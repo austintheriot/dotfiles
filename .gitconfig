@@ -1,5 +1,5 @@
 [user]
-	email = austinmtheriot@gmail.com
+	email = austin.theriot@literati.com
 	name = Austin Theriot
 [credential "https://github.com"]
 	helper = 
@@ -12,3 +12,9 @@
 	br = branch
 	ci = commit
 	st = status
+
+# WORK CONFIG (while still using VS Code)
+[core]
+	editor = code --wait
+[diff]
+ 	tool = vscode

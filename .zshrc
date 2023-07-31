@@ -17,8 +17,34 @@ compinit
 # DOTFILE SETUP (for sharing dotfiles accross envs in git)
 alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
 
+# WORK CONFIG #######################################################################
 # PLUGINS
 plugin=(git)
+
+# SETUP NVM PLUGIN
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# INIT PYENV
+eval "$(pyenv init -)"
+
+# GOOGLE CLOUD INIT
+# The next line updates PATH for the Google Cloud SDK.
+if [ -f '/Users/austintheriot/google-cloud-sdk/path.zsh.inc' ]; then . '/Users/austintheriot/google-cloud-sdk/path.zsh.inc'; fi
+# The next line enables shell command completion for gcloud.
+if [ -f '/Users/austintheriot/google-cloud-sdk/completion.zsh.inc' ]; then . '/Users/austintheriot/google-cloud-sdk/completion.zsh.inc'; fi
+
+# SOURCE BASH_SECURE FILE (IF IT EXISTS)
+if [ -f "$HOME/.bash_secure" ]; then 
+    source "$HOME/.bash_secure"
+fi
+
+export PATH=$(pyenv root)/shims:$PATH
+export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+alias config='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+
+# CONFIG FOR ALL #####################################################################
 
 # CUSTOMIZING PROMPT 
 parse_git_dirty() {

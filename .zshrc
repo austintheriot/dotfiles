@@ -4,7 +4,6 @@ HISTSIZE=1000
 SAVEHIST=1000
 setopt beep extendedglob nomatch notify
 unsetopt autocd
-bindkey -e
 # End of lines configured by zsh-newuser-install
 # The following lines were added by compinstall
 zstyle :compinstall filename '/home/austin/.zshrc'
@@ -21,8 +20,10 @@ alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin
 
 # PLUGINS
 # git - comes with zsh
-# zsh-autosuggestions - see https://github.com/zsh-users/zsh-autosuggestions
-plugin=(git zsh-autosuggestions)
+plugin=(git)
+
+# zsh-autosuggestions init - see https://github.com/zsh-users/zsh-autosuggestions
+source /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 
 # SETUP NVM PLUGIN
 export NVM_DIR="$HOME/.nvm"

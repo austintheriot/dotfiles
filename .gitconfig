@@ -1,25 +1,19 @@
 # PERSONAL/UNIVERSAL CONFIG
 [user]
-	email = austinmtheriot@gmail.com
+	email = austin.theriot@literati.com
 	name = Austin Theriot
 [credential "https://github.com"]
-	helper = !/usr/bin/gh auth git-credential
+	helper = !/usr/local/bin/gh auth git-credential
 [credential "https://gist.github.com"]
-	helper = !/usr/bin/gh auth git-credential
+	helper = !/usr/local/bin/gh auth git-credential
 [alias]
 	co = checkout
 	br = branch
 	ci = commit
 	st = status
 
-# WORK CONFIG (while still using VS Code)
-[user]
-	email = austin.theriot@literati.com
+# PREFER VS CODE (FOR NOW) 
 [core]
 	editor = code --wait
 [diff]
  	tool = vscode
-[credential "https://github.com"]
-	helper = !/usr/local/bin/gh auth git-credential
-[credential "https://gist.github.com"]
-	helper = !/usr/local/bin/gh auth git-credential

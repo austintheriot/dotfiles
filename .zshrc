@@ -18,8 +18,11 @@ compinit
 alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
 
 # WORK CONFIG #######################################################################
+
 # PLUGINS
-plugin=(git)
+# git - comes with zsh
+# zsh-autosuggestions - see https://github.com/zsh-users/zsh-autosuggestions
+plugin=(git zsh-autosuggestions)
 
 # SETUP NVM PLUGIN
 export NVM_DIR="$HOME/.nvm"

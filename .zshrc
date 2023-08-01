@@ -18,7 +18,13 @@ compinit
 alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
 
 # PLUGINS
-plugin=(git)
+plugin=(
+	git
+	zsh-autosuggestions
+)
+
+# zsh-autosuggestions - set up with manual git clone -  see https://github.com/zsh-users/zsh-autosuggestions
+source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
 
 # CUSTOMIZING PROMPT 
 

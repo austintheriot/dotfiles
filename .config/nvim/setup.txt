@@ -1,0 +1,17 @@
+# Setup HOW TO (personal notes)
+
+Copy the config from personal dotconfig repo. 
+
+Install `neovim` (using `pacman` on arch) or using `brew` on MacOS
+ - https://github.com/neovim/neovim
+
+Install Packer
+- https://github.com/wbthomason/packer.nvim
+
+Open `.config/nvim` using nvim (ignore errors)
+
+Go to ./config/nvim/lua/austin/packer.lua and run `:so` to source the file
+
+Run `:PackerSync` to install all packages
+
+Good to go!

@@ -17,6 +17,9 @@ compinit
 # DOTFILE SETUP (for sharing dotfiles accross envs in git)
 alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
 
+# NVM CONFIGURATION
+source /usr/share/nvm/init-nvm.sh
+
 # PLUGINS
 plugin=(git)
 
@@ -40,5 +43,4 @@ precmd () { vcs_info } # always load before displaying the prompt
 zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
 
 PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} %F{254}λ%f '
-
 

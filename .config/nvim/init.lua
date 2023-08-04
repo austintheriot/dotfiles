@@ -67,6 +67,7 @@ require('lazy').setup({
 
   -- Git related plugins
   'tpope/vim-fugitive',
+  -- Integrates git with GitHub
   'tpope/vim-rhubarb',
 
   -- Detect tabstop and shiftwidth automatically
@@ -283,6 +284,12 @@ vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
 -- Remap for dealing with word wrap
 vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
 vim.keymap.set('n', 'j', "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = true })
+
+-- Center cursor automatically when paging up and down
+vim.keymap.set("n", "<C-d>", "<C-d>zz")
+vim.keymap.set("n", "<C-u>", "<C-u>zz")
+vim.keymap.set("n", "n", "nzzzv")
+vim.keymap.set("n", "N", "Nzzzv")
 
 -- [[ Highlight on yank ]]
 -- See `:help vim.highlight.on_yank()`

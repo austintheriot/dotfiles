@@ -191,7 +191,9 @@ require('lazy').setup({
     },
   },
 
-  -- "gc" to comment visual regions/lines
+  -- "gcc" to comment visual lines
+  -- "gbc" to comment blocks
+  -- :help `comment-nvim` for more information
   { 'numToStr/Comment.nvim', opts = {} },
 
   -- Fuzzy Finder (files, lsp, etc)
@@ -288,8 +290,6 @@ vim.keymap.set('n', 'j', "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = tr
 -- Center cursor automatically when paging up and down
 vim.keymap.set("n", "<C-d>", "<C-d>zz")
 vim.keymap.set("n", "<C-u>", "<C-u>zz")
-vim.keymap.set("n", "n", "nzzzv")
-vim.keymap.set("n", "N", "Nzzzv")
 
 -- [[ Highlight on yank ]]
 -- See `:help vim.highlight.on_yank()`

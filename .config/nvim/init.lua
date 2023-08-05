@@ -167,7 +167,7 @@ require('lazy').setup({
   },
 
   {
-    -- Set lualine as statusline
+    -- Set lualine as statusline (a prettier status line at the bottom of neovim)
     'nvim-lualine/lualine.nvim',
     -- See `:help lualine.txt`
     opts = {

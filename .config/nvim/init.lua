@@ -248,6 +248,12 @@ require('lazy').setup({
 -- Set highlight on search
 vim.o.hlsearch = false
 
+-- add words false positives to spell checker word with `zg`
+-- get spelling suggestion using `z=`
+vim.o.spell = true
+vim.o.spelllang = "en_us"
+vim.o.spellsuggest = "best,9"
+
 -- Make line numbers default
 
 -- use relative line numbers, but the current line has the absolute number
@@ -337,10 +343,14 @@ vim.keymap.set('n', '<leader>/', function()
   })
 end, { desc = '[/] Fuzzily search in current buffer' })
 
-vim.keymap.set('n', '<leader>sgf', require('telescope.builtin').git_files, { desc = 'Search [G]it [F]iles' })
-vim.keymap.set('n', '<leader>sf', require('telescope.builtin').find_files, { desc = '[S]earch [F]iles' })
+-- Fuzzy search through the output of git ls-files command, respects .gitignore
+vim.keymap.set('n', '<leader>sf', require('telescope.builtin').git_files, { desc = 'Search (git) [F]iles' })
+-- Lists files in your current working directory, respects .gitignore
+vim.keymap.set('n', '<leader>sff', require('telescope.builtin').find_files, { desc = '[S]earch (all) [F]iles' })
 vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc = '[S]earch [H]elp' })
+-- Searches for the string under your cursor or selection in your current working directory
 vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { desc = '[S]earch current [W]ord' })
+-- Search for a string in your current working directory and get results live as you type, respects .gitignore. (Requires ripgrep)
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep, { desc = '[S]earch by [G]rep' })
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics, { desc = '[S]earch [D]iagnostics' })
 

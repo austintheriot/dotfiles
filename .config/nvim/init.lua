@@ -347,7 +347,7 @@ end, { desc = '[/] Fuzzily search in current buffer' })
 -- Fuzzy search through the output of git ls-files command, respects .gitignore
 vim.keymap.set('n', '<leader>sf', require('telescope.builtin').git_files, { desc = 'Search (git) [F]iles' })
 -- Lists files in your current working directory, respects .gitignore
-vim.keymap.set('n', '<leader>sff', require('telescope.builtin').find_files, { desc = '[S]earch (all) [F]iles' })
+vim.keymap.set('n', '<leader>sF', require('telescope.builtin').find_files, { desc = '[S]earch (all) [F]iles' })
 vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc = '[S]earch [H]elp' })
 -- Searches for the string under your cursor or selection in your current working directory
 vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { desc = '[S]earch current [W]ord' })

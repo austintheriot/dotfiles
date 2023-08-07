@@ -226,6 +226,9 @@ require('lazy').setup({
     build = ':TSUpdate',
   },
 
+  -- Enable treesitter to auto-close and auto-update HTML/JSX tags
+  'windwp/nvim-ts-autotag',
+
   -- NOTE: Next Step on Your Neovim Journey: Add/Configure additional "plugins" for kickstart
   --       These are some example plugins that I've included in the kickstart repository.
   --       Uncomment any of the lines below to enable them.
@@ -375,6 +378,10 @@ require('nvim-treesitter.configs').setup {
       scope_incremental = '<c-s>',
       node_decremental = '<M-space>',
     },
+  },
+  -- see nvim-ts-autotag
+  autotag = {
+    enable = true,
   },
   textobjects = {
     select = {

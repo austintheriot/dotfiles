@@ -14,7 +14,7 @@ compinit
 
 # CONFIG BY ME #######################################################################
 # DOTFILE SETUP (for sharing dotfiles accross envs in git)
-alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
+alias config='/usr/bin/git --git-dir=/Users/austintheriot/.cfg/ --work-tree=/Users/austintheriot'
 
 # WORK CONFIG #######################################################################
 

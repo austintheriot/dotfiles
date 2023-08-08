@@ -347,15 +347,23 @@ vim.keymap.set('n', '<leader>/', function()
   })
 end, { desc = '[/] Fuzzily search in current buffer' })
 
+-- MOST HELPFUL TELESCOPE FEATURES:
 -- Fuzzy search through the output of git ls-files command, respects .gitignore
+-- This is the equivalent of fuzzy finding by file in VS Code
 vim.keymap.set('n', '<leader>sf', require('telescope.builtin').git_files, { desc = 'Search (git) [F]iles' })
+-- Search for a string in your current working directory and get results live as you type, respects .gitignore. (Requires ripgrep)
+-- This is the equivalent of global "find" in VS Code
+vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep, { desc = '[S]earch by [G]rep' })
+-- Searches for the string under your cursor or selection in your current working directory
+-- This is the equivalent to VS Code's per-file search feature, with the added convenience of auto-searching
+-- the word that is under the cursor or currently selected with visual mode
+vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { desc = '[S]earch current [W]ord' })
+
+-- MORE OBSCURE TELESCOPE FEATURES (may delete later if not needed):
 -- Lists files in your current working directory, respects .gitignore
+-- This includes files normally hidden from search results such as node_modules, etc.
 vim.keymap.set('n', '<leader>sF', require('telescope.builtin').find_files, { desc = '[S]earch (all) [F]iles' })
 vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc = '[S]earch [H]elp' })
--- Searches for the string under your cursor or selection in your current working directory
-vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { desc = '[S]earch current [W]ord' })
--- Search for a string in your current working directory and get results live as you type, respects .gitignore. (Requires ripgrep)
-vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep, { desc = '[S]earch by [G]rep' })
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics, { desc = '[S]earch [D]iagnostics' })
 
 -- [[ Configure Treesitter ]]
@@ -491,10 +499,25 @@ end
 local servers = {
   -- clangd = {},
   -- gopls = {},
-  pyright = {},
   rust_analyzer = {},
   tsserver = {},
   html = { filetypes = { 'html', 'twig', 'hbs' } },
+  pylsp = {
+    configurationSources = { 'flake8' },
+    plugins = {
+      -- we don't care about these, we use ruff (3rd-party_
+      pycodestyle = { enabled = false },
+      mccabe = { enabled = false },
+      pyflakes = { enabled = false },
+      flake8 = {
+        enabled = false,
+      },
+    }
+  },
+  ruff_lsp = {
+    -- Any extra CLI arguments for `ruff` can go here.
+    args = {},
+  },
 
   lua_ls = {
     Lua = {

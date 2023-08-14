@@ -21,11 +21,34 @@ return {
     -- Add your own debuggers here
     'leoluz/nvim-dap-go',
     'mfussenegger/nvim-dap-python',
-    'mxsdev/nvim-dap-vscode-js'
-  },
+    'mxsdev/nvim-dap-vscode-js' },
   config = function()
     local dap = require 'dap'
     local dapui = require 'dapui'
+    local dappython = require 'dap-python'
+
+    -- here, we are inserting a new selectable configuration into our debugging option table
+    -- this includes the information on how to look at things in a djangoproject FROM
+    -- the djangoproject folder
+    -- table.insert(dap.configurations.python, {
+    --   type = "python",
+    --   request = "attach",
+    --   connect = {
+    --     port = 8765,
+    --     host = "localhost",
+    --   },
+    --   mode = "remote",
+    --   name = "Python: Remote Django",
+    --   cwd = vim.fn.getcwd(),
+    --   pathMappings = {
+    --     {
+    --       localRoot = vim.fn.getcwd(),
+    --       remoteRoot = "/opt/app"
+    --     },
+    --   },
+    --   django = true
+    -- })
+
 
     require('mason-nvim-dap').setup {
       -- Makes a best effort to setup the various debuggers with

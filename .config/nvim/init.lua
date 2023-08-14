@@ -135,6 +135,8 @@ require('lazy').setup({
     },
   },
 
+
+
   -- gemme sommma that sweet VS Code nostalgia
   {
     'Mofiqul/vscode.nvim',
@@ -200,6 +202,8 @@ require('lazy').setup({
   -- "gbc" to comment blocks
   -- :help `comment-nvim` for more information
   { 'numToStr/Comment.nvim',         opts = {} },
+
+  'jose-elias-alvarez/null-ls.nvim',
 
   -- Fuzzy Finder (files, lsp, etc)
   { 'nvim-telescope/telescope.nvim', branch = '0.1.x', dependencies = { 'nvim-lua/plenary.nvim' } },
@@ -300,6 +304,9 @@ vim.o.termguicolors = true
 -- See `:help vim.keymap.set()`
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
 vim.keymap.set("n", "<leader>-", vim.cmd.Ex)
+vim.keymap.set({ 'n', 'x' }, '<leader>pf', function()
+  vim.lsp.buf.format({ async = false, timeout_ms = 10000 })
+end)
 
 -- Remap for dealing with word wrap
 vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
@@ -488,6 +495,9 @@ local on_attach = function(_, bufnr)
   end, { desc = 'Format current buffer with LSP' })
 end
 
+-- PYTHON VIRTUALENV SETUP
+vim.g.python3_host_prog = '/Users/austintheriot/.pyenv/versions/nvim-general/bin/python'
+
 -- Enable the following language servers
 --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
 --
@@ -551,6 +561,35 @@ mason_lspconfig.setup_handlers {
     }
   end
 }
+
+-- use null ls to setup formatting and diagnostics
+local null_ls = require("null-ls")
+null_ls.setup({
+  should_attach = function(bufnr)
+    -- I want to always ignore formatting / diagnostics in packages
+    -- this was breaking mypy which was annoying. Turns out, I just
+    -- it's better to not care about things we shouldn't care about
+    return not vim.api.nvim_buf_get_name(bufnr):match(".pyenv")
+  end,
+  debug = true,
+  sources = {
+    -- diagnostics
+    null_ls.builtins.diagnostics.flake8.with({ prefer_local = true }),
+    -- null_ls.builtins.diagnostics.mypy.with({
+    --   prefer_local = true,
+    --   extra_args = {
+    --     "--check-untyped-defs",
+    --     "--ignore-missing-imports",
+    --   },
+    --   timeout = 10000
+    -- }),
+    -- formatting
+    null_ls.builtins.formatting.black.with({ prefer_local = true }),
+    null_ls.builtins.formatting.isort.with({ prefer_local = true }),
+    -- NOTE: if prettier / eslint are clashing, delete this
+    null_ls.builtins.formatting.prettier.with({ prefer_local = true })
+  },
+})
 
 -- [[ Configure nvim-cmp ]]
 -- See `:help cmp`

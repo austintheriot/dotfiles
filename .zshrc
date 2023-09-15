@@ -4,7 +4,6 @@ HISTSIZE=1000
 SAVEHIST=1000
 setopt beep extendedglob nomatch notify
 unsetopt autocd
-bindkey -e
 # End of lines configured by zsh-newuser-install
 # The following lines were added by compinstall
 zstyle :compinstall filename '/home/austin/.zshrc'
@@ -17,10 +16,13 @@ compinit
 # DOTFILE SETUP (for sharing dotfiles accross envs in git)
 alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
 
+# WORK CONFIG #######################################################################
+
 # NVM CONFIGURATION
 source /usr/share/nvm/init-nvm.sh
 
 # PLUGINS
+# git - comes with zsh
 plugin=(git)
 
 # zsh-autosuggestions - set up with manual git clone -  see https://github.com/zsh-users/zsh-autosuggestions
@@ -40,7 +42,6 @@ setopt prompt_subst
 
 autoload -Uz vcs_info # enable vcs_info
 precmd () { vcs_info } # always load before displaying the prompt
-zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
+zstyle ':vcs_info:git*' formats '%b' # format $vcs_info_msg_0_
 
-PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} %F{254}λ%f '
-
+PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f $(parse_git_dirty)${vcs_info_msg_0_} %F{254}λ%f '

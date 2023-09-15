@@ -155,6 +155,14 @@ require('lazy').setup({
     'folke/which-key.nvim',
     opts = {}
   },
+  
+  -- Share permalinks to GitHub/GitLab
+  {
+    'ruifm/gitlinker.nvim',
+    config = function()
+      require"gitlinker".setup()
+    end
+  },
 
   {
     -- Adds git related signs to the gutter, as well as utilities for managing changes

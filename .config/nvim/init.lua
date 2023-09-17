@@ -69,6 +69,8 @@ require('lazy').setup({
   'tpope/vim-fugitive',
   -- Integrates git with GitHub
   'tpope/vim-rhubarb',
+  -- game created by Prime for learning vim
+  'ThePrimeagen/vim-be-good',
 
   -- unobtrusive indicators for built-in vim marks
   {
@@ -365,6 +367,8 @@ vim.keymap.set('n', 'j', "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = tr
 -- Center cursor automatically when paging up and down
 vim.keymap.set("n", "<C-d>", "<C-d>zz")
 vim.keymap.set("n", "<C-u>", "<C-u>zz")
+vim.keymap.set("n", "n", "nzz")
+vim.keymap.set("n", "N", "Nzz")
 
 -- [[ Highlight on yank ]]
 -- See `:help vim.highlight.on_yank()`

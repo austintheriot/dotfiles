@@ -13,8 +13,6 @@ compinit
 # End of lines added by compinstall
 
 # CONFIG BY ME #######################################################################
-# DOTFILE SETUP (for sharing dotfiles accross envs in git)
-alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
 alias go='source .start-tmux.sh'
 
 # NVM CONFIGURATION
@@ -23,9 +21,6 @@ source /usr/share/nvm/init-nvm.sh
 # PLUGINS
 # git - comes with zsh
 plugin=(git)
-
-# zsh-autosuggestions - set up with manual git clone -  see https://github.com/zsh-users/zsh-autosuggestions
-source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
 
 # CUSTOMIZING PROMPT 
 

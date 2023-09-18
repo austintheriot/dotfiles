@@ -13,7 +13,14 @@ compinit
 # End of lines added by compinstall
 
 # SOURCE BRANCH-SPECIFIC CONFIG ####################################################################
-source ".zshrc-$(config rev-parse --abbrev-ref HEAD)"
+FILE=.zshrc-home
+if test -f "$FILE"; then
+   source $FILE
+fi
+FILE=.zshrc-work
+if test -f "$FILE"; then
+   source $FILE
+fi
 
 # CONFIG BY ME #####################################################################################
 alias go='source .my-scripts/tmux-start.sh'

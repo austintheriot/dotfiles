@@ -15,6 +15,7 @@ compinit
 # CONFIG BY ME #######################################################################
 # DOTFILE SETUP (for sharing dotfiles accross envs in git)
 alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
+alias go='source .start-tmux.sh'
 
 # NVM CONFIGURATION
 source /usr/share/nvm/init-nvm.sh

@@ -15,9 +15,6 @@ compinit
 # CONFIG BY ME #######################################################################
 alias go='source .start-tmux.sh'
 
-# NVM CONFIGURATION
-source /usr/share/nvm/init-nvm.sh
-
 # PLUGINS
 # git - comes with zsh
 plugin=(git)

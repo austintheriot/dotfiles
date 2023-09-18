@@ -21,9 +21,6 @@ alias go='source .start-tmux.sh'
 # git - comes with zsh
 plugin=(git)
 
-# zsh-autosuggestions init - see https://github.com/zsh-users/zsh-autosuggestions
-source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
-
 # SETUP NVM PLUGIN
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm

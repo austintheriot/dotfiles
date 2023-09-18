@@ -1,0 +1,6 @@
+# DOTFILE SETUP (for sharing dotfiles accross envs in git)
+alias config='/usr/bin/git --git-dir=/Users/austin/.cfg/ --work-tree=/Users/austin'
+
+# zsh-autosuggestions init - see https://github.com/zsh-users/zsh-autosuggestions
+source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+

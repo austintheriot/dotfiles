@@ -12,24 +12,14 @@ autoload -Uz compinit
 compinit
 # End of lines added by compinstall
 
-# CONFIG BY ME #######################################################################
-# DOTFILE SETUP (for sharing dotfiles accross envs in git)
-alias config='/usr/bin/git --git-dir=/Users/austin/.cfg/ --work-tree=/Users/austin'
+# CONFIG BY ME #####################################################################################
 alias go='source .start-tmux.sh'
 
-# PLUGINS ############################################################################
+# PLUGINS ##########################################################################################
 # git - comes with zsh
 plugin=(git)
 
-# SETUP NVM PLUGIN
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-# CONFIG FOR ALL #####################################################################
-
-# CUSTOMIZING PROMPT 
-
+# CUSTOMIZING PROMPT ################################################################################
 # creates color formatting string based on current staged status
 parse_git_dirty() {
   git_status="$(git status 2> /dev/null)"

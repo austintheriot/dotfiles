@@ -23,7 +23,7 @@ if test -f "$FILE"; then
 fi
 
 # CONFIG BY ME #####################################################################################
-alias go='source .my-scripts/tmux-start.sh'
+alias s='source .my-scripts/tmux-start.sh'
 
 # PLUGINS ##########################################################################################
 # git - comes with zsh

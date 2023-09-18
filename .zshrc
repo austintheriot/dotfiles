@@ -12,15 +12,24 @@ autoload -Uz compinit
 compinit
 # End of lines added by compinstall
 
-# CONFIG BY ME #######################################################################
-alias go='source .start-tmux.sh'
+# SOURCE BRANCH-SPECIFIC CONFIG ####################################################################
+FILE=.zshrc-home
+if test -f "$FILE"; then
+   source $FILE
+fi
+FILE=.zshrc-work
+if test -f "$FILE"; then
+   source $FILE
+fi
 
-# PLUGINS
+# CONFIG BY ME #####################################################################################
+alias s='source .my-scripts/tmux-start.sh'
+
+# PLUGINS ##########################################################################################
 # git - comes with zsh
 plugin=(git)
 
-# CUSTOMIZING PROMPT 
-
+# CUSTOMIZING PROMPT ################################################################################
 # creates color formatting string based on current staged status
 parse_git_dirty() {
   git_status="$(git status 2> /dev/null)"

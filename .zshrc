@@ -12,8 +12,11 @@ autoload -Uz compinit
 compinit
 # End of lines added by compinstall
 
+# SOURCE BRANCH-SPECIFIC CONFIG ####################################################################
+source ".zshrc-$(config rev-parse --abbrev-ref HEAD)"
+
 # CONFIG BY ME #####################################################################################
-alias go='source .start-tmux.sh'
+alias go='source .my-scripts/tmux-start.sh'
 
 # PLUGINS ##########################################################################################
 # git - comes with zsh

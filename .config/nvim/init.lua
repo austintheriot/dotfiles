@@ -120,12 +120,12 @@ require('lazy').setup({
     'folke/which-key.nvim',
     opts = {}
   },
-  
+
   -- Share permalinks to GitHub/GitLab
   {
     'ruifm/gitlinker.nvim',
     config = function()
-      require"gitlinker".setup()
+      require "gitlinker".setup()
     end
   },
 
@@ -320,6 +320,18 @@ end)
 vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
 vim.keymap.set('n', 'j', "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = true })
 
+-- Make copy and paste from clipboard easier" " Copy to clipboard
+-- copy to clipboard
+vim.keymap.set("v", "<leader>y", '"+y')
+vim.keymap.set("n", "<leader>Y", '"+yg')
+vim.keymap.set("n", "<leader>y", '"+y')
+vim.keymap.set("n", "<leader>yy", '"+yy')
+-- past from clipboard
+vim.keymap.set("n", "<leader>p", '"+p')
+vim.keymap.set("n", "<leader>P", '"+P')
+vim.keymap.set("v", "<leader>p", '"+p')
+vim.keymap.set("v", "<leader>P", '"+P')
+
 -- Center cursor automatically when paging up and down
 vim.keymap.set("n", "<C-d>", "<C-d>zz")
 vim.keymap.set("n", "<C-u>", "<C-u>zz")
@@ -490,7 +502,7 @@ local on_attach = function(_, bufnr)
   -- See `:help K` for why this keymap
   nmap('K', vim.lsp.buf.hover, 'Hover Documentation')
   nmap('<C-k>', vim.lsp.buf.signature_help, 'Signature Documentation')
-  vim.lsp.texlab.setup{
+  vim.lsp.texlab.setup {
     callbacks = {
       ["textDocument/hover"] = "hover_wrap"
     },

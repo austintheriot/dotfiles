@@ -23,7 +23,10 @@ if test -f "$FILE"; then
 fi
 
 # CONFIG BY ME #####################################################################################
-alias s='source .my-scripts/tmux-start.sh'
+alias start='source .my-scripts/tmux-start.sh'
+alias s='start'
+alias split='source ~/.my-scripts/tmux-split.sh'
+alias sp='split' 
 
 # PLUGINS ##########################################################################################
 # git - comes with zsh

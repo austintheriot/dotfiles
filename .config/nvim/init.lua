@@ -236,6 +236,27 @@ require('lazy').setup({
     end,
   },
 
+  -- enable using a dedicated file view (netrw doesn't work great on MacOS)
+  {
+    "nvim-neo-tree/neo-tree.nvim",
+    branch = "v3.x",
+    dependencies = {
+      "nvim-lua/plenary.nvim",
+      "nvim-tree/nvim-web-devicons", -- not strictly required, but recommended
+      "MunifTanjim/nui.nvim",
+    },
+    config = function()
+      require("neo-tree").setup({
+        window = {
+          mappings = {
+            ["-"] = "navigate_up"
+          }
+        },
+      })
+      vim.keymap.set('n', '<leader>-', '<Cmd>Neotree toggle<CR>')
+    end
+  },
+
   {
     -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
@@ -311,7 +332,6 @@ vim.o.termguicolors = true
 -- Keymaps for better default experience
 -- See `:help vim.keymap.set()`
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
-vim.keymap.set("n", "<leader>-", vim.cmd.Ex)
 vim.keymap.set({ 'n', 'x' }, '<leader>pf', function()
   vim.lsp.buf.format({ async = false, timeout_ms = 10000 })
 end)

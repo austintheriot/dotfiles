@@ -4,6 +4,10 @@
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
+-- must be disabled early on in init.lua to prevent race conditions with nvim-tree
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
+
 -- Install package manager
 --    https://github.com/folke/lazy.nvim
 --    `:help lazy.nvim.txt` for more info
@@ -237,56 +241,19 @@ require('lazy').setup({
   },
 
   -- icons used for numerous plugins
+  -- TODO: add as dep to plugins that actually need it
   'nvim-tree/nvim-web-devicons',
 
   -- file explorer
   {
     "nvim-tree/nvim-tree.lua",
     config = function()
-      -- disable netrw at the very start of your init.lua
-      vim.g.loaded_netrw = 1
-      vim.g.loaded_netrwPlugin = 1
-
-      -- set termguicolors to enable highlight groups
-      vim.opt.termguicolors = true
-
-      -- empty setup using defaults
-      local HEIGHT_RATIO = 0.8 -- You can change this
-      local WIDTH_RATIO = 0.5  -- You can change this too
-
       require('nvim-tree').setup({
-        disable_netrw = true,
-        hijack_netrw = true,
         respect_buf_cwd = true,
-        sync_root_with_cwd = true,
         view = {
-          relativenumber = true,
-          float = {
-            enable = true,
-            open_win_config = function()
-              local screen_w = vim.opt.columns:get()
-              local screen_h = vim.opt.lines:get() - vim.opt.cmdheight:get()
-              local window_w = screen_w * WIDTH_RATIO
-              local window_h = screen_h * HEIGHT_RATIO
-              local window_w_int = math.floor(window_w)
-              local window_h_int = math.floor(window_h)
-              local center_x = (screen_w - window_w) / 2
-              local center_y = ((vim.opt.lines:get() - window_h) / 2)
-                  - vim.opt.cmdheight:get()
-              return {
-                border = "rounded",
-                relative = "editor",
-                row = center_y,
-                col = center_x,
-                width = window_w_int,
-                height = window_h_int,
-              }
-            end,
-          },
-          width = function()
-            return math.floor(vim.opt.columns:get() * WIDTH_RATIO)
-          end,
-        },
+          relativenumber = true
+        }
+        -- todo: close nvim-tree after selecting file
       })
       vim.keymap.set("n", "<leader>-", ':NvimTreeToggle<CR>')
     end

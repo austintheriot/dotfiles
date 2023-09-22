@@ -94,8 +94,8 @@ conf
 hjkl
 resize
 Ctrl
-Winit
-CSS
-wasm
-renderer
-css
+backend
+jpg
+jpeg
+png
+heic

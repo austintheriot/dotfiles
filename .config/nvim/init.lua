@@ -416,6 +416,12 @@ vim.keymap.set('n', '<leader>sf', require('telescope.builtin').git_files, { desc
 -- Search for a string in your current working directory and get results live as you type, respects .gitignore. (Requires ripgrep)
 -- This is the equivalent of global "find" in VS Code
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep, { desc = '[S]earch by [G]rep' })
+-- This is the equivalent of global "find" in VS Code, but searching ignored files
+vim.keymap.set('n', '<leader>sG',
+  function ()
+     require('telescope.builtin').live_grep({ additional_args = { '-u' }})
+  end
+, { desc = '[S]earch Hidden Files by [G]rep' })
 -- Searches for the string under your cursor or selection in your current working directory
 -- This is the equivalent to VS Code's per-file search feature, with the added convenience of auto-searching
 -- the word that is under the cursor or currently selected with visual mode

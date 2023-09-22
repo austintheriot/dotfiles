@@ -250,8 +250,17 @@ require('lazy').setup({
     config = function()
       require('nvim-tree').setup({
         respect_buf_cwd = true,
+        update_focused_file = {
+          enable = true,
+        },
         view = {
+          number = true,
           relativenumber = true
+        },
+        actions = {
+          open_file = {
+            quit_on_open = true
+          }
         }
         -- todo: close nvim-tree after selecting file
       })
@@ -403,10 +412,16 @@ end, { desc = '[/] Fuzzily search in current buffer' })
 -- MOST HELPFUL TELESCOPE FEATURES:
 -- Fuzzy search through the output of git ls-files command, respects .gitignore
 -- This is the equivalent of fuzzy finding by file in VS Code
-vim.keymap.set('n', '<leader>sf', require('telescope.builtin').git_files, { desc = 'Search (git) [F]iles' })
+vim.keymap.set('n', '<leader>sf', require('telescope.builtin').git_files, { desc = '[S]earch (git) [F]iles' })
 -- Search for a string in your current working directory and get results live as you type, respects .gitignore. (Requires ripgrep)
 -- This is the equivalent of global "find" in VS Code
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep, { desc = '[S]earch by [G]rep' })
+-- This is the equivalent of global "find" in VS Code, but searching ignored files
+vim.keymap.set('n', '<leader>sG',
+  function ()
+     require('telescope.builtin').live_grep({ additional_args = { '-u' }})
+  end
+, { desc = '[S]earch Hidden Files by [G]rep' })
 -- Searches for the string under your cursor or selection in your current working directory
 -- This is the equivalent to VS Code's per-file search feature, with the added convenience of auto-searching
 -- the word that is under the cursor or currently selected with visual mode
@@ -415,7 +430,7 @@ vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { de
 -- MORE OBSCURE TELESCOPE FEATURES (may delete later if not needed):
 -- Lists files in your current working directory, respects .gitignore
 -- This includes files normally hidden from search results such as node_modules, etc.
-vim.keymap.set('n', '<leader>sF', require('telescope.builtin').find_files, { desc = '[S]earch (all) [F]iles' })
+vim.keymap.set('n', '<leader>sa', require('telescope.builtin').find_files, { desc = '[S]earch [A]ll) Files' })
 vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc = '[S]earch [H]elp' })
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics, { desc = '[S]earch [D]iagnostics' })
 

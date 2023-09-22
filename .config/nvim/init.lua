@@ -251,7 +251,13 @@ require('lazy').setup({
       require('nvim-tree').setup({
         respect_buf_cwd = true,
         view = {
+          number = true,
           relativenumber = true
+        },
+        actions = {
+          open_file = {
+            quit_on_open = true
+          }
         }
         -- todo: close nvim-tree after selecting file
       })

@@ -430,7 +430,8 @@ vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { de
 -- MORE OBSCURE TELESCOPE FEATURES (may delete later if not needed):
 -- Lists files in your current working directory, respects .gitignore
 -- This includes files normally hidden from search results such as node_modules, etc.
-vim.keymap.set('n', '<leader>sa', require('telescope.builtin').find_files, { desc = '[S]earch [A]ll) Files' })
+vim.keymap.set('n', '<leader>sa', require('telescope.builtin').find_files, { desc = '[S]earch [A]ll Files' })
+vim.keymap.set('n', '<leader>sF', require('telescope.builtin').find_files, { desc = '[S]earch All [F]iles' })
 vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc = '[S]earch [H]elp' })
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics, { desc = '[S]earch [D]iagnostics' })
 

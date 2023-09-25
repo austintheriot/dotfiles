@@ -84,6 +84,9 @@ require('lazy').setup({
   -- Detect tabstop and shiftwidth automatically
   'tpope/vim-sleuth',
 
+  -- Automatically close parentheses, brackets, etc.
+  'jiangmiao/auto-pairs',
+
   -- NOTE: This is where your plugins related to LSP can be installed.
   --  The configuration is done below. Search for lspconfig to find it below.
   {
@@ -203,6 +206,28 @@ require('lazy').setup({
         component_separators = '|',
         section_separators = '',
       },
+      sections = {
+        lualine_c = {
+          {
+            'filename',
+            file_status = true,   -- Displays file status (readonly status, modified status)
+            newfile_status = false, -- Display new file status (new file means no write after created)
+            path = 3,             -- 0: Just the filename
+            -- 1: Relative path
+            -- 2: Absolute path
+            -- 3: Absolute path, with tilde as the home directory
+            -- 4: Filename and parent dir, with tilde as the home directory
+
+            symbols = {
+              modified = '[+]',    -- Text to show when the file is modified.
+              readonly = '[-]',    -- Text to show when the file is non-modifiable or readonly.
+              unnamed = '[No Name]', -- Text to show for unnamed buffers.
+              newfile = '[New]',   -- Text to show for newly created file before first write
+            }
+          }
+        }
+
+      }
     },
   },
 
@@ -236,31 +261,31 @@ require('lazy').setup({
       vim.keymap.set("n", "<leader>h", ui.toggle_quick_menu)
       vim.keymap.set("n", "<leader>1", function()
         ui.nav_file(1)
-      end)
+      end, { desc = "Go to Harpoon Mark 1" })
       vim.keymap.set("n", "<leader>2", function()
         ui.nav_file(2)
-      end)
+      end, { desc = "Go to Harpoon Mark 2" })
       vim.keymap.set("n", "<leader>3", function()
         ui.nav_file(3)
-      end)
+      end, { desc = "Go to Harpoon Mark 3" })
       vim.keymap.set("n", "<leader>4", function()
         ui.nav_file(4)
-      end)
+      end, { desc = "Go to Harpoon Mark 4" })
       vim.keymap.set("n", "<leader>5", function()
         ui.nav_file(5)
-      end)
+      end, { desc = "Go to Harpoon Mark 5" })
       vim.keymap.set("n", "<leader>6", function()
         ui.nav_file(6)
-      end)
+      end, { desc = "Go to Harpoon Mark 6" })
       vim.keymap.set("n", "<leader>7", function()
         ui.nav_file(7)
-      end)
+      end, { desc = "Go to Harpoon Mark 7" })
       vim.keymap.set("n", "<leader>8", function()
         ui.nav_file(8)
-      end)
+      end, { desc = "Go to Harpoon Mark 8" })
       vim.keymap.set("n", "<leader>9", function()
         ui.nav_file(9)
-      end)
+      end, { desc = "Go to Harpoon Mark 1" })
     end
   },
 
@@ -631,11 +656,12 @@ local servers = {
       },
     }
   },
+  -- TOML
+  taplo = {},
   ruff_lsp = {
     -- Any extra CLI arguments for `ruff` can go here.
     args = {},
   },
-
   lua_ls = {
     Lua = {
       workspace = { checkThirdParty = false },

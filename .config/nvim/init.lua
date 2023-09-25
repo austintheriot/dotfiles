@@ -84,6 +84,9 @@ require('lazy').setup({
   -- Detect tabstop and shiftwidth automatically
   'tpope/vim-sleuth',
 
+  -- Automatically close parentheses, brackets, etc.
+  'jiangmiao/auto-pairs',
+
   -- NOTE: This is where your plugins related to LSP can be installed.
   --  The configuration is done below. Search for lspconfig to find it below.
   {
@@ -203,6 +206,28 @@ require('lazy').setup({
         component_separators = '|',
         section_separators = '',
       },
+      sections = {
+        lualine_c = {
+          {
+            'filename',
+            file_status = true,   -- Displays file status (readonly status, modified status)
+            newfile_status = false, -- Display new file status (new file means no write after created)
+            path = 3,             -- 0: Just the filename
+            -- 1: Relative path
+            -- 2: Absolute path
+            -- 3: Absolute path, with tilde as the home directory
+            -- 4: Filename and parent dir, with tilde as the home directory
+
+            symbols = {
+              modified = '[+]',    -- Text to show when the file is modified.
+              readonly = '[-]',    -- Text to show when the file is non-modifiable or readonly.
+              unnamed = '[No Name]', -- Text to show for unnamed buffers.
+              newfile = '[New]',   -- Text to show for newly created file before first write
+            }
+          }
+        }
+
+      }
     },
   },
 
@@ -222,7 +247,47 @@ require('lazy').setup({
   -- :help `comment-nvim` for more information
   { 'numToStr/Comment.nvim',         opts = {} },
 
+  -- (deprecated) LSP diagnostics, code actions, etc.
   'jose-elias-alvarez/null-ls.nvim',
+
+  -- plugin for keeping track of a small list of files
+  -- that you frequently switch between
+  {
+    'ThePrimeagen/harpoon',
+    config = function(self, opts)
+      local mark = require('harpoon.mark')
+      local ui = require('harpoon.ui')
+      vim.keymap.set("n", "<leader>a", mark.add_file)
+      vim.keymap.set("n", "<leader>h", ui.toggle_quick_menu)
+      vim.keymap.set("n", "<leader>1", function()
+        ui.nav_file(1)
+      end, { desc = "Go to Harpoon Mark 1" })
+      vim.keymap.set("n", "<leader>2", function()
+        ui.nav_file(2)
+      end, { desc = "Go to Harpoon Mark 2" })
+      vim.keymap.set("n", "<leader>3", function()
+        ui.nav_file(3)
+      end, { desc = "Go to Harpoon Mark 3" })
+      vim.keymap.set("n", "<leader>4", function()
+        ui.nav_file(4)
+      end, { desc = "Go to Harpoon Mark 4" })
+      vim.keymap.set("n", "<leader>5", function()
+        ui.nav_file(5)
+      end, { desc = "Go to Harpoon Mark 5" })
+      vim.keymap.set("n", "<leader>6", function()
+        ui.nav_file(6)
+      end, { desc = "Go to Harpoon Mark 6" })
+      vim.keymap.set("n", "<leader>7", function()
+        ui.nav_file(7)
+      end, { desc = "Go to Harpoon Mark 7" })
+      vim.keymap.set("n", "<leader>8", function()
+        ui.nav_file(8)
+      end, { desc = "Go to Harpoon Mark 8" })
+      vim.keymap.set("n", "<leader>9", function()
+        ui.nav_file(9)
+      end, { desc = "Go to Harpoon Mark 1" })
+    end
+  },
 
   -- Fuzzy Finder (files, lsp, etc)
   { 'nvim-telescope/telescope.nvim', branch = '0.1.x', dependencies = { 'nvim-lua/plenary.nvim' } },
@@ -399,8 +464,8 @@ require('telescope').setup {
 pcall(require('telescope').load_extension, 'fzf')
 
 -- See `:help telescope.builtin`
-vim.keymap.set('n', '<leader>?', require('telescope.builtin').oldfiles, { desc = '[?] Find recently opened files' })
-vim.keymap.set('n', '<leader><space>', require('telescope.builtin').buffers, { desc = '[ ] Find existing buffers' })
+vim.keymap.set('n', '<leader>so', require('telescope.builtin').oldfiles, { desc = '[S]earch Recently [O]pened Files' })
+vim.keymap.set('n', '<leader>sb', require('telescope.builtin').buffers, { desc = '[S]earch Existing [B]uffers' })
 vim.keymap.set('n', '<leader>/', function()
   -- You can pass additional configuration to telescope to change theme, layout, etc.
   require('telescope.builtin').current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
@@ -418,10 +483,10 @@ vim.keymap.set('n', '<leader>sf', require('telescope.builtin').git_files, { desc
 vim.keymap.set('n', '<leader>sg', require('telescope.builtin').live_grep, { desc = '[S]earch by [G]rep' })
 -- This is the equivalent of global "find" in VS Code, but searching ignored files
 vim.keymap.set('n', '<leader>sG',
-  function ()
-     require('telescope.builtin').live_grep({ additional_args = { '-u' }})
+  function()
+    require('telescope.builtin').live_grep({ additional_args = { '-u' } })
   end
-, { desc = '[S]earch Hidden Files by [G]rep' })
+  , { desc = '[S]earch Hidden Files by [G]rep' })
 -- Searches for the string under your cursor or selection in your current working directory
 -- This is the equivalent to VS Code's per-file search feature, with the added convenience of auto-searching
 -- the word that is under the cursor or currently selected with visual mode
@@ -430,7 +495,7 @@ vim.keymap.set('n', '<leader>sw', require('telescope.builtin').grep_string, { de
 -- MORE OBSCURE TELESCOPE FEATURES (may delete later if not needed):
 -- Lists files in your current working directory, respects .gitignore
 -- This includes files normally hidden from search results such as node_modules, etc.
-vim.keymap.set('n', '<leader>sa', require('telescope.builtin').find_files, { desc = '[S]earch [A]ll) Files' })
+vim.keymap.set('n', '<leader>sF', require('telescope.builtin').find_files, { desc = '[S]earch All [F]iles' })
 vim.keymap.set('n', '<leader>sh', require('telescope.builtin').help_tags, { desc = '[S]earch [H]elp' })
 vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics, { desc = '[S]earch [D]iagnostics' })
 
@@ -496,7 +561,8 @@ require('nvim-treesitter.configs').setup {
     swap = {
       enable = true,
       swap_next = {
-        ['<leader>a'] = '@parameter.inner',
+        -- disabling for now because default keybinding conflicts with harpoon
+        -- ['<leader>a'] = '@parameter.inner',
       },
       swap_previous = {
         ['<leader>A'] = '@parameter.inner',
@@ -590,11 +656,12 @@ local servers = {
       },
     }
   },
+  -- TOML
+  taplo = {},
   ruff_lsp = {
     -- Any extra CLI arguments for `ruff` can go here.
     args = {},
   },
-
   lua_ls = {
     Lua = {
       workspace = { checkThirdParty = false },

@@ -210,19 +210,19 @@ require('lazy').setup({
         lualine_c = {
           {
             'filename',
-            file_status = true,   -- Displays file status (readonly status, modified status)
+            file_status = true,     -- Displays file status (readonly status, modified status)
             newfile_status = false, -- Display new file status (new file means no write after created)
-            path = 3,             -- 0: Just the filename
+            path = 3,               -- 0: Just the filename
             -- 1: Relative path
             -- 2: Absolute path
             -- 3: Absolute path, with tilde as the home directory
             -- 4: Filename and parent dir, with tilde as the home directory
 
             symbols = {
-              modified = '[+]',    -- Text to show when the file is modified.
-              readonly = '[-]',    -- Text to show when the file is non-modifiable or readonly.
+              modified = '[+]',      -- Text to show when the file is modified.
+              readonly = '[-]',      -- Text to show when the file is non-modifiable or readonly.
               unnamed = '[No Name]', -- Text to show for unnamed buffers.
-              newfile = '[New]',   -- Text to show for newly created file before first write
+              newfile = '[New]',     -- Text to show for newly created file before first write
             }
           }
         }
@@ -255,6 +255,10 @@ require('lazy').setup({
   {
     'ThePrimeagen/harpoon',
     config = function(self, opts)
+      require('harpoon').setup({
+        -- set marks specific to each git branch inside git repository
+        mark_branch = true,
+      })
       local mark = require('harpoon.mark')
       local ui = require('harpoon.ui')
       vim.keymap.set("n", "<leader>a", mark.add_file)
@@ -320,7 +324,8 @@ require('lazy').setup({
         },
         view = {
           number = true,
-          relativenumber = true
+          relativenumber = true,
+          width = 60
         },
         actions = {
           open_file = {

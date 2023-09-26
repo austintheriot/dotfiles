@@ -247,8 +247,74 @@ require('lazy').setup({
   -- :help `comment-nvim` for more information
   { 'numToStr/Comment.nvim',         opts = {} },
 
+  -- prettier setup (used by null-ls prettier auto-formatting)
+  {
+    'MunifTanjim/prettier.nvim',
+    config = function()
+      -- requires prettierd to be installed
+      -- see https://github.com/fsouza/prettierd
+      local prettier = require("prettier")
+
+      prettier.setup({
+        bin = 'prettierd',
+        filetypes = {
+          "css",
+          "graphql",
+          "html",
+          "javascript",
+          "javascriptreact",
+          "json",
+          "less",
+          "markdown",
+          "scss",
+          "typescript",
+          "typescriptreact",
+          "yaml",
+        },
+      })
+    end
+  },
+
   -- (deprecated) LSP diagnostics, code actions, etc.
-  'jose-elias-alvarez/null-ls.nvim',
+  {
+    'jose-elias-alvarez/null-ls.nvim',
+    config = function()
+      local null_ls = require('null-ls')
+      null_ls.setup({
+        on_attach = function(client, bufnr)
+          if client.supports_method("textDocument/formatting") then
+            local group = vim.api.nvim_create_augroup("lsp_format_on_save", { clear = false })
+            local event = "BufWritePre" -- or "BufWritePost"
+            local async = event == "BufWritePost"
+
+            -- assign keymap for formatting in normal mode
+            vim.keymap.set("n", "<Leader>f", function()
+              vim.lsp.buf.format({ bufnr = vim.api.nvim_get_current_buf() })
+            end, { buffer = bufnr, desc = "[lsp] format" })
+
+            -- automatically format on save
+            vim.api.nvim_clear_autocmds({ buffer = bufnr, group = group })
+            vim.api.nvim_create_autocmd(event, {
+              buffer = bufnr,
+              group = group,
+              callback = function()
+                vim.lsp.buf.format({ bufnr = bufnr, async = async })
+              end,
+              desc = "[lsp] format on save",
+            })
+          end
+
+          -- enable formatting only selected text
+          if client.supports_method("textDocument/rangeFormatting") then
+            vim.keymap.set("x", "<Leader>f", function()
+              vim.lsp.buf.format({ bufnr = vim.api.nvim_get_current_buf() })
+            end, { buffer = bufnr, desc = "[lsp] format" })
+          end
+        end,
+        debug = true,
+      })
+    end
+  },
 
   -- plugin for keeping track of a small list of files
   -- that you frequently switch between
@@ -415,9 +481,6 @@ vim.o.termguicolors = true
 -- Keymaps for better default experience
 -- See `:help vim.keymap.set()`
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
-vim.keymap.set({ 'n', 'x' }, '<leader>pf', function()
-  vim.lsp.buf.format({ async = false, timeout_ms = 10000 })
-end)
 
 -- Remap for dealing with word wrap
 vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
@@ -699,35 +762,6 @@ mason_lspconfig.setup_handlers {
     }
   end
 }
-
--- use null ls to setup formatting and diagnostics
-local null_ls = require("null-ls")
-null_ls.setup({
-  should_attach = function(bufnr)
-    -- I want to always ignore formatting / diagnostics in packages
-    -- this was breaking mypy which was annoying. Turns out, I just
-    -- it's better to not care about things we shouldn't care about
-    return not vim.api.nvim_buf_get_name(bufnr):match(".pyenv")
-  end,
-  debug = true,
-  sources = {
-    -- diagnostics
-    null_ls.builtins.diagnostics.flake8.with({ prefer_local = true }),
-    -- null_ls.builtins.diagnostics.mypy.with({
-    --   prefer_local = true,
-    --   extra_args = {
-    --     "--check-untyped-defs",
-    --     "--ignore-missing-imports",
-    --   },
-    --   timeout = 10000
-    -- }),
-    -- formatting
-    null_ls.builtins.formatting.black.with({ prefer_local = true }),
-    null_ls.builtins.formatting.isort.with({ prefer_local = true }),
-    -- NOTE: if prettier / eslint are clashing, delete this
-    null_ls.builtins.formatting.prettier.with({ prefer_local = true })
-  },
-})
 
 -- [[ Configure nvim-cmp ]]
 -- See `:help cmp`

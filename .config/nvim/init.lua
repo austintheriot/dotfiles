@@ -247,33 +247,6 @@ require('lazy').setup({
   -- :help `comment-nvim` for more information
   { 'numToStr/Comment.nvim',         opts = {} },
 
-  -- prettier setup (used by null-ls prettier auto-formatting)
-  {
-    'MunifTanjim/prettier.nvim',
-    config = function()
-      -- requires prettierd to be installed
-      -- see https://github.com/fsouza/prettierd
-      local prettier = require("prettier")
-
-      prettier.setup({
-        bin = 'prettierd',
-        filetypes = {
-          "css",
-          "graphql",
-          "html",
-          "javascript",
-          "javascriptreact",
-          "json",
-          "less",
-          "markdown",
-          "scss",
-          "typescript",
-          "typescriptreact",
-          "yaml",
-        },
-      })
-    end
-  },
 
   -- (deprecated) LSP diagnostics, code actions, etc.
   {
@@ -315,6 +288,63 @@ require('lazy').setup({
       })
     end
   },
+
+  -- prettier setup (used by null-ls prettier auto-formatting)
+  {
+    'MunifTanjim/prettier.nvim',
+    config = function()
+      -- requires prettierd to be installed
+      -- see https://github.com/fsouza/prettierd
+      local prettier = require("prettier")
+
+      prettier.setup({
+        bin = 'prettierd',
+        filetypes = {
+          "css",
+          "graphql",
+          "html",
+          "javascript",
+          "javascriptreact",
+          "json",
+          "less",
+          "markdown",
+          "scss",
+          "typescript",
+          "typescriptreact",
+          "yaml",
+        },
+      })
+    end
+  },
+
+  -- eslint setup
+  {
+    'MunifTanjim/eslint.nvim',
+    config = function()
+      local eslint = require("eslint")
+
+      eslint.setup({
+        bin = 'eslint_d', -- or `eslint`
+        code_actions = {
+          enable = true,
+          apply_on_save = {
+            enable = true,
+            types = { "directive", "problem", "suggestion", "layout" },
+          },
+          disable_rule_comment = {
+            enable = true,
+            location = "separate_line", -- or `same_line`
+          },
+        },
+        diagnostics = {
+          enable = true,
+          report_unused_disable_directives = false,
+          run_on = "type", -- or `save`
+        },
+      })
+    end
+  },
+
 
   -- plugin for keeping track of a small list of files
   -- that you frequently switch between
@@ -481,6 +511,9 @@ vim.o.termguicolors = true
 -- Keymaps for better default experience
 -- See `:help vim.keymap.set()`
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
+vim.keymap.set({ 'n', 'x' }, '<leader>f', function()
+  vim.lsp.buf.format({ async = false, timeout_ms = 10000 })
+end)
 
 -- Remap for dealing with word wrap
 vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
@@ -709,7 +742,14 @@ end
 local servers = {
   -- clangd = {},
   -- gopls = {},
-  rust_analyzer = {},
+  rust_analyzer = {
+    -- ['rust-analyzer'] = {
+    --   cargo = {
+    --     features = { 'simd128' },
+    --     target = "wasm32-unknown-unknown"
+    --   }
+    -- }
+  },
   tsserver = {},
   html = { filetypes = { 'html', 'twig', 'hbs' } },
   pylsp = {

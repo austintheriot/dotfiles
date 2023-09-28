@@ -247,9 +247,6 @@ require('lazy').setup({
   -- :help `comment-nvim` for more information
   { 'numToStr/Comment.nvim',         opts = {} },
 
-  -- (deprecated) LSP diagnostics, code actions, etc.
-  'jose-elias-alvarez/null-ls.nvim',
-
   -- plugin for keeping track of a small list of files
   -- that you frequently switch between
   {
@@ -352,6 +349,19 @@ require('lazy').setup({
   -- Enable treesitter to auto-close and auto-update HTML/JSX tags
   'windwp/nvim-ts-autotag',
 
+  {
+    'jose-elias-alvarez/null-ls.nvim',
+    lazy = false,
+    config = function()
+      local null_ls = require('null-ls')
+      null_ls.setup({
+        sources = {
+          null_ls.builtins.formatting.prettierd,
+        },
+      })
+    end
+  },
+
   -- default kickstart plugins
   require 'kickstart.plugins.autoformat',
   require 'kickstart.plugins.debug',
@@ -411,13 +421,9 @@ vim.o.completeopt = 'menuone,noselect'
 vim.o.termguicolors = true
 
 -- [[ Basic Keymaps ]]
-
 -- Keymaps for better default experience
 -- See `:help vim.keymap.set()`
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
-vim.keymap.set({ 'n', 'x' }, '<leader>pf', function()
-  vim.lsp.buf.format({ async = false, timeout_ms = 10000 })
-end)
 
 -- Remap for dealing with word wrap
 vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
@@ -584,7 +590,7 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 
 -- [[ Configure LSP ]]
 --  This function gets run when an LSP connects to a particular buffer.
-local on_attach = function(_, bufnr)
+local on_attach = function(client, bufnr)
   -- NOTE: Remember that lua is a real programming language, and as such it is possible
   -- to define small helper and utility functions so you don't have to repeat yourself
   -- many times.
@@ -612,11 +618,6 @@ local on_attach = function(_, bufnr)
   -- See `:help K` for why this keymap
   nmap('K', vim.lsp.buf.hover, 'Hover Documentation')
   nmap('<C-k>', vim.lsp.buf.signature_help, 'Signature Documentation')
-  vim.lsp.texlab.setup {
-    callbacks = {
-      ["textDocument/hover"] = "hover_wrap"
-    },
-  }
 
   -- Lesser used LSP functionality
   nmap('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
@@ -626,10 +627,46 @@ local on_attach = function(_, bufnr)
     print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
   end, '[W]orkspace [L]ist Folders')
 
+
+  local run_format = function(local_bufnr)
+    -- use null-ls to format in Notability repo,
+    -- since it's necessary to use prettier config
+    if (vim.fn.getcwd() == "/Users/austin/Documents/Code/Notability") then
+      vim.lsp.buf.format({
+        bufnr = local_bufnr,
+        filter = function(local_client)
+          return local_client.name == "null-ls"
+        end
+      })
+      print("Formatted with null-ls & pretterd")
+    else
+      vim.lsp.buf.format({ timeout_ms = 10000 })
+      print("Formatted with default LSP formatter")
+    end
+  end
+
   -- Create a command `:Format` local to the LSP buffer
   vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_)
-    vim.lsp.buf.format()
+    run_format(bufnr)
   end, { desc = 'Format current buffer with LSP' })
+
+  -- assign keymap for formatting in normal mode
+  vim.keymap.set("n", "<Leader>f", run_format, { desc = "[lsp] format" })
+
+  -- allow auto-formatting on save
+  if client.supports_method("textDocument/formatting") then
+    vim.api.nvim_create_autocmd("BufWritePre", {
+      callback = function()
+        run_format(bufnr)
+      end,
+      group = vim.api.nvim_create_augroup("lsp_document_format", { clear = true }),
+      buffer = 0
+    })
+  else
+    vim.schedule(function()
+      print('No formatter')
+    end)
+  end
 end
 
 -- PYTHON VIRTUALENV SETUP (not used currently)
@@ -646,8 +683,16 @@ end
 local servers = {
   -- clangd = {},
   -- gopls = {},
-  rust_analyzer = {},
+  rust_analyzer = {
+    -- ['rust-analyzer'] = {
+    --   cargo = {
+    --     features = { 'simd128' },
+    --     target = "wasm32-unknown-unknown"
+    --   }
+    -- }
+  },
   tsserver = {},
+  eslint = {},
   html = { filetypes = { 'html', 'twig', 'hbs' } },
   pylsp = {
     configurationSources = { 'flake8' },
@@ -699,35 +744,6 @@ mason_lspconfig.setup_handlers {
     }
   end
 }
-
--- use null ls to setup formatting and diagnostics
-local null_ls = require("null-ls")
-null_ls.setup({
-  should_attach = function(bufnr)
-    -- I want to always ignore formatting / diagnostics in packages
-    -- this was breaking mypy which was annoying. Turns out, I just
-    -- it's better to not care about things we shouldn't care about
-    return not vim.api.nvim_buf_get_name(bufnr):match(".pyenv")
-  end,
-  debug = true,
-  sources = {
-    -- diagnostics
-    null_ls.builtins.diagnostics.flake8.with({ prefer_local = true }),
-    -- null_ls.builtins.diagnostics.mypy.with({
-    --   prefer_local = true,
-    --   extra_args = {
-    --     "--check-untyped-defs",
-    --     "--ignore-missing-imports",
-    --   },
-    --   timeout = 10000
-    -- }),
-    -- formatting
-    null_ls.builtins.formatting.black.with({ prefer_local = true }),
-    null_ls.builtins.formatting.isort.with({ prefer_local = true }),
-    -- NOTE: if prettier / eslint are clashing, delete this
-    null_ls.builtins.formatting.prettier.with({ prefer_local = true })
-  },
-})
 
 -- [[ Configure nvim-cmp ]]
 -- See `:help cmp`

@@ -247,105 +247,6 @@ require('lazy').setup({
   -- :help `comment-nvim` for more information
   { 'numToStr/Comment.nvim',         opts = {} },
 
-
-  -- (deprecated) LSP diagnostics, code actions, etc.
-  {
-    'jose-elias-alvarez/null-ls.nvim',
-    config = function()
-      local null_ls = require('null-ls')
-      null_ls.setup({
-        on_attach = function(client, bufnr)
-          if client.supports_method("textDocument/formatting") then
-            local group = vim.api.nvim_create_augroup("lsp_format_on_save", { clear = false })
-            local event = "BufWritePre" -- or "BufWritePost"
-            local async = event == "BufWritePost"
-
-            -- assign keymap for formatting in normal mode
-            vim.keymap.set("n", "<Leader>f", function()
-              vim.lsp.buf.format({ bufnr = vim.api.nvim_get_current_buf() })
-            end, { buffer = bufnr, desc = "[lsp] format" })
-
-            -- automatically format on save
-            vim.api.nvim_clear_autocmds({ buffer = bufnr, group = group })
-            vim.api.nvim_create_autocmd(event, {
-              buffer = bufnr,
-              group = group,
-              callback = function()
-                vim.lsp.buf.format({ bufnr = bufnr, async = async })
-              end,
-              desc = "[lsp] format on save",
-            })
-          end
-
-          -- enable formatting only selected text
-          if client.supports_method("textDocument/rangeFormatting") then
-            vim.keymap.set("x", "<Leader>f", function()
-              vim.lsp.buf.format({ bufnr = vim.api.nvim_get_current_buf() })
-            end, { buffer = bufnr, desc = "[lsp] format" })
-          end
-        end,
-        debug = true,
-      })
-    end
-  },
-
-  -- prettier setup (used by null-ls prettier auto-formatting)
-  {
-    'MunifTanjim/prettier.nvim',
-    config = function()
-      -- requires prettierd to be installed
-      -- see https://github.com/fsouza/prettierd
-      local prettier = require("prettier")
-
-      prettier.setup({
-        bin = 'prettierd',
-        filetypes = {
-          "css",
-          "graphql",
-          "html",
-          "javascript",
-          "javascriptreact",
-          "json",
-          "less",
-          "markdown",
-          "scss",
-          "typescript",
-          "typescriptreact",
-          "yaml",
-        },
-      })
-    end
-  },
-
-  -- eslint setup
-  {
-    'MunifTanjim/eslint.nvim',
-    config = function()
-      local eslint = require("eslint")
-
-      eslint.setup({
-        bin = 'eslint_d', -- or `eslint`
-        code_actions = {
-          enable = true,
-          apply_on_save = {
-            enable = true,
-            types = { "directive", "problem", "suggestion", "layout" },
-          },
-          disable_rule_comment = {
-            enable = true,
-            location = "separate_line", -- or `same_line`
-          },
-        },
-        diagnostics = {
-          enable = true,
-          report_unused_disable_directives = false,
-          run_on = "type", -- or `save`
-        },
-      })
-    end
-  },
-
-
   -- plugin for keeping track of a small list of files
   -- that you frequently switch between
   {
@@ -448,6 +349,19 @@ require('lazy').setup({
   -- Enable treesitter to auto-close and auto-update HTML/JSX tags
   'windwp/nvim-ts-autotag',
 
+  {
+    'jose-elias-alvarez/null-ls.nvim',
+    lazy = false,
+    config = function()
+      local null_ls = require('null-ls')
+      null_ls.setup({
+        sources = {
+          null_ls.builtins.formatting.prettierd,
+        },
+      })
+    end
+  },
+
   -- default kickstart plugins
   require 'kickstart.plugins.autoformat',
   require 'kickstart.plugins.debug',
@@ -507,13 +421,9 @@ vim.o.completeopt = 'menuone,noselect'
 vim.o.termguicolors = true
 
 -- [[ Basic Keymaps ]]
-
 -- Keymaps for better default experience
 -- See `:help vim.keymap.set()`
 vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
-vim.keymap.set({ 'n', 'x' }, '<leader>f', function()
-  vim.lsp.buf.format({ async = false, timeout_ms = 10000 })
-end)
 
 -- Remap for dealing with word wrap
 vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
@@ -680,7 +590,7 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 
 -- [[ Configure LSP ]]
 --  This function gets run when an LSP connects to a particular buffer.
-local on_attach = function(_, bufnr)
+local on_attach = function(client, bufnr)
   -- NOTE: Remember that lua is a real programming language, and as such it is possible
   -- to define small helper and utility functions so you don't have to repeat yourself
   -- many times.
@@ -708,11 +618,6 @@ local on_attach = function(_, bufnr)
   -- See `:help K` for why this keymap
   nmap('K', vim.lsp.buf.hover, 'Hover Documentation')
   nmap('<C-k>', vim.lsp.buf.signature_help, 'Signature Documentation')
-  vim.lsp.texlab.setup {
-    callbacks = {
-      ["textDocument/hover"] = "hover_wrap"
-    },
-  }
 
   -- Lesser used LSP functionality
   nmap('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
@@ -722,10 +627,46 @@ local on_attach = function(_, bufnr)
     print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
   end, '[W]orkspace [L]ist Folders')
 
+
+  local run_format = function(local_bufnr)
+    -- use null-ls to format in Notability repo,
+    -- since it's necessary to use prettier config
+    if (vim.fn.getcwd() == "/Users/austin/Documents/Code/Notability") then
+      vim.lsp.buf.format({
+        bufnr = local_bufnr,
+        filter = function(local_client)
+          return local_client.name == "null-ls"
+        end
+      })
+      print("Formatted with null-ls & pretterd")
+    else
+      vim.lsp.buf.format({ timeout_ms = 10000 })
+      print("Formatted with default LSP formatter")
+    end
+  end
+
   -- Create a command `:Format` local to the LSP buffer
   vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_)
-    vim.lsp.buf.format()
+    run_format(bufnr)
   end, { desc = 'Format current buffer with LSP' })
+
+  -- assign keymap for formatting in normal mode
+  vim.keymap.set("n", "<Leader>f", run_format, { desc = "[lsp] format" })
+
+  -- allow auto-formatting on save
+  if client.supports_method("textDocument/formatting") then
+    vim.api.nvim_create_autocmd("BufWritePre", {
+      callback = function()
+        run_format(bufnr)
+      end,
+      group = vim.api.nvim_create_augroup("lsp_document_format", { clear = true }),
+      buffer = 0
+    })
+  else
+    vim.schedule(function()
+      print('No formatter')
+    end)
+  end
 end
 
 -- PYTHON VIRTUALENV SETUP (not used currently)
@@ -751,6 +692,7 @@ local servers = {
     -- }
   },
   tsserver = {},
+  eslint = {},
   html = { filetypes = { 'html', 'twig', 'hbs' } },
   pylsp = {
     configurationSources = { 'flake8' },

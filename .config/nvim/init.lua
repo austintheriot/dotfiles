@@ -342,7 +342,7 @@ require('lazy').setup({
         }
         -- todo: close nvim-tree after selecting file
       })
-      vim.keymap.set("n", "<leader>-", ':NvimTreeToggle<CR>')
+      vim.keymap.set("n", "<leader>o", ':NvimTreeToggle<CR>')
     end
   },
 

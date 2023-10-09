@@ -87,6 +87,17 @@ require('lazy').setup({
   -- Automatically close parentheses, brackets, etc.
   'jiangmiao/auto-pairs',
 
+  {
+    "kylechui/nvim-surround",
+    version = "*", -- Use for stability; omit to use `main` branch for the latest features
+    event = "VeryLazy",
+    config = function()
+      require("nvim-surround").setup({
+        -- Configuration here, or leave empty to use defaults
+      })
+    end
+  },
+
   -- NOTE: This is where your plugins related to LSP can be installed.
   --  The configuration is done below. Search for lspconfig to find it below.
   {
@@ -629,9 +640,10 @@ local on_attach = function(client, bufnr)
 
 
   local run_format = function(local_bufnr)
+    local file_path = vim.fn.expand('%:p')
     -- use null-ls to format in Notability repo,
     -- since it's necessary to use prettier config
-    if (vim.fn.getcwd() == "/Users/austin/Documents/Code/Notability") then
+    if (string.find(file_path, "/Users/austin/Documents/Code/Notability")) then
       vim.lsp.buf.format({
         bufnr = local_bufnr,
         filter = function(local_client)

@@ -18,11 +18,11 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 export PATH="$WASMTIME_HOME/bin:$PATH"
 
 # SOURCE BRANCH-SPECIFIC CONFIG ####################################################################
-FILE=.zshrc-home
+FILE=.zshrc-linux
 if test -f "$FILE"; then
    source $FILE
 fi
-FILE=.zshrc-work
+FILE=.zshrc-mac
 if test -f "$FILE"; then
    source $FILE
 fi

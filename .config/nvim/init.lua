@@ -269,35 +269,12 @@ require('lazy').setup({
       })
       local mark = require('harpoon.mark')
       local ui = require('harpoon.ui')
+      -- add this file to harpoon list
       vim.keymap.set("n", "<leader>a", mark.add_file)
-      vim.keymap.set("n", "<leader>h", ui.toggle_quick_menu)
-      vim.keymap.set("n", "<leader>1", function()
-        ui.nav_file(1)
-      end, { desc = "Go to Harpoon Mark 1" })
-      vim.keymap.set("n", "<leader>2", function()
-        ui.nav_file(2)
-      end, { desc = "Go to Harpoon Mark 2" })
-      vim.keymap.set("n", "<leader>3", function()
-        ui.nav_file(3)
-      end, { desc = "Go to Harpoon Mark 3" })
-      vim.keymap.set("n", "<leader>4", function()
-        ui.nav_file(4)
-      end, { desc = "Go to Harpoon Mark 4" })
-      vim.keymap.set("n", "<leader>5", function()
-        ui.nav_file(5)
-      end, { desc = "Go to Harpoon Mark 5" })
-      vim.keymap.set("n", "<leader>6", function()
-        ui.nav_file(6)
-      end, { desc = "Go to Harpoon Mark 6" })
-      vim.keymap.set("n", "<leader>7", function()
-        ui.nav_file(7)
-      end, { desc = "Go to Harpoon Mark 7" })
-      vim.keymap.set("n", "<leader>8", function()
-        ui.nav_file(8)
-      end, { desc = "Go to Harpoon Mark 8" })
-      vim.keymap.set("n", "<leader>9", function()
-        ui.nav_file(9)
-      end, { desc = "Go to Harpoon Mark 1" })
+      -- open up the harpoon menu
+      vim.keymap.set("n", "<leader><leader>", ui.toggle_quick_menu)
+      -- 1<leader>h navigates to file 1, and 3<leader>h navigates to file 3, etc.
+      vim.keymap.set('n', '<leader>h', '<cmd>lua require("harpoon.ui").nav_file(vim.v.count1)<cr>', opts)
     end
   },
 
@@ -457,6 +434,8 @@ vim.keymap.set("n", "<C-d>", "<C-d>zz")
 vim.keymap.set("n", "<C-u>", "<C-u>zz")
 vim.keymap.set("n", "n", "nzz")
 vim.keymap.set("n", "N", "Nzz")
+vim.keymap.set("n", "*", "*zz")
+vim.keymap.set("n", "#", "#zz")
 
 -- [[ Highlight on yank ]]
 -- See `:help vim.highlight.on_yank()`
@@ -771,8 +750,6 @@ cmp.setup {
     end,
   },
   mapping = cmp.mapping.preset.insert {
-    ['<C-j>'] = cmp.mapping.select_next_item(),
-    ['<C-k>'] = cmp.mapping.select_prev_item(),
     ['<C-d>'] = cmp.mapping.scroll_docs(-4),
     ['<C-f>'] = cmp.mapping.scroll_docs(4),
     ['<C-Space>'] = cmp.mapping.complete {},

@@ -32,6 +32,7 @@ alias start='source ~/.my-scripts/tmux-start.sh'
 alias s='start'
 alias split='source ~/.my-scripts/tmux-split.sh'
 alias sp='split' 
+alias nvc='NVIM_APPNAME=nvchad nvim'
 
 # PLUGINS ##########################################################################################
 # git - comes with zsh
@@ -54,3 +55,5 @@ zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
 
 PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} %F{254}λ%f '
 
+# SETUP ZOXIDE ####################################################################################
+eval "$(zoxide init zsh)"

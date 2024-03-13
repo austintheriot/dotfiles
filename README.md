@@ -1,6 +1,6 @@
 # Dot Files
 
-Welcome! Here is my (very) unpolished .dotfile configuration. Below are some setup notes to my future self, after I completely forgot what I setup or how I did it.
+Welcome! Here is my rather unpolished .dotfile configuration. Below are some setup notes to my future self, for when I inevitably completely forget what I did or how I did it.
 
 ## Setup
 

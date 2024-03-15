@@ -38,6 +38,13 @@ require('lazy').setup({
   'tpope/vim-rhubarb',
   -- game created by Prime for learning vim
   'ThePrimeagen/vim-be-good',
+  -- undotree
+  {
+    'mbbill/undotree',
+    config = function()
+      vim.keymap.set('n', '<leader>u', vim.cmd.UndotreeToggle)
+    end
+  },
 
   -- unobtrusive indicators for built-in vim marks
   {

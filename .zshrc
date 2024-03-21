@@ -33,6 +33,7 @@ alias s='start'
 alias split='source ~/.my-scripts/tmux-split.sh'
 alias sp='split' 
 alias nvc='NVIM_APPNAME=nvchad nvim'
+alias c='clear'
 
 # PLUGINS ##########################################################################################
 # git - comes with zsh

@@ -35,6 +35,9 @@ alias sp='split'
 alias nvc='NVIM_APPNAME=nvchad nvim'
 alias c='clear'
 
+# use neovim by default when editing files in git
+export GIT_EDITOR=nvim
+
 # PLUGINS ##########################################################################################
 # git - comes with zsh
 plugin=(git)
@@ -58,3 +61,7 @@ PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_inf
 
 # SETUP ZOXIDE ####################################################################################
 eval "$(zoxide init zsh)"
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion

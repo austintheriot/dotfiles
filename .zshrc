@@ -38,6 +38,8 @@ alias c='clear'
 # use neovim by default when editing files in git
 export GIT_EDITOR=nvim
 
+tmux source ~/.config/tmux/tmux.conf
+
 # PLUGINS ##########################################################################################
 # git - comes with zsh
 plugin=(git)

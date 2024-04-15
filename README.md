@@ -24,6 +24,22 @@ Or see local copy here, if that link no longer works: [DOTFILES](./DOTFILES.md).
 
 - Install zoxide for `z` in place of `cd`: https://github.com/ajeetdsouza/zoxide
 
+- Clone tpm (tmux plugin manager) (yes, this is to a different directory than the tmux config directory)
+
+```sh
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+```
+
+- Source the tmux config file within a tmux session
+
+```sh
+tmux source ~/.config/tmux/tmux.conf
+```
+
+- Install tpm plugins from within tmux session
+
+prefix + I (this is usually Ctrl+b and then capital I)
+
 ### Env setup
 
 #### JS

@@ -17,12 +17,16 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
 
-# SOURCE BRANCH-SPECIFIC CONFIG ####################################################################
+# CONTEXT & BRANCH-SPECIFIC CONFIGS ####################################################################
 FILE=.zshrc-linux
 if test -f "$FILE"; then
    source $FILE
 fi
 FILE=.zshrc-mac
+if test -f "$FILE"; then
+   source $FILE
+fi
+FILE=.zshrc-work
 if test -f "$FILE"; then
    source $FILE
 fi
@@ -64,6 +68,3 @@ PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_inf
 # SETUP ZOXIDE ####################################################################################
 eval "$(zoxide init zsh)"
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion

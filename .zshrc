@@ -17,12 +17,16 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
 
-# SOURCE BRANCH-SPECIFIC CONFIG ####################################################################
+# CONTEXT & BRANCH-SPECIFIC CONFIGS ####################################################################
 FILE=.zshrc-linux
 if test -f "$FILE"; then
    source $FILE
 fi
 FILE=.zshrc-mac
+if test -f "$FILE"; then
+   source $FILE
+fi
+FILE=.zshrc-work
 if test -f "$FILE"; then
    source $FILE
 fi
@@ -33,6 +37,12 @@ alias s='start'
 alias split='source ~/.my-scripts/tmux-split.sh'
 alias sp='split' 
 alias nvc='NVIM_APPNAME=nvchad nvim'
+alias c='clear'
+
+# use neovim by default when editing files in git
+export GIT_EDITOR=nvim
+
+tmux source ~/.config/tmux/tmux.conf
 
 # PLUGINS ##########################################################################################
 # git - comes with zsh
@@ -57,3 +67,4 @@ PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_inf
 
 # SETUP ZOXIDE ####################################################################################
 eval "$(zoxide init zsh)"
+

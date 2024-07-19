@@ -20,6 +20,22 @@ Or see local copy here, if that link no longer works: [DOTFILES](./DOTFILES.md).
 
 - Install neovim (editor): https://neovim.io/
 
+- (optional) Install NvChad: https://nvchad.com/docs/quickstart/install
+
+
+To install (modified the install location to not overwrite default Neovim location)
+
+
+```sh
+git clone https://github.com/NvChad/starter ~/.config/nvchad 
+```
+
+To start (custom alias in ~/.zshrc)
+
+```sh
+nvc .
+```
+
 - Install fzf (command-line fuzzy finder, used by neovim): https://github.com/junegunn/fzf
 
 - Install ripgrep (faster grep alternative written in Rust, used by neovim): https://github.com/BurntSushi/ripgrep

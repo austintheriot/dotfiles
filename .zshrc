@@ -32,12 +32,15 @@ if test -f "$FILE"; then
 fi
 
 # CONFIG BY ME #####################################################################################
-alias start='source ~/.my-scripts/tmux-start.sh'
-alias s='start'
-alias split='source ~/.my-scripts/tmux-split.sh'
-alias sp='split' 
+
+# start
+alias s='source ~/.my-scripts/tmux-start.sh'
+# split
+alias sp='source ~/.my-scripts/tmux-split.sh'
+# NvChad https://nvchad.com/
 alias nvc='NVIM_APPNAME=nvchad nvim'
-alias c='clear'
+# Neovim kickstart https://github.com/nvim-lua/kickstart.nvim/tree/master
+alias nvk='NVIM_APPNAME=nvim-kickstart nvim'
 
 # use neovim by default when editing files in git
 export GIT_EDITOR=nvim

@@ -653,7 +653,7 @@ local on_attach = function(client, bufnr)
     local file_path = vim.fn.expand('%:p')
     -- use null-ls to format in Notability repo,
     -- since it's necessary to use prettier config
-    if (string.find(file_path, "/Users/austin/Documents/Code/Notability")) then
+    if (string.find(file_path, "Notability")) then
       vim.lsp.buf.format({
         bufnr = local_bufnr,
         filter = function(local_client)

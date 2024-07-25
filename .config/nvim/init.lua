@@ -25,19 +25,6 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require('lazy').setup({
-  {
-    'jose-elias-alvarez/null-ls.nvim',
-    lazy = false,
-    config = function()
-      local null_ls = require('null-ls')
-      null_ls.setup({
-        sources = {
-          null_ls.builtins.formatting.prettierd,
-        },
-      })
-    end
-  },
-
   require 'plugins.icons',
   require 'plugins.telescope',
   require 'plugins.treesitter',

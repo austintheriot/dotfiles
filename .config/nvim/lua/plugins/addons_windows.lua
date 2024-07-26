@@ -25,7 +25,8 @@ return {
       -- open up the harpoon menu
       vim.keymap.set("n", "<leader><leader>", ui.toggle_quick_menu, { desc = "Open Harpoon quick toggle menu" })
       -- 1<leader>h navigates to file 1, and 3<leader>h navigates to file 3, etc.
-      vim.keymap.set('n', '<leader>h', '<cmd>lua require("harpoon.ui").nav_file(vim.v.count1)<cr>', opts)
+      vim.keymap.set('n', '<leader>h', '<cmd>lua require("harpoon.ui").nav_file(vim.v.count1)<cr>',
+        vim.tbl_deep_extend("force", opts, { desc = "[H]arpoon: select <number> buffer" }))
     end
   },
 }

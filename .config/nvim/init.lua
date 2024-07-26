@@ -34,7 +34,7 @@ require('lazy').setup({
   require 'plugins.statusline',
   require 'plugins.file_explorer',
   require 'plugins.theme',
-  require 'plugins.autocompletion',
+  require 'plugins.autocomplete',
   require 'plugins.git',
   require 'plugins.lsp',
 }, {})

@@ -9,6 +9,7 @@ return {
   { 'numToStr/Comment.nvim', opts = {} },
 
   -- Share permalinks to GitHub/GitLab
+  -- <leader>gy
   {
     'ruifm/gitlinker.nvim',
     config = function()
@@ -16,7 +17,9 @@ return {
     end
   },
 
-
+  -- allows surrounding a selection with (), {}, etc.
+  -- use with ys + motions + character
+  -- see :help nvim-surround for more info
   {
     "kylechui/nvim-surround",
     version = "*", -- Use for stability; omit to use `main` branch for the latest features
@@ -27,8 +30,4 @@ return {
       })
     end
   },
-
-
-  -- Enable treesitter to auto-close and auto-update HTML/JSX tags
-  'windwp/nvim-ts-autotag',
 }

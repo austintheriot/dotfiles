@@ -1,21 +1,16 @@
 return {
-  -- Useful plugin to show you pending keybinds.
-  {
-    'folke/which-key.nvim',
-    opts = {}
-  },
+  -- shows available keybinds when <leader> key is pressed
+  'folke/which-key.nvim',
 
-
-  -- undotree
+  -- undotree - traverse edit graphs in a separate window
   {
     'mbbill/undotree',
     config = function()
-      vim.keymap.set('n', '<leader>u', vim.cmd.UndotreeToggle)
+      vim.keymap.set('n', '<leader>u', vim.cmd.UndotreeToggle, { desc = "Open [u]ndo tree" })
     end
   },
 
-  -- plugin for keeping track of a small list of files
-  -- that you frequently switch between
+  -- keeps track of a small list of files that you frequently switch between
   {
     'ThePrimeagen/harpoon',
     config = function(self, opts)
@@ -26,9 +21,9 @@ return {
       local mark = require('harpoon.mark')
       local ui = require('harpoon.ui')
       -- add this file to harpoon list
-      vim.keymap.set("n", "<leader>a", mark.add_file)
+      vim.keymap.set("n", "<leader>a", mark.add_file, { desc = "Harpoon [a]dd file" })
       -- open up the harpoon menu
-      vim.keymap.set("n", "<leader><leader>", ui.toggle_quick_menu)
+      vim.keymap.set("n", "<leader><leader>", ui.toggle_quick_menu, { desc = "Open Harpoon quick toggle menu" })
       -- 1<leader>h navigates to file 1, and 3<leader>h navigates to file 3, etc.
       vim.keymap.set('n', '<leader>h', '<cmd>lua require("harpoon.ui").nav_file(vim.v.count1)<cr>', opts)
     end

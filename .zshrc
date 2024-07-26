@@ -17,22 +17,7 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
 
-# CONTEXT & BRANCH-SPECIFIC CONFIGS ####################################################################
-FILE=.zshrc-linux
-if test -f "$FILE"; then
-   source $FILE
-fi
-FILE=.zshrc-mac
-if test -f "$FILE"; then
-   source $FILE
-fi
-FILE=.zshrc-work
-if test -f "$FILE"; then
-   source $FILE
-fi
-
 # CONFIG BY ME #####################################################################################
-
 # start
 alias s='source ~/.my-scripts/tmux-start.sh'
 # split
@@ -42,16 +27,54 @@ alias nvc='NVIM_APPNAME=nvchad nvim'
 # Neovim kickstart https://github.com/nvim-lua/kickstart.nvim/tree/master
 alias nvk='NVIM_APPNAME=nvim-kickstart nvim'
 
+# ENVIRONMENT-SPECIFIC CONFIGURATIONS ##############################################################
+# mac 
+if [ -f ".zshrc-mac" ]; then
+    # setup root git repo alias
+    alias config='/usr/bin/git --git-dir=/Users/austin/.cfg/ --work-tree=/Users/austin'
+
+    # zsh-autosuggestions init - see https://github.com/zsh-users/zsh-autosuggestions
+    source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+
+    # SETUP NVM PLUGIN
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+    # SETUP SHORTCUT FOR USING ALACRITTY
+    # reload config with `alacritty -v`
+    alias alacritty="/Applications/Alacritty.app/Contents/MacOS/alacritty"
+fi
+
+# linux
+if [ -f ".zshrc-linux" ]; then
+    # setup root git repo alias
+    alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
+
+    # zsh-autosuggestions - set up with manual git clone -  see https://github.com/zsh-users/zsh-autosuggestions
+    source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
+
+    # NVM CONFIGURATION
+    source /usr/share/nvm/init-nvm.sh
+fi
+
+# work
+if [ -f ".zshrc-work" ]; then
+    export BULLMQ_PRO_NPM_TOKEN=xyz
+fi
+
 # use neovim by default when editing files in git
 export GIT_EDITOR=nvim
 
+# make sure tmux has correct config
 tmux source ~/.config/tmux/tmux.conf
 
-# PLUGINS ##########################################################################################
+# ZSH PLUGINS #######################################################################################
 # git - comes with zsh
 plugin=(git)
 
-# CUSTOMIZING PROMPT ################################################################################
+# CUSTOMIZING COMMAND LINE PROMPT ###################################################################
+# see https://arjanvandergaag.nl/blog/customize-zsh-prompt-with-vcs-info.html
 # creates color formatting string based on current staged status
 parse_git_dirty() {
   git_status="$(git status 2> /dev/null)"
@@ -60,12 +83,12 @@ parse_git_dirty() {
   [[ "$git_status" =~ "Untracked files:" ]] && echo -n "%F{red}"
 }
 
+# zsh-specific config stuff
+# substite of parameters inside the prompt each time the prompt is drawn.
 setopt prompt_subst
-
 autoload -Uz vcs_info # enable vcs_info
 precmd () { vcs_info } # always load before displaying the prompt
 zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
-
 PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} %F{254}λ%f '
 
 # SETUP ZOXIDE ####################################################################################

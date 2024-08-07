@@ -9,6 +9,12 @@ vim.g.maplocalleader = ' '
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
+-- add words false positives to spell checker word with `zg`
+-- get spelling suggestion using `z=`
+vim.o.spell = true
+vim.o.spelllang = 'en_us'
+vim.o.spellsuggest = 'best,9'
+
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = true
 

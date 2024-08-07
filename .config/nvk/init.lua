@@ -1,5 +1,5 @@
-require("settings")
-require("health")
+require 'settings'
+require 'health'
 
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
@@ -25,21 +25,29 @@ vim.opt.rtp:prepend(lazypath)
 --
 -- NOTE: Here is where you install your plugins.
 require('lazy').setup({
-  -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
-  'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
+  -- essentials
+  require 'plugins.telescope',
+  require 'plugins.lsp',
+  require 'plugins.autoformat',
+  require 'plugins.autocomplete',
+  require 'plugins.treesitter',
+  require 'plugins.neo-tree',
 
-  require("plugins.gitsigns"),
-  require("plugins.which-key"),
-  require("plugins.telescope"),
-  require("plugins.lsp"),
-  require("plugins.autoformat"),
-  require("plugins.autocomplete"),
-  require("plugins.theme"),
-  require("plugins.todo-comments"),
-  require("plugins.mini"),
-  require("plugins.treesitter"),
-  require("plugins.neo-tree"),
-  require("plugins.autopairs"),
+  -- non-essentials
+  'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
+  -- Git related plugins
+  'tpope/vim-fugitive',
+  require 'plugins.todo-comments',
+  require 'plugins.mini',
+  require 'plugins.theme',
+  require 'plugins.which-key',
+  require 'plugins.gitsigns',
+  require 'plugins.gitlinker',
+  require 'plugins.autopairs',
+  require 'plugins.marks',
+  require 'plugins.indent-blankline',
+  require 'plugins.undotree',
+  require 'plugins.harpoon',
 }, {
   ui = {
     -- If you are using a Nerd Font: set icons to an empty table which will use the

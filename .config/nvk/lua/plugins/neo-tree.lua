@@ -18,7 +18,7 @@ return {
     { '<leader>O', ':Neotree toggle position=current<CR>', desc = 'NeoTree reveal (window)' },
   },
   opts = {
-    close_if_last_window = false,
+    close_if_last_window = true,
     filesystem = {
       window = {
         mappings = {

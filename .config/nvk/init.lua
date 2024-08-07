@@ -1,4 +1,5 @@
 require("settings")
+require("health")
 
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
@@ -37,9 +38,8 @@ require('lazy').setup({
   require("plugins.todo-comments"),
   require("plugins.mini"),
   require("plugins.treesitter"),
-
-  -- TODO replace with nvim-tree?
-  require 'kickstart.plugins.neo-tree',
+  require("plugins.neo-tree"),
+  require("plugins.autopairs"),
 }, {
   ui = {
     -- If you are using a Nerd Font: set icons to an empty table which will use the

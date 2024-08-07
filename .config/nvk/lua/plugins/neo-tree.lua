@@ -11,13 +11,18 @@ return {
   },
   cmd = 'Neotree',
   keys = {
-    { '<leader>o', ':Neotree reveal<CR>', desc = 'NeoTree reveal' },
+    -- opens in default position (whatever specified in ops.filesystem.window.position)
+    { '<leader>o', ':Neotree toggle<CR>', desc = 'NeoTree reveal ' },
+    -- open in current window
+    { '<leader>O', ':Neotree toggle position=current<CR>', desc = 'NeoTree reveal (window)' },
   },
   opts = {
+    close_if_last_window = false,
     filesystem = {
       window = {
         mappings = {
           ['<leader>o'] = 'close_window',
+          ['-'] = 'navigate_up',
         },
       },
     },

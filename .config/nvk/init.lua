@@ -31,7 +31,7 @@ require('lazy').setup({
   require 'plugins.autoformat',
   require 'plugins.autocomplete',
   require 'plugins.treesitter',
-  require 'plugins.neo-tree',
+  require 'plugins.file-exlorer',
 
   -- non-essentials
   'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically

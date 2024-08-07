@@ -1,3 +1,17 @@
+local function get_is_git_repo()
+  -- run shell command
+  local handle = io.popen 'git rev-parse --is-inside-work-tree 2>/dev/null'
+
+  -- get string output
+  local result
+  if handle then
+    result = handle:read '*a'
+    handle:close()
+  end
+
+  return result:match 'true'
+end
+
 return {
   -- NOTE: Plugins can specify dependencies.
   --
@@ -77,8 +91,12 @@ return {
       local builtin = require 'telescope.builtin'
       vim.keymap.set('n', '<leader>sb', builtin.buffers, { desc = '[S]earch for existing [B]uffers' })
       vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
-      vim.keymap.set('n', '<leader>sf', builtin.git_files, { desc = '[S]earch [F]iles' })
-      vim.keymap.set('n', '<leader>sF', require('telescope.builtin').find_files, { desc = '[S]earch All [F]iles' })
+      vim.keymap.set('n', '<leader>sf', function()
+        local is_git_repo = get_is_git_repo()
+        -- fallback to searching all files if not in a git repo
+        return is_git_repo and require('telescope.builtin').git_files() or builtin.find_files()
+      end, { desc = '[S]earch [F]iles' })
+      vim.keymap.set('n', '<leader>sF', builtin.find_files, { desc = '[S]earch All [F]iles' })
       vim.keymap.set('n', '<leader>sg', builtin.live_grep, { desc = '[S]earch by [G]rep' })
       vim.keymap.set('n', '<leader>sG', function()
         builtin.live_grep { additional_args = { '-u' } }

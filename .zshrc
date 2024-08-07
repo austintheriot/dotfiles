@@ -25,7 +25,7 @@ alias sp='source ~/.my-scripts/tmux-split.sh'
 # NvChad https://nvchad.com/
 alias nvc='NVIM_APPNAME=nvchad nvim'
 # Neovim kickstart https://github.com/nvim-lua/kickstart.nvim/tree/master
-alias nvk='NVIM_APPNAME=nvim-kickstart nvim'
+alias nvk='NVIM_APPNAME=nvk nvim'
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS ##############################################################
 # mac 

@@ -66,15 +66,47 @@ return {
 
       -- [[ Configure Telescope ]]
       -- See `:help telescope` and `:help telescope.setup()`
+
+      local telescope_actions = require 'telescope.actions'
+
+      local faster_move_up = function(opts)
+        for _ = 1, 5, 1 do
+          telescope_actions.move_selection_previous(opts)
+        end
+      end
+
+      local faster_move_down = function(opts)
+        for _ = 1, 5, 1 do
+          telescope_actions.move_selection_next(opts)
+        end
+      end
+
+      local shared_mappings = {
+        -- fuzzily search over the returned results
+        ['<C-r>'] = 'to_fuzzy_refine',
+        -- match autocomplete [Y]es selection
+        ['<C-y>'] = 'select_default',
+        -- disable arrow keys for better muscle memory consistency
+        ['<left>'] = false,
+        ['<right>'] = false,
+        ['<up>'] = false,
+        ['<down>'] = false,
+        -- move up/down in the file picker faster
+        ['<C-u>'] = faster_move_up,
+        ['<C-d>'] = faster_move_down,
+      }
+
       require('telescope').setup {
         -- You can put your default mappings / updates / etc. in here
         --  All the info you're looking for is in `:help telescope.setup()`
-        --
-        -- defaults = {
-        --   mappings = {
-        --     i = { ['<c-enter>'] = 'to_fuzzy_refine' },
-        --   },
-        -- },
+        defaults = {
+          mappings = {
+            -- insert mode
+            i = shared_mappings,
+            -- normal mode
+            n = shared_mappings,
+          },
+        },
         -- pickers = {}
         extensions = {
           ['ui-select'] = {
@@ -92,9 +124,12 @@ return {
       vim.keymap.set('n', '<leader>sb', builtin.buffers, { desc = '[S]earch for existing [B]uffers' })
       vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
       vim.keymap.set('n', '<leader>sf', function()
-        local is_git_repo = get_is_git_repo()
-        -- fallback to searching all files if not in a git repo
-        return is_git_repo and require('telescope.builtin').git_files() or builtin.find_files()
+        if get_is_git_repo() then
+          return require('telescope.builtin').git_files()
+        else
+          -- fallback to searching all files if not in a git repo
+          return builtin.find_files()
+        end
       end, { desc = '[S]earch [F]iles' })
       vim.keymap.set('n', '<leader>sF', builtin.find_files, { desc = '[S]earch All [F]iles' })
       vim.keymap.set('n', '<leader>sg', builtin.live_grep, { desc = '[S]earch by [G]rep' })

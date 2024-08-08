@@ -1,4 +1,5 @@
 require 'settings'
+require 'keymaps'
 require 'health'
 
 -- [[ Install `lazy.nvim` plugin manager ]]

@@ -38,6 +38,7 @@ require('lazy').setup({
   'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
   -- Git related plugins
   'tpope/vim-fugitive',
+  require 'plugins.hardtime',
   require 'plugins.todo-comments',
   require 'plugins.mini',
   require 'plugins.theme',

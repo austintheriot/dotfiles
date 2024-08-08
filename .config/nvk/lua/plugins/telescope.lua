@@ -86,6 +86,7 @@ return {
         ['<C-r>'] = 'to_fuzzy_refine',
         -- match autocomplete [Y]es selection
         ['<C-y>'] = 'select_default',
+        ['<CR>'] = false,
         -- disable arrow keys for better muscle memory consistency
         ['<left>'] = false,
         ['<right>'] = false,

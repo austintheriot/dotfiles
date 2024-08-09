@@ -74,4 +74,6 @@ prefix + I (this is usually Ctrl+b and then capital I)
 
 - Install via rustup (do NOT use brew for this on mac!): https://www.rust-lang.org/tools/install
 
+### Window manager setup
 
+- Install Amethyst for window tiling on MacOS: https://github.com/ianyh/Amethyst

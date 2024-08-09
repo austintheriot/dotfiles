@@ -1,4 +1,4 @@
-# #!/bin/sh
+#!/bin/sh
 
 # start or attach a tmux session and configure the desired pane locations
 
@@ -9,10 +9,18 @@ if [ -n "$TMUX" ]; then
     return
 fi
 
+SESSION_NAME=$1
+
+# if no session specified, just spin up the default tmux session
+if [ "$SESSION_NAME" = "" ]; then
+  # open new session with default name and no splits
+  tmux
+  return
+fi
+
 # check if session already exists
 # if it doesn't exist yet, create it
-SESSION_NAME=$1
-if [[ "$(tmux ls | rg $SESSION_NAME)" = "" ]]; then
+if [ "$(tmux ls | rg $SESSION_NAME)" = "" ]; then
   # open new session 
   tmux new-session -d -s $SESSION_NAME
   # split windows--use same argument as the name of the session
@@ -21,4 +29,3 @@ fi
 
 # attach the session
 tmux attach -t $SESSION_NAME
-

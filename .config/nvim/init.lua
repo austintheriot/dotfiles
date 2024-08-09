@@ -1,50 +1,76 @@
--- Set <space> as the leader key
--- See `:help mapleader`
---  NOTE: Must happen before plugins are required (otherwise wrong leader will be used)
-vim.g.mapleader = ' '
-vim.g.maplocalleader = ' '
+require 'settings'
+require 'keymaps'
+require 'health'
 
--- must be disabled early on in init.lua to prevent race conditions with nvim-tree
-vim.g.loaded_netrw = 1
-vim.g.loaded_netrwPlugin = 1
-
--- Install package manager
---    https://github.com/folke/lazy.nvim
---    `:help lazy.nvim.txt` for more info
+-- [[ Install `lazy.nvim` plugin manager ]]
+--    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
 local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
-if not vim.loop.fs_stat(lazypath) then
-  vim.fn.system {
-    'git',
-    'clone',
-    '--filter=blob:none',
-    'https://github.com/folke/lazy.nvim.git',
-    '--branch=stable', -- latest stable release
-    lazypath,
-  }
-end
+if not vim.uv.fs_stat(lazypath) then
+  local lazyrepo = 'https://github.com/folke/lazy.nvim.git'
+  local out = vim.fn.system { 'git', 'clone', '--filter=blob:none', '--branch=stable', lazyrepo, lazypath }
+  if vim.v.shell_error ~= 0 then
+    error('Error cloning lazy.nvim:\n' .. out)
+  end
+end ---@diagnostic disable-next-line: undefined-field
 vim.opt.rtp:prepend(lazypath)
 
+-- [[ Configure and install plugins ]]
+--
+--  To check the current status of your plugins, run
+--    :Lazy
+--
+--  You can press `?` in this menu for help. Use `:q` to close the window
+--
+--  To update plugins you can run
+--    :Lazy update
+--
+-- NOTE: Here is where you install your plugins.
 require('lazy').setup({
-  require 'plugins.null_ls',
-  require 'plugins.icons',
+  -- essentials
   require 'plugins.telescope',
-  require 'plugins.treesitter',
-  require 'plugins.addons_windows',
-  require 'plugins.addons_keys',
-  require 'plugins.indicators',
-  require 'plugins.statusline',
-  require 'plugins.file_explorer',
-  require 'plugins.theme',
-  require 'plugins.autocomplete',
-  require 'plugins.git',
   require 'plugins.lsp',
-}, {})
+  require 'plugins.autoformat',
+  require 'plugins.autocomplete',
+  require 'plugins.treesitter',
+  require 'plugins.file-exlorer',
 
-require 'keymaps'
-require 'settings'
-
--- Setup neovim lua configuration
-require('neodev').setup()
+  -- non-essentials
+  'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
+  -- Git related plugins
+  'tpope/vim-fugitive',
+  require 'plugins.hardtime',
+  require 'plugins.todo-comments',
+  require 'plugins.mini',
+  require 'plugins.theme',
+  require 'plugins.which-key',
+  require 'plugins.gitsigns',
+  require 'plugins.gitlinker',
+  require 'plugins.autopairs',
+  require 'plugins.marks',
+  require 'plugins.indent-blankline',
+  require 'plugins.undotree',
+  require 'plugins.harpoon',
+}, {
+  ui = {
+    -- If you are using a Nerd Font: set icons to an empty table which will use the
+    -- default lazy.nvim defined Nerd Font icons, otherwise define a unicode icons table
+    icons = vim.g.have_nerd_font and {} or {
+      cmd = '⌘',
+      config = '🛠',
+      event = '📅',
+      ft = '📂',
+      init = '⚙',
+      keys = '🗝',
+      plugin = '🔌',
+      runtime = '💻',
+      require = '🌙',
+      source = '📄',
+      start = '🚀',
+      task = '📌',
+      lazy = '💤 ',
+    },
+  },
+})
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et

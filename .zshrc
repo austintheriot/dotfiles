@@ -22,45 +22,21 @@ export PATH="$WASMTIME_HOME/bin:$PATH"
 alias s='source ~/.my-scripts/tmux-start.sh'
 # split
 alias sp='source ~/.my-scripts/tmux-split.sh'
-# NvChad https://nvchad.com/
-alias nvc='NVIM_APPNAME=nvchad nvim'
-# Neovim kickstart https://github.com/nvim-lua/kickstart.nvim/tree/master
-alias nvk='NVIM_APPNAME=nvk nvim'
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS ##############################################################
 # mac 
 if [ -f ".zshrc-mac" ]; then
-    # setup root git repo alias
-    alias config='/usr/bin/git --git-dir=/Users/austin/.cfg/ --work-tree=/Users/austin'
-
-    # zsh-autosuggestions init - see https://github.com/zsh-users/zsh-autosuggestions
-    source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
-
-    # SETUP NVM PLUGIN
-    export NVM_DIR="$HOME/.nvm"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-    # SETUP SHORTCUT FOR USING ALACRITTY
-    # reload config with `alacritty -v`
-    alias alacritty="/Applications/Alacritty.app/Contents/MacOS/alacritty"
+    source .zshrc-mac
 fi
 
 # linux
 if [ -f ".zshrc-linux" ]; then
-    # setup root git repo alias
-    alias config='/usr/bin/git --git-dir=/home/austin/.cfg/ --work-tree=/home/austin'
-
-    # zsh-autosuggestions - set up with manual git clone -  see https://github.com/zsh-users/zsh-autosuggestions
-    source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
-
-    # NVM CONFIGURATION
-    source /usr/share/nvm/init-nvm.sh
+    source .zshrc-linux
 fi
 
 # work
 if [ -f ".zshrc-work" ]; then
-    export BULLMQ_PRO_NPM_TOKEN=xyz
+    source .zshrc-work
 fi
 
 # use neovim by default when editing files in git

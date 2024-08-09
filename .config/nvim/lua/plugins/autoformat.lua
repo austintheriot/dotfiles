@@ -1,3 +1,10 @@
+local shared_prettier_config = {
+  'prettierd',
+  'prettier',
+  -- You can use 'stop_after_first' to run the first available formatter from the list
+  stop_after_first = true,
+}
+
 return {
   { -- Autoformat
     'stevearc/conform.nvim',
@@ -29,13 +36,21 @@ return {
       --   }
       -- end,
       formatters_by_ft = {
-        lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
         -- python = { "isort", "black" },
-        --
-        -- You can use 'stop_after_first' to run the first available formatter from the list
-        javascript = { 'prettierd', 'prettier', stop_after_first = true },
-        typescript = { 'prettierd', 'prettier', stop_after_first = true },
+        lua = { 'stylua' },
+        javascript = shared_prettier_config,
+        typescript = shared_prettier_config,
+        javascriptreact = shared_prettier_config,
+        typescriptreact = shared_prettier_config,
+        svelte = shared_prettier_config,
+        css = shared_prettier_config,
+        html = shared_prettier_config,
+        json = shared_prettier_config,
+        yaml = shared_prettier_config,
+        markdown = shared_prettier_config,
+        graphql = shared_prettier_config,
+        liquid = shared_prettier_config,
       },
     },
   },

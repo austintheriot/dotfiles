@@ -1,4 +1,6 @@
-# #!/bin/zsh
+# #!/bin/sh
+
+# split the attached tmux session into pre-configured panes
 
 SPLIT_TYPE=$1
 

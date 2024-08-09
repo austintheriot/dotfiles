@@ -1,4 +1,6 @@
-# #!/bin/zsh
+# #!/bin/sh
+
+# start or attach a tmux session and configure the desired pane locations
 
 # Return early if already inside a tmux session
 # We don't want to nest tmux sessions!

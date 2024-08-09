@@ -18,10 +18,12 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 export PATH="$WASMTIME_HOME/bin:$PATH"
 
 # CONFIG BY ME #####################################################################################
-# start
+# [s]tart
 alias s='source ~/.my-scripts/tmux-start.sh'
-# split
+# [sp]lit
 alias sp='source ~/.my-scripts/tmux-split.sh'
+# [c]lose
+alias c='source ~/.my-scripts/tmux-close.sh'
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS ##############################################################
 # mac 

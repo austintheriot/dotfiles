@@ -14,7 +14,7 @@ SESSION_NAME=$1
 # if no session specified, just spin up the default tmux session
 if [ "$SESSION_NAME" = "" ]; then
   # open new session with default name and no splits
-  tmux
+  tmux new-session -A -s zsh
   return
 fi
 

@@ -28,17 +28,17 @@ alias c='source ~/.my-scripts/tmux-close.sh'
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS ##############################################################
 # mac 
 if [ -f ".zshrc-mac" ]; then
-    source .zshrc-mac
+    source ~/.zshrc-mac
 fi
 
 # linux
 if [ -f ".zshrc-linux" ]; then
-    source .zshrc-linux
+    source ~/.zshrc-linux
 fi
 
 # work
 if [ -f ".zshrc-work" ]; then
-    source .zshrc-work
+    source ~/.zshrc-work
 fi
 
 # use neovim by default when editing files in git

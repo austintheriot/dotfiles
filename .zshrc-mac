@@ -12,3 +12,5 @@ export NVM_DIR="$HOME/.nvm"
 # SETUP SHORTCUT FOR USING ALACRITTY
 # reload config with `alacritty -v`
 alias alacritty="/Applications/Alacritty.app/Contents/MacOS/alacritty"
+
+echo "Loaded mac configuration"

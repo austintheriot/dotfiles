@@ -4,7 +4,7 @@ Welcome! Here is my rather unpolished .dotfile configuration. Below are some set
 
 ## Setup
 
-### Dotfile setup 
+### Dotfile setup
 
 Follow instructions here for configuring git repo at your base path: https://www.atlassian.com/git/tutorials/dotfiles
 
@@ -22,12 +22,10 @@ Or see local copy here, if that link no longer works: [DOTFILES](./DOTFILES.md).
 
 - (optional) Install NvChad: https://nvchad.com/docs/quickstart/install
 
-
 To install (modified the install location to not overwrite default Neovim location)
 
-
 ```sh
-git clone https://github.com/NvChad/starter ~/.config/nvchad 
+git clone https://github.com/NvChad/starter ~/.config/nvchad
 ```
 
 To start (custom alias in ~/.zshrc)
@@ -66,9 +64,9 @@ prefix + I (this is usually Ctrl+b and then capital I)
 
 #### JS
 
-- Install nvm (or equivalent on Windows): https://github.com/nvm-sh/nvm
+- Install Volta (cross-platform alternative to nvm): https://volta.sh/
 
-- Use nvm to install latest Node version
+- Use Volta to install latest Node version
 
 #### Rust
 

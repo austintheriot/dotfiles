@@ -180,6 +180,9 @@ return {
         --
         -- But for many setups, the LSP (`tsserver`) will work just fine
         tsserver = {},
+        css_variables = {},
+        cssls = {},
+        cssmodules_ls = {},
 
         lua_ls = {
           -- cmd = {...},

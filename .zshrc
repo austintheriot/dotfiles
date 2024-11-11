@@ -47,10 +47,6 @@ export GIT_EDITOR=nvim
 # make sure tmux has correct config
 tmux source ~/.config/tmux/tmux.conf
 
-# configure Volta variables
-export VOLTA_HOME="$HOME/.volta"
-export PATH="$VOLTA_HOME/bin:$PATH"
-
 # ZSH PLUGINS #######################################################################################
 # git - comes with zsh
 plugin=(git)

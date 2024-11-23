@@ -183,6 +183,7 @@ return {
         css_variables = {},
         cssls = {},
         cssmodules_ls = {},
+        svelte = {},
 
         lua_ls = {
           -- cmd = {...},

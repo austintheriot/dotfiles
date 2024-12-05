@@ -1,6 +1,6 @@
 local shared_prettier_config = {
-  'prettierd',
   'prettier',
+  'prettierd',
   -- You can use 'stop_after_first' to run the first available formatter from the list
   stop_after_first = true,
 }

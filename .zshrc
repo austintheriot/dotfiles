@@ -72,3 +72,9 @@ PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_inf
 # SETUP ZOXIDE ####################################################################################
 eval "$(zoxide init zsh)"
 
+# SETUP PYENV #####################################################################################
+export PYENV_ROOT="$HOME/.pyenv"
+[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init - zsh)"
+
+

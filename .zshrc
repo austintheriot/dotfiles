@@ -27,17 +27,17 @@ alias c='source ~/.my-scripts/tmux-close.sh'
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS ##############################################################
 # mac 
-if [ -f ".zshrc-mac" ]; then
+if [ -f ~/.zshrc-mac ]; then
     source ~/.zshrc-mac
 fi
 
 # linux
-if [ -f ".zshrc-linux" ]; then
+if [ -f ~/.zshrc-linux ]; then
     source ~/.zshrc-linux
 fi
 
 # work
-if [ -f ".zshrc-work" ]; then
+if [ -f ~/.zshrc-work ]; then
     source ~/.zshrc-work
 fi
 

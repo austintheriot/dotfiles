@@ -17,7 +17,7 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
 
-# CONFIG BY ME #####################################################################################
+# CONFIG BY ME ##############################################################################################
 # [s]tart
 alias s='source ~/.my-scripts/tmux-start.sh'
 # [sp]lit
@@ -25,7 +25,19 @@ alias sp='source ~/.my-scripts/tmux-split.sh'
 # [c]lose
 alias c='source ~/.my-scripts/tmux-close.sh'
 
-# ENVIRONMENT-SPECIFIC CONFIGURATIONS ##############################################################
+# GIT ALIASES ###############################################################################################
+# This allows not having to store the actual root .gitconfig in git itself, which quickly becomes problematic
+git config --global alias.co checkout
+git config --global alias.br branch
+git config --global alias.cm commit
+git config --global alias.st status
+git config --global alias.p push
+git config --global alias.pl pull
+git config --global alias.lg log --oneline
+git config --global core.editor nvim
+git config --global core.excludeFile ~/.gitignore
+
+# ENVIRONMENT-SPECIFIC CONFIGURATIONS #######################################################################
 # mac 
 if [ -f ~/.zshrc-mac ]; then
     source ~/.zshrc-mac
@@ -47,11 +59,11 @@ export GIT_EDITOR=nvim
 # make sure tmux has correct config
 tmux source ~/.config/tmux/tmux.conf
 
-# ZSH PLUGINS #######################################################################################
+# ZSH PLUGINS ################################################################################################
 # git - comes with zsh
 plugin=(git)
 
-# CUSTOMIZING COMMAND LINE PROMPT ###################################################################
+# CUSTOMIZING COMMAND LINE PROMPT ############################################################################
 # see https://arjanvandergaag.nl/blog/customize-zsh-prompt-with-vcs-info.html
 # creates color formatting string based on current staged status
 parse_git_dirty() {
@@ -69,10 +81,10 @@ precmd () { vcs_info } # always load before displaying the prompt
 zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
 PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} %F{254}λ%f '
 
-# SETUP ZOXIDE ####################################################################################
+# SETUP ZOXIDE #############################################################################################
 eval "$(zoxide init zsh)"
 
-# SETUP PYENV #####################################################################################
+# SETUP PYENV ##############################################################################################
 export PYENV_ROOT="$HOME/.pyenv"
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init - zsh)"

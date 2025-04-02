@@ -27,15 +27,45 @@ alias c='source ~/.my-scripts/tmux-close.sh'
 
 # GIT ALIASES ###############################################################################################
 # This allows not having to store the actual root .gitconfig in git itself, which quickly becomes problematic
-git config --global alias.co checkout
-git config --global alias.br branch
-git config --global alias.cm commit
-git config --global alias.st status
-git config --global alias.p push
-git config --global alias.pl pull
-git config --global alias.lg log --oneline
-git config --global core.editor nvim
-git config --global core.excludeFile ~/.gitignore
+if ! git config --global --get "alias.co" >/dev/null; then
+    git config --global alias.co checkout
+fi
+
+if ! git config --global --get "alias.br" >/dev/null; then
+    git config --global alias.co branch
+fi
+
+if ! git config --global --get "alias.cm" >/dev/null; then
+    git config --global alias.cm commit
+fi
+
+if ! git config --global --get "alias.st" >/dev/null; then
+    git config --global alias.st status
+fi
+
+if ! git config --global --get "alias.p" >/dev/null; then
+    git config --global alias.p push
+fi
+
+if ! git config --global --get "alias.pl" >/dev/null; then
+    git config --global alias.pl pull
+fi
+
+if ! git config --global --get "alias.lg" >/dev/null; then
+    git config --global alias.lg 'log --oneline'
+fi
+
+if ! git config --global --get "alias.lg" >/dev/null; then
+    git config --global alias.lg 'log --oneline'
+fi
+
+if ! git config --global --get "core.editor" >/dev/null; then
+    git config --global core.editor nvim
+fi
+
+if ! git config --global --get "core.excludeFile" >/dev/null; then
+    git config --global core.excludeFile ~/.gitignore
+fi
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS #######################################################################
 # mac 

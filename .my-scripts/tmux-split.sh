@@ -1,41 +1,84 @@
 #!/bin/sh
 
-# split the attached tmux session into pre-configured panes
+# tmux Layout Manager
+# Creates pre-configured tmux pane layouts with customizable splits
 
-# Function to split tmux panes vertical-terminal-style
-split_tmux_terminal_panes() {
-  if [[ $1 = "2" ]]; then
+# Constants
+DEFAULT_VERTICAL_SPLITS=2
+DEFAULT_HORIZONTAL_SPLITS=2
+DEFAULT_TERMINAL_SPLITS=4
+
+# --- Layout Functions ---
+
+# Creates vertical splits (default: 2 panes)
+create_vertical_splits() {
+  local count=${1:-$DEFAULT_VERTICAL_SPLITS}
+  for ((i=1; i<count; i++)); do
     tmux split-window -v
-    tmux select-pane -U
-  elif [[ $1 = "4" ]]; then
-    tmux split-window -v
-    tmux split-window -v
-    tmux select-pane -D
-    tmux split-window -v
-    tmux select-pane -U
-  else
-    echo "Invalid number of splits: $NUM_SPLITS"
-  fi
+  done
+  tmux select-pane -U  # Return to top pane
 }
 
+# Creates horizontal splits (default: 2 panes)
+create_horizontal_splits() {
+  local count=${1:-$DEFAULT_HORIZONTAL_SPLITS}
+  for ((i=1; i<count; i++)); do
+    tmux split-window -h
+  done
+}
 
-SPLIT_TYPE=$1
+# Creates a main area above and two panes below (default: 2x2)
+create_main_above_two_below() {
+  local vertical_splits=${1:-$DEFAULT_VERTICAL_SPLITS}
+  local horizontal_splits=${2:-$DEFAULT_HORIZONTAL_SPLITS}
+  
+  # Create main area (vertical splits)
+  create_vertical_splits "$vertical_splits"
+  
+  # Create bottom area (horizontal splits)
+  tmux select-pane -D
+  create_horizontal_splits "$horizontal_splits"
+  
+  # Return to main area
+  tmux select-pane -U
+}
 
-# Fallback to 4
-NUM_SPLITS=${2:-4}
+# Creates multiple vertical terminals (default: 4 panes)
+create_vertical_terminals() {
+  local splits=${1:-$DEFAULT_TERMINAL_SPLITS}
+  create_vertical_splits "$splits"
+}
 
-# split into 4 vertically stacked terminals, select the top-most one
-if [[ $SPLIT_TYPE = "terms" ]]; then
-  split_tmux_terminal_panes "$NUM_SPLITS"
-fi
-
- # splits pane into left code editor and two side terminals, select the leftmost one
-if [[ $SPLIT_TYPE = "code" ]]; then
+# Creates editor on left with terminals on right (default: 4 terminals)
+create_editor_with_terminals() {
+  local vertical_splits=${1:-$DEFAULT_TERMINAL_SPLITS}
   tmux split-window -h
-  split_tmux_terminal_panes "$NUM_SPLITS"
-  tmux select-pane -L
-fi 
+  create_vertical_terminals "$vertical_splits"
+  tmux select-pane -L  # Focus editor pane
+}
 
+# --- Main Script ---
 
+# Validate input and show help if no arguments provided
+show_usage() {
+  echo "Usage: $0 <layout_type> [vertical_splits] [horizontal_splits]"
+  echo "Available layouts:"
+  echo "  terms    - Vertical terminals (default: $DEFAULT_TERMINAL_SPLITS)"
+  echo "  | or \\   - Editor with terminals (default: $DEFAULT_TERMINAL_SPLITS)"
+  echo "  - or _   - Main above with panes below (default: ${DEFAULT_VERTICAL_SPLITS}x${DEFAULT_HORIZONTAL_SPLITS})"
+  exit 1
+}
 
+# Parse arguments
+LAYOUT_TYPE=${1:-}
+VERTICAL_SPLITS=${2:-$DEFAULT_VERTICAL_SPLITS}
+HORIZONTAL_SPLITS=${3:-$DEFAULT_HORIZONTAL_SPLITS}
 
+# Create requested layout
+case $LAYOUT_TYPE in
+  "terms")    create_vertical_terminals "$VERTICAL_SPLITS" ;;
+  "\\"|"|")   create_editor_with_terminals "$VERTICAL_SPLITS" ;;
+  "-"|"_")    create_main_above_two_below "$VERTICAL_SPLITS" "$HORIZONTAL_SPLITS" ;;
+  "code")     create_editor_with_terminals "$VERTICAL_SPLITS" ;;  # Alias for editor layout
+  *)          show_usage ;;
+esac

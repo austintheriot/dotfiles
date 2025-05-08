@@ -59,6 +59,10 @@ if ! git config --global --get "alias.lg" >/dev/null; then
     git config --global alias.lg 'log --oneline'
 fi
 
+if ! git config --global --get "alias.pr" >/dev/null; then
+    git config --global alias.pr "!gh pr ls -L 100 | fzf | sed -E \"s/^([0-9]+).*/\\1/\" | xargs gh pr checkout"
+fi
+
 if ! git config --global --get "core.editor" >/dev/null; then
     git config --global core.editor nvim
 fi
@@ -66,6 +70,7 @@ fi
 if ! git config --global --get "core.excludeFile" >/dev/null; then
     git config --global core.excludeFile ~/.gitignore
 fi
+
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS #######################################################################
 # mac 

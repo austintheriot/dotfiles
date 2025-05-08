@@ -4,11 +4,19 @@ Welcome! Here is my rather unpolished .dotfile configuration. Below are some set
 
 ## Setup
 
-### Dotfile setup
+### Homebrew setup
 
-Follow instructions here for configuring git repo at your base path: https://www.atlassian.com/git/tutorials/dotfiles
+- Setup homebrew: https://brew.sh/
 
-Or see local copy here, if that link no longer works: [DOTFILES](./DOTFILES.md).
+### Git setup
+
+- Install git
+
+- Install GitHub CLI (for some command-line git utilities): https://cli.github.com/
+
+```sh
+brew install gh
+```
 
 ### Shell setup
 
@@ -59,6 +67,12 @@ tmux source ~/.config/tmux/tmux.conf
 prefix + I (this is usually Ctrl+b and then capital I)
 
 - Source ~/.zshrc to ensure everything is working (and also maybe `~/.zshrc-mac` or `~/.zshrc-linux` etc. to ensure everything is working correctly)
+
+### Dotfile setup
+
+After git and basic shell stuff is installed, follow instructions here for configuring the `config` git repo at your base path: https://www.atlassian.com/git/tutorials/dotfiles
+
+Or see local copy here, if that link no longer works: [DOTFILES](./DOTFILES.md).
 
 ### Env setup
 

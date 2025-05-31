@@ -82,3 +82,8 @@ vim.opt.cursorline = true
 -- Minimal number of screen lines to keep above and below the cursor.
 -- if the cursor hits this boundary, neovim will automatically scroll to restore the boundary
 vim.opt.scrolloff = 10
+
+vim.o.foldmethod = 'expr' -- Use expression-based folding
+vim.o.foldexpr = 'nvim_treesitter#foldexpr()' -- Use Treesitter for fold logic
+vim.o.foldlevel = 99 -- Start with all folds open
+vim.o.foldenable = true -- Enable folding

@@ -59,6 +59,24 @@ if ! git config --global --get "alias.lg" >/dev/null; then
     git config --global alias.lg 'log --oneline'
 fi
 
+# Rewrite commits with different email
+#
+# Examples:
+# To change the author name:
+# git change-commits GIT_AUTHOR_NAME "old name" "new name"
+#
+# or the email for only the last 10 commits:
+# git change-commits GIT_AUTHOR_EMAIL "old@email.com" "new@email.com" HEAD~10..HEAD
+#
+# See https://stackoverflow.com/questions/2919878/git-rewrite-previous-commit-usernames-and-emails
+if ! git config --global --get "alias.change-commits" >/dev/null; then
+    git config --global alias.change-commits '!'"f() { VAR=\$1; OLD=\$2; NEW=\$3; shift 3; git filter-branch --env-filter \"if [[ \\\"\$\`echo \$VAR\`\\\" = '\$OLD' ]]; then export \$VAR='\$NEW'; fi\" \$@; }; f"
+fi
+
+
+# Search for PRs via CLI
+#
+# From Dan Susman
 if ! git config --global --get "alias.pr" >/dev/null; then
     git config --global alias.pr "!gh pr ls -L 100 | fzf | sed -E \"s/^([0-9]+).*/\\1/\" | xargs gh pr checkout"
 fi

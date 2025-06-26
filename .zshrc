@@ -55,10 +55,6 @@ if ! git config --global --get "alias.lg" >/dev/null; then
     git config --global alias.lg 'log --oneline'
 fi
 
-if ! git config --global --get "alias.lg" >/dev/null; then
-    git config --global alias.lg 'log --oneline'
-fi
-
 # Rewrite commits with different email
 #
 # Examples:

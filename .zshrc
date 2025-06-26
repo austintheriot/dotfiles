@@ -32,7 +32,7 @@ if ! git config --global --get "alias.co" >/dev/null; then
 fi
 
 if ! git config --global --get "alias.br" >/dev/null; then
-    git config --global alias.co branch
+    git config --global alias.br branch
 fi
 
 if ! git config --global --get "alias.cm" >/dev/null; then

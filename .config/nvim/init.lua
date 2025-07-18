@@ -33,6 +33,7 @@ require('lazy').setup({
   require 'plugins.autocomplete',
   require 'plugins.treesitter',
   require 'plugins.file-exlorer',
+  require 'plugins.typescript-tools',
 
   -- non-essentials
   'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically

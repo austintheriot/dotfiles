@@ -76,14 +76,19 @@ vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
 -- Preview substitutions live, as you type!
 vim.opt.inccommand = 'split'
 
--- Highlights the line your cursor is on
-vim.opt.cursorline = true
+-- Highlights the line your cursor is on (conditionally for performance)
+vim.api.nvim_create_autocmd("BufEnter", {
+  callback = function()
+    local file_size = vim.fn.getfsize(vim.api.nvim_buf_get_name(0))
+    vim.opt.cursorline = file_size < 100000  -- Only for files < 100KB
+  end
+})
 
 -- Minimal number of screen lines to keep above and below the cursor.
 -- if the cursor hits this boundary, neovim will automatically scroll to restore the boundary
 vim.opt.scrolloff = 10
 
-vim.o.foldmethod = 'expr' -- Use expression-based folding
-vim.o.foldexpr = 'nvim_treesitter#foldexpr()' -- Use Treesitter for fold logic
+vim.o.foldmethod = 'manual' -- Use manual folding for better performance
+-- vim.o.foldexpr = 'nvim_treesitter#foldexpr()' -- Disabled for performance
 vim.o.foldlevel = 99 -- Start with all folds open
 vim.o.foldenable = true -- Enable folding

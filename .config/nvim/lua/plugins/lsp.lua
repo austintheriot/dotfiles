@@ -191,7 +191,7 @@ return {
         --    https://github.com/pmizio/typescript-tools.nvim
         --
         -- But for many setups, the LSP (`tsserver`) will work just fine
-        -- tsserver = {},  -- Disabled in favor of typescript-tools
+        tsserver = {},
         css_variables = {},
         cssls = {},
         cssmodules_ls = {},

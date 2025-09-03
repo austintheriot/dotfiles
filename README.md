@@ -46,6 +46,12 @@ nvc .
 
 - Install ripgrep (faster grep alternative written in Rust, used by neovim): https://github.com/BurntSushi/ripgrep
 
+- Install cspell (intelligent spell checker for code and comments, used by neovim LSP):
+
+```sh
+npm install -g cspell
+```
+
 - Install zoxide for `z` in place of `cd`: https://github.com/ajeetdsouza/zoxide
 
 - Install tmux (terminal multiplexer): https://github.com/tmux/tmux

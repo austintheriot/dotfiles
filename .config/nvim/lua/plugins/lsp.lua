@@ -197,6 +197,30 @@ return {
         cssmodules_ls = {},
         svelte = {},
 
+        -- CSpell for intelligent spell checking in code
+        -- Note: The LSP server name is 'cspell_ls' not 'cspell'
+        -- First install the language server: npm install -g @cspell/cspell-language-server
+        -- Then Mason will recognize and manage it
+        -- cspell_ls = {
+        --   filetypes = {
+        --     'javascript', 'javascriptreact', 'typescript', 'typescriptreact',
+        --     'python', 'lua', 'rust', 'go', 'c', 'cpp', 'java',
+        --     'html', 'css', 'scss', 'json', 'yaml', 'toml', 'markdown',
+        --     'gitcommit', 'text', 'vim', 'sh', 'bash', 'zsh',
+        --   },
+        --   settings = {
+        --     cspell = {
+        --       -- Recognize camelCase, PascalCase, snake_case, CONSTANT_CASE, kebab-case
+        --       allowCompoundWords = true,
+        --       -- Add custom words that should not be flagged as misspellings
+        --       userWords = {
+        --         'nvim', 'neovim', 'lspconfig', 'treesitter', 'ripgrep',
+        --         'alacritty', 'tmux', 'zsh', 'dotfiles', 'zoxide', 'fzf',
+        --       },
+        --     },
+        --   },
+        -- },
+
         lua_ls = {
           -- cmd = {...},
           -- filetypes = { ...},

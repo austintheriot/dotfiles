@@ -45,8 +45,6 @@ require('lazy').setup({
   require 'plugins.mini',
   require 'plugins.theme',
   require 'plugins.which-key',
-  require 'plugins.lint',
-  require 'plugins.cspell-actions',
   require 'plugins.gitsigns',
   require 'plugins.gitlinker',
   require 'plugins.autopairs',

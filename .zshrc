@@ -18,13 +18,31 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 export PATH="$WASMTIME_HOME/bin:$PATH"
 
 # CONFIG BY ME ##############################################################################################
-# [s]tart
+# [s]tart - Start or attach to a tmux session
+# Examples:
+#   s              # Start/attach default session named 'zsh'
+#   s myproject    # Start/attach session named 'myproject' with splits
 alias s='source ~/.my-scripts/tmux-start.sh'
-# [se]tup
+
+# [se]tup - Setup multi-window tmux session for code projects
+# Creates windows for multiple work directories (Notability projects, staging, reviews)
+# Examples:
+#   se             # Create/attach 'code' session with predefined windows
+#   se mywork      # Create/attach 'mywork' session with predefined windows
 alias se='source ~/.my-scripts/tmux-code-setup.sh'
-# [sp]lit
+
+# [sp]lit - Create tmux pane layouts
+# Examples:
+#   sp terms       # Create vertical terminals (default: 4 panes)
+#   sp |           # Editor on left with terminals on right
+#   sp -           # Main area above with 2 panes below
+#   sp terms 3     # Create 3 vertical terminals
+#   sp - 2 3       # Main above with 2 vertical splits and 3 horizontal splits below
 alias sp='source ~/.my-scripts/tmux-split.sh'
-# [c]lose
+
+# [c]lose - Close all tmux panes except the current one
+# Example:
+#   c              # Closes all other panes in current session
 alias c='source ~/.my-scripts/tmux-close.sh'
 
 # GIT ALIASES ###############################################################################################

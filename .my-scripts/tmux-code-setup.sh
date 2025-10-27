@@ -8,7 +8,7 @@ if [ -n "$TMUX" ]; then
     return
 fi
 
-SESSION_NAME="code"
+SESSION_NAME="${1:-code}"
 
 # Check if session already exists
 if tmux has-session -t $SESSION_NAME 2>/dev/null; then

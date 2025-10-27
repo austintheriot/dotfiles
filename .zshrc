@@ -31,6 +31,10 @@ setopt HIST_IGNORE_ALL_DUPS  # Don't record duplicate commands in history
 setopt HIST_FIND_NO_DUPS     # Don't show duplicates when searching history
 setopt SHARE_HISTORY         # Share command history between all tmux panes/sessions
 
+# Enables zsh to send the correct word-navigation command for Alt+Left/Right arrow keys
+bindkey '\e[1;3D' backward-word  # Alt+Left
+bindkey '\e[1;3C' forward-word   # Alt+Right
+
 # End of lines configured by zsh-newuser-install
 # The following lines were added by compinstall
 zstyle :compinstall filename '/home/austin/.zshrc'

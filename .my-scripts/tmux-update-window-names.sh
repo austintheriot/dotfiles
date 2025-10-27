@@ -19,17 +19,18 @@ get_branch() {
 # Update Notability work windows (1-4)
 update_window_if_exists() {
     local window_num=$1
-    local dir=$2
+    local window_name=$2
+    local dir=$3
 
     if tmux list-windows -t $SESSION_NAME -F '#I' | grep -q "^${window_num}$"; then
         local branch=$(get_branch "$dir")
-        tmux rename-window -t $SESSION_NAME:$window_num "$window_num - $branch"
+        tmux rename-window -t $SESSION_NAME:$window_num "$window_name - $branch"
     fi
 }
 
-update_window_if_exists 1 ~/Documents/Code/Notability
-update_window_if_exists 2 ~/Documents/Code/Notability-My-Work-2
-update_window_if_exists 3 ~/Documents/Code/Notability-My-Work-3
-update_window_if_exists 4 ~/Documents/Code/Notability-My-Work-4
-update_window_if_exists 5 ~/Documents/Code/Notability-Staging
-update_window_if_exists 6 ~/Documents/Code/Notability-Reviews
+update_window_if_exists 1 "1" ~/Documents/Code/Notability
+update_window_if_exists 2 "2" ~/Documents/Code/Notability-My-Work-2
+update_window_if_exists 3 "3" ~/Documents/Code/Notability-My-Work-3
+update_window_if_exists 4 "4" ~/Documents/Code/Notability-My-Work-4
+update_window_if_exists 5 "Staging" ~/Documents/Code/Notability-Staging
+update_window_if_exists 6 "Reviews" ~/Documents/Code/Notability-Reviews

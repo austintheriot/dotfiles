@@ -151,7 +151,10 @@ parse_git_dirty() {
 # substite of parameters inside the prompt each time the prompt is drawn.
 setopt prompt_subst
 autoload -Uz vcs_info # enable vcs_info
-precmd () { vcs_info } # always load before displaying the prompt
+precmd () {
+    vcs_info # always load before displaying the prompt
+    ~/.my-scripts/tmux-update-window-names.sh 2>/dev/null # update tmux window names
+}
 zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
 PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} %F{254}λ%f '
 

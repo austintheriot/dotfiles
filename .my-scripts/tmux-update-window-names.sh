@@ -24,7 +24,6 @@ update_window_if_exists() {
     if tmux list-windows -t $SESSION_NAME -F '#I' | grep -q "^${window_num}$"; then
         local branch=$(get_branch "$dir")
         tmux rename-window -t $SESSION_NAME:$window_num "$window_num - $branch"
-        echo "Updated window $window_num: $window_num - $branch"
     fi
 }
 
@@ -34,5 +33,3 @@ update_window_if_exists 3 ~/Documents/Code/Notability-My-Work-3
 update_window_if_exists 4 ~/Documents/Code/Notability-My-Work-4
 update_window_if_exists 5 ~/Documents/Code/Notability-Staging
 update_window_if_exists 6 ~/Documents/Code/Notability-Reviews
-
-echo "Window names updated."

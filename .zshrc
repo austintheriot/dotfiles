@@ -1,9 +1,34 @@
+# HISTORY SEARCH REFERENCE #################################################################################
+# Multiple ways to search your terminal history:
+#
+# 1. Ctrl+R (fzf)           - Fuzzy search command history (RECOMMENDED - configured below)
+#                             Type any part of command, use arrows to navigate, Enter to execute
+#
+# 2. Tmux copy mode         - Search scrollback buffer (not just commands)
+#                             Ctrl+b [ → Enter copy mode
+#                             / → Search forward, ? → Search backward
+#                             n → Next match, N → Previous match
+#                             q → Exit copy mode
+#
+# 3. history | grep         - Search history output with grep
+#                             Example: history | grep docker
+#
+# 4. Up/Down arrows         - Navigate recent commands sequentially
+#
+############################################################################################################
+
 # Lines configured by zsh-newuser-install
 HISTFILE=~/.histfile
-HISTSIZE=1000
-SAVEHIST=1000
+HISTSIZE=10000      # Number of commands to keep in memory during session
+SAVEHIST=10000      # Number of commands to save to history file
 setopt beep extendedglob nomatch notify
 unsetopt autocd
+
+# History search and sharing options
+setopt HIST_IGNORE_ALL_DUPS  # Don't record duplicate commands in history
+setopt HIST_FIND_NO_DUPS     # Don't show duplicates when searching history
+setopt SHARE_HISTORY         # Share command history between all tmux panes/sessions
+
 # End of lines configured by zsh-newuser-install
 # The following lines were added by compinstall
 zstyle :compinstall filename '/home/austin/.zshrc'
@@ -160,6 +185,13 @@ PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_inf
 
 # SETUP ZOXIDE #############################################################################################
 eval "$(zoxide init zsh)"
+
+# SETUP FZF (FUZZY FINDER) #################################################################################
+# Enable fzf key bindings for interactive fuzzy searching
+# Ctrl+R  : Search command history (fuzzy search with preview)
+# Ctrl+T  : Search files in current directory and subdirectories
+# Alt+C   : Fuzzy cd into subdirectories
+source <(fzf --zsh)
 
 # SETUP PYENV ##############################################################################################
 export PYENV_ROOT="$HOME/.pyenv"

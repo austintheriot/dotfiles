@@ -1,19 +1,21 @@
 # HISTORY SEARCH REFERENCE #################################################################################
 # Multiple ways to search your terminal history:
 #
-# 1. Ctrl+R (fzf)           - Fuzzy search command history (RECOMMENDED - configured below)
-#                             Type any part of command, use arrows to navigate, Enter to execute
+# 1. fzf
+#   Ctrl+R : Search command history (fuzzy search with preview)
+#   Ctrl+T : Search files in current directory and subdirectories
+#   Alt+C : Fuzzy cd into subdirectories
 #
-# 2. Tmux copy mode         - Search scrollback buffer (not just commands)
-#                             Ctrl+b [ → Enter copy mode
-#                             / → Search forward, ? → Search backward
-#                             n → Next match, N → Previous match
-#                             q → Exit copy mode
+# 2. Tmux copy mode - Search scrollback buffer (not just commands)
+#   Ctrl+b [ → Enter copy mode
+#   / → Search forward, ? → Search backward
+#   n → Next match, N → Previous match
+#   q → Exit copy mode
 #
-# 3. history | grep         - Search history output with grep
-#                             Example: history | grep docker
+# 3. history | grep - Search history output with grep
+#   Example: history | grep docker
 #
-# 4. Up/Down arrows         - Navigate recent commands sequentially
+# 4. Up/Down arrows - Navigate recent commands sequentially
 #
 ############################################################################################################
 

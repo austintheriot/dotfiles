@@ -18,14 +18,14 @@ if tmux has-session -t $SESSION_NAME 2>/dev/null; then
 fi
 
 # Create new session with first window (Notability)
-tmux new-session -d -s $SESSION_NAME -n "1 - Free" -c ~/code/Notability
+tmux new-session -d -s $SESSION_NAME -n "1 - Free" -c ~/Documents/Code/Notability
 
 # Create additional windows
-tmux new-window -t $SESSION_NAME -n "2 - Free" -c ~/Notability-My-Work-2
-tmux new-window -t $SESSION_NAME -n "3 - Free" -c ~/Notability-My-Work-3
-tmux new-window -t $SESSION_NAME -n "4 - Free" -c ~/Notability-My-Work-4
-tmux new-window -t $SESSION_NAME -n "Staging" -c ~/Notability-Staging
-tmux new-window -t $SESSION_NAME -n "Reviews" -c ~/Notability-Reviews
+tmux new-window -t $SESSION_NAME -n "2 - Free" -c ~/Documents/Code/Notability-My-Work-2
+tmux new-window -t $SESSION_NAME -n "3 - Free" -c ~/Documents/Code/Notability-My-Work-3
+tmux new-window -t $SESSION_NAME -n "4 - Free" -c ~/Documents/Code/Notability-My-Work-4
+tmux new-window -t $SESSION_NAME -n "Staging" -c ~/Documents/Code/Notability-Staging
+tmux new-window -t $SESSION_NAME -n "Reviews" -c ~/Documents/Code/Notability-Reviews
 
 # Select the first window
 tmux select-window -t $SESSION_NAME:1

@@ -8,7 +8,7 @@ Prefer robust, modular coding that is easily tested.
 
 # Config Environment Context
 
-@~/README.md
+See ~/README.md for specific, dev env details.
 
 # Development Guidelines
 

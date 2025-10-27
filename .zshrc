@@ -45,6 +45,11 @@ alias sp='source ~/.my-scripts/tmux-split.sh'
 #   c              # Closes all other panes in current session
 alias c='source ~/.my-scripts/tmux-close.sh'
 
+
+# [r]ename - Rename tmux window names to match the branches
+# that are active in the directory each window is responsible for
+alias re='source .my-scripts/tmux-update-window-names.sh'
+
 # GIT ALIASES ###############################################################################################
 # This allows not having to store the actual root .gitconfig in git itself, which quickly becomes problematic
 if ! git config --global --get "alias.co" >/dev/null; then

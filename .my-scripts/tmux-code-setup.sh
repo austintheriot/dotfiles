@@ -26,6 +26,7 @@ tmux new-window -t $SESSION_NAME -n "3 - Free" -c ~/Documents/Code/Notability-My
 tmux new-window -t $SESSION_NAME -n "4 - Free" -c ~/Documents/Code/Notability-My-Work-4
 tmux new-window -t $SESSION_NAME -n "Staging" -c ~/Documents/Code/Notability-Staging
 tmux new-window -t $SESSION_NAME -n "Reviews" -c ~/Documents/Code/Notability-Reviews
+tmux new-window -t $SESSION_NAME -n "Config" -c ~
 
 # Select the first window
 tmux select-window -t $SESSION_NAME:1

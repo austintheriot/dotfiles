@@ -20,6 +20,8 @@ export PATH="$WASMTIME_HOME/bin:$PATH"
 # CONFIG BY ME ##############################################################################################
 # [s]tart
 alias s='source ~/.my-scripts/tmux-start.sh'
+# [se]tup
+alias se='source ~/.my-scripts/tmux-code-setup.sh'
 # [sp]lit
 alias sp='source ~/.my-scripts/tmux-split.sh'
 # [c]lose

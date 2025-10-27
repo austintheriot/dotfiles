@@ -29,7 +29,7 @@ alias s='source ~/.my-scripts/tmux-start.sh'
 # Examples:
 #   se             # Create/attach 'code' session with predefined windows
 #   se mywork      # Create/attach 'mywork' session with predefined windows
-alias se='source ~/.my-scripts/tmux-code-setup.sh'
+alias se='source ~/.my-scripts/tmux-setup.sh'
 
 # [sp]lit - Create tmux pane layouts
 # Examples:

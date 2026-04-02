@@ -55,6 +55,15 @@ return {
 
       require('telescope').setup {
         defaults = {
+          layout_strategy = 'vertical',
+          layout_config = {
+            vertical = {
+              width = 0.999,
+              height = 0.999,
+              preview_height = 0.6,
+            },
+          },
+          borderchars = { '─', '│', '─', '│', '┌', '┐', '┘', '└' },
           mappings = { i = shared_mappings, n = shared_mappings },
         },
         extensions = {

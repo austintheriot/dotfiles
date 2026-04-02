@@ -1,6 +1,3 @@
--- nvim-lint runs linters asynchronously and feeds results into vim's diagnostic system
--- cspell is configured here as a custom linter for spell checking across all filetypes
-
 return {
   {
     'mfussenegger/nvim-lint',
@@ -8,7 +5,6 @@ return {
     config = function()
       local lint = require 'lint'
 
-      -- custom cspell linter definition (not built into nvim-lint)
       lint.linters.cspell = {
         cmd = 'cspell',
         stdin = false,
@@ -35,7 +31,6 @@ return {
                 message = full_message,
                 severity = vim.diagnostic.severity.HINT,
                 source = 'cspell',
-                -- word/suggestion stored here so cspell-actions.lua can access them
                 user_data = word and { word = word, suggestion = suggestion } or nil,
               })
             end

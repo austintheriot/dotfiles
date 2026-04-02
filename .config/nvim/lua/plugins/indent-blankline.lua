@@ -1,6 +1,3 @@
--- indent-blankline adds vertical guide lines at each indent level
--- the rainbow colors cycle through indent depths so you can visually match blocks
-
 return {
   {
     'lukas-reineke/indent-blankline.nvim',
@@ -8,7 +5,6 @@ return {
     config = function()
       local highlight = { 'RainbowRed', 'RainbowYellow', 'RainbowBlue', 'RainbowOrange', 'RainbowGreen', 'RainbowViolet', 'RainbowCyan' }
       local hooks = require 'ibl.hooks'
-      -- highlight groups must be re-registered whenever the colorscheme changes
       hooks.register(hooks.type.HIGHLIGHT_SETUP, function()
         vim.api.nvim_set_hl(0, 'RainbowRed', { fg = '#E06C75' })
         vim.api.nvim_set_hl(0, 'RainbowYellow', { fg = '#E5C07B' })

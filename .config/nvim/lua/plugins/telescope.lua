@@ -55,16 +55,29 @@ return {
 
       require('telescope').setup {
         defaults = {
+          -- when a path is too long, drop leading segments rather than truncating the filename
+          path_display = { truncate = 3 },
+          -- vertical splits the window into preview (top) and results+prompt (bottom)
           layout_strategy = 'vertical',
           layout_config = {
             vertical = {
+              -- <1.0 is treated as a percentage; 1.0 exactly would be 1 column/row
               width = 0.999,
               height = 0.999,
               preview_height = 0.6,
             },
           },
+          -- standard box-drawing border so the window extends flush to screen edges
           borderchars = { '─', '│', '─', '│', '┌', '┐', '┘', '└' },
           mappings = { i = shared_mappings, n = shared_mappings },
+        },
+        pickers = {
+          -- fname_width controls the path column width in results; default is ~30 which truncates deeply nested paths
+          live_grep = { fname_width = 70 },
+          grep_string = { fname_width = 70 },
+          lsp_references = { fname_width = 70 },
+          lsp_definitions = { fname_width = 70 },
+          lsp_implementations = { fname_width = 70 },
         },
         extensions = {
           ['ui-select'] = {

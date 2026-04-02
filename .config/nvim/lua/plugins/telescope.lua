@@ -67,6 +67,15 @@ return {
       pcall(require('telescope').load_extension, 'fzf')
       pcall(require('telescope').load_extension, 'ui-select')
 
+      -- nvim 0.12 removed these from nvim-treesitter; shim them so telescope doesn't crash
+      local ok, parsers = pcall(require, 'nvim-treesitter.parsers')
+      if ok and not parsers.ft_to_lang then
+        parsers.ft_to_lang = function(ft) return ft end
+      end
+      package.loaded['nvim-treesitter.configs'] = package.loaded['nvim-treesitter.configs'] or {
+        is_enabled = function() return false end,
+      }
+
       local builtin = require 'telescope.builtin'
       vim.keymap.set('n', '<leader>sb', builtin.buffers, { desc = '[S]earch [B]uffers' })
       vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
@@ -87,7 +96,10 @@ return {
       vim.keymap.set('n', '<leader>ss', builtin.builtin, { desc = '[S]earch [S]elect Telescope' })
       vim.keymap.set('n', '<leader>sw', builtin.grep_string, { desc = '[S]earch current [W]ord' })
       vim.keymap.set('n', '<leader>/', function()
-        builtin.current_buffer_fuzzy_find(require('telescope.themes').get_dropdown { winblend = 10, previewer = false })
+        builtin.current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
+          winblend = 10,
+          previewer = false,
+        })
       end, { desc = '[/] Fuzzily search in current buffer' })
       vim.keymap.set('n', '<leader>s/', function()
         builtin.live_grep { grep_open_files = true, prompt_title = 'Live Grep in Open Files' }

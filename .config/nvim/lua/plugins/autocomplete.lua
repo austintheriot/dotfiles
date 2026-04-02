@@ -3,6 +3,7 @@ return {
     'hrsh7th/nvim-cmp',
     event = 'InsertEnter',
     dependencies = {
+      -- LuaSnip is the snippet engine — nvim-cmp uses it to expand snippets
       {
         'L3MON4D3/LuaSnip',
         version = 'v2.*',
@@ -27,16 +28,21 @@ return {
           ['<C-p>'] = cmp.mapping.select_prev_item(),
           ['<C-b>'] = cmp.mapping.scroll_docs(-4),
           ['<C-f>'] = cmp.mapping.scroll_docs(4),
+          -- confirm the selected completion item
           ['<C-y>'] = cmp.mapping.confirm { select = true },
+          -- manually trigger completion (usually happens automatically)
           ['<C-Space>'] = cmp.mapping.complete {},
+          -- move to the next placeholder in a snippet
           ['<C-l>'] = cmp.mapping(function()
             if luasnip.expand_or_locally_jumpable() then luasnip.expand_or_jump() end
           end, { 'i', 's' }),
+          -- move to the previous placeholder in a snippet
           ['<C-h>'] = cmp.mapping(function()
             if luasnip.locally_jumpable(-1) then luasnip.jump(-1) end
           end, { 'i', 's' }),
         },
         sources = {
+          -- lazydev completions for nvim config (group_index 0 = highest priority)
           { name = 'lazydev', group_index = 0 },
           { name = 'nvim_lsp' },
           { name = 'luasnip' },

@@ -1,3 +1,7 @@
+-- extends <leader>ca (code action) to include cspell spelling suggestions
+-- when the cursor is on a misspelled word, you'll see options to replace it
+-- or add it to the dictionary (~/.config/nvim/cspell.json)
+
 return {
   {
     'kosayoda/nvim-lightbulb',
@@ -38,6 +42,7 @@ return {
             return actions
           end
 
+          -- wrap vim.lsp.buf.code_action to prepend cspell suggestions to the list
           local original_code_action = vim.lsp.buf.code_action
           vim.lsp.buf.code_action = function(options)
             local cspell_actions = get_cspell_actions()
@@ -96,6 +101,7 @@ return {
             vim.fn.writefile(vim.fn.split(json, '\n'), config_path)
             vim.notify(string.format('Added "%s" to dictionary', word), vim.log.levels.INFO)
 
+            -- remove the diagnostic for this word immediately, then re-lint
             local bufnr = vim.api.nvim_get_current_buf()
             local ns = vim.api.nvim_create_namespace 'nvim-lint'
             local filtered = vim.tbl_filter(function(d)
@@ -103,6 +109,7 @@ return {
             end, vim.diagnostic.get(bufnr, { namespace = ns }))
             vim.diagnostic.set(ns, bufnr, filtered)
 
+            -- small delay so cspell has time to reload its config before re-linting
             vim.defer_fn(function()
               if vim.api.nvim_buf_is_valid(bufnr) then
                 require('lint').try_lint 'cspell'

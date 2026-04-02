@@ -1,3 +1,6 @@
+-- telescope is a fuzzy finder — use it to search files, text, LSP symbols, and more
+-- while inside a picker: <C-/> (insert) or ? (normal) shows all available keymaps
+
 local function in_git_repo()
   local handle = io.popen 'git rev-parse --is-inside-work-tree 2>/dev/null'
   if not handle then return false end
@@ -13,7 +16,9 @@ return {
     branch = '0.1.x',
     dependencies = {
       'nvim-lua/plenary.nvim',
+      -- native fzf sorting for much better performance
       { 'nvim-telescope/telescope-fzf-native.nvim', build = 'make', cond = function() return vim.fn.executable 'make' == 1 end },
+      -- replaces vim.ui.select (used for code actions, etc.) with telescope
       'nvim-telescope/telescope-ui-select.nvim',
       { 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
     },
@@ -33,13 +38,17 @@ return {
       end
 
       local shared_mappings = {
+        -- refine results with a second fuzzy search
         ['<C-r>'] = 'to_fuzzy_refine',
+        -- confirm selection (remapped from <CR> to match autocomplete muscle memory)
         ['<C-y>'] = 'select_default',
         ['<CR>'] = false,
+        -- disable arrow keys inside pickers
         ['<left>'] = false,
         ['<right>'] = false,
         ['<up>'] = false,
         ['<down>'] = false,
+        -- jump 5 items at a time
         ['<C-u>'] = move_up(5),
         ['<C-d>'] = move_down(5),
       }
@@ -61,11 +70,13 @@ return {
       local builtin = require 'telescope.builtin'
       vim.keymap.set('n', '<leader>sb', builtin.buffers, { desc = '[S]earch [B]uffers' })
       vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
+      -- prefer git files when in a repo (respects .gitignore), fall back to all files
       vim.keymap.set('n', '<leader>sf', function()
         return in_git_repo() and builtin.git_files() or builtin.find_files()
       end, { desc = '[S]earch [F]iles' })
       vim.keymap.set('n', '<leader>sF', builtin.find_files, { desc = '[S]earch All [F]iles' })
       vim.keymap.set('n', '<leader>sg', builtin.live_grep, { desc = '[S]earch by [G]rep' })
+      -- -u tells ripgrep to include hidden/ignored files
       vim.keymap.set('n', '<leader>sG', function()
         builtin.live_grep { additional_args = { '-u' } }
       end, { desc = '[S]earch Hidden Files by [G]rep' })

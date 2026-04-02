@@ -1,3 +1,7 @@
+-- marks.nvim shows vim marks as signs in the sign column
+-- use m<letter> to set a mark, '<letter> to jump to it
+-- use zg to add a word to the spell dictionary, z= for suggestions
+
 return {
   {
     'chentoast/marks.nvim',

@@ -2,6 +2,7 @@ require 'settings'
 require 'keymaps'
 require 'health'
 
+-- bootstrap lazy.nvim (plugin manager) — clones it if not already installed
 local lazypath = vim.fn.stdpath 'data' .. '/lazy/lazy.nvim'
 if not vim.uv.fs_stat(lazypath) then
   local out = vim.fn.system { 'git', 'clone', '--filter=blob:none', '--branch=stable', 'https://github.com/folke/lazy.nvim.git', lazypath }
@@ -11,6 +12,8 @@ if not vim.uv.fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+-- each plugin lives in its own file under lua/plugins/
+-- run :Lazy to manage plugins, :Lazy update to update them
 require('lazy').setup({
   -- essentials
   require 'plugins.telescope',
@@ -41,6 +44,7 @@ require('lazy').setup({
   require 'plugins.cspell-actions',
   require 'plugins.markdown-preview',
 
+  -- automatically detect tab/space settings from the current file
   'tpope/vim-sleuth',
 }, {
   ui = {

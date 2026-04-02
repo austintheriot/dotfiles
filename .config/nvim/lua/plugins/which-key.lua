@@ -1,3 +1,6 @@
+-- which-key shows a popup of available keybindings when you pause mid-sequence
+-- e.g. press <leader> and wait to see all leader keymaps grouped by category
+
 return {
   {
     'folke/which-key.nvim',

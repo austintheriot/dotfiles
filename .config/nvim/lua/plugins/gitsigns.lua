@@ -1,3 +1,6 @@
+-- gitsigns shows git change indicators in the sign column (the thin strip left of line numbers)
+-- and provides hunk-level staging/resetting without leaving nvim
+
 return {
   {
     'lewis6991/gitsigns.nvim',
@@ -8,6 +11,7 @@ return {
           vim.keymap.set(mode, l, r, vim.tbl_extend('force', { buffer = bufnr }, opts or {}))
         end
 
+        -- a "hunk" is a contiguous block of changed lines
         map('n', ']c', function()
           if vim.wo.diff then vim.cmd.normal { ']c', bang = true } else gs.nav_hunk 'next' end
         end, { desc = 'Next git change' })
@@ -15,6 +19,7 @@ return {
           if vim.wo.diff then vim.cmd.normal { '[c', bang = true } else gs.nav_hunk 'prev' end
         end, { desc = 'Previous git change' })
 
+        -- visual mode hunk actions operate on the selected lines only
         map('v', '<leader>hs', function() gs.stage_hunk { vim.fn.line '.', vim.fn.line 'v' } end, { desc = 'Stage hunk' })
         map('v', '<leader>hr', function() gs.reset_hunk { vim.fn.line '.', vim.fn.line 'v' } end, { desc = 'Reset hunk' })
         map('n', '<leader>hs', gs.stage_hunk, { desc = 'Git stage hunk' })

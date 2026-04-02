@@ -1,3 +1,7 @@
+-- conform.nvim runs formatters on save or on demand with <leader>f
+-- formatters must be installed separately (prettier, stylua, etc.)
+-- run :ConformInfo to see which formatter is active for the current file
+
 local prettier = { 'prettier', 'prettierd', stop_after_first = true }
 
 return {

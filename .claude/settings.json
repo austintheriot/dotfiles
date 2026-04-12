@@ -1,0 +1,14 @@
+{
+  "alwaysThinkingEnabled": false,
+  "effortLevel": "medium",
+  "feedbackSurveyState": {
+    "lastShownTime": 1753972945729
+  },
+  "skipAutoPermissionPrompt": true,
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    }
+  }
+}

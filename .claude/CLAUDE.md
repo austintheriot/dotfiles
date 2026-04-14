@@ -10,6 +10,18 @@ Prefer robust, modular coding that is easily tested.
 
 See ~/README.md for specific, dev env details.
 
+## Local Config Files
+
+Project-specific credentials and secrets live in `~/.claude/` outside any repo:
+
+- `~/.claude/notability.env` — Notability staging dev credentials (`NOTABILITY_DEV_EMAIL`, `NOTABILITY_DEV_PASSWORD`)
+
+## MCP Servers
+
+MCP servers are configured globally in `~/.claude/settings.json`.
+
+- **Playwright** (`mcp__playwright__*`) — browser automation via `@playwright/mcp`. Output (screenshots, snapshots, console logs) goes to `~/.claude/playwright-mcp/`.
+
 # Development Guidelines
 
 ## Philosophy

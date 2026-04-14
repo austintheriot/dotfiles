@@ -1,4 +1,8 @@
 {
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"/Users/austin/.claude/plugins/cache/caveman/caveman/63e797cd753b/hooks/caveman-statusline.sh\""
+  },
   "extraKnownMarketplaces": {
     "caveman": {
       "source": {

@@ -1,10 +1,11 @@
 {
   "alwaysThinkingEnabled": false,
   "effortLevel": "medium",
+  "autoMemoryEnabled": true,
+  "skipAutoPermissionPrompt": true,
   "feedbackSurveyState": {
     "lastShownTime": 1753972945729
   },
-  "skipAutoPermissionPrompt": true,
   "mcpServers": {
     "playwright": {
       "command": "npx",

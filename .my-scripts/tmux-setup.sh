@@ -47,14 +47,26 @@ setup_code_layout 5
 tmux new-window -t $SESSION_NAME -n "6" -c ~/Documents/Code/Notability-My-Work-6
 setup_code_layout 6
 
-tmux new-window -t $SESSION_NAME -n "Reviews" -c ~/Documents/Code/Notability-Reviews
+tmux new-window -t $SESSION_NAME -n "7" -c ~/Documents/Code/Notability-My-Work-7
 setup_code_layout 7
 
-tmux new-window -t $SESSION_NAME -n "Staging" -c ~/Documents/Code/Notability-Staging
+tmux new-window -t $SESSION_NAME -n "8" -c ~/Documents/Code/Notability-My-Work-8
 setup_code_layout 8
 
-tmux new-window -t $SESSION_NAME -n "Config" -c ~
+tmux new-window -t $SESSION_NAME -n "9" -c ~/Documents/Code/Notability-My-Work-9
 setup_code_layout 9
+
+tmux new-window -t $SESSION_NAME -n "Reviews" -c ~/Documents/Code/Notability-Reviews
+setup_code_layout 10
+
+tmux new-window -t $SESSION_NAME -n "Staging" -c ~/Documents/Code/Notability-Staging
+setup_code_layout 11
+
+tmux new-window -t $SESSION_NAME -n "Config" -c ~
+setup_code_layout 12
+
+tmux new-window -t $SESSION_NAME -n "Other" -c ~/Documents/Code
+setup_code_layout 13
 
 # Update window names with git branches
 ~/.my-scripts/tmux-update-window-names.sh $SESSION_NAME

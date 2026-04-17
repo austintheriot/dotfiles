@@ -34,5 +34,8 @@ update_window_if_exists 3 "3" ~/Documents/Code/Notability-My-Work-3
 update_window_if_exists 4 "4" ~/Documents/Code/Notability-My-Work-4
 update_window_if_exists 5 "5" ~/Documents/Code/Notability-My-Work-5
 update_window_if_exists 6 "6" ~/Documents/Code/Notability-My-Work-6
-update_window_if_exists 7 "Staging" ~/Documents/Code/Notability-Staging
-update_window_if_exists 8 "Reviews" ~/Documents/Code/Notability-Reviews
+update_window_if_exists 7 "7" ~/Documents/Code/Notability-My-Work-7
+update_window_if_exists 8 "8" ~/Documents/Code/Notability-My-Work-8
+update_window_if_exists 9 "9" ~/Documents/Code/Notability-My-Work-9
+update_window_if_exists 10 "Reviews" ~/Documents/Code/Notability-Reviews
+update_window_if_exists 11 "Staging" ~/Documents/Code/Notability-Staging

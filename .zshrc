@@ -168,6 +168,9 @@ tmux source ~/.config/tmux/tmux.conf
 # git - comes with zsh
 plugin=(git)
 
+# CLAUDE #####################################################################################################
+export PATH="$HOME/.local/bin:$PATH"
+
 # CUSTOMIZING COMMAND LINE PROMPT ############################################################################
 # see https://arjanvandergaag.nl/blog/customize-zsh-prompt-with-vcs-info.html
 # creates color formatting string based on current staged status

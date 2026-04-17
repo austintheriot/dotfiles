@@ -41,10 +41,10 @@ setup_code_layout 3
 tmux new-window -t $SESSION_NAME -n "4" -c ~/Documents/Code/Notability-My-Work-4
 setup_code_layout 4
 
-tmux new-window -t $SESSION_NAME -n "4" -c ~/Documents/Code/Notability-My-Work-5
+tmux new-window -t $SESSION_NAME -n "5" -c ~/Documents/Code/Notability-My-Work-5
 setup_code_layout 5
 
-tmux new-window -t $SESSION_NAME -n "4" -c ~/Documents/Code/Notability-My-Work-6
+tmux new-window -t $SESSION_NAME -n "6" -c ~/Documents/Code/Notability-My-Work-6
 setup_code_layout 6
 
 tmux new-window -t $SESSION_NAME -n "Reviews" -c ~/Documents/Code/Notability-Reviews

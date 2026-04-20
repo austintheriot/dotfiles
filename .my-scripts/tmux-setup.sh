@@ -28,44 +28,44 @@ setup_code_layout() {
 }
 
 # Create new session with first window (Notability worktrees)
-tmux new-session -d -s $SESSION_NAME -n "1" -c ~/Documents/Code/Notability-worktrees/1
+tmux new-session -d -s $SESSION_NAME -n "1" -c ~/Documents/code/Notability/1
 setup_code_layout 1
 
 # Create additional windows
-tmux new-window -t $SESSION_NAME -n "2" -c ~/Documents/Code/Notability-worktrees/2
+tmux new-window -t $SESSION_NAME -n "2" -c ~/Documents/code/Notability/2
 setup_code_layout 2
 
-tmux new-window -t $SESSION_NAME -n "3" -c ~/Documents/Code/Notability-worktrees/3
+tmux new-window -t $SESSION_NAME -n "3" -c ~/Documents/code/Notability/3
 setup_code_layout 3
 
-tmux new-window -t $SESSION_NAME -n "4" -c ~/Documents/Code/Notability-worktrees/4
+tmux new-window -t $SESSION_NAME -n "4" -c ~/Documents/code/Notability/4
 setup_code_layout 4
 
-tmux new-window -t $SESSION_NAME -n "5" -c ~/Documents/Code/Notability-worktrees/5
+tmux new-window -t $SESSION_NAME -n "5" -c ~/Documents/code/Notability/5
 setup_code_layout 5
 
-tmux new-window -t $SESSION_NAME -n "6" -c ~/Documents/Code/Notability-worktrees/6
+tmux new-window -t $SESSION_NAME -n "6" -c ~/Documents/code/Notability/6
 setup_code_layout 6
 
-tmux new-window -t $SESSION_NAME -n "7" -c ~/Documents/Code/Notability-worktrees/7
+tmux new-window -t $SESSION_NAME -n "7" -c ~/Documents/code/Notability/7
 setup_code_layout 7
 
-tmux new-window -t $SESSION_NAME -n "8" -c ~/Documents/Code/Notability-worktrees/8
+tmux new-window -t $SESSION_NAME -n "8" -c ~/Documents/code/Notability/8
 setup_code_layout 8
 
-tmux new-window -t $SESSION_NAME -n "9" -c ~/Documents/Code/Notability-worktrees/9
+tmux new-window -t $SESSION_NAME -n "9" -c ~/Documents/code/Notability/9
 setup_code_layout 9
 
-tmux new-window -t $SESSION_NAME -n "Reviews" -c ~/Documents/Code/Notability-worktrees/reviews
+tmux new-window -t $SESSION_NAME -n "Reviews" -c ~/Documents/code/Notability/reviews
 setup_code_layout 10
 
-tmux new-window -t $SESSION_NAME -n "Staging" -c ~/Documents/Code/Notability-worktrees/staging
+tmux new-window -t $SESSION_NAME -n "Staging" -c ~/Documents/code/Notability/staging
 setup_code_layout 11
 
 tmux new-window -t $SESSION_NAME -n "Config" -c ~
 setup_code_layout 12
 
-tmux new-window -t $SESSION_NAME -n "Other" -c ~/Documents/Code
+tmux new-window -t $SESSION_NAME -n "Other" -c ~/Documents/code
 setup_code_layout 13
 
 # Update window names with git branches

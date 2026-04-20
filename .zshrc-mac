@@ -9,15 +9,15 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-# SET NODE v22 AS DEFAULT NODE VERSION #################################################################
-# Check if Node.js v22 is installed
-if ! nvm ls v22 &>/dev/null; then
-  echo "Node.js v22 is not installed. Installing now..."
-  nvm install v22
+# SET NODE v24 AS DEFAULT NODE VERSION #################################################################
+# Check if Node.js v24 is installed
+if ! nvm ls v24 &>/dev/null; then
+  echo "Node.js v24 is not installed. Installing now..."
+  nvm install v24
 fi
 
-# Set Node.js v22 as the current version
-nvm use 22
+# Set Node.js v24 as the current version
+nvm use 24
 
 # SETUP SHORTCUT FOR USING ALACRITTY ##################################################################
 # reload config with `alacritty -v`

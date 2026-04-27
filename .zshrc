@@ -171,6 +171,9 @@ plugin=(git)
 # CLAUDE #####################################################################################################
 export PATH="$HOME/.local/bin:$PATH"
 
+# ebook-convert ##############################################################################################
+export PATH="/Applications/calibre.app/Contents/MacOS:$PATH"
+
 # CUSTOMIZING COMMAND LINE PROMPT ############################################################################
 # see https://arjanvandergaag.nl/blog/customize-zsh-prompt-with-vcs-info.html
 # creates color formatting string based on current staged status

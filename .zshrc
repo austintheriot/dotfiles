@@ -82,7 +82,7 @@ alias c='source ~/.my-scripts/tmux-close.sh'
 alias re='source .my-scripts/tmux-update-window-names.sh'
 
 # cleans out local yarn dependencies & re-installs
-alias nuke="yarn clean && npx npkill -D -y && yarn && yarn build"
+alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn build"
 
 # GIT ALIASES ###############################################################################################
 # This allows not having to store the actual root .gitconfig in git itself, which quickly becomes problematic

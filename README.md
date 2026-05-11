@@ -105,3 +105,20 @@ Disable `Displays have separate spaces`
 ```sh
 defaults write com.apple.spaces spans-displays -bool true && killall SystemUIServer
 ```
+
+### Claude Code notifications
+
+Claude Code fires an OS-level notification when it finishes a turn, but only
+when the active tmux pane in the frontmost Alacritty window is *not* the one
+running Claude.
+
+Wired up via the `Stop` hook in `~/.claude/settings.json`, which calls
+`~/.claude/hooks/notify.sh`. The script uses `aerospace list-windows --focused`
+plus `tmux display -p '#{pane_active}#{window_active}'` to decide whether to
+suppress the notification, then fires it via `osascript -e 'display
+notification ...'` (notifications appear under "Script Editor").
+
+`terminal-notifier` was tried first but its notifications were silently
+dropped on this machine despite Settings showing them as enabled — a known
+issue with its bundle on recent macOS. osascript Just Works and needs no
+permission setup.

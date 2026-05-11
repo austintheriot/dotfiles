@@ -28,3 +28,8 @@ program = "open"
 [window]
 option_as_alt = "Both"
 startup_mode = "Maximized"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Shift"
+chars = "\u001B\r"

@@ -6,6 +6,11 @@ In TypeScript projects, do not use `as any` or `as unknown as _`.
 
 Prefer robust, modular coding that is easily tested.
 
+## Writing style
+
+- **No em dashes (—) anywhere.** Use a comma, a colon, parentheses, or two hyphens (`--`) instead. Two hyphens are fine. This applies to chat replies, drafted messages, comments, commit messages, PR descriptions, documentation, and any other prose you write on my behalf. It does not apply to verbatim quoting of existing text or to code/identifiers that legitimately contain `—`.
+- **No emojis anywhere.** Not in chat replies, not in messages drafted on my behalf, not in code, not in commit messages, not in PR descriptions, not in documentation. The only exception is verbatim quoting of existing content or when I explicitly ask for one.
+
 # Config Environment Context
 
 See ~/README.md for specific, dev env details.
@@ -22,6 +27,10 @@ MCP servers are configured globally in `~/.claude/settings.json`.
 
 - **Playwright** (`mcp__playwright__*`) — browser automation via `@playwright/mcp`. Output (screenshots, snapshots, console logs) goes to `~/.claude/playwright-mcp/`.
 
+## Hooks
+
+- **Stop** → `~/.claude/hooks/notify.sh stop` — fires a macOS notification via `osascript` when a turn ends, suppressed if the active tmux pane in the frontmost Alacritty window is the one running Claude. See `~/README.md` "Claude Code notifications" section. (terminal-notifier was tried first; its notifications were silently dropped despite Settings showing as enabled — known issue with its bundle on this macOS.)
+
 # Development Guidelines
 
 ## Philosophy
@@ -36,9 +45,18 @@ MCP servers are configured globally in `~/.claude/settings.json`.
 ### Simplicity Means
 
 - Single responsibility per function/class
+- Functions should be small and easily readable in one sitting
 - Avoid premature abstractions
 - No clever tricks - choose the boring solution
 - If you need to explain it, it's too complex
+
+### Functions Tell a Story
+
+- A function's body should read as a declarative outline of what it does. Reach for well-named helpers so the call sites announce intent; the function name plus the names of the calls inside it should be enough to understand the function without reading the bodies of those calls.
+- Prefer composability and smaller units that compose together over monolithic functions that do many things inline.
+- Avoid internal mutability inside a function: no `let`-then-reassign accumulators, no flags that get flipped, no arrays built up by `push` in a loop when `map`/`filter`/`reduce` (or a comprehension) expresses the same thing as a single expression. The point is not that pipelines are stylish — it's that each named binding should mean one thing for its whole lifetime, so the reader doesn't have to track how a variable mutates over the body.
+- **Parse, don't validate.** When data crosses a boundary (user input, network response, untrusted call site), parse it once into a type that makes the invariant impossible to violate downstream — `NonEmpty<T>`, `ValidatedEmail`, a discriminated union of legal states — rather than passing the loose shape around and re-checking at every layer. Choose data structures so illegal states are unrepresentable. A function whose primary job is to throw on bad input and return `void`/`()` is a smell: have it return the refined type instead, so the proof travels with the value. This is the principled reason callees don't need to re-validate preconditions: the type already carries the proof.
+  - In TypeScript specifically (where the type system "doesn't want you to" do this — structural typing makes brands easy to forge): use **branded types** for refined values (`type Email = string & { readonly __brand: unique symbol }`), and let *only* the parser produce the brand — never `as Email` at a call site, since that collapses the whole guarantee. Distinguish raw shapes from trusted ones at the type level (`UnvalidatedUser` vs `User`). Treat `JSON.parse` results as `unknown` and route them through a parser (zod / valibot / hand-written) that returns a discriminated `{ ok: true, value } | { ok: false, error }` rather than throwing. If the same defensive check shows up in three call sites, that's the signal to lift it into a parser at the boundary and delete the downstream checks.
 
 ## Process
 
@@ -93,11 +111,12 @@ Break complex work into 3-5 stages. Document in a local `IMPLEMENTATION_PLAN.md`
 
 ### Architecture Principles
 
-- **Composition over inheritance** - Use dependency injection
+- **Composition over inheritance** - Use dependency injection. Prefer composing small units over building large ones.
 - **Interfaces over singletons** - Enable testing and flexibility
-- **Explicit over implicit** - Clear data flow and dependencies
+- **Explicit over implicit** - Clear data flow and dependencies. Avoid magic; surface errors in explicit ways (typed results, thrown errors with context, exhaustive switches) rather than swallowing them or relying on implicit fallbacks.
 - **Test-driven when possible** - Never disable tests, fix them
-- **Prefer pure functions** - Avoid mutation, especially global mutation
+- **Prefer pure functions** - Avoid mutation and internal re-assignment. Use `const` over `let`, return new values instead of mutating arguments, and push side effects to the edges. Especially avoid global mutation.
+- **Lean on existing infrastructure** - Before writing new helpers, search for utilities the project (or adjacent subsystems) already provides. Match their patterns rather than parallel-implementing.
 
 ### Code Quality
 

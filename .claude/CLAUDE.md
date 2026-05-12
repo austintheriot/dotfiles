@@ -9,12 +9,17 @@ Prefer robust, modular coding that is easily tested. Detailed rules live in `~/.
 - `typescript.md` -- TypeScript-specific principles for `.ts`/`.tsx` files: type design, inference, generics, conditional types, template literals, classes, brands, language footguns, and decision frameworks (`satisfies` vs `: T`, overloads vs conditionals, `interface` vs `type`). Distilled from *Effective TypeScript* (Vanderkam) and *TypeScript Cookbook* (Baumgartner).
 - `rust.md` -- Rust-specific principles for `.rs` files: ownership/borrowing idioms, error handling, trait/API design, smart pointers, iterators, naming, modules, features, testing, common antipatterns. Distilled from *Effective Rust* (Drysdale) and the Rust API Guidelines.
 - `distributed-systems.md` and `system-design-patterns.md` -- NOT auto-loaded; pulled in by the `/system-design`, `/distsys-review`, and `distsys-*` subagents. Principles (44 of them, organized in 3 parts: mental models, operational patterns, SRE+Jepsen) and patterns (DDIA 2nd ed + practical microservices/architecture canon) respectively.
+- `observability.md` and `observability-patterns.md` -- NOT auto-loaded; pulled in by the `/observability-review`, `/observability-design`, and `otel-*` / `observability-practice` subagents. Principles (OTel spec, semantic conventions, SLOs, alerting, structured logging, the schools-of-thought debate) and patterns (Collector config, sampling, cardinality, exporters) respectively. Honeycomb-aware.
 
 TypeScript helpers: `/ts-review` skill and `typescript-types` subagent.
 
 Rust helpers: `/rust-review` skill (auto-routes hunks to specialist subagents) plus five domain subagents -- `rust-async`, `rust-backend`, `rust-unsafe`, `rust-wasm`, `rust-ffi`.
 
 Distributed-systems / system-design helpers: `/system-design` skill (brainstorm + critique modes), `/distsys-review` skill (runtime/operational footguns in changed code), plus `distsys-data` and `distsys-runtime` subagents.
+
+Observability helpers: `/observability-design` skill (brainstorm + critique modes for instrumentation/SLO/alert plans), `/observability-review` skill (telemetry quality in changed code), plus `otel-instrumentation`, `otel-pipeline`, and `observability-practice` subagents.
+
+Multi-expert panel: `/expert-review` runs the relevant specialist subagents in parallel and synthesizes findings into one report.
 
 ## Writing style
 

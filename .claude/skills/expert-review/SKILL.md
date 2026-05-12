@@ -23,6 +23,11 @@ The full roster of review-capable subagents on this machine, ordered by domain:
 - `distsys-data` -- storage, replication, sharding, transactions, consistency, schema evolution.
 - `distsys-runtime` -- messaging, retries, idempotency, timeouts, caches, failure modes.
 
+**Observability**:
+- `otel-instrumentation` -- OTel SDK, span lifecycle, attribute hygiene, semantic conventions, context propagation, exemplars, log/trace correlation. `~/.claude/agents/otel-instrumentation.md`.
+- `otel-pipeline` -- OTel Collector config, processors, sampling strategies, cardinality management, exporters, pipeline reliability. `~/.claude/agents/otel-pipeline.md`.
+- `observability-practice` -- SLO design, burn-rate alerting, four-golden-signals / RED / USE, postmortem culture, on-call ergonomics, debugging workflow. `~/.claude/agents/observability-practice.md`.
+
 **Discoverability**: at the start of a session, also run `ls ~/.claude/agents/*.md` to pick up any subagents added since this skill was last updated. Read each agent's frontmatter `description` line to decide if it's review-capable. (The user noted they'll add more agents over time.) Any agent whose description includes "review" or "expert" or "audit" is fair game; agents that are clearly action-only (writing code, running commands, brainstorming) are not.
 
 ## Process
@@ -56,6 +61,9 @@ Classification rules (tune to additional agents as they appear):
 | `extern "C"`, `#[repr(C/transparent/packed)]`, `bindgen`, `cbindgen`, `cxx::bridge`, `pyo3`, `napi`, `uniffi`, `Box::into_raw`, `CString`/`CStr`, `#[no_mangle]` | rust-ffi |
 | Storage/replication/sharding/schema changes: migrations, replication-aware reads, secondary indexes, isolation level config, CRDT code, conflict-resolution logic, DB connection setup, sharding logic | distsys-data |
 | Messaging/retries/idempotency/caching/failure-mode patterns: retry loops, queue handlers, message consumers, cache reads/writes, circuit breakers, saga / outbox code, idempotency-key handling, timeout/deadline propagation, fencing tokens, distributed locks | distsys-runtime |
+| Instrumentation code: `tracing::`, `opentelemetry::`, `@opentelemetry/api`, span creation, `tracer.start_span` / `startSpan`, attribute/event/exception recording, metric instruments (counters, histograms, gauges), structured logger setup with trace correlation, propagator config | otel-instrumentation |
+| Pipeline/Collector config: `otel-collector.yaml`, `refinery_rules.toml`, processors (batch, memory_limiter, transform, tail_sampling), exporters (otlp, prometheus), sampling configuration, cardinality-affecting code | otel-pipeline |
+| SLO/alert definitions, runbook files, dashboard config, error-budget policies, on-call documentation, postmortem templates | observability-practice |
 
 If a hunk matches no expert lens (pure plumbing, config, docs), it gets a `[generic]` tag and is reviewed inline by the main agent using the cross-cutting principles in `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`.
 

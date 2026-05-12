@@ -6,6 +6,9 @@ Prefer robust, modular coding that is easily tested. Detailed rules live in `~/.
 
 - `coding-style.md` -- function shape, parse-don't-validate, TypeScript brands, architecture principles, error handling.
 - `testing.md` -- test isolation, harness/factory patterns, testing through user-visible seams, mocking at boundaries, structural pitfalls. Distilled from real codebase patterns and Kent C. Dodds's testing essays.
+- `typescript.md` -- TypeScript-specific principles for `.ts`/`.tsx` files: type design, inference, generics, conditional types, template literals, classes, brands, language footguns, and decision frameworks (`satisfies` vs `: T`, overloads vs conditionals, `interface` vs `type`). Distilled from *Effective TypeScript* (Vanderkam) and *TypeScript Cookbook* (Baumgartner).
+
+Two TypeScript-specific helpers extend that rule file: `/ts-review` (skill -- expert review pass on diff/file/PR) and the `typescript-types` subagent (for hard type-design work delegated out of the main context).
 
 ## Writing style
 

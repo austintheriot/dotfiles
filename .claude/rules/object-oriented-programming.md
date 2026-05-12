@@ -1,0 +1,109 @@
+# Object-Oriented Programming Principles
+
+For an engineer whose default model is functional programming (FP): algebraic data types (ADTs), immutability, pure functions, parametricity, equational reasoning. Object-oriented (OO) concepts are presented in terms of how they relate to, differ from, or genuinely outperform that baseline. Goal: fluency to review OO code from any major lineage and ask informed questions. Cross-references to `~/.claude/rules/functional-programming.md` are noted where the toolkits overlap.
+
+A persistent theme: "OO is good" and "OO is bad" are almost always category errors, because there are at least five schools of OO that share a name and very little else. Most heat in the FP-vs-OO debate evaporates once the lineage is named.
+
+## The five OO lineages
+
+**1. Smalltalk / Alan Kay's vision.** Kay's well-known regret -- "I'm sorry that I long ago coined the term 'objects' for this topic because it gets many people to focus on the lesser idea. The big idea is messaging" -- is the load-bearing quote. Independent objects encapsulating state absolutely, communicating only by sending messages, deciding for themselves how to respond. Late binding is essential; the sender never knows what the receiver will do. Polymorphism follows from late binding, not bolted-on. Inheritance was, in Kay's telling, a minor convenience. The closest modern descendants are not Java or C++ but the actor model (Erlang, Elixir, Akka), Objective-C, Ruby, and the surviving Smalltalks (Pharo, Squeak). The FP-mind should notice: Kay's "objects" are closer to "isolated processes communicating by immutable messages" than to "records with methods." Erlang -- the language Joe Armstrong built while writing "Why OO Sucks" -- is arguably the most Kay-faithful production OO language in existence.
+
+**2. Java / C# / classical OO.** Classes are the unit; inheritance hierarchies the structuring tool; polymorphism is virtual dispatch through subclassing; Gang of Four (GoF) design patterns the shared vocabulary. This is what almost everyone means by "OO" in casual conversation, and what almost every "OO sucks" essay is actually attacking. Strengths: deep tooling, vast literature, IDE refactorings, well-understood scaling story for large teams. Weaknesses: inheritance abuse, mutable shared state, broken-in-practice "encapsulation" (getters and setters that just expose the field), and the noun-heavy ceremony Steve Yegge skewered in "Execution in the Kingdom of Nouns."
+
+**3. Domain-Driven Design (DDD).** Evans and Vernon. The most defensible OO position for large business systems, and the one worth taking most seriously if your prior is FP. Primitives: **entities** (identity over time), **value objects** (defined by attributes, immutable), **aggregates** (consistency boundaries; the aggregate root is the only outside reference), **bounded contexts** (each has its own ubiquitous language; the same word means different things across contexts). DDD bridges OO and FP cleanly: value objects are essentially ADT records and behave functionally; aggregates are mutable but the mutation is bounded and the invariants explicit. DDD done well is closer to "pure core, mutable shell" than to a classical Java mess.
+
+**4. Prototype-based OO.** Self, original JavaScript, Lua, Io. No classes; only objects, and new objects are created by cloning existing ones and overriding slots. Inheritance happens dynamically through prototype chains, not a static class graph. The Self papers argued classes are a premature abstraction that fossilises decisions you do not yet have evidence to make. JavaScript hid the prototype model behind `class` syntax in ES6, but the chain is still underneath and still leaks (`Object.create`, `__proto__`, `prototype.constructor`). Less common in production today, but the conceptual argument -- "objects are primary, classes are a compression of patterns we noticed across objects" -- is genuinely interesting.
+
+**5. Modern hybrid (Kotlin, Swift, C# 9+, Java 21+, Scala).** Not pure OO, not pure FP. Classes plus value types plus immutability defaults plus sealed hierarchies plus pattern matching plus records. Records are ADT product types with a class face. Sealed interfaces plus exhaustive `switch` are ADT sum types with virtual dispatch as a fallback. Most modern application code lives here. The interesting question in hybrid code is rarely "is this OO or FP?" but "is the mutation bounded and the data shape honest?"
+
+When reading any OO essay or codebase, identify which lineage it is talking about. Most flame wars dissolve at that point.
+
+## Core OO concepts (for the FP mind)
+
+**Encapsulation.** Data and the operations on that data are bundled together; the internal representation is hidden behind a public interface. Kay's phrasing: "local retention and protection and hiding of state-process." The modern reading: invariants are enforced by methods that mediate all access. The FP objection: encapsulation hides mutation, and mutation is the real cost; once state is hidden behind methods, equational reasoning is gone and you are reasoning operationally about a state machine. The OO defense: when a thing has identity over time (a bank account, an open file, a UI widget), mutation is essential and hiding it behind invariant-enforcing methods is the honest move. The fight is really about whether the thing in question genuinely has identity. (See `functional-programming.md` on Hickey's values-vs-places; the OO answer is that some domain concepts are inherently places.)
+
+**Inheritance.** Subclass IS-A superclass; the subclass inherits fields and methods and may override them. Most criticisms are correct. The "fragile base class" problem: a change to a base class can break subclasses through invisible channels (an overridden method whose new implementation no longer satisfies an implicit contract the base assumed). Most production inheritance violates the Liskov Substitution Principle without noticing. Modern consensus inside the OO tradition (Sandi Metz, the GoF authors in retrospect, Bjarne Stroustrup): **prefer composition over inheritance**; reserve inheritance for cases where a real subtype relationship exists AND you want to signal substitutability AND you want to share implementation. If only the last is true, use a trait, mixin, delegate, or default method.
+
+**Polymorphism.** Same operation, different behavior depending on the type of the operand. Three flavors, all of which an FP reader has seen under different names:
+
+- *Subtype polymorphism* (virtual dispatch): the OO classic. `shape.area()` dispatches at runtime based on whether `shape` is a `Circle` or `Rectangle`. The FP analogue is pattern matching on a sum type, with one critical difference: virtual dispatch is *open* (anyone can add a new subtype), pattern matching is *closed* (the sum type's variants are fixed). Sealed classes close the OO version; the right choice depends on which axis you expect to extend -- new operations (FP wins) or new types (OO wins). This is the **expression problem** in one sentence. CLOS (Common Lisp Object System) goes further with *multiple dispatch*: methods dispatch on the runtime types of all arguments, not just the receiver, dissolving the asymmetry between "the object" and "the arguments."
+- *Ad-hoc polymorphism*: the same function name resolves to different implementations based on type. Method overloading in Java, type classes in Haskell, traits in Rust, protocols in Swift, extension methods in C#/Kotlin. Usually statically resolved.
+- *Parametric polymorphism*: one implementation works for any type. Generics. The FP world treats this as default and gets parametricity for free (see `functional-programming.md` on free theorems). OO supports generics but historically does less work with them.
+
+**Liskov Substitution Principle (LSP).** Subtypes must be substitutable for their base type without breaking client code that depends on the base type's contract. The canonical violation is `Square extends Rectangle`: a `Rectangle` promises that `setWidth(w)` leaves height unchanged; a `Square` cannot honor that without ceasing to be a square. The fix is not to subclass; the fix is to recognise that the mathematical "is-a" does not imply a behavioral "is-a." LSP is the one SOLID principle nearly everyone agrees is load-bearing, because it formalises what subtyping has to mean for inheritance not to be a lie.
+
+**Object identity vs value equality.** A `User` has identity: it is the same user even if its email changes. Two `Money(100, USD)` values are equal if their fields match; there is no "the same hundred dollars." OO encodes identity directly; FP encodes values. Modern hybrid languages distinguish explicitly: Kotlin `data class`, Java/C# `record`, Scala `case class` are values (structural equality, immutable, hashable by content); ordinary classes are identities (reference equality, mutable, hashable by identity). The FP reader will recognise records as ADT product types. The OO reader should notice this distinction is not new -- DDD has been formalising it as "entity vs value object" since 2003.
+
+## SOLID, its critiques, and CUPID
+
+SOLID is taught dogmatically and applied poorly. Each principle has a defensible core and a common failure mode.
+
+**S -- Single Responsibility Principle.** "A class should have only one reason to change." The core insight is real: classes that mix unrelated concerns are hard to evolve. The failure mode is that "responsibility" is undefined and shifts with the granularity of analysis. Dan North's critique: SRP becomes a license to spawn dozens of tiny classes, each "responsible" for a method's worth of behavior, and the system becomes harder to read because the logic is spread across files. Bob Martin's later refinement -- "a single reason to change" means "a single stakeholder/audience" -- is more useful but still vague.
+
+**O -- Open/Closed Principle.** "Open for extension, closed for modification." Meyer's original formulation was inheritance-based; Martin reinterpreted it in terms of polymorphism (extend behavior by adding subtypes, not by editing existing code). The aspiration is correct; the practice is hard. Most useful extensions require modification somewhere, and contorting code to be "closed" against changes you have not seen is premature abstraction. The honest version: when you have evidence of an extension axis, make that axis polymorphic; otherwise wait.
+
+**L -- Liskov Substitution Principle.** Covered above. The universally-respected one. An LSP violation found in review is almost always a real bug.
+
+**I -- Interface Segregation Principle.** "Clients shouldn't be forced to depend on interfaces they don't use." Largely correct. Common failure mode: explodes into many one-method interfaces named `IDoTheThing`, each with a single implementation. At that point you have reinvented functions with extra ceremony.
+
+**D -- Dependency Inversion Principle.** "Depend on abstractions, not concretions; high-level modules should not depend on low-level modules." Often conflated with dependency injection (DI), which is a mechanism, not the principle. The architectural insight: the domain layer defines the interfaces it needs (e.g., a `UserRepository` in the domain), and the infrastructure layer implements them. This is the heart of hexagonal architecture (ports and adapters), clean architecture, and onion architecture. Failure mode: interface inflation -- every class has an interface "just in case," doubling the file count without ever being substituted.
+
+**Dan North's CUPID alternative.** SOLID is a set of rules that compose poorly; CUPID is a set of *properties* code can aspire to.
+- *Composable*: plays well with other code; small surface area, few dependencies, predictable boundary behavior.
+- *Unix-philosophy*: does one thing well, with a clear input and output.
+- *Predictable*: behaves as described, deterministic where possible, fails obviously.
+- *Idiomatic*: looks like it belongs in this language and this team's codebase.
+- *Domain-based*: structure mirrors the problem; names come from the business, not the framework.
+
+Harder to enforce mechanically than SOLID, and probably better for it.
+
+**Other critiques.** Yegor Bugayenko's "Elegant Objects" is the radical-purist position: getters and setters are evil (objects should not expose state at all), null is evil (use the Null Object pattern), static methods are evil (they are not OO), `-er` class names are evil (a `Manager` is a procedure pretending to be an object). Too extreme for most teams, but the critique of "objects" that are really structs with accessor methods is dead-on. Sandi Metz is the pragmatist counterweight: rules need exceptions, duplication is cheaper than the wrong abstraction, the goal is changeable code not "correct" code. The working-engineer skepticism: SOLID is taught as gospel in interviews and bootcamps and applied by people who have not yet seen a system get worse from following it.
+
+## Inheritance vs composition: the modern consensus
+
+The bumper sticker is "favor composition over inheritance," and it is correct, but the nuance matters.
+
+**Composition wins by default** because objects with collaborators (passed in or held as fields) are more flexible than objects extending a base class. "Has-a" composes; "is-a" forks. Composed objects can be swapped, mocked, decorated, and re-wired. Inherited behavior is fixed at class-definition time and changes ripple through the hierarchy.
+
+**Inheritance is genuinely right** in a narrow set of cases: (a) a real subtype relationship exists and strictly satisfies LSP; (b) you want to share implementation AND signal substitutability AND clients should treat the subtype interchangeably; (c) the framework demands it (extending `JFrame`, `UIViewController`, `Activity`, `Component`). Framework inheritance is usually inheritance-as-plugin-registration rather than modeling, and it is fine.
+
+**Inheritance is genuinely wrong** when sharing implementation is the *only* goal (use a trait, mixin, delegate, or extension method); when subclasses fail LSP (Square/Rectangle, mutable Bag extending immutable Set); when "is-a" is conceptual but not behavioral; when the hierarchy is more than two or three deep and people are tracing method resolution by eye.
+
+**Mixins, traits, default methods.** Composition-of-behavior at the type level. Rust traits are the cleanest example: a trait declares behavior; a type can implement many; there is no inheritance hierarchy. Java default methods, Kotlin interfaces with default impls, Swift protocol extensions, Scala traits, C# default interface methods all converge on this model. The right tool when "I want to share behavior across otherwise-unrelated types" comes up.
+
+## Where OO genuinely wins (the positive case)
+
+The honest case for OO is not that it is the universal best tool but that there are domains where it models reality more faithfully than FP, and where FP alternatives have well-documented practical failures.
+
+**Entities with identity over time.** A bank account, a user, a game character, an order, a tenant. These *are* identities, not values -- they persist across changes, have history, are referenced from elsewhere, and there is a fact of the matter about whether two are "the same one." DDD's entities and aggregates are the right primitive. The FP alternative (immutable snapshots threaded through every function; identities as references to value cells; change as atomic swap) works but adds ceremony that is rarely free. (See `functional-programming.md` on Hickey's values-vs-places; the OO answer is "yes, some things are places, modeled with bounded mutation.")
+
+**GUI widgets and event-driven systems.** State is the substance. A text field has a cursor, a selection, a value, focus. Functional Reactive Programming (FRP) is intellectually beautiful and has a thirty-year history of practical struggles; the production GUI frameworks that survive (UIKit, AppKit, Android Views, Win32, the document object model -- DOM) are all OO and all stateful. React's virtual-DOM diffing is a pure-shell over a stateful core, itself a concession to the difficulty of GUIs functionally end-to-end.
+
+**Resource lifecycle.** File handles, network connections, database transactions, locks, GPU contexts. Acquire/release semantics. Resource Acquisition Is Initialization (RAII) in C++, `using`/`with`/`try-with-resources` in C#/Python/Java, `Drop` in Rust -- all converge on object-with-destructor as the right primitive. The FP linear-types / region-types alternative is real but itself adopts OO's lifecycle insight.
+
+**Object-relational mapping.** Relational rows have identity (primary keys) and references (foreign keys), which is exactly what entities and aggregates model. Active Record, Hibernate, Entity Framework, Doctrine -- all OO, all entrenched, all working.
+
+**Hexagonal / ports-and-adapters** (Alistair Cockburn), aka clean architecture (Martin), onion architecture, or "functional core, imperative shell." The domain core defines its own interfaces (ports); infrastructure adapters implement them. The core is the OO part modeling entities and value objects with explicit invariants; the shell is mostly procedural glue. The single most useful architectural idea from the OO tradition; FP writers describe the same pattern as pure core / impure shell. (See `functional-programming.md`.)
+
+## The modern hybrid: Kotlin, Swift, C# 9+, Java 21+
+
+The interesting code review work today happens in languages that are neither pure OO nor pure FP. The features that matter:
+
+- **Records / data classes** (Java records, Kotlin `data class`, C# records, Scala case classes, Swift structs). ADT product types in OO clothing: immutable by default, structural equality, generated `hashCode`/`toString`/`copy`. Values, not entities. Participate in pattern matching cleanly.
+- **Sealed classes / sealed interfaces** (Kotlin `sealed`, Java `sealed`, Swift `enum` with associated values). ADT sum types with the option of virtual dispatch. Combined with exhaustive pattern matching, you get genuine ADTs the type system enforces.
+- **Pattern matching for switch** (Java 21+, C# 8+, Kotlin `when`, Swift `switch`). Exhaustiveness on sealed hierarchies turns "did I handle every case?" from manual audit into a compiler error. The FP move into the OO mainstream.
+- **Immutability defaults** (Kotlin `val`, Swift `let`, Scala `val`, Java records). Mutable is opt-in. Shared-mutable-default was the original sin of Java and C# 1.0; modern dialects have walked it back.
+- **Extension methods / extension functions** (Kotlin, Swift, C#). Add operations to types you do not own without subclassing. Ad-hoc polymorphism by a different name; the OO answer to "I want to add a function to a closed sum type."
+- **Scope functions, optionals as monads, structured concurrency.** Kotlin's `let`/`also`/`apply`/`run`, Swift's optional chaining, structured concurrency in Kotlin coroutines and Swift -- FP ideas naturalised into OO syntax.
+
+Reviewing hybrid code, the load-bearing questions are rarely "is this OO?" but: is mutation bounded and explicit? Are sum types exhaustively matched? Are entities and values distinguished? Does the domain core know about its infrastructure?
+
+## Honest dissent from both sides
+
+The user is multi-paradigm; both critiques deserve fair air.
+
+**From the FP side.** Steve Yegge's "Execution in the Kingdom of Nouns" argues Java's insistence on wrapping every verb in a noun (`Doer`, `Manager`, `Executor`, `Validator`) makes simple operations ceremonious and obscures the actual computation. Right about Java specifically; overstates as a critique of OO generally. Joe Armstrong's "Why OO Sucks" argues data and functions should not be coupled, everything-is-an-object including integers is silly, and real-world entities (Armstrong's example: a car) are not naturally modeled as objects with methods. He later softened, noting Erlang's actor model is itself a kind of OO and the message-passing core of Kay's vision is sound. Rich Hickey's "Are We There Yet?" and "The Value of Values" argue OO conflates identity, state, value, and time, and that separating them (values are immutable; identities are references to successive values; time is first-class) clarifies systems enormously. Hickey's critique is the most substantive and hardest to fully rebut: he attacks the conflation at the center of the classical OO model, not a straw man.
+
+**From the OO side.** The *stable abstractions* argument: well-designed OO with clear class names and methods is more readable to working engineers than equivalent FP with point-free composition and typeclass dispatch. Empirical, not aesthetic. The *team scaling* argument (Conway's Law): OO's class structure provides natural boundaries for team-of-team development; "this team owns these classes" is a real coordination mechanism. FP modules support the same but in practice exercise it less. The *you cannot avoid identity* argument: real systems have entities, audit trails, references; FP does not eliminate identity, it relocates it (to atom/ref/agent/STM cells) and sometimes pretends it has disappeared. The *literature depth* argument: thirty-plus years of design patterns, refactoring catalogues, architectural styles, and IDE tooling, all OO-shaped. FP has more theoretical depth and is catching up on practice, but the practitioner literature for "how do I structure a 500K-line OO codebase" is denser than the FP equivalent.
+
+Reviewer's stance: name the lineage; ask whether the chosen primitive (entity, value object, actor, prototype, record) matches the domain shape; push back hard on inheritance hierarchies that exist only to share code; push back on objects that are really structs with accessor methods; accept that some things are places.

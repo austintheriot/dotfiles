@@ -33,6 +33,13 @@ The full roster of review-capable subagents on this machine, ordered by domain:
 - `fp-effects` -- effect tracking, monads, pure-core/imperative-shell, structured concurrency as effect, async-as-monad, ZIO/Cats Effect/Effect-TS patterns. `~/.claude/agents/fp-effects.md`.
 - `fp-verification` -- Curry-Howard in practice, dependent types, Lean/Agda/Coq/Idris/F* dipping. Use sparingly. `~/.claude/agents/fp-verification.md`.
 
+**Object-oriented programming** (signal-driven, NOT mandatory -- include only when the diff has OO-shaped code):
+- `oo-patterns` -- Gang of Four + modern design patterns. `~/.claude/agents/oo-patterns.md`.
+- `oo-architecture` -- inheritance/composition, SOLID/CUPID, hexagonal/clean/onion. `~/.claude/agents/oo-architecture.md`.
+- `oo-domain-modeling` -- DDD specialist (aggregates, entities, value objects, bounded contexts). `~/.claude/agents/oo-domain-modeling.md`.
+
+The OO panel has a pedagogical bias -- when the user encounters unfamiliar OO patterns, the agents explain rather than just critique. Use the OO agents whenever the diff has classes-with-methods, inheritance, factories, builders, visitor/observer/strategy/decorator patterns, DDD-shaped code (aggregates, repositories, value objects), or virtual dispatch.
+
 ### The mandatory FP lens
 
 **Every `/expert-review` invocation MUST spawn at least one FP agent**, even when the hunks have no obvious FP-flavored signals. Rationale: the FP lens frequently surfaces outside-the-box suggestions other reviewers miss -- ADT opportunities masquerading as boolean flags, mutation-across-async-boundaries, smart-constructor candidates, pure-core/impure-shell separations.
@@ -84,6 +91,9 @@ Classification rules (tune to additional agents as they appear):
 | Effect-shaped code: monads, Result/Option chains, async/await pipelines, IO interleaved with logic, error handling strategy, structured concurrency, Effect-TS / ZIO / Cats Effect / fp-ts usage | fp-effects |
 | Safety-critical code (crypto, kernel, financial settlement) or hunks the user explicitly flags for verification | fp-verification |
 | **All hunks (mandatory FP lens)**: every panel review includes at least `fp-types` regardless of the table above, per the "always include at least one FP agent" policy | fp-types |
+| Classes with methods, inheritance hierarchies, abstract classes, virtual dispatch, factory patterns, builder patterns, design-pattern-shaped code (Visitor, Observer, Strategy, Decorator, Template Method, etc.) | oo-patterns |
+| Larger OO architecture: deep class hierarchies, SOLID-flavored design, ports-and-adapters/hexagonal/clean/onion structures, module boundaries, dependency direction concerns | oo-architecture |
+| DDD-shaped code: aggregate roots, entities + value objects, repositories, domain events, bounded-context integration, anti-corruption layers, ubiquitous-language naming | oo-domain-modeling |
 
 If a hunk matches no expert lens (pure plumbing, config, docs), it gets a `[generic]` tag and is reviewed inline by the main agent using the cross-cutting principles in `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`.
 

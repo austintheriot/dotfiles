@@ -11,6 +11,7 @@ Prefer robust, modular coding that is easily tested. Detailed rules live in `~/.
 - `distributed-systems.md` and `system-design-patterns.md` -- NOT auto-loaded; pulled in by the `/system-design`, `/distsys-review`, and `distsys-*` subagents. Principles (44 of them, organized in 3 parts: mental models, operational patterns, SRE+Jepsen) and patterns (DDIA 2nd ed + practical microservices/architecture canon) respectively.
 - `observability.md` and `observability-patterns.md` -- NOT auto-loaded; pulled in by the `/observability-review`, `/observability-design`, and `otel-*` / `observability-practice` subagents. Principles (OTel spec, semantic conventions, SLOs, alerting, structured logging, the schools-of-thought debate) and patterns (Collector config, sampling, cardinality, exporters) respectively. Honeycomb-aware.
 - `functional-programming.md` and `functional-patterns.md` -- NOT auto-loaded; pulled in by the `/fp-review`, `/fp-design`, and `fp-*` subagents. Principles (ADTs, parametricity, totality, Curry-Howard in practice, schools of thought from pure-FP through OO dissent) and patterns (Functor/Applicative/Monad, Reader/Writer/State, transformers, free, tagless final, algebraic effects, lenses, smart constructors, GADTs, refinement types, recursion schemes, parser combinators, cross-language application). Multi-paradigm stance; expert-level depth.
+- `object-oriented-programming.md` and `oo-patterns.md` -- NOT auto-loaded; pulled in by the `/oo-review`, `/oo-design`, and `oo-*` subagents. Principles (five OO lineages from Smalltalk/Kay through DDD through modern hybrid, SOLID + CUPID + GRASP, encapsulation/inheritance/polymorphism, where OO genuinely wins) and patterns (Gang of Four creational/structural/behavioral, modern architectural like hexagonal/clean/onion, DDD tactical and strategic patterns, cross-language manifestations). Pedagogical bias for an FP-leaning reader.
 
 TypeScript helpers: `/ts-review` skill and `typescript-types` subagent.
 
@@ -22,7 +23,9 @@ Observability helpers: `/observability-design` skill (brainstorm + critique mode
 
 Functional-programming helpers: `/fp-design` skill (brainstorm + critique modes for "what would the functional approach be"), `/fp-review` skill (FP opportunities in changed code), plus `fp-types`, `fp-effects`, `fp-verification` subagents. Multi-paradigm -- meets the language where it is.
 
-Multi-expert panel: `/expert-review` runs the relevant specialist subagents in parallel and synthesizes findings into one report. Always includes at least one FP agent (default: `fp-types`) since the FP lens often surfaces non-obvious improvements.
+Object-oriented helpers: `/oo-design` skill (brainstorm + critique modes with pedagogical bias), `/oo-review` skill (OO code review with pedagogical bias), plus `oo-patterns`, `oo-architecture`, `oo-domain-modeling` subagents. NOT auto-included anywhere; invoke when reviewing OO code or asking OO questions.
+
+Multi-expert panel: `/expert-review` runs the relevant specialist subagents in parallel and synthesizes findings into one report. Always includes at least one FP agent (default: `fp-types`); includes OO agents only when the diff has OO-shaped code.
 
 ## Writing style
 

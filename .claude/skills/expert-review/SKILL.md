@@ -28,6 +28,22 @@ The full roster of review-capable subagents on this machine, ordered by domain:
 - `otel-pipeline` -- OTel Collector config, processors, sampling strategies, cardinality management, exporters, pipeline reliability. `~/.claude/agents/otel-pipeline.md`.
 - `observability-practice` -- SLO design, burn-rate alerting, four-golden-signals / RED / USE, postmortem culture, on-call ergonomics, debugging workflow. `~/.claude/agents/observability-practice.md`.
 
+**Functional programming** (ALWAYS include at least one of these in every panel -- see note below):
+- `fp-types` -- ADT design, parametricity, refinement types, GADTs, phantom types, typestate, "make illegal states unrepresentable." `~/.claude/agents/fp-types.md`.
+- `fp-effects` -- effect tracking, monads, pure-core/imperative-shell, structured concurrency as effect, async-as-monad, ZIO/Cats Effect/Effect-TS patterns. `~/.claude/agents/fp-effects.md`.
+- `fp-verification` -- Curry-Howard in practice, dependent types, Lean/Agda/Coq/Idris/F* dipping. Use sparingly. `~/.claude/agents/fp-verification.md`.
+
+### The mandatory FP lens
+
+**Every `/expert-review` invocation MUST spawn at least one FP agent**, even when the hunks have no obvious FP-flavored signals. Rationale: the FP lens frequently surfaces outside-the-box suggestions other reviewers miss -- ADT opportunities masquerading as boolean flags, mutation-across-async-boundaries, smart-constructor candidates, pure-core/impure-shell separations.
+
+Routing:
+- Default: `fp-types`. It applies to almost every codebase and produces the most universally-useful insights (ADTs, refinement, parametricity).
+- If the diff has substantial async/concurrent/effectful code, ALSO include `fp-effects`.
+- Include `fp-verification` only if the diff is in a safety-critical context (crypto, kernel, financial settlement) OR the user explicitly invokes `/expert-review --verify` (treat any "verify" / "lean" / "formal" hint in args this way).
+
+In the synthesis, FP findings often carry an "expert insight" severity rather than blocker/major -- treat that as additive rather than competing with the language and domain reviewers.
+
 **Discoverability**: at the start of a session, also run `ls ~/.claude/agents/*.md` to pick up any subagents added since this skill was last updated. Read each agent's frontmatter `description` line to decide if it's review-capable. (The user noted they'll add more agents over time.) Any agent whose description includes "review" or "expert" or "audit" is fair game; agents that are clearly action-only (writing code, running commands, brainstorming) are not.
 
 ## Process
@@ -64,6 +80,10 @@ Classification rules (tune to additional agents as they appear):
 | Instrumentation code: `tracing::`, `opentelemetry::`, `@opentelemetry/api`, span creation, `tracer.start_span` / `startSpan`, attribute/event/exception recording, metric instruments (counters, histograms, gauges), structured logger setup with trace correlation, propagator config | otel-instrumentation |
 | Pipeline/Collector config: `otel-collector.yaml`, `refinery_rules.toml`, processors (batch, memory_limiter, transform, tail_sampling), exporters (otlp, prometheus), sampling configuration, cardinality-affecting code | otel-pipeline |
 | SLO/alert definitions, runbook files, dashboard config, error-budget policies, on-call documentation, postmortem templates | observability-practice |
+| Type definitions, ADTs, enums, sealed classes, discriminated unions, pattern matching, smart constructors, branded primitives, validation logic | fp-types |
+| Effect-shaped code: monads, Result/Option chains, async/await pipelines, IO interleaved with logic, error handling strategy, structured concurrency, Effect-TS / ZIO / Cats Effect / fp-ts usage | fp-effects |
+| Safety-critical code (crypto, kernel, financial settlement) or hunks the user explicitly flags for verification | fp-verification |
+| **All hunks (mandatory FP lens)**: every panel review includes at least `fp-types` regardless of the table above, per the "always include at least one FP agent" policy | fp-types |
 
 If a hunk matches no expert lens (pure plumbing, config, docs), it gets a `[generic]` tag and is reviewed inline by the main agent using the cross-cutting principles in `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`.
 

@@ -10,6 +10,7 @@ Prefer robust, modular coding that is easily tested. Detailed rules live in `~/.
 - `rust.md` -- Rust-specific principles for `.rs` files: ownership/borrowing idioms, error handling, trait/API design, smart pointers, iterators, naming, modules, features, testing, common antipatterns. Distilled from *Effective Rust* (Drysdale) and the Rust API Guidelines.
 - `distributed-systems.md` and `system-design-patterns.md` -- NOT auto-loaded; pulled in by the `/system-design`, `/distsys-review`, and `distsys-*` subagents. Principles (44 of them, organized in 3 parts: mental models, operational patterns, SRE+Jepsen) and patterns (DDIA 2nd ed + practical microservices/architecture canon) respectively.
 - `observability.md` and `observability-patterns.md` -- NOT auto-loaded; pulled in by the `/observability-review`, `/observability-design`, and `otel-*` / `observability-practice` subagents. Principles (OTel spec, semantic conventions, SLOs, alerting, structured logging, the schools-of-thought debate) and patterns (Collector config, sampling, cardinality, exporters) respectively. Honeycomb-aware.
+- `functional-programming.md` and `functional-patterns.md` -- NOT auto-loaded; pulled in by the `/fp-review`, `/fp-design`, and `fp-*` subagents. Principles (ADTs, parametricity, totality, Curry-Howard in practice, schools of thought from pure-FP through OO dissent) and patterns (Functor/Applicative/Monad, Reader/Writer/State, transformers, free, tagless final, algebraic effects, lenses, smart constructors, GADTs, refinement types, recursion schemes, parser combinators, cross-language application). Multi-paradigm stance; expert-level depth.
 
 TypeScript helpers: `/ts-review` skill and `typescript-types` subagent.
 
@@ -19,7 +20,9 @@ Distributed-systems / system-design helpers: `/system-design` skill (brainstorm 
 
 Observability helpers: `/observability-design` skill (brainstorm + critique modes for instrumentation/SLO/alert plans), `/observability-review` skill (telemetry quality in changed code), plus `otel-instrumentation`, `otel-pipeline`, and `observability-practice` subagents.
 
-Multi-expert panel: `/expert-review` runs the relevant specialist subagents in parallel and synthesizes findings into one report.
+Functional-programming helpers: `/fp-design` skill (brainstorm + critique modes for "what would the functional approach be"), `/fp-review` skill (FP opportunities in changed code), plus `fp-types`, `fp-effects`, `fp-verification` subagents. Multi-paradigm -- meets the language where it is.
+
+Multi-expert panel: `/expert-review` runs the relevant specialist subagents in parallel and synthesizes findings into one report. Always includes at least one FP agent (default: `fp-types`) since the FP lens often surfaces non-obvious improvements.
 
 ## Writing style
 

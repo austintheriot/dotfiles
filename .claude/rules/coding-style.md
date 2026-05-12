@@ -45,9 +45,4 @@ Structural typing makes brands easy to forge, so:
 
 ## Tests
 
-- Test behavior, not implementation.
-- One assertion per test when possible.
-- Clear test names describing the scenario.
-- Use existing test utilities/helpers.
-- Tests should be deterministic.
-- Never disable tests, fix them.
+Testing principles live in their own file: see `~/.claude/rules/testing.md`. It loads automatically when editing test files or any code under matching source paths. Key points in one line each: isolate every test, push setup into a `spawnApp()`-style harness, test through the user-visible seam (not implementation details), prefer functions over nested `describe`/`beforeEach`, mock only at system boundaries, never disable a failing test.

@@ -8,10 +8,13 @@ Prefer robust, modular coding that is easily tested. Detailed rules live in `~/.
 - `testing.md` -- test isolation, harness/factory patterns, testing through user-visible seams, mocking at boundaries, structural pitfalls. Distilled from real codebase patterns and Kent C. Dodds's testing essays.
 - `typescript.md` -- TypeScript-specific principles for `.ts`/`.tsx` files: type design, inference, generics, conditional types, template literals, classes, brands, language footguns, and decision frameworks (`satisfies` vs `: T`, overloads vs conditionals, `interface` vs `type`). Distilled from *Effective TypeScript* (Vanderkam) and *TypeScript Cookbook* (Baumgartner).
 - `rust.md` -- Rust-specific principles for `.rs` files: ownership/borrowing idioms, error handling, trait/API design, smart pointers, iterators, naming, modules, features, testing, common antipatterns. Distilled from *Effective Rust* (Drysdale) and the Rust API Guidelines.
+- `distributed-systems.md` and `system-design-patterns.md` -- NOT auto-loaded; pulled in by the `/system-design`, `/distsys-review`, and `distsys-*` subagents. Principles (44 of them, organized in 3 parts: mental models, operational patterns, SRE+Jepsen) and patterns (DDIA 2nd ed + practical microservices/architecture canon) respectively.
 
 TypeScript helpers: `/ts-review` skill and `typescript-types` subagent.
 
 Rust helpers: `/rust-review` skill (auto-routes hunks to specialist subagents) plus five domain subagents -- `rust-async`, `rust-backend`, `rust-unsafe`, `rust-wasm`, `rust-ffi`.
+
+Distributed-systems / system-design helpers: `/system-design` skill (brainstorm + critique modes), `/distsys-review` skill (runtime/operational footguns in changed code), plus `distsys-data` and `distsys-runtime` subagents.
 
 ## Writing style
 

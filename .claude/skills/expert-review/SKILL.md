@@ -1,6 +1,6 @@
 ---
 name: expert-review
-description: Deep multi-expert code review. Detects what to review, classifies code regions by language and domain, spawns the relevant specialist subagents in parallel (typescript-types, rust-async/backend/unsafe/wasm/ffi, distsys-data/distsys-runtime, fp-*, oo-*, otel-*, observability-practice, and any future review-capable subagents), then synthesizes their findings into one severity-and-confidence-ranked report tagged by which expert raised each issue. Supports two modes -- diff review (current branch vs. main, a PR, a git range) and survey review (a file, directory, or subsystem reviewed in full). Burns more tokens than the per-language review skills -- use when you genuinely want a panel pass, not for routine review. Does NOT post comments to GitHub. Does NOT apply fixes -- read-only.
+description: Deep multi-expert code review. Detects what to review, classifies code regions by language and domain, spawns the relevant specialist subagents in parallel (typescript-types, rust-async/backend/unsafe/wasm/ffi, distsys-data/distsys-runtime, fp-*, oo-*, otel-*, observability-practice, bug-hunter, code-simplifier, test-coverage, and any future review-capable subagents), then synthesizes their findings into one severity-and-confidence-ranked report tagged by which expert raised each issue. Always invokes `bug-hunter` (canonical bug-pattern catalog) and at least one FP agent. Supports two modes -- diff review (current branch vs. main, a PR, a git range) and survey review (a file, directory, or subsystem reviewed in full). Burns more tokens than the per-language review skills -- use when you genuinely want a panel pass, not for routine review. Does NOT post comments to GitHub. Does NOT apply fixes -- read-only.
 ---
 
 # Expert Review
@@ -52,16 +52,27 @@ The full roster of review-capable subagents on this machine, ordered by domain:
 
 The OO panel has a pedagogical bias -- when the user encounters unfamiliar OO patterns, the agents explain rather than just critique. Use the OO agents whenever the code has classes-with-methods, inheritance, factories, builders, visitor/observer/strategy/decorator patterns, DDD-shaped code (aggregates, repositories, value objects), or virtual dispatch.
 
-### The mandatory FP lens
+**Cross-cutting** (domain-general lenses):
+- `bug-hunter` -- canonical bug-prone patterns: TOCTOU, races, async/await footguns, caching, null/optionality, integer arithmetic, resource leaks, mutability/aliasing, error handling, time/timezone, encoding, boundary conditions, API leaks, security-shaped bugs. **MANDATORY in every panel** (see below). `~/.claude/agents/bug-hunter.md`.
+- `code-simplifier` -- surplus complexity: single-implementation abstractions, pass-through layers, premature configuration, dead code, excessive nesting, duplication ripe for extraction, unnecessary state, cleverness, misplaced abstraction levels. Read-only -- suggests, never applies. `~/.claude/agents/code-simplifier.md`.
+- `test-coverage` -- coverage gaps prioritized by failure-cost; discovers and runs repo tooling (coverage reports, mutation testing, flamegraphs) to ground findings in data. Also flags bad existing tests. `~/.claude/agents/test-coverage.md`.
 
-**Every `/expert-review` invocation MUST spawn at least one FP agent**, even when the code has no obvious FP-flavored signals. Rationale: the FP lens frequently surfaces outside-the-box suggestions other reviewers miss -- ADT opportunities masquerading as boolean flags, mutation-across-async-boundaries, smart-constructor candidates, pure-core/impure-shell separations.
+### Mandatory lenses
 
-Routing:
+Two lenses are invoked on **every** `/expert-review` invocation, regardless of what signals the code shows:
+
+**`bug-hunter` (always invoked).** The canonical bug-pattern catalog (TOCTOU, races, async, caching, null, integer arithmetic, resource leaks, mutability, error handling, time, encoding, boundaries, API leaks, security) is domain-general; almost any code touches several categories. The bug-hunter is the "what compiles cleanly and still pages someone at 3am" lens.
+
+**At least one FP agent (always invoked).** Even when the code has no obvious FP-flavored signals. Rationale: the FP lens frequently surfaces outside-the-box suggestions other reviewers miss -- ADT opportunities masquerading as boolean flags, mutation-across-async-boundaries, smart-constructor candidates, pure-core/impure-shell separations.
+
+FP routing:
 - Default: `fp-types`. It applies to almost every codebase and produces the most universally-useful insights (ADTs, refinement, parametricity).
 - If the code has substantial async/concurrent/effectful code, ALSO include `fp-effects`.
 - Include `fp-verification` only if the code is in a safety-critical context (crypto, kernel, financial settlement) OR the user explicitly invokes `/expert-review --verify` (treat any "verify" / "lean" / "formal" hint in args this way).
 
 In the synthesis, FP findings often carry an "expert insight" severity rather than blocker/major -- treat that as additive rather than competing with the language and domain reviewers.
+
+Two other cross-cutting lenses (`code-simplifier`, `test-coverage`) are signal-driven but apply broadly enough that they fire on most reviews -- see the classification table below.
 
 **Discoverability**: at the start of a session, also run `ls ~/.claude/agents/*.md` to pick up any subagents added since this skill was last updated. Read each agent's frontmatter `description` line to decide if it's review-capable. (The user noted they'll add more agents over time.) Any agent whose description includes "review" or "expert" or "audit" is fair game; agents that are clearly action-only (writing code, running commands, brainstorming) are not.
 
@@ -113,8 +124,11 @@ Classification rules (tune to additional agents as they appear):
 | Classes with methods, inheritance hierarchies, abstract classes, virtual dispatch, factory patterns, builder patterns, design-pattern-shaped code (Visitor, Observer, Strategy, Decorator, Template Method, etc.) | oo-patterns |
 | Larger OO architecture: deep class hierarchies, SOLID-flavored design, ports-and-adapters/hexagonal/clean/onion structures, module boundaries, dependency direction concerns | oo-architecture |
 | DDD-shaped code: aggregate roots, entities + value objects, repositories, domain events, bounded-context integration, anti-corruption layers, ubiquitous-language naming | oo-domain-modeling |
+| **All code (mandatory bug-hunter lens)**: every panel review includes `bug-hunter` regardless of the table above, per the "always invoked" mandatory-lens policy | bug-hunter |
+| Code that looks more complex than the problem demands: deep nesting, interfaces with one implementation, layers that just forward calls, "configurable" params never varied, duplicated blocks ripe for extraction, state that mirrors a computation, clever one-liners | code-simplifier |
+| Any production code (i.e., not pure config / docs / generated): test-coverage runs on most reviews because gaps in error-paths and edge-cases are common. Skip only for diffs / surveys that are entirely test code, config, docs, or generated bindings | test-coverage |
 
-If a region matches no expert lens (pure plumbing, config, docs), it gets a `[generic]` tag and is reviewed inline by the main agent using the cross-cutting principles in `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`.
+If a region matches no expert lens (pure plumbing, config, docs), it gets a `[generic]` tag and is reviewed inline by the main agent using the cross-cutting principles in `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`. Note: `bug-hunter` still runs on every panel regardless.
 
 ### Stage 3 -- Soft warning on panel size
 

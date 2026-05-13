@@ -25,7 +25,13 @@ Functional-programming helpers: `/fp-design` skill (brainstorm + critique modes 
 
 Object-oriented helpers: `/oo-design` skill (brainstorm + critique modes with pedagogical bias), `/oo-review` skill (OO code review with pedagogical bias), plus `oo-patterns`, `oo-architecture`, `oo-domain-modeling` subagents. NOT auto-included anywhere; invoke when reviewing OO code or asking OO questions.
 
-Multi-expert panel: `/expert-review` runs the relevant specialist subagents in parallel and synthesizes findings into one report. Always includes at least one FP agent (default: `fp-types`); includes OO agents only when the diff has OO-shaped code.
+Cross-cutting helpers (not auto-loaded; pulled in by the corresponding subagents):
+
+- `bug-patterns.md` (paired with the `bug-hunter` subagent) -- canonical bug-prone pattern catalog: TOCTOU, races, async/await footguns, caching, null/optionality, integer arithmetic, resource leaks, mutability/aliasing, error handling, time/timezone, encoding/escaping, boundary conditions, API/abstraction leaks, security-shaped bugs.
+- `simplification.md` (paired with the `code-simplifier` subagent) -- review-only simplification principles: single-implementation abstractions, pass-through layers, premature configuration, dead code, excessive nesting, duplication ripe for extraction, unnecessary state, cleverness, misplaced abstraction levels. Includes "what is NOT a simplification opportunity" filters.
+- `test-coverage.md` (paired with the `test-coverage` subagent) -- coverage gap analysis prioritized by failure-cost; discovery checklist for project tooling (coverage reports, mutation testing, flamegraphs); anti-patterns in existing tests.
+
+Multi-expert panel: `/expert-review` runs the relevant specialist subagents in parallel and synthesizes findings into one report. Always includes `bug-hunter` (canonical bug-pattern catalog) and at least one FP agent (default: `fp-types`); `code-simplifier` and `test-coverage` run on most reviews; includes OO agents only when the code has OO-shaped patterns. Two modes: diff review (default for no arg / `<PR#>` / `<range>`) and survey review (default for `<path>`, explicit via `--survey`).
 
 ## Writing style
 

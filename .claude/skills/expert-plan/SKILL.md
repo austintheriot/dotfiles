@@ -1,6 +1,6 @@
 ---
 name: expert-plan
-description: Iterative spec-development skill. Combines a relentless Socratic interview (grill-me style) with optional expert-agent consultation during questioning and full expert-panel critique of the resulting spec. Loops: grill -> draft/update spec file -> expert critique + synthesis -> convergence check -> repeat. Re-surfaces previously-decided questions only on high-confidence major-or-blocker findings; otherwise grills new/unresolved ambiguities. Soft cap of 3 cycles, warns at cycle 4+, no hard shutoff. Use to firm up a feature spec before any code is written. Read-only on the codebase; writes a spec markdown file the user owns.
+description: Iterative spec-development skill. Combines a relentless Socratic interview (grill-me style) with optional expert-agent consultation during questioning and full expert-panel critique of the resulting spec. Always runs `first-principles` (the wildcard "is the answer already in scope?" lens) so we never spec a thing the codebase already has. Loops: grill -> draft/update spec file -> expert critique + synthesis -> convergence check -> repeat. Re-surfaces previously-decided questions only on high-confidence major-or-blocker findings; otherwise grills new/unresolved ambiguities. Soft cap of 3 cycles, warns at cycle 4+, no hard shutoff. Use to firm up a feature spec before any code is written. Read-only on the codebase; writes a spec markdown file the user owns.
 ---
 
 # Expert Plan
@@ -40,6 +40,7 @@ These are the experts consulted during step 1 (model-discretion, tactical) and s
 - **`accessibility`** -- POUR concerns when the spec describes UI surfaces. Skip when the feature is backend / CLI / config.
 - **`fp-types`** -- ADT / sum-type design, making illegal states unrepresentable, type-driven domain modeling. Almost always applicable.
 - **`oo-domain-modeling`** -- aggregates, entities + value objects, bounded contexts, ubiquitous language. Applicable whenever the spec has a domain model.
+- **`first-principles`** -- mandatory wildcard reviewer. Asks "is the answer already in scope?" before any spec commitment is made. Q1 (does the codebase already have a service / module / utility solving this problem; does an installed dependency provide it) is the highest-yield check at spec time -- catching "we're about to build a thing that already exists" costs much less here than after code is written. Q2-Q4 (constraint relaxation, problem reframe, cross-domain precedent) cap at `insight`. Especially valuable in cycle 1 of the loop; the user should consider explicitly re-asking it to scrutinize for prior-art on every cycle if the spec scope is expanding.
 
 Other agents (`otel-instrumentation`, `otel-pipeline`, `fp-effects`, `fp-verification`, `oo-patterns`, `oo-architecture`, language specialists like `rust-async` / `typescript-types`) can be consulted opportunistically during the grill when a tactical question lands in their lens. Do not include them in the default critique fan-out.
 

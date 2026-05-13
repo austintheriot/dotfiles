@@ -1,6 +1,6 @@
 ---
 name: expert-review
-description: Deep multi-expert code review. Classifies code regions, spawns the relevant specialist subagents in parallel (typescript-types, rust-async/backend/unsafe/wasm/ffi, distsys-data/distsys-runtime, fp-*, oo-*, otel-*, observability-practice, bug-hunter, code-simplifier, test-coverage, readability, debuggability, documentation, security, performance, accessibility), then synthesizes into one severity-and-confidence-ranked report. Always invokes `bug-hunter` and at least one FP agent. Two modes: diff (current branch / PR / range) and survey (a path or feature). Burns more tokens than per-language review skills -- use for genuine panel passes. Read-only; does NOT apply fixes or post to GitHub.
+description: Deep multi-expert code review. Classifies code regions, spawns the relevant specialist subagents in parallel (typescript-types, rust-async/backend/unsafe/wasm/ffi, distsys-data/distsys-runtime, fp-*, oo-*, otel-*, observability-practice, bug-hunter, code-simplifier, test-coverage, readability, debuggability, documentation, security, performance, accessibility, first-principles), then synthesizes into one severity-and-confidence-ranked report. Always invokes `bug-hunter`, at least one FP agent, and `first-principles` (the wildcard reviewer that asks "is the answer already in scope?"). Two modes: diff (current branch / PR / range) and survey (a path or feature). Burns more tokens than per-language review skills -- use for genuine panel passes. Read-only; does NOT apply fixes or post to GitHub.
 ---
 
 # Expert Review
@@ -25,12 +25,13 @@ Current review-capable agents (run `ls ~/.claude/agents/` at session start to pi
 - **Observability**: `otel-instrumentation`, `otel-pipeline`, `observability-practice`
 - **Functional programming**: `fp-types`, `fp-effects`, `fp-verification`
 - **Object-oriented programming**: `oo-patterns`, `oo-architecture`, `oo-domain-modeling`
-- **Cross-cutting**: `bug-hunter`, `code-simplifier`, `test-coverage`, `readability`, `debuggability`, `documentation`, `security`, `performance`, `accessibility`
+- **Cross-cutting**: `bug-hunter`, `code-simplifier`, `test-coverage`, `readability`, `debuggability`, `documentation`, `security`, `performance`, `accessibility`, `first-principles`
 
 ### Mandatory lenses (every invocation)
 
 - **`bug-hunter`** -- the canonical bug-pattern catalog. Domain-general.
 - **At least one FP agent.** Default `fp-types`. Add `fp-effects` if the code is substantially async / effectful. Add `fp-verification` only for safety-critical contexts or explicit `--verify`.
+- **`first-principles`** -- wildcard reviewer that asks "is the answer already in scope?" before any code is added. Runs Q1 (existing-utility / already-installed-dependency check) on every invocation; Q2-Q4 (constraint relaxation, problem reframe, cross-domain precedent) when the diff / survey has substance to reframe. Never produces blocker; Q1 caps at major, Q2-Q4 cap at insight.
 
 ### Broadly-applicable lenses (fire on most reviews)
 
@@ -66,6 +67,7 @@ Match a region to a specialist via signals. Keep the table tight; the agent's ow
 | `security` | trust boundaries (any handler accepting external input), auth code (login, session, token, JWT, OAuth, MFA), AuthZ checks, crypto / hashing / signing, secrets handling, dependency / lockfile / supply-chain changes, file upload, URL fetching / SSRF surfaces, deserialization, SQL / NoSQL / template / command construction, CORS / CSP / cookie config, redirect logic, admin / debug / internal endpoints |
 | `performance` | hot-path code (request handlers on busy endpoints, render functions, tight loops, batch processors), DB query construction (especially with `JOIN` / `WHERE` / `ORDER BY` on new columns), loops over collections that grow, async / parallel patterns (`Promise.all`, `tokio::spawn`, goroutines), React / Vue / Svelte component bodies and effects, bundle / import changes, caching code, allocation-heavy paths (string building, buffer construction), state-management updates that trigger re-renders |
 | `accessibility` | rendered UI code: `*.html` / `*.jsx` / `*.tsx` / `*.vue` / `*.svelte` with rendered markup, SwiftUI / UIKit views (`*.swift` with `View` / `UIView` / `UIViewController`), Jetpack Compose / Android Views (`*.kt` / `*.java` with `Composable` / `View` / `Activity` / `Fragment`), ARIA attribute usage, role / `tabindex` / `aria-*`, focus management code, color / theme / contrast changes, animation / transition with no `prefers-reduced-motion`, custom form controls or modal / dialog code. Skip for backend / CLI / config / non-UI |
+| `first-principles` | always fires (mandatory lens). Reads the package manifest and conventional utility locations (`utils/`, `helpers/`, `lib/`, `internal/`, `shared/`, `common/`) before the rest of the panel. Q1 (existing-utility / installed-dependency check) runs on every invocation; Q2-Q4 (constraint relaxation, problem reframe, cross-domain precedent) fire when the diff / survey has substance to reframe |
 
 A region matching no specialist gets a `[generic]` tag and is reviewed inline using `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`. `bug-hunter` still runs.
 

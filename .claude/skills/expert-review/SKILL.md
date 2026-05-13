@@ -1,6 +1,6 @@
 ---
 name: expert-review
-description: Deep multi-expert code review. Classifies code regions, spawns the relevant specialist subagents in parallel (typescript-types, rust-async/backend/unsafe/wasm/ffi, distsys-data/distsys-runtime, fp-*, oo-*, otel-*, observability-practice, bug-hunter, code-simplifier, test-coverage, readability, debuggability, documentation), then synthesizes into one severity-and-confidence-ranked report. Always invokes `bug-hunter` and at least one FP agent. Two modes: diff (current branch / PR / range) and survey (a path or feature). Burns more tokens than per-language review skills -- use for genuine panel passes. Read-only; does NOT apply fixes or post to GitHub.
+description: Deep multi-expert code review. Classifies code regions, spawns the relevant specialist subagents in parallel (typescript-types, rust-async/backend/unsafe/wasm/ffi, distsys-data/distsys-runtime, fp-*, oo-*, otel-*, observability-practice, bug-hunter, code-simplifier, test-coverage, readability, debuggability, documentation, security), then synthesizes into one severity-and-confidence-ranked report. Always invokes `bug-hunter` and at least one FP agent. Two modes: diff (current branch / PR / range) and survey (a path or feature). Burns more tokens than per-language review skills -- use for genuine panel passes. Read-only; does NOT apply fixes or post to GitHub.
 ---
 
 # Expert Review
@@ -25,7 +25,7 @@ Current review-capable agents (run `ls ~/.claude/agents/` at session start to pi
 - **Observability**: `otel-instrumentation`, `otel-pipeline`, `observability-practice`
 - **Functional programming**: `fp-types`, `fp-effects`, `fp-verification`
 - **Object-oriented programming**: `oo-patterns`, `oo-architecture`, `oo-domain-modeling`
-- **Cross-cutting**: `bug-hunter`, `code-simplifier`, `test-coverage`, `readability`, `debuggability`, `documentation`
+- **Cross-cutting**: `bug-hunter`, `code-simplifier`, `test-coverage`, `readability`, `debuggability`, `documentation`, `security`
 
 ### Mandatory lenses (every invocation)
 
@@ -63,6 +63,7 @@ Match a region to a specialist via signals. Keep the table tight; the agent's ow
 | `oo-patterns` | classes with methods, inheritance, factory/builder/visitor/observer/strategy/decorator patterns |
 | `oo-architecture` | deep class hierarchies, SOLID-flavored design, hexagonal/clean/onion, module boundaries |
 | `oo-domain-modeling` | aggregates, entities + value objects, repositories, domain events, bounded contexts |
+| `security` | trust boundaries (any handler accepting external input), auth code (login, session, token, JWT, OAuth, MFA), AuthZ checks, crypto / hashing / signing, secrets handling, dependency / lockfile / supply-chain changes, file upload, URL fetching / SSRF surfaces, deserialization, SQL / NoSQL / template / command construction, CORS / CSP / cookie config, redirect logic, admin / debug / internal endpoints |
 
 A region matching no specialist gets a `[generic]` tag and is reviewed inline using `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`. `bug-hunter` still runs.
 

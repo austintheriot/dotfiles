@@ -76,13 +76,33 @@ Open one status line:
 - Diff: `Reviewing diff: N files across {langs}, M changed regions. Classifying...`
 - Survey: `Surveying N files across {langs} (P total lines). Classifying...`
 
-### Stage 2: Region classification
+### Stage 2: Project-conventions discovery
+
+**Critical step. This is where the panel learns the project's local rules.** Most production-flagged review concerns are documented in the repo itself; agents only catch them if those docs reach the dispatch prompt.
+
+Discover and load:
+
+1. **Every `CLAUDE.md` in the repo** -- root, plus every subdirectory CLAUDE.md whose path is a prefix of any file under review. For Notability-shaped repos this includes `Backend/CLAUDE.md`, `ios/CLAUDE.md`, `Android/CLAUDE.md`, etc. Use `find <repo-root> -name CLAUDE.md -not -path '*/node_modules/*' -not -path '*/target/*'`.
+
+2. **PR / contribution conventions** -- `pull_request_template.md` (and `.github/pull_request_template.md`), `CONTRIBUTING.md`, `STYLE.md`, `CODE_OF_CONDUCT.md`. The PR template often encodes a review checklist.
+
+3. **Project docs that look like guidance** -- `docs/*.md` files whose names match conventions / standards / engineering / best-practices / analytics / observability / architecture / decisions / runbooks. Read them. They commonly contain the project-specific rules (canonical log key names, analytics naming, SOC2 prohibitions, framework conventions) generic agents will not know.
+
+4. **Lint and config that encodes convention** -- `.eslintrc*`, `tsconfig.json`, `biome.json`, `.rubocop.yml`, `.pre-commit-config.yaml`, `clippy.toml`, `rustfmt.toml`, `.editorconfig`, package-specific configs (`jest.config`, `vitest.config`, `playwright.config`). Skim for rules; load the strict ones into dispatch.
+
+5. **Local `.claude/rules/*.md`** in the repo (separate from global `~/.claude/rules/`).
+
+Build a **conventions bundle** per region: for each file under review, the conventions are the union of (root CLAUDE.md, all path-prefix CLAUDE.mds, the relevant `docs/` files, and the relevant lint configs). When dispatching, include this bundle in the agent's prompt -- not just root CLAUDE.md.
+
+If a `docs/*.md` file references a specific concern in the changed code (e.g., a `docs/analytics.md` describing event-naming and the diff touches analytics calls), prioritize it. The main agent should grep the loaded docs for keywords matching the regions being reviewed.
+
+### Stage 3: Region classification
 
 Read each in-scope file. For diff mode, read small (<400 lines) files in full for context; for larger ones, read changed regions plus enough surrounding code. For survey mode, read every file in full.
 
 For each region, assign one or more lenses via the table + the mandatory / broad rules. A region can (and should) match multiple lenses -- that's the point.
 
-### Stage 3: Soft warning
+### Stage 4: Soft warning
 
 Count (lens, region-cluster) pairs. If > 15, print:
 
@@ -90,7 +110,7 @@ Count (lens, region-cluster) pairs. If > 15, print:
 
 Do not block.
 
-### Stage 4: Parallel dispatch
+### Stage 5: Parallel dispatch
 
 For each lens with matched regions, spawn the agent. **Use the dispatch template below** -- do not repeat the panel contract per call; the agent reads `~/.claude/rules/panel-contract.md` itself.
 
@@ -103,11 +123,19 @@ Scope: <one-sentence description of what to review>
 
 Read `~/.claude/rules/panel-contract.md` for the output format, severity / confidence rubrics, and "do NOT flag" list. Follow your agent definition for what to look for.
 
-Project conventions (these override generic principles):
-<contents of repo root CLAUDE.md, plus any CLAUDE.md sharing a path prefix with the code, plus relevant `.claude/rules/*.md`>
+Project conventions (these override generic principles -- read them BEFORE applying your generic catalog):
+<full contents of the conventions bundle for the regions under review:
+  - root CLAUDE.md
+  - every CLAUDE.md whose path is a prefix of any file under review
+  - relevant docs/*.md guidance files (analytics, observability, engineering values, architecture decisions, runbooks)
+  - PR template if it encodes review rules
+  - relevant lint / config rules that encode convention
+  - local .claude/rules/*.md if present>
+
+When project conventions contradict your generic catalog, the project wins. Flag deviations from documented project conventions at higher severity than deviations from generic principles -- the project authors wrote those rules for a reason.
 
 Repo context:
-<branch, base branch, relevant config flags (tsconfig.json, Cargo.toml, package.json)>
+<branch, base branch, relevant config flags (tsconfig.json, Cargo.toml, package.json), framework versions if affecting review>
 
 Code:
 <the code regions with file:line context. Diff mode: changed regions plus enough surrounding lines to reason. Survey mode: the files in full, or the representative sections for very large ones>
@@ -115,7 +143,7 @@ Code:
 
 Send all dispatches in a single message (parallel tool calls). Block until all return. If an agent fails, surface that in the report and proceed.
 
-### Stage 5: Synthesis
+### Stage 6: Synthesis
 
 Synthesis is the differentiator. Steps:
 
@@ -135,7 +163,7 @@ Synthesis is the differentiator. Steps:
 
 8. **Threshold the report.** Confidence >= 70: main report. 50-69: collapsible appendix. <50: filtered by agents, never reaches synthesis.
 
-### Stage 6: Report
+### Stage 7: Report
 
 Header:
 

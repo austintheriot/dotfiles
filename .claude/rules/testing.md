@@ -63,6 +63,7 @@ Kent's "avoid nesting" argument, distilled:
 - **Bias toward the harness; abstract early when the duplication is real.** Two identical setup lines that will obviously be repeated are worth wrapping right away. Genuinely one-off setup can stay inline. The aim is that tests read top-to-bottom: the harness call, the action, the assertion.
 - **Group by file, not by deeply nested grouping.** One level of grouping for the unit under test is plenty; split into more files before you nest more.
 - **Scope lifecycle hooks tightly when you use them at all.** Scope to the smallest group that needs them. File-level hooks leak across unrelated groups -- a recurring source of cross-test interference in real codebases.
+- **Never reassign a shared variable inside `beforeEach` / `afterEach` / `setUp` / `tearDown` (or equivalent).** A `let user; beforeEach(() => { user = makeUser(); })` pattern looks isolated but breaks isolation the moment any test mutates `user` after a hook in a different lifecycle phase has reassigned it -- or the moment the runner parallelizes, shuffles, or runs a single test from the middle. Each test must own its own bindings: call `const user = makeUser()` (or `const world = setup()`) inside the test body, or have the setup helper return a fresh object the test names locally. Lifecycle hooks should do framework wiring (start a server, open a connection) and teardown only; they should not assign to file-scoped or describe-scoped variables that tests then read.
 
 ## Mocking: at the boundary, sparingly
 

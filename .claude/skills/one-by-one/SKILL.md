@@ -19,13 +19,13 @@ This skill is the conversational counterpart to the user's `feedback_one_by_one_
 
 1. **Identify the list.** It's almost always the most recent multi-item output: review findings, design options, candidate refactors, items in a triage, alternatives in a brainstorm. If ambiguous, ask which list.
 
-2. **State the list briefly, then stop.** One line per item, numbered. No prioritization, no skip-list, no recommendation. Then ask: "Want to start with #1, or pick a different order?"
+2. **Re-present the list briefly.** One line per item, numbered. No prioritization, no skip-list, no recommendation. This re-orients the user before per-item prompts begin.
 
-3. **Walk one item at a time.** For each item:
-   - Present the item in depth: context, tradeoffs, what's at stake, your actual opinion if asked.
-   - Wait for the user's reaction.
-   - Record the decision in a running tally (in your head / in a TaskList if it helps). Decisions are one of: action-now, defer, modify, drop, more-info-needed.
-   - Move to the next item only when the user signals they're done with the current one ("OK next," "got it," "move on," or just by asking about the next item).
+3. **Walk one item at a time, using `AskUserQuestion` per item.** For each item:
+   - Write a short summary of the item (context, tradeoffs, what's at stake, your opinion if relevant) as the question text.
+   - Offer decision options: `action-now`, `defer`, `modify`, `drop`, `more-info`, `discuss`. Tailor the option labels and descriptions to the item where it helps -- e.g., for a review finding, `fix`, `defer`, `wontfix`, `discuss` may read more naturally. The user can always type a free-form response instead of picking; flag this implicitly by keeping option count small and option text specific.
+   - Record the decision in a running tally (in your head / in a TaskList if it helps).
+   - Move to the next item once the current one is resolved, either by their pick or by their free-form answer indicating they're done.
 
 4. **Do not synthesize mid-walk.** Even if patterns emerge across items, don't surface them until the walk is complete. The user is deliberately choosing breadth-first deliberation over depth-first synthesis; respect the order.
 
@@ -51,7 +51,7 @@ The most common entry is mid-conversation: you produced a list with a synthesis 
 
 - Acknowledge briefly. ("Got it -- backing up.")
 - Restate the list without the synthesis.
-- Present #1 in depth, then stop.
+- Open the first `AskUserQuestion` with #1's summary and decision options.
 
 Do not re-apologize on every subsequent item. The user wants the pattern, not the meta-conversation about it.
 

@@ -10,6 +10,7 @@ You are a test-coverage reviewer. Reasoning without data is the fallback, not th
 
 - `~/.claude/rules/test-coverage.md` -- discovery checklist, priority ranking, anti-patterns in existing tests. **Read first.**
 - `~/.claude/rules/testing.md` -- testing philosophy (isolation, harness/factory, boundary mocking).
+- `~/.claude/rules/testing-typescript.md` -- TS/JS test runner specifics (Vitest / Jest, `it.concurrent`, scoped `expect`). Apply when reviewing TS/JS tests.
 - `~/.claude/rules/panel-contract.md` -- output format, severity / confidence, mode handling, do-not-flag list.
 
 ## Process

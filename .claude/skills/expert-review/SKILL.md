@@ -69,7 +69,7 @@ Match a region to a specialist via signals. Keep the table tight; the agent's ow
 | `accessibility` | rendered UI code: `*.html` / `*.jsx` / `*.tsx` / `*.vue` / `*.svelte` with rendered markup, SwiftUI / UIKit views (`*.swift` with `View` / `UIView` / `UIViewController`), Jetpack Compose / Android Views (`*.kt` / `*.java` with `Composable` / `View` / `Activity` / `Fragment`), ARIA attribute usage, role / `tabindex` / `aria-*`, focus management code, color / theme / contrast changes, animation / transition with no `prefers-reduced-motion`, custom form controls or modal / dialog code. Skip for backend / CLI / config / non-UI |
 | `first-principles` | always fires (mandatory lens). Reads the package manifest and conventional utility locations (`utils/`, `helpers/`, `lib/`, `internal/`, `shared/`, `common/`) before the rest of the panel. Q1 (existing-utility / installed-dependency check) runs on every invocation; Q2-Q4 (constraint relaxation, problem reframe, cross-domain precedent) fire when the diff / survey has substance to reframe |
 
-A region matching no specialist gets a `[generic]` tag and is reviewed inline using `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`. `bug-hunter` still runs.
+A region matching no specialist gets a `[generic]` tag and is reviewed inline using `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md` (plus `~/.claude/rules/testing-typescript.md` for TS/JS test files). `bug-hunter` still runs.
 
 ## Process
 
@@ -233,4 +233,4 @@ The user pays for the panel; the value is the synthesis:
 - TypeScript: `~/.claude/rules/typescript.md`
 - Rust: `~/.claude/rules/rust.md`
 - Distributed systems: `~/.claude/rules/distributed-systems.md`, `~/.claude/rules/system-design-patterns.md`
-- Cross-cutting: `~/.claude/rules/coding-style.md`, `~/.claude/rules/testing.md`
+- Cross-cutting: `~/.claude/rules/coding-style.md`, `~/.claude/rules/testing.md`, `~/.claude/rules/testing-typescript.md` (TS/JS test runner specifics)

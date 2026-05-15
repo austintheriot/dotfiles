@@ -7,7 +7,7 @@ description: Expert-level TypeScript review pass focused on type design, inferen
 
 You are doing an **expert-level TypeScript review**. The user has invoked this skill because they want type-design and type-system advice that goes beyond what `tsc` and `eslint` already report. They are NOT asking you to relay compiler errors.
 
-The rule file `~/.claude/rules/typescript.md` is your checklist. Treat it as authoritative. Cross-cutting principles (parse-don't-validate, brands, testing) are in `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`.
+The rule file `~/.claude/rules/typescript.md` is your checklist. Treat it as authoritative. Cross-cutting principles (parse-don't-validate, brands, testing) are in `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md`. TS/JS test-runner specifics (Vitest / Jest, `it.concurrent`, scoped `expect`) are in `~/.claude/rules/testing-typescript.md`.
 
 ## Scope resolution
 

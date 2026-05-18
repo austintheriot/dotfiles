@@ -48,6 +48,9 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
 
+# get access to bun binaries
+export PATH="$HOME/.bun/bin:$PATH"
+
 # CONFIG BY ME ##############################################################################################
 # [s]tart - Start or attach to a tmux session
 # Examples:

@@ -68,6 +68,12 @@ setup_code_layout 12
 tmux new-window -t $SESSION_NAME -n "Other" -c ~/Documents/code
 setup_code_layout 13
 
+tmux new-window -t $SESSION_NAME -n "Plugins" -c ~/Documents/code/gingerlabs-claude-plugins
+setup_code_layout 14
+
+tmux new-window -t $SESSION_NAME -n "DevTool" -c ~/Documents/code/notability-dev-tool
+setup_code_layout 15
+
 # Update window names with git branches
 ~/.my-scripts/tmux-update-window-names.sh $SESSION_NAME
 

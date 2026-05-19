@@ -162,23 +162,36 @@ Send all dispatches in a single message (parallel tool calls). Block until all r
 
 ### Stage 6: Synthesis
 
-Synthesis is the differentiator. Steps:
+Synthesis is the differentiator. **Apply a healthy dose of skepticism throughout.** Agent findings are suggestions and hypotheses to be tested, not truths to be passed through. See "Skepticism discipline" below.
+
+Steps:
 
 1. **Bucket findings by location.** Diff: `file:line ± 5 lines`. Survey: by file + function/section. Cross-file findings: separate bucket.
 
 2. **Semantic dedup.** If two agents flag the same issue, merge with both lens tags (e.g., `[rust-async, distsys-runtime]`). Preserve both perspectives -- the language agent often spots the mechanism, the domain agent the consequence.
 
-3. **Note agreements.** `(flagged by N experts)`. Strong signal; bump confidence.
+3. **Note agreements.** `(flagged by N experts)`. Strong signal, but not proof: agents can share the same blind spot, the same generic catalog, or be reacting to the same surface pattern that doesn't actually hold here. Bump confidence cautiously.
 
-4. **Synthesize confidence.** Merged confidence = max of inputs, +10 (capped 100) when 2+ experts independently agree.
+4. **Synthesize confidence.** Merged confidence = max of inputs, +10 (capped 100) when 2+ experts independently agree. Then **adjust downward** based on the skepticism checks below.
 
 5. **Preserve disagreements.** If experts disagree (one blocker, one minor), show both views with their lenses and confidences. Do not collapse to an average.
 
-6. **Re-rank by max severity.** Highest severity any expert assigned, unless one expert had context the other didn't.
+6. **Re-rank by max severity.** Highest severity any expert assigned, unless one expert had context the other didn't, or the skepticism check downgrades it.
 
 7. **Surface cross-cutting findings.** Patterns spanning regions ("no tests anywhere," "every handler has a different error type," "schema evolution breaks rolling deploys"). Synthesize from agent reports + your own scan.
 
 8. **Threshold the report.** Confidence >= 70: main report. 50-69: collapsible appendix. <50: filtered by agents, never reaches synthesis.
+
+#### Skepticism discipline
+
+**Subagent output is hypothesis, not verdict -- LLM analysis with a generic catalog and a limited view of the code.** Before promoting a finding, scrutinize it against the actual code:
+
+- **Verify the trigger.** Re-read the cited file:line. Does the code actually do what the agent claims? Agents hallucinate function names, misread control flow, and assume defaults the project overrides. If the evidence doesn't hold up on a fresh read, the finding is invalid regardless of stated confidence.
+- **Check reachability.** A theoretical bug pattern on an unreachable branch is not a finding. If no realistic input triggers it, drop or downgrade.
+- **Honor project conventions.** If the agent flags a deviation from a generic principle but the project's `CLAUDE.md` / `docs/` / lint config endorses the local pattern, the project wins.
+- **Resist generic-catalog overreach.** "Looks like an N+1" is not "is an N+1." "Could race" is not "does race given the actual synchronization here." Demand a concrete failure trigger, not a pattern label.
+
+The confidence score is the agent's, not yours -- weight the body of the finding over the number, and adjust when verification supports or undermines it.
 
 ### Stage 7: Report
 
@@ -222,10 +235,11 @@ Close with:
 
 The user pays for the panel; the value is the synthesis:
 
-- **Compress agreement.** Three experts on one line -> one merged finding.
-- **Preserve disagreement.** Show both views; don't average.
+- **Scrutinize, don't relay.** Findings are hypotheses, not verdicts. Verify each against the actual code before promoting it. See "Skepticism discipline" in Stage 6.
+- **Compress agreement.** Three experts on one line -> one merged finding. Multi-agent agreement is a signal, not a proof -- agents share blind spots.
+- **Preserve disagreement.** Show both views; don't average. When agents contradict, read the code and decide.
 - **Surface patterns.** "Three regions all have unbounded retries" > three separate findings.
-- **Rank honestly.** Multi-expert + high confidence = almost certainly real. Single-expert + 55 = appendix.
+- **Rank honestly.** Multi-expert + high confidence + verified trigger = almost certainly real. Single-expert + 55 = appendix. Confident-sounding but unverifiable on re-read = drop.
 
 ## What NOT to do
 

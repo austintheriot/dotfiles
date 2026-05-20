@@ -72,6 +72,7 @@ Spec-development panel: `/expert-plan` is the planning counterpart to `/expert-r
 - **Study existing code first.** Find similar features, match their patterns and libraries, follow existing test patterns.
 - **Boring over clever.** If you need to explain it, it's too complex.
 - **Stop after 3 failed attempts at the same problem.** Document what failed and why, then question whether it's the right abstraction, the right scope, or the right approach entirely. Don't keep retrying minor variations.
+- **No comments by default.** Write code so clearly that comments aren't needed. Only add a comment when the *why* is genuinely non-obvious and absolutely essential to prevent misunderstanding--a hidden constraint, a subtle invariant, a workaround for a specific bug, a counterintuitive choice that a future reader would otherwise "fix" wrongly. Never comment the *what* (the code already says it). Never restate the function name, the type signature, or the obvious effect. No section-banner comments, no `// step 1` / `// step 2` narration, no doc comments on internal helpers whose name already conveys their purpose. Comments rot; the bar is "removing this would lose information the reader can't recover from the code." Comment _why_ not _what_. When in doubt, omit.
 
 ## Hard rules
 

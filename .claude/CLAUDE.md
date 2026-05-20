@@ -80,6 +80,20 @@ Spec-development panel: `/expert-plan` is the planning counterpart to `/expert-r
 - Never commit code that doesn't compile.
 - Never reset or rewrite git history without explicit instruction.
 
+## Notability posting conventions
+
+When posting on my behalf to any Notability-related platform (GitHub issues / PRs / PR descriptions / issue + PR + review comments; Linear tickets and comments; Slack messages; anywhere a teammate would see it), **always prefix the body with a disclaimer on its own line at the top**, followed by a blank line, then the actual content:
+
+> Posted by Claude on behalf of @<my-handle-on-that-platform>
+
+Use the handle appropriate to the platform:
+- GitHub: `@austintheriotgl`
+- Slack: `@Austin Theriot` (or the platform's mention syntax for me)
+- Linear: my Linear username
+- Other platforms: my handle on that platform; if unsure which form, ask before posting
+
+Applies to every `gh issue create`, `gh pr create`, `gh issue comment`, `gh pr comment`, `gh pr review`, Linear API call, Slack send, and equivalents — anywhere a Notability teammate will read the content. Does not apply to git commit messages, to non-Notability work, or to drafts saved for me to review (the disclaimer belongs in posted-to-others content, not personal drafts).
+
 ## Environment
 
 See `~/README.md` for dev environment details. Notable local-only bits:

@@ -94,6 +94,8 @@ Use the handle appropriate to the platform:
 
 Applies to every `gh issue create`, `gh pr create`, `gh issue comment`, `gh pr comment`, `gh pr review`, Linear API call, Slack send, and equivalents — anywhere a Notability teammate will read the content. Does not apply to git commit messages, to non-Notability work, or to drafts saved for me to review (the disclaimer belongs in posted-to-others content, not personal drafts).
 
+**Edits to existing content**: when editing a PR description, comment, ticket body, message, etc. that I (or someone else) originally authored, preserve whatever's already there — if the disclaimer isn't present, don't add it; if it is present, keep it. Only add the disclaimer when creating new content or when posting a new reply/comment.
+
 ## Environment
 
 See `~/README.md` for dev environment details. Notable local-only bits:

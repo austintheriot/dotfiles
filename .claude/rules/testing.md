@@ -13,6 +13,8 @@ paths:
 
 The guiding principle: a test should read as a short story about one behavior, and it should not be able to influence, or be influenced by, any other test. Push setup into helpers that hand the test a fully-configured, isolated world. Then make the assertions look as much as possible like how the software is actually used.
 
+**Workflow note.** The CLAUDE.md "Working approach" section establishes test-driven development as the default for new code, including small functions: plan the behavior, write red tests against the spec, implement minimally to green, refactor with the tests as the safety net. This file covers *how* tests should be written; the TDD rule covers *when* in the dev cycle to write them. The two compose: TDD the loop at whatever granularity the suite already supports (integration where the harness allows it, unit for pure helpers), using the patterns below.
+
 Two slogans worth internalizing, both from Kent C. Dodds:
 
 - **"The more your tests resemble the way your software is used, the more confidence they can give you."** This is the answer to most "should I test X this way?" questions.

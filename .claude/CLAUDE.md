@@ -69,6 +69,7 @@ Spec-development panel: `/expert-plan` is the planning counterpart to `/expert-r
 ## Working approach
 
 - **Incremental progress over big bangs.** Small changes that compile and pass tests.
+- **Test-driven development by default.** For any new feature -- small functions included, not just non-trivial ones -- follow the TDD loop: (1) scope the behavior in a short planning session that names the inputs, outputs, edge cases, and test surface; (2) write the red tests against that spec so they fail for the right reason (not import errors, not typos -- the actual missing behavior); (3) implement minimally to get them green; (4) refactor with the tests as the safety net. Match the project's existing test patterns and harnesses (see `~/.claude/rules/testing.md`). Skip TDD only when it genuinely doesn't fit: pure refactors with existing coverage, exploratory spikes you'll throw away, UI tweaks where the feedback loop is the browser. When skipping, say so and why; don't quietly drop the practice.
 - **Study existing code first.** Find similar features, match their patterns and libraries, follow existing test patterns.
 - **Boring over clever.** If you need to explain it, it's too complex.
 - **Stop after 3 failed attempts at the same problem.** Document what failed and why, then question whether it's the right abstraction, the right scope, or the right approach entirely. Don't keep retrying minor variations.

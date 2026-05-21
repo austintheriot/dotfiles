@@ -13,12 +13,10 @@ The rule file `~/.claude/rules/typescript.md` is your checklist. Treat it as aut
 
 Determine what to review:
 
-- **No arg** -- diff between current branch and the merge base with the main branch (`git merge-base HEAD main` -- check the repo's CLAUDE.md for the actual main-branch name; could be `staging`, `develop`, etc.). If working tree is dirty, include uncommitted changes and flag this in the report.
-- **`<PR#>` arg** -- a numeric arg means a GitHub PR. Use `gh pr diff <PR#>` and `gh pr view <PR#> --json title,body,headRefName,baseRefName,additions,deletions,files,url`.
-- **`<path>` arg** -- a path argument means review that file or directory in full (not just the diff).
-- **`<commit>..<commit>` arg** -- a git range means review that range.
+- **No arg / `<PR#>` / `<commit>..<commit>` range** -- delegate to the `pr-diff` agent (`Agent` tool, `subagent_type: pr-diff`) to fetch a clean change set. Pass through the arg verbatim. The agent returns PR metadata (when applicable), linked issues, file stats, and the diff (full if under threshold, excerpt + per-file fetch instructions otherwise). Read the returned diff; for files where you need surrounding context, open them via `Read`. If the working tree is dirty (no-arg case), note it in the report.
+- **`<path>` arg** -- a path argument means review that file or directory in full (not just the diff). No `pr-diff` delegation; read the files directly.
 
-In all cases, exclude `node_modules`, `dist`, `build`, `.next`, `coverage`. Hand-authored `.d.ts` files (e.g., module augmentations, ambient declarations) are in scope; generated ones under the excluded directories are not.
+The `pr-diff` agent already applies default exclusions (lockfiles, generated code, build output, snapshots). For survey mode (path arg), exclude `node_modules`, `dist`, `build`, `.next`, `coverage` yourself. Hand-authored `.d.ts` files (e.g., module augmentations, ambient declarations) are in scope; generated ones under the excluded directories are not.
 
 ## What to review
 

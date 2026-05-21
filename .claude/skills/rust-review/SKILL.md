@@ -11,12 +11,10 @@ The rule file `~/.claude/rules/rust.md` is your baseline checklist. The five spe
 
 ## Scope resolution
 
-- **No arg** -- diff between current branch and the merge base with the main branch (check the repo's CLAUDE.md; could be `main`, `master`, `develop`, `staging`). Include uncommitted changes; flag dirty tree in the report.
-- **`<PR#>` arg** (numeric) -- a GitHub PR. Use `gh pr diff <PR#>` and `gh pr view <PR#> --json title,body,headRefName,baseRefName,additions,deletions,files,url`.
-- **`<path>` arg** -- review that file or directory in full (not just the diff).
-- **`<range>` arg** (contains `..` or `...`) -- review that git range.
+- **No arg / `<PR#>` / `<range>`** -- delegate to the `pr-diff` agent (`Agent` tool, `subagent_type: pr-diff`) to fetch a clean change set. Pass through the arg verbatim. The agent returns PR metadata (when applicable), linked issues, file stats, and the diff (full if under threshold, excerpt + per-file fetch instructions otherwise). Read the returned diff; for files where you need surrounding context, open them via `Read`. If the working tree is dirty (no-arg case), note it in the report.
+- **`<path>` arg** -- review that file or directory in full (not just the diff). No `pr-diff` delegation; read the files directly.
 
-Always exclude `target/`, generated bindings (typically under `src/bindings.rs` or `OUT_DIR`), and `Cargo.lock` for review purposes.
+The `pr-diff` agent already applies default exclusions (lockfiles, generated code, build output). For survey mode (path arg), exclude `target/`, generated bindings (typically under `src/bindings.rs` or `OUT_DIR`), and `Cargo.lock` yourself.
 
 ## Routing to specialist subagents
 

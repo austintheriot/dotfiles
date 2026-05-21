@@ -87,7 +87,11 @@ A region matching no specialist gets a `[generic]` tag and is reviewed inline us
 
 ### Stage 1: Scope resolution
 
-Parse the arg to determine mode + scope (above). Always exclude `node_modules/`, `target/`, `dist/`, `build/`, `.next/`, `coverage/`, generated bindings, lock files.
+Parse the arg to determine mode + scope (above).
+
+For **diff mode** (no arg / `<PR#>` / `<range>`): delegate to the `pr-diff` agent (`Agent` tool, `subagent_type: pr-diff`) to fetch the clean change set. Pass through the arg verbatim. The agent returns PR metadata (when applicable), linked issues, file stats, and the diff (full if under threshold, excerpt + per-file fetch instructions otherwise). Use the returned file list to drive region classification (Stage 3). For survey mode (path arg), skip the agent and read files directly.
+
+The `pr-diff` agent already applies default exclusions (lockfiles, generated code, build output, snapshots). For survey mode, exclude `node_modules/`, `target/`, `dist/`, `build/`, `.next/`, `coverage/`, generated bindings, lock files yourself.
 
 Open one status line:
 - Diff: `Reviewing diff: N files across {langs}, M changed regions. Classifying...`

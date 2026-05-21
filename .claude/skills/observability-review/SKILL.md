@@ -13,12 +13,10 @@ The user works at Honeycomb. Honeycomb-flavored patterns (wide events, trace-id 
 
 ## Scope resolution
 
-- **No arg** -- diff between current branch and the merge base with the main branch (check the repo's CLAUDE.md; may be `main`, `master`, `staging`, `develop`). Include uncommitted changes; flag dirty tree.
-- **`<PR#>`** (numeric) -- a GitHub PR. Use `gh pr diff <PR#>` and `gh pr view <PR#>`.
-- **`<path>`** -- review that file or directory in full.
-- **`<range>`** (contains `..` or `...`) -- review that git range.
+- **No arg / `<PR#>` / `<range>`** -- delegate to the `pr-diff` agent (`Agent` tool, `subagent_type: pr-diff`) to fetch a clean change set. Pass through the arg verbatim. The agent returns PR metadata (when applicable), linked issues, file stats, and the diff (full if under threshold, excerpt + per-file fetch instructions otherwise). Read the returned diff; for files where you need surrounding context, open them via `Read`. If the working tree is dirty (no-arg case), note it in the report.
+- **`<path>`** -- review that file or directory in full. No `pr-diff` delegation; read the files directly.
 
-Exclude `node_modules/`, `target/`, `dist/`, `build/`, `.next/`, `coverage/`, generated bindings, lockfiles.
+The `pr-diff` agent already applies default exclusions (lockfiles, generated code, build output). For survey mode (path arg), exclude `node_modules/`, `target/`, `dist/`, `build/`, `.next/`, `coverage/`, generated bindings yourself.
 
 ## What to flag
 

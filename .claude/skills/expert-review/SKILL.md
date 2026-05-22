@@ -25,7 +25,7 @@ Current review-capable agents (run `ls ~/.claude/agents/` at session start to pi
 - **Observability**: `otel-instrumentation`, `otel-pipeline`, `observability-practice`
 - **Functional programming**: `fp-types`, `fp-effects`, `fp-verification`
 - **Object-oriented programming**: `oo-patterns`, `oo-architecture`, `oo-domain-modeling`
-- **Cross-cutting**: `bug-hunter`, `code-simplifier`, `test-coverage`, `readability`, `debuggability`, `documentation`, `security`, `performance`, `accessibility`, `api-design`, `concurrency`, `i18n`, `ci-pipeline`, `web-analytics`, `graphics-programming`, `audio-programming`, `webassembly`, `browser-spec`, `mobile-native`, `llm-app`, `devops-infrastructure`, `first-principles`
+- **Cross-cutting**: `bug-hunter`, `code-simplifier`, `test-coverage`, `readability`, `debuggability`, `documentation`, `security`, `performance`, `accessibility`, `api-design`, `concurrency`, `i18n`, `ci-pipeline`, `web-analytics`, `graphics-programming`, `audio-programming`, `webassembly`, `browser-spec`, `mobile-native`, `llm-app`, `devops-infrastructure`, `data-flow`, `first-principles`
 
 ### Mandatory lenses (every invocation)
 
@@ -40,6 +40,7 @@ Current review-capable agents (run `ls ~/.claude/agents/` at session start to pi
 - **`readability`** -- skip only for generated / lock / fixture files.
 - **`debuggability`** -- skip only for purely pure / static / generated content.
 - **`documentation`** -- always when the change touches a public API or doc surface; otherwise skip only for purely-internal helpers.
+- **`data-flow`** -- the topology lens (who creates / owns / consumes / decides; lifetime; boundary placement; data-flow direction). Fires whenever the change adds a class, adds a module, introduces a long-lived object, instantiates a singleton, registers a global subscription, defines a new module boundary, or touches who-owns-what. Skip only for pure bug fixes inside a single function, pure formatting, generated code, or pure test additions whose topology mirrors existing code. The user's `~/.claude/CLAUDE.md` flags "interface boundaries are paramount" -- this is the agent that enforces it.
 
 ### Signal-driven lenses
 
@@ -64,6 +65,7 @@ Match a region to a specialist via signals. Keep the table tight; the agent's ow
 | `oo-patterns` | classes with methods, inheritance, factory/builder/visitor/observer/strategy/decorator patterns |
 | `oo-architecture` | deep class hierarchies, SOLID-flavored design, hexagonal/clean/onion, module boundaries |
 | `oo-domain-modeling` | aggregates, entities + value objects, repositories, domain events, bounded contexts |
+| `data-flow` | any non-trivial entity / boundary in scope (broadly-applicable, see above). High-yield signals: new class / module / service introduced; singleton creation site; constructor body that calls `getInstance()` / `new SomeOther()` / `subscribe()` / `connect()`; long-lived object (cache, listener-list, pool, scheduler, queue) added; module-level `let` or mutable export; class with both decider responsibilities and consumer responsibilities visible in the diff; Redux / Vuex / signals / stores changes; React Context provider / consumer additions; DI container registrations; per-request / per-session / per-tenant scope decisions; lifecycle hook additions (`mount` / `unmount` / `dispose` / `destroy`); event-handler subscription without an obvious teardown pair |
 | `security` | trust boundaries (any handler accepting external input), auth code (login, session, token, JWT, OAuth, MFA), AuthZ checks, crypto / hashing / signing, secrets handling, dependency / lockfile / supply-chain changes, file upload, URL fetching / SSRF surfaces, deserialization, SQL / NoSQL / template / command construction, CORS / CSP / cookie config, redirect logic, admin / debug / internal endpoints |
 | `performance` | hot-path code (request handlers on busy endpoints, render functions, tight loops, batch processors), DB query construction (especially with `JOIN` / `WHERE` / `ORDER BY` on new columns), loops over collections that grow, async / parallel patterns (`Promise.all`, `tokio::spawn`, goroutines), React / Vue / Svelte component bodies and effects, bundle / import changes, caching code, allocation-heavy paths (string building, buffer construction), state-management updates that trigger re-renders |
 | `accessibility` | rendered UI code: `*.html` / `*.jsx` / `*.tsx` / `*.vue` / `*.svelte` with rendered markup, SwiftUI / UIKit views (`*.swift` with `View` / `UIView` / `UIViewController`), Jetpack Compose / Android Views (`*.kt` / `*.java` with `Composable` / `View` / `Activity` / `Fragment`), ARIA attribute usage, role / `tabindex` / `aria-*`, focus management code, color / theme / contrast changes, animation / transition with no `prefers-reduced-motion`, custom form controls or modal / dialog code. Skip for backend / CLI / config / non-UI |

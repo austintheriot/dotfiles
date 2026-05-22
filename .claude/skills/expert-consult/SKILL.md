@@ -29,7 +29,7 @@ Sibling to:
 
 ## The roster
 
-Eligible agents are the 34 consult-capable ones from `/consult`. Run `ls ~/.claude/agents/` at session start to pick up new ones.
+Eligible agents are the 35 consult-capable ones from `/consult`. Run `ls ~/.claude/agents/` at session start to pick up new ones.
 
 ### Already advisor-shaped
 
@@ -55,7 +55,7 @@ Eligible agents are the 34 consult-capable ones from `/consult`. Run `ls ~/.clau
 
 ### Multi-mode (preload `agent-modes`)
 
-- **`security`**, **`performance`**, **`accessibility`**, **`api-design`**, **`concurrency`**, **`i18n`**, **`ci-pipeline`**, **`devops-infrastructure`**, **`graphics-programming`**, **`audio-programming`**, **`webassembly`**, **`mobile-native`**, **`llm-app`**, **`browser-spec`**, **`web-analytics`**.
+- **`security`**, **`performance`**, **`accessibility`**, **`api-design`**, **`concurrency`**, **`i18n`**, **`ci-pipeline`**, **`devops-infrastructure`**, **`graphics-programming`**, **`audio-programming`**, **`webassembly`**, **`mobile-native`**, **`llm-app`**, **`browser-spec`**, **`web-analytics`**, **`data-flow`**.
 
 See their frontmatter `description` fields for the exact lens of each.
 
@@ -162,7 +162,10 @@ Same vocabulary as `/consult`. The difference: `/consult` picks one; `/expert-co
 | "Should we adopt event sourcing / CQRS / event-driven architecture" | `distsys-data` + `distsys-runtime` + `oo-domain-modeling` + (maybe `fp-effects`) |
 | "How should I model multi-tenant data" | `distsys-data` + `security` + `oo-domain-modeling` |
 | "How should I handle async work that must complete" | `distsys-runtime` + `rust-async` or `concurrency` (language-appropriate) + `observability-practice` |
-| "Should this be a microservice or monolith" | `distsys-runtime` + `oo-architecture` + `people-and-org` (Conway's Law) + `performance` |
+| "Should this be a microservice or monolith" | `distsys-runtime` + `oo-architecture` + `data-flow` + `people-and-org` (Conway's Law) + `performance` |
+| "Should this state live in Redux / the store / a singleton / per-request scope" | `data-flow` + `oo-architecture` + (maybe `fp-effects` if effects are involved) |
+| "Where should the boundary between X and Y live" | `data-flow` + `oo-architecture` + `api-design` (if X or Y has a consumer-facing surface) |
+| "Who should own this long-lived resource (cache / pool / scheduler)" | `data-flow` + `oo-architecture` + (maybe `distsys-runtime` if the resource is a cache that affects fault behavior) |
 | "How should I roll out this big migration" | `ci-pipeline` + `distsys-data` (if schema) + `observability-practice` + `product-leadership` |
 | "How do I structure my agent / RAG / eval system" | `llm-app` + `distsys-runtime` (orchestration) + `observability-practice` + (maybe `security` for prompt injection) |
 | "Should I rewrite this in Rust" | `rust-async` or `rust-backend` (situation-appropriate) + `performance` + `people-and-org` (hiring / ramp-up cost) |

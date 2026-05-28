@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Security Review Principles
 
 A reference for evaluating code from a security-engineering lens. Used by the `security` subagent. Distinct from `bug-patterns.md`'s "Security-shaped bugs" section -- that catches *patterns* (injection, timing channels, secret logging). This file is the *design and mental-model* layer: AuthN/AuthZ design, threat-modeling, supply-chain integrity, OWASP Top 10 / CWE Top 25, secrets handling, dependency hygiene.

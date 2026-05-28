@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # System Design Patterns and Decisions
 
 A pattern catalog and decision reference for system design. Use this alongside `distributed-systems.md` (which contains the *principles*). This file contains the *moves* -- what each pattern does, when to reach for it, what reviewers flag. Distilled from *Designing Data-Intensive Applications* 2nd ed. (Kleppmann + Riccomini, 2026) plus the established microservices/architecture canon.

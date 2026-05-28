@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # First-Principles Review Principles
 
 A reference for the wildcard `first-principles` subagent. The posture: **before adding code, ask whether the answer is already in scope.** Four questions, asked in priority order, with the verifiable ones exhausted before the speculative ones.

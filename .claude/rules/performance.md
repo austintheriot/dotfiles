@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Performance Review Principles
 
 A reference for evaluating code from a performance lens during review. Used by the `performance` subagent. Distinct from `simplification.md` (surplus complexity), `bug-patterns.md` (correctness), and `distsys-runtime.md` (distributed-system tail latency and queue dynamics).

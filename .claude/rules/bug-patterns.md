@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Bug-Prone Patterns
 
 A reference catalog of the bug categories most worth scrutinizing during review. Used by the `bug-hunter` subagent. Cross-cutting; complements language-specific (`typescript.md`, `rust.md`) and domain-specific (`distributed-systems.md`, `observability.md`) rules.

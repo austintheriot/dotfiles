@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Functional Programming Patterns
 
 A patterns-and-decisions companion to the FP principles file. Each entry names a move you can invoke ("the Reader pattern", "the smart-constructor pattern") and tells you when to reach for it and when it would be overkill. Cross-language analogues are called out because the patterns are not confined to Haskell or Scala -- once you see them, you start spotting them in Rust, TypeScript, Kotlin, Python, and C#.

@@ -1,3 +1,10 @@
+---
+paths:
+  - "**/*.{tsx,jsx,vue,svelte}"
+  - "**/*.{swift,kt,kts}"
+  - "**/*.{html,htm}"
+---
+
 # Accessibility Review Principles
 
 A reference for evaluating frontend / UI code for accessibility (a11y). Used by the `accessibility` subagent. Grounded in WCAG 2.1 / 2.2 (Web Content Accessibility Guidelines), the WAI-ARIA Authoring Practices Guide (APG), and platform-specific guides (Apple Human Interface Guidelines, Android Accessibility Developer Guide).

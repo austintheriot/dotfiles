@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Web Analytics
 
 A reference for evaluating product-analytics instrumentation (event taxonomy, identity, properties, funnels, retention, A/B testing, attribution, privacy) and for designing analytics for a new feature. Used by the `web-analytics` subagent and the `/analytics-design` skill.

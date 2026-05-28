@@ -1,3 +1,9 @@
+---
+paths:
+  - "**/*.{wgsl,glsl,hlsl,msl,vert,frag,comp}"
+  - "**/*.{metal,shader}"
+---
+
 # Graphics Programming
 
 A reference for evaluating graphics code from a correctness, performance, portability, and modern-best-practice lens. Used by the `graphics-programming` subagent.

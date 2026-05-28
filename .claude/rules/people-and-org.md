@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # People, Management, Organization, and Culture
 
 A reference for management, leadership, team organization, company culture, work distribution, communication patterns, hiring, performance, and the org dynamics surrounding engineering work. Used by the `people-and-org` advisor subagent and the `/comms-and-team` skill.

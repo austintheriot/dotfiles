@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Functional Programming Principles
 
 Reference rules for functional programming (FP). Intermediate-to-advanced: assume Haskell/OCaml/F#/Clojure/Rust syntax is readable and the reader is choosing what to apply rather than learning what FP is. School-of-thought disagreements are preserved, not collapsed -- pick per codebase.

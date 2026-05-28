@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Observability Principles
 
 The load-bearing principles for instrumenting, operating, and debugging production systems. Companion to `observability-patterns.md` (which covers Collector, sampling, cardinality, exporters). Used by `/observability-review`, `/observability-design`, and the `otel-instrumentation` / `otel-pipeline` / `observability-practice` subagents.

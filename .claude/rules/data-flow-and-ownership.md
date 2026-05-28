@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Data Flow, Ownership, and Lifetime
 
 A reference for evaluating code from the **data-flow / state-ownership / lifetime** lens during planning, writing, and review. Used by the `data-flow` subagent. Companion to `coding-style.md` (push effects to edges), `object-oriented-programming.md` (entities vs value objects, encapsulation, DDD aggregates), `oo-patterns.md` (hexagonal / ports-and-adapters, repository, DI), `api-design.md` (Bloch / Hyrum's Law -- contracts are forever), `simplification.md` (premature abstraction, hidden state), and `system-design-patterns.md` (systems of record vs derived data, identity vs value).

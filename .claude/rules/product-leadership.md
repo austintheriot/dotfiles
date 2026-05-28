@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Product Leadership and Product Management Craft
 
 A reference for product strategy, discovery, prioritization, goal-setting, MVP design, pricing, growth, roadmap, launch, and the PM craft generally. Used by the `product-leadership` subagent and the `/product-design` skill.

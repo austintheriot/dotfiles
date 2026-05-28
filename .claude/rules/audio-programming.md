@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Audio Programming
 
 A reference for evaluating audio code from a real-time safety, DSP correctness, and architecture lens. Used by the `audio-programming` subagent.

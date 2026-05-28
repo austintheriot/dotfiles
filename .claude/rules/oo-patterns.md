@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Object-Oriented Design Patterns
 
 A reference for an FP-leaning engineer reviewing object-oriented (OO) code. The goal is recognition and evaluation: when is a pattern doing real work, when is it ceremony, what is the modern (often functional or hybrid) alternative? No code samples; companion to `coding-style.md` and `functional-patterns.md`.

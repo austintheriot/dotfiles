@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # LLM-Powered Application Review
 
 A reference for evaluating code that builds on large language model APIs (Anthropic Claude, OpenAI GPT, Google Gemini, open models via inference providers). Used by the `llm-app` subagent.

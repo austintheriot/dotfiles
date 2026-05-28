@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # API Design Principles
 
 A reference for evaluating code from an API-design lens during review. Used by the `api-design` subagent. The scope is *contract design at any surface where consumers depend on shape*: HTTP/REST APIs, gRPC / Protobuf services, GraphQL schemas, library / SDK public surfaces, and command-line interfaces (CLIs). Distinct from `documentation.md` (which evaluates whether the surface is *documented*), `security.md` (which evaluates the threat model of the surface), and `performance.md` (which evaluates how the surface performs).

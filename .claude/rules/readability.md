@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Code Readability
 
 A reference for evaluating code from a human-reader lens during review. Used by the `readability` subagent. Distinct from `simplification.md` (which asks "is there surplus complexity?") -- this file asks "even at appropriate complexity, can a human follow this?"

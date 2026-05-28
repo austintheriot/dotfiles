@@ -1,3 +1,10 @@
+---
+paths:
+  - "**/*.{wat,wasm}"
+  - "**/*wasm-bindgen*"
+  - "**/Cargo.toml"
+---
+
 # WebAssembly
 
 A reference for evaluating WebAssembly code from a correctness, performance, security, and modern-best-practice lens. Used by the `webassembly` subagent.

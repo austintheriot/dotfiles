@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/*.{swift,kt,kts,java,m,mm}"
+  - "**/*.{xib,storyboard,xml}"
+  - "**/AndroidManifest.xml"
+  - "**/Info.plist"
+---
+
 # Mobile-Native Programming
 
 A reference for evaluating native mobile code: iOS / macOS (Swift, SwiftUI, UIKit, AppKit, Swift Concurrency, SwiftData, Core Data) and Android (Kotlin, Jetpack Compose, Views, Kotlin Coroutines, Room). Used by the `mobile-native` subagent.

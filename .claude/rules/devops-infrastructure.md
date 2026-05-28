@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # DevOps / Infrastructure-as-Code
 
 A reference for evaluating IaC and operational infrastructure code from a correctness, blast-radius, cost, and disaster-recovery lens. Used by the `devops-infrastructure` subagent.

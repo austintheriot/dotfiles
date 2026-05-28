@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Concurrency Principles
 
 A reference for evaluating code from a concurrency-correctness lens during review. Used by the `concurrency` subagent. The scope is **in-process, intra-machine, shared-memory concurrency**: threads, locks, atomics, memory models, lock-free / wait-free structures, actors, CSP-style channels, async/await in any language, structured concurrency, web workers, SharedArrayBuffer.

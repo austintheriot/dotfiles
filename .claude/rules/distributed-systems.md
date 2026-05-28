@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Distributed Systems Principles
 
 Load-bearing mental models for systems where more than one machine, process, or service must agree on something. Frames to think *in*, not tactical patterns.

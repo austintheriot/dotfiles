@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # CI / Build / Release Pipeline
 
 A reference for evaluating CI / build / release pipelines from a security, reliability, and supply-chain integrity lens during review. Used by the `ci-pipeline` subagent.

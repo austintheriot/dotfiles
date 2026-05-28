@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Test Coverage Principles
 
 A reference for identifying under-tested code during review. Used by the `test-coverage` subagent. Companion to `~/.claude/rules/testing.md` (which covers *how* to write tests well) -- this file covers *what* to test and *how to find* what's missing.

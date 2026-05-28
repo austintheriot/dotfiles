@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Observability Patterns
 
 Reference for OpenTelemetry (OTel) Collector design, sampling strategies, cardinality management, and pipeline reliability. Used by the `otel-pipeline` subagent.

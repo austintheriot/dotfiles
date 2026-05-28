@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Object-Oriented Programming Principles
 
 For an engineer whose default model is functional programming (FP): algebraic data types (ADTs), immutability, pure functions, parametricity, equational reasoning. Object-oriented (OO) concepts are presented in terms of how they relate to, differ from, or genuinely outperform that baseline. Goal: fluency to review OO code from any major lineage and ask informed questions. Cross-references to `~/.claude/rules/functional-programming.md` are noted where the toolkits overlap.

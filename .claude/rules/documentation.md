@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/*.md"
+  - "**/README*"
+  - "**/CHANGELOG*"
+  - "**/CONTRIBUTING*"
+---
+
 # Documentation
 
 A reference for evaluating documentation quality during review. Used by the `documentation` subagent. Cross-language, cross-surface; complements `~/.claude/rules/readability.md` (which covers in-code prose / naming / function shape).

@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Debuggability
 
 A reference for evaluating whether code provides the means to observe, inspect, and reproduce its runtime behavior during development and incident response. Used by the `debuggability` subagent. Distinct from `observability.md` (which is production telemetry: SLOs, alerts, sampling, span hygiene for the operator) -- this file is the *developer-facing* lens: can I set a breakpoint here, will the stack trace help me, can I attach a debugger to a worker, do panics carry source location, can I reproduce locally?

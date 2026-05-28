@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Panel review contract
 
 The shared output and scope contract for any subagent dispatched by `/expert-review`. Agents read this once per call so the dispatch prompt doesn't have to restate it.

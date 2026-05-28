@@ -1,3 +1,10 @@
+---
+paths:
+  - "**/*.{ts,tsx,js,jsx,mjs,cjs}"
+  - "**/*.{html,htm}"
+  - "**/*.{vue,svelte}"
+---
+
 # Browser Spec / Browser Internals
 
 A reference for the `browser-spec` subagent. The lens: **"this code needs the eyes of someone who's worked in a browser implementation. What does the platform already give you that you've reinvented in JavaScript?"**

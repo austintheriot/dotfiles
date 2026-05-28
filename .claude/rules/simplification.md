@@ -1,3 +1,8 @@
+---
+paths:
+  - "__agent_only_never_match_at_startup__/**"
+---
+
 # Simplification Principles
 
 A reference for surfacing simplification opportunities during review. Used by the `code-simplifier` subagent. This file is **review-oriented** -- it describes what to flag, not how to rewrite. `/expert-review` is read-only by design; the user decides which suggestions to apply.

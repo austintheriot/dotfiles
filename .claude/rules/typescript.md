@@ -102,7 +102,8 @@ The mental model: **a generic is a function from types to types.** You "instanti
 
 ## Classes
 
-- **Prefer ES `#private` over TS `private`.** TS `private` is compile-time only -- erased at runtime, enumerable, bypassable via `as any`. ES `#private` is a runtime feature with real encapsulation.
+- **Always write explicit access modifiers on every class member.** Every field, method, constructor, getter, setter, and static member gets an explicit `public`, `protected`, `private`, or `#private` keyword -- no exceptions, no implicit `public`. The default-to-`public` behavior is the wrong default: members start over-exposed, and "should this be on the public surface?" becomes a question nobody asks at the point of authoring. Writing the modifier forces the decision every time. Enforce with the ESLint rule `@typescript-eslint/explicit-member-accessibility` set to `{ "accessibility": "explicit" }` (or `"no-public": false` if you want the rule to also flag redundant `public`). This applies to declarations in classes, abstract classes, and class expressions. Parameter properties are still banned (see below); when you do use a normal field, prefix it.
+- **For genuinely private members, prefer ES `#private` over TS `private`.** TS `private` is compile-time only -- erased at runtime, enumerable, bypassable via `as any`. ES `#private` is a runtime feature with real encapsulation. Use TS `private` only when you need a member to be visible to tests via `as any` escape hatches, or for `protected` semantics (ES has no `#protected`).
 - **Enable `noImplicitOverride` and use `override`.** Catches subclass methods that have been silently orphaned when the base class is renamed or its signature changes.
 - **For async or multi-step init, use a `static async create()` factory.** Constructors can't be async, so anything that tries forces null-checks across every method.
 - **Generic class parameters that touch only one method belong on the method, not the class.** Reduces the surface where callers have to spell out type arguments.
@@ -176,6 +177,7 @@ When reviewing TypeScript, these are the recurring smells:
 - Type complexity exceeding the implementation complexity it describes -- consider codegen or a simpler annotation.
 - `enum` declarations (prefer string-literal union or `as const` object).
 - TS `private` rather than ES `#private` in new code.
+- Class members without an explicit access modifier (implicit `public` -- write it).
 - `let` reused for semantically different concepts.
 - `for...in` with a `keyof T` cast on an externally-sourced object.
 - Recursive types built with non-tail recursion (visible when the input length matters).

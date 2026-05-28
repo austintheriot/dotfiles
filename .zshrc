@@ -164,7 +164,9 @@ if [ -f ~/.zshrc-work ]; then
     source ~/.zshrc-work
 fi
 
-# use neovim by default when editing files in git
+# use neovim as the default editor
+export EDITOR=nvim
+export VISUAL=nvim
 export GIT_EDITOR=nvim
 
 # make sure tmux has correct config

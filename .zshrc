@@ -178,6 +178,7 @@ plugin=(git)
 
 # CLAUDE #####################################################################################################
 export PATH="$HOME/.local/bin:$PATH"
+export CLAUDE_CODE_DISABLE_MOUSE=1
 
 # ebook-convert ##############################################################################################
 export PATH="/Applications/calibre.app/Contents/MacOS:$PATH"

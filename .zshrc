@@ -5,6 +5,7 @@
 #   Ctrl+R : Search command history (fuzzy search with preview)
 #   Ctrl+T : Search files in current directory and subdirectories
 #   Alt+C : Fuzzy cd into subdirectories
+#   Ctrl+G : Fuzzy-pick a git branch and paste it onto the command line
 #
 # 2. Tmux copy mode - Search scrollback buffer (not just commands)
 #   Ctrl+b [ → Enter copy mode
@@ -213,6 +214,9 @@ eval "$(zoxide init zsh)"
 # Ctrl+T  : Search files in current directory and subdirectories
 # Alt+C   : Fuzzy cd into subdirectories
 source <(fzf --zsh)
+
+# Ctrl+G  : Fuzzy-pick a git branch and paste it onto the command line
+source ~/.my-scripts/zsh-git-widgets.sh
 
 # SETUP PYENV ##############################################################################################
 export PYENV_ROOT="$HOME/.pyenv"

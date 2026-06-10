@@ -9,8 +9,7 @@ fzf-git-branch-widget() {
   local branch
   branch=$(
     git branch --color=always --format="%(refname:short)%09%(color:yellow)%(committerdate:relative)%(color:reset)" --sort=-committerdate --all 2>/dev/null \
-      | grep -v HEAD \
-      | egrep -v '^origin' \
+      | rg -v 'HEAD|^origin' \
       | sed 's/^[* ]*//' \
       | sed 's#^remotes/[^/]*/##' \
       | fzf --ansi --no-sort --reverse --height=40% --min-height=20 \

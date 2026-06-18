@@ -54,6 +54,7 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`api-design`** -- HTTP / REST, gRPC / Protobuf, GraphQL, library / SDK, CLI; backward compat, versioning, pagination, error envelopes.
 - **`concurrency`** -- threads, locks, atomics, memory models, lock-free, actors, channels, async/await (any language except Rust async).
 - **`i18n`** -- text encoding, normalization, pluralization, dates / times / timezones, currency, sorting, names, RTL / BiDi, IDN.
+- **`text-engineering`** -- the text stack encoding-through-rendering: Unicode algorithms (normalization / segmentation / line-breaking / bidi / collation by spec number), fonts and OpenType (cmap / GSUB / GPOS, variable / color fonts), shaping (HarfBuzz / Core Text / DirectWrite), and the international writing systems (CJK Han unification + East Asian Width, Arabic cursive joining, Hebrew final forms, Indic reordering, Thai segmentation, Zawgyi, emoji). The implementation depth beneath `i18n`'s locale altitude.
 - **`ci-pipeline`** -- GitHub Actions / GitLab CI / Buildkite / Jenkins workflows, Dockerfiles, branch protection, OIDC, signing, SLSA.
 - **`devops-infrastructure`** -- Terraform / Pulumi / CloudFormation / Helm; state management, IAM, networking, secrets, K8s manifests, GitOps, FinOps, DR.
 - **`graphics-programming`** -- WebGL / WebGPU, 2D vector graphics, text shaping (HarfBuzz / SDF / MSDF), shaders, GPU best practices.
@@ -127,6 +128,7 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "Should this be REST / gRPC / GraphQL / how do I version" | `api-design` |
 | "How do I synchronize threads / avoid deadlock / use channels" (non-Rust) | `concurrency` |
 | "How do I handle Unicode / timezones / currencies / RTL / IDN" | `i18n` |
+| "How do I normalize / segment graphemes / shape text / use HarfBuzz / handle OpenType / render CJK-Arabic-Indic / get terminal width right" | `text-engineering` |
 | "How do I structure my GitHub Actions / sign artifacts / OIDC" | `ci-pipeline` |
 | "How do I structure my Terraform / Helm / IAM / K8s manifests" | `devops-infrastructure` |
 | "How do I render this on WebGPU / shape text / use SDF" | `graphics-programming` |

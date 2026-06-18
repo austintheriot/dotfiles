@@ -133,6 +133,8 @@ Two stages: **shaping** (text â†’ positioned glyphs) and **rendering** (glyphs â
 
 **Flag**: hand-rolled text shaping; "we just split on spaces and look up codepoints" approaches; missing fallback chain for unsupported codepoints.
 
+The boundary: **shaping, the Unicode algorithms (bidi / segmentation / normalization), `cmap` / GSUB / GPOS, font-table parsing, and font fallback belong to `text-engineering`; this lens owns glyphs -> pixels** (atlas / SDF / MSDF / Slug / compute rasterization, batching, GPU upload). Route shaping-correctness and "why does this script render wrong" questions there; keep "how do I rasterize the positioned glyphs efficiently" here.
+
 ### Rendering
 
 **Atlas-based**: pre-rasterize glyphs to a texture atlas; sample. Quality degrades at non-1:1 scales.

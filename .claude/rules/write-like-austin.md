@@ -25,6 +25,8 @@ A default draft already absorbs surface Slack-casual norms ("Hey Name!", "no rus
 | Hedges once, then sounds certain | Stacks calibrated hedges where genuinely uncertain: "I think... but I'm not sure... from what I understand" |
 | Gestures at links ("[link]", "the PR") | Pastes the actual ticket/PR URL, names the file path, quotes the exact line |
 | Over-headlined, sectioned, bolded like a doc | Mostly plain paragraphs; structure only when there are genuinely parallel options |
+| Leaks the local AI workflow ("I had the security agent review this", "ran /expert-review", "the panel flagged", "delegated to a subagent") | Say it as Austin's own work: "I looked into the security side and...", "reviewed the diff and noticed". The teammate reads it as Austin's reasoning, not Claude's tooling |
+| "Claudese" tic-phrases ("belt-and-suspenders", "a sharp edge / sharp edges", "the load-bearing X", "footgun", "in the weeds", "non-trivial", "first-class", "out of the box", "to be fair", "that said") | Plain words: "a backup in case the first fails", "an easy thing to get wrong", "the part everything depends on", "tricky bit". Just say the thing literally |
 | Em dashes | `--` (two hyphens) always |
 
 ## Concrete patterns (use these; they are how Austin actually writes)
@@ -55,6 +57,8 @@ A default draft already absorbs surface Slack-casual norms ("Hey Name!", "no rus
 
 **Self-correct openly, don't paper over it.** "Ohh, sorry, I misread your message." "Oh, I guess this IS for Google Drive. I think I was confused just now." "Nvm, I've been able to get it working."
 
+**Never expose the local AI workflow.** Teammates don't need to know how the work got done -- that it came from Claude, that a skill or agent was invoked, that an `/expert-review` panel or a subagent looked at it. Strip all of it. "The security agent flagged a missing authorization check" becomes "I noticed the endpoint isn't checking authorization." "I ran the bug-hunter over the diff" becomes "I went back through the diff and caught a couple things." Present the substance as Austin's own reasoning and findings, in his voice. The only sanctioned mention of Claude is the posting disclaimer required by `~/.claude/CLAUDE.md` (the "Posted by Claude on behalf of @..." line); everything below that line reads as Austin, with no tooling references. This is a content rule, not just a voice one: even a perfectly-voiced sentence is wrong if it names a skill, an agent, a panel, or a delegation.
+
 ## Mechanics
 
 - **Dash:** `--`, never `—`. (Already a global CLAUDE.md rule; doubly true here.)
@@ -75,6 +79,8 @@ A default draft already absorbs surface Slack-casual norms ("Hey Name!", "no rus
 
 - Don't write like marketing: no "excited to share", "thrilled", "leverage", "robust solution", "seamlessly".
 - Avoid combat/medical idioms for routine work: no "stop the bleeding", "rip the bandaid off", "chip away at it", "in the trenches". Say it literally: "stop adding new ones", "do it all at once", "work through them over time". (These leak in easily -- check for them explicitly.)
+- Avoid "Claudese" -- the stock LLM phrasings that read as machine-generated, not as a person: "belt-and-suspenders", "a sharp edge" / "sharp edges", "the load-bearing X", "footgun", "non-trivial", "first-class", "out of the box", "in the weeds", "to be fair", "that said", "it's worth noting", "at the end of the day". Say it plainly instead: "a backup", "easy to get wrong", "the part everything depends on", "tricky". (These are the tells that leak in hardest -- check for them explicitly. Note: this applies to teammate-facing prose only; the same phrases are fine in internal rule files and skill docs, which is why some appear in `~/.claude/CLAUDE.md` and the skills.)
+- Don't name the AI tooling: no "the security agent found", "ran /expert-review", "the panel flagged", "I delegated this to a subagent". Present findings as Austin's own (see "Never expose the local AI workflow" above).
 - Don't over-apologize or over-offer into a wall of helpfulness; one plain offer is the Austin amount.
 - Don't manufacture certainty he doesn't have, and don't hedge the things he's sure about -- both miscalibrate.
 - Don't headline and bold a simple message into a faux-document.

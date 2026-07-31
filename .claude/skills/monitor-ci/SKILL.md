@@ -43,6 +43,8 @@ nd ci workflows --latest --branch <headRefName>
 
 Parse status strings: terminal = `success` / `failed` / `error` / `canceled`; running = `running`; not-yet = `created` / `pending`; gated = `on_hold`.
 
+`on_hold` is **not** in-flight. A gated workflow is waiting on a human to approve a job and will never advance on its own, so it is terminal-pending for monitoring purposes: report it, never wait it out. Read the **workflow-level** status column, not the adjacent job-activity column -- a gated workflow can print `on_hold` in the status column while the next column still says `running`, so a grep for "running" misclassifies it. The `⏸` glyph marks the gated rows.
+
 For any `failed` / `error` workflow, fetch its failed jobs:
 
 ```bash
@@ -68,9 +70,12 @@ Evaluate cumulatively — one cycle can hit both a CI failure and new review com
 
 1. If **new AI review comments** arrived this cycle → run **Step 4 (review comments)**.
 2. If **any workflow is `failed` / `error`** → run **Step 3 (CI failure)**.
-3. If either of the above ran, hand off — the developer needs to act. Step 3 and Step 4 outputs both appear in the same turn if both triggered.
-4. Otherwise, if **any workflow is `running` / `created` / `pending` / `on_hold`** → run **Step 2d (await completion)**.
-5. Otherwise (all workflows `success` or `canceled`, no new review comments, review has run or the PR carries `Claude Opt Out`) → run **Step 5 (final report)**.
+3. If **any workflow is `on_hold`** → run **Step 3b (gated workflow)**.
+4. If any of the above ran, hand off: the developer needs to act. Step 3, Step 3b, and Step 4 outputs all appear in the same turn if more than one triggered.
+5. Otherwise, if **any workflow is `running` / `created` / `pending`** → run **Step 2d (await completion)**.
+6. Otherwise (all workflows `success` or `canceled`, no gated workflows, no new review comments, review has run or the PR carries `Claude Opt Out`) → run **Step 5 (final report)**.
+
+A gated workflow does **not** keep the poll loop alive. If `on_hold` workflows are the only non-terminal thing left across everything being monitored, that is terminal for monitoring: report the hold (Step 3b), print the final report (Step 5), and stop scheduling wakeups. Only genuinely in-flight workflows (`running` / `created` / `pending`) route to Step 2d.
 
 ### 2d: Await completion (background wait + safety-net poll, in tandem)
 
@@ -155,6 +160,30 @@ For each failing workflow:
 
      `--from-failed` is the default. Ask once before rerunning; do not rerun silently. On approval, run the retry, then resume at Step 2 (record a new monitor start time so we don't re-show old review comments).
 
+## Step 3b: Gated workflow (`on_hold`)
+
+A workflow sitting at `on_hold` is blocked on a manual-approval job. Nothing in CI will move it; the user's attention is the blocker, so say so.
+
+For each `on_hold` workflow:
+
+1. Identify the gate:
+
+   ```bash
+   nd ci jobs --workflow-id <workflow-uuid>
+   ```
+
+   The gating job is the one whose own status is `on_hold` (`⏸`). Jobs downstream of it read `blocked` (`?`) and are waiting on the approval, not failing. The canonical gate on this repo's deploy-adjacent workflows is `approve_berry_rollback`, with `trigger_berry_rollback_workflow` blocked behind it.
+
+2. Check every other job in the workflow. If they all passed, the report is "only the gate remains"; if any `failed` / `error` jobs are also present, say that too and route them through Step 3 -- do not let the hold mask a real failure.
+
+3. Report the hold explicitly and stop counting that workflow as pending. Name the gating job, the blocked job(s) behind it, and what approving it would trigger as far as the job name reveals (e.g. `approve_berry_rollback` gates `trigger_berry_rollback_workflow`, a rollback deploy). Example:
+
+   > `build_test_conditionally_deploy_notability_backend` is `on_hold`: all jobs passed except the manual gate `approve_berry_rollback` (`⏸`), with `trigger_berry_rollback_workflow` `blocked` behind it. Approving it would kick off the Berry rollback workflow. Your call.
+
+4. **Never approve the gate.** Approval is a human decision, and on a deploy-adjacent job it is outward-facing. This skill has no approve command and must not invent one: if the user wants it approved, they do it in the CircleCI UI, or they explicitly ask you to go find a command for it.
+
+5. If the gated workflow is the only thing left un-terminal across everything being monitored, go to **Step 5 (final report)** and stop the poll loop. Do not schedule another wakeup on a gate.
+
 ## Step 4: AI Review Comments
 
 Summarize the new comments: total count and an actionable-vs-question breakdown (heuristic: imperative requests for change → actionable; "why" / "should we" / "what about" / "could we" → question). Present the list with file paths and line numbers from the comment payload.
@@ -167,8 +196,10 @@ Print:
 
 - PR URL, title, draft/ready state
 - Workflow summary: green / red / mixed, failed workflow names (if any), reruns used this session
+- Gated workflows (`on_hold`), listed separately from green and red: workflow name plus the gating job. "All green except one human gate" is a real and common outcome for a stack, and the report should say exactly that, naming the job (e.g. "green except `approve_berry_rollback`, awaiting your approval in the CircleCI UI").
 - AI review status: ran / skipped / N comments addressed
 - Suggested next action, e.g.:
+  - "Approve or skip the manual gate `approve_berry_rollback` in the CircleCI UI (this skill will not approve it for you)"
   - "Mark ready for review: `gh pr ready <PR>`"
   - "Investigate failed `lint_backend` job: `nd ci logs --job-number <n> --failed-only --tail 100`"
   - "Rerun the flaky workflow: `nd ci retry --workflow-id <uuid>`"
@@ -176,6 +207,7 @@ Print:
 ## Important
 
 - **Background wait and safety-net poll run together; neither is a pure fallback.** Background `nd ci wait` gives the precise wake-up; the ~60s `ScheduleWakeup` poll is the liveness backstop that catches a dropped or late notification. Run both whenever CI is in flight. Only when backgrounding is unavailable does `ScheduleWakeup` become the sole mechanism (with the longer interval table, not the 60s cadence). Once the user has invoked the skill, keep re-scheduling the poll each cycle without re-asking — stop only at a terminal state or on the user's say-so.
+- **`on_hold` is never waited out and never auto-approved.** A gated workflow needs a human, so it is terminal-pending: report the gate (Step 3b), name it in the final report, and stop polling once it's the only thing left. Approving a manual gate is outside this skill's default the same way editing files is (see "Observe vs implement") -- and unlike a fix, an explicit "approve it" ask has no `nd ci` command behind it, so point the user at the CircleCI UI rather than improvising one.
 - **Background processes don't survive session close.** The `nd ci wait` process is tied to the Claude Code session. If the developer exits Claude Code, they must re-invoke `/monitor-ci` to resume — same constraint as the polling path.
 - **Observe vs implement.** Default to observe-and-plan: surface the failure with a fix plan, let the developer apply it. The developer can opt into implementation by saying so ("fix it", "apply the fix", "and then continue monitoring") — in auto mode, treat the explicit ask as authorization to edit, build/lint locally, commit, push, and resume the wait.
 - **`nd ci` is the only CircleCI surface.** Do not scrape the CircleCI web UI, do not call the CircleCI REST API directly, and do not require the CircleCI MCP. If `nd ci` lacks a capability, surface that to the user rather than working around it.

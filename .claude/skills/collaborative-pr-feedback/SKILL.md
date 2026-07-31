@@ -46,9 +46,9 @@ when the fix is substantial.
 - TDD where the finding is behavioral (red test first); say so when skipping (e.g.
   WASM-bound seams no unit harness reaches).
 - Per-commit verification, no exceptions: relevant vitest suites, `tsc --noEmit`, and
-  **prettier + eslint on EVERY touched file** -- a single unlinted file has turned CI
-  red twice (`no-duplicate-imports`, `consistent-type-imports` after a refactor made
-  an import type-only).
+  **prettier + eslint --max-warnings 0 on EVERY touched file** (CI fails on warnings) -- unlinted files have turned CI
+  red three times (`no-duplicate-imports`, `consistent-type-imports`,
+  `prefer-expect-assertions` warnings under --max-warnings 0).
 - Stale local commons after staging merges: `bun run build` in `common-universal`
   then `common-model` (order matters) when `blockWrapSupport`-style tsc errors appear.
 - Stacked PRs: fix at the **originating slice**, and defer the cascade until all PRs

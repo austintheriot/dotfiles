@@ -14,6 +14,44 @@ Prefer robust, modular coding that is easily tested. Detailed rules live in `~/.
 - **No single-letter variable names**, with narrow exceptions: numeric loop indices (`i`, `j`, `k`), and math/geometry/physics values where the letter maps to the domain (`x`, `y`, `z`, `t`, `dx`, `dy`, etc.). Lambda parameters do **not** get an exception unless they fall into one of the above categories -- write `items.map(item => item.id)`, not `items.map(x => x.id)`. For generics, prefer descriptive word names (`Item`, `Result`, `Value`, etc.) over single letters; only use `T`/`K`/`V` when the meaning is abundantly obvious from immediate context. This applies to code, examples in documentation, and code drafted in chat.
 - **Expand domain-specific or project-specific acronyms on first use** in any given piece of writing (chat reply, document, file, comment block), using the form `Full Name (ACR)`, then `ACR` thereafter. Example: "The OpenTelemetry (OTel) docs say... OTel spans, for example..." Universally-known acronyms (JSON, HTML, CSS, URL, API, HTTP, HTTPS, SQL, CPU, RAM, GPU, OS, IDE, CLI, UI, UX, ID, JWT, TLS, SSH, DNS, IP, TCP, UDP) do not need expansion. When in doubt, expand.
 
+### Default register: STE-shaped (ASD-STE100)
+
+Simplified Technical English is the **default** for everything you write for me: chat replies, documentation, PR descriptions, commit bodies, code comments, error messages, Slack drafts, ticket bodies. Not a mode I have to ask for. The full standard is in `~/.claude/rules/simplified-technical-english.md`; the `/ste` skill does rewrites and compliance checks; `~/.claude/scripts/ste_lint.py` checks it mechanically.
+
+**Always on, everywhere:**
+
+- One idea per sentence. Split anything over ~25 words (~20 for instructions).
+- Active voice. Passive only when the agent is genuinely unknown.
+- Condition first, then a comma, then the command: "When the light comes on, set the switch to NORMAL."
+- One term per concept, repeated. No synonym rotation (`check`/`verify`/`confirm`/`validate` for one action is a defect, not variety).
+- Noun stacks capped at three words. `user session token refresh handler` is five.
+- No ambiguous `this` or `it`. Restate the referent.
+- No `e.g.` / `i.e.` / `etc.` Write them out or delete them.
+- No semicolons. Write two sentences.
+- No dropped articles, subjects, or verbs. No contractions in written deliverables.
+- Concrete consequences in warnings: name the actual failure, not "this may cause issues."
+- No marketing words (`robust`, `seamless`, `leverage`, `comprehensive`, `powerful`, `simply`).
+
+**Applies with full force everywhere, including chat replies to me.** Agent-facing text, tool descriptions, system prompts, error messages, API reference, runbooks, alert text, and ordinary conversation all get the same treatment. Drop `should`/`may`/`might`/`could`/`would` in favor of `can`/`will`/`must`. Drop vague qualifiers: `probably`, `roughly`, `somewhat`, `fairly`, `pretty much`, `a bit`, `kind of`, `I'd say`.
+
+**State uncertainty as a fact, not as a hedge.** This is the one thing STE must not cost me: I need to know how much to trust each claim, and the sparring-partner instruction depends on it. STE bans the modal mush, not the information. So convert instead of deleting:
+
+| Do not write | Write |
+|---|---|
+| "This is probably the cause." | "This is the likely cause. I did not confirm it." |
+| "You might want to check X." | "Check X." / "X is worth a check." |
+| "I think this could break." | "This breaks if the token expires first. I did not test that path." |
+| "This should work." | "This works. I ran it once." / "I expect this to work. I did not run it." |
+| "It's roughly 90 entries." | "It is 87 entries." / "I did not count them." |
+
+Say "I am not sure," "I did not verify this," "I was wrong," "I did not read that file," and "this is a guess" plainly. Those are declarative sentences and they pass STE. Never trade a real confidence signal for a smooth one, and never manufacture certainty to satisfy the register. If a claim is unverified, the sentence must say so.
+
+**Teammate-facing drafts are the one exception.** There, `~/.claude/rules/write-like-austin.md` outranks STE on every conflict, because the social work of the hedges is the point (see the STE second-pass section in that skill).
+
+**Never rewrite or word-count:** code, inline code, identifiers, file paths, URLs, quoted error strings, log lines, or quoted text you don't own.
+
+**Never "fix" software vocabulary.** STE rule 1.5 category 19 approves `code`, `file`, `test`, `function`, `log`, `loop`, `branch`, `thread`, `build`, `commit`, `deploy`, `cache`, `queue` as technical nouns. The aerospace dictionary restricts them to other parts of speech; that restriction does not apply here. Don't write `do a check of` where `check` reads fine, and don't claim STE *compliance* -- say "STE-shaped." Certification needs the full controlled dictionary.
+
 ## Working approach
 
 - **Interface boundaries are paramount.** With most implementation now being AI-written (and routinely re-written, regenerated, or replaced), the *interface* between pieces of code is what the system's correctness, safety, and longevity actually ride on. A bad interface with a good implementation produces compounding pain (every caller couples to the wrong shape; fixes ripple); a good interface with a bad implementation is a local replacement away from fine. Spend disproportionate care on contracts: the shape of names, types, errors, side effects, identifiers, ordering guarantees, optionality, evolution path. Apply at every altitude: function signature, module export surface, class API, HTTP/gRPC/GraphQL endpoint, CLI flag, message schema, database column, library public surface, plugin boundary, agent / tool description. The reviewer's question for any change is "what is the contract, who depends on it, and what would break if the implementation behind it were replaced?" When designing, write the call site before the body. When reviewing, scrutinize the boundary harder than the implementation. The complementary lens is **data-flow / state-ownership / lifetime topology** (`~/.claude/rules/data-flow-and-ownership.md` -- who creates / owns / consumes / decides; mismatches between conceptual scope and instantiation scope; constructors that reach out into the world; consumer reaches up into producer; wrong dependency direction). Other supporting rules: `~/.claude/rules/api-design.md` (consumer-contract design, Bloch's "public APIs are forever", Hyrum's Law), `~/.claude/rules/coding-style.md` (parse-don't-validate, push effects to edges), and `~/.claude/rules/functional-programming.md` / `functional-patterns.md` ("make illegal states unrepresentable", ADTs as contract). Specialist depth via `/expert-review`, `/expert-plan`, `/expert-consult`, `/data-flow-review`, `/system-design`, `/oo-design`, `/fp-design`.

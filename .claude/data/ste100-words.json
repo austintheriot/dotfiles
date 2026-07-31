@@ -1,0 +1,7205 @@
+{
+ "_meta": {
+  "source": "ASD-STE100 Simplified Technical English, Issue 9 (2025), Part 2 dictionary",
+  "contents": "not-approved words with their approved alternatives",
+  "count": 1198,
+  "kinds": {
+   "swap": "single approved word; usually a drop-in replacement",
+   "rewrite": "multi-word alternative; needs a construction change",
+   "technical-term": "alternative is a technical noun (TN) or technical verb (TV); restructure the sentence to use it as that part of speech"
+  },
+  "domain_exempt": "true when software/CS usage is protected by STE technical-noun category 19 or technical-verb category 2; do not flag these",
+  "caveat": "machine-extracted from a PDF table; a small number of rows may be truncated. The PDF is authoritative.",
+  "excludes": "the 875 approved words and their approved meanings; consult the PDF for those"
+ },
+ "words": {
+  "abaft": {
+   "use": "aft of",
+   "pos": "prep",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "abandon": {
+   "use": "go",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "abate": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ability": {
+   "use": "can",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "able": {
+   "use": "can",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "abnormal": {
+   "use": "unusual",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "abnormality": {
+   "use": "defect",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "abrupt": {
+   "use": "sudden",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "absence": {
+   "use": "none",
+   "pos": "pron",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "absent": {
+   "use": "missing",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "absolutely": {
+   "use": "fully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "absorption": {
+   "use": "absorb",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "abundant": {
+   "use": "large",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "abut": {
+   "use": "touch",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "accelerate": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "acceptable": {
+   "use": "permitted",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "acceptance": {
+   "use": "accept",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "accessible": {
+   "use": "access",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "accommodate": {
+   "use": "let",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "accomplish": {
+   "use": "do",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "account for": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "accumulate": {
+   "use": "collect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "accumulation": {
+   "use": "quantity",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "accuracy": {
+   "use": "precision",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "achieve": {
+   "use": "get",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "acquire": {
+   "use": "get",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "acrid": {
+   "use": "dangerous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "action": {
+   "use": "step",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "activity": {
+   "use": "task",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "actuate": {
+   "use": "start",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "actuation": {
+   "use": "operation",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "addition": {
+   "use": "add",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "additional": {
+   "use": "more",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "adequate": {
+   "use": "sufficient",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "adhere": {
+   "use": "bond",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "adhesion": {
+   "use": "bond",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "adjoining": {
+   "use": "adjacent",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "admit": {
+   "use": "let",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "adopt": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "advance": {
+   "use": "forward",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "adverse": {
+   "use": "bad",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "advisable": {
+   "use": "recommend",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "advise": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "affect": {
+   "use": "effect",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "aggravate": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "agitate": {
+   "use": "shake",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "agitation": {
+   "use": "shake",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ahead": {
+   "use": "forward",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "aid": {
+   "use": "help",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "aim": {
+   "use": "point",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "air-dry": {
+   "use": "dry",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "alert": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "alignment": {
+   "use": "align",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "allocate": {
+   "use": "give",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "allow": {
+   "use": "let",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "allowable": {
+   "use": "permitted",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "already": {
+   "use": "in progress",
+   "pos": "adv",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "alter": {
+   "use": "change",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "alteration": {
+   "use": "change",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "alternate": {
+   "use": "alternative",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "alternatively": {
+   "use": "alternative",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "amend": {
+   "use": "change",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "amendment": {
+   "use": "change",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "among": {
+   "use": "in",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "amount": {
+   "use": "quantity",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "analyze": {
+   "use": "analysis",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "anchor": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ancillary": {
+   "use": "auxiliary",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "annotation": {
+   "use": "write",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "annunciate": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "another": {
+   "use": "one (tn) more",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "any": {
+   "use": "one",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "anytime": {
+   "use": "when",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "aperture": {
+   "use": "opening",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "apparent": {
+   "use": "see",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "appear": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "application": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "appoint": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "approach": {
+   "use": "go near",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "appropriate": {
+   "use": "applicable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "approve": {
+   "use": "approval",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "arise": {
+   "use": "occur",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "arrange": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "arrangement": {
+   "use": "configuration",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "arrest": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "arrive": {
+   "use": "get",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "article": {
+   "use": "object",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "as": {
+   "use": "because",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "as to": {
+   "use": "about",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ascertain": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "ask": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "assess": {
+   "use": "calculate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "assessment": {
+   "use": "estimate",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "assign": {
+   "use": "give",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "assist": {
+   "use": "help",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "assistance": {
+   "use": "aid",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "associated": {
+   "use": "correct",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "assume": {
+   "use": "think",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "assure": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "asymmetric": {
+   "use": "not symmetrical",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "attachment": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "attain": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "attempt": {
+   "use": "try",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "attention": {
+   "use": "aid",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "audible": {
+   "use": "hear",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "augment": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "aurally": {
+   "use": "listen",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "authentic": {
+   "use": "accurate",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "authorized": {
+   "use": "approved",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "avert": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "avoid": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "aware": {
+   "use": "know",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "back": {
+   "use": "rear",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "back off": {
+   "use": "loosen",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "backup": {
+   "use": "emergency",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "backward": {
+   "use": "rearward",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "badly": {
+   "use": "incorrectly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "bank": {
+   "use": "bank",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "bared": {
+   "use": "bare",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "base": {
+   "use": "bottom",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "begin": {
+   "use": "start",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "beginning": {
+   "use": "start",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "below": {
+   "use": "follow",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "beneath": {
+   "use": "below",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "beside": {
+   "use": "adjacent to",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "beware": {
+   "use": "careful",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "beyond": {
+   "use": "more than",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "big": {
+   "use": "large",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "bind": {
+   "use": "freely",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "blank": {
+   "use": "seal",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "blend": {
+   "use": "mix",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "block": {
+   "use": "cause a blockage",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "blot": {
+   "use": "dry",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "blunted": {
+   "use": "blunt",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "bolt": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "both": {
+   "use": "the two",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "bottom": {
+   "use": "touch",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "bounds": {
+   "use": "limit",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "brace": {
+   "use": "hold",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "branch": {
+   "use": "divide",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "breadth": {
+   "use": "width",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "break": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "breakdown": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "brilliance": {
+   "use": "intensity",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "bring": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "briskly": {
+   "use": "quickly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "broadcast": {
+   "use": "transmit",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "brush": {
+   "use": "brush",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "brush on": {
+   "use": "brush",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "build": {
+   "use": "assemble",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "bump": {
+   "use": "hit",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "burst": {
+   "use": "break",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "butt": {
+   "use": "touch",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "by means of": {
+   "use": "with",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "calculation": {
+   "use": "calculate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "call": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "cap": {
+   "use": "seal",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "capability": {
+   "use": "function",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "capable": {
+   "use": "approved",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "care": {
+   "use": "precaution",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "carry": {
+   "use": "transmit",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "carry out": {
+   "use": "do",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "case": {
+   "use": "condition",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "categorize": {
+   "use": "category",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "caution": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "cautiously": {
+   "use": "carefully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "cavity": {
+   "use": "hole",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "cease": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "center": {
+   "use": "center",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "centralize": {
+   "use": "center",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "certain": {
+   "use": "sure",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "certify": {
+   "use": "write",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "chafe": {
+   "use": "rub",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "chafed": {
+   "use": "worn",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "channel": {
+   "use": "channel",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "characteristic": {
+   "use": "property",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "check": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "chip": {
+   "use": "particle",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "chock": {
+   "use": "chock",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "choice": {
+   "use": "selection",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "choose": {
+   "use": "select",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "circa": {
+   "use": "approximately (adv) put a container",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "circle": {
+   "use": "around",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "circulate": {
+   "use": "supply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "clamp": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "classification": {
+   "use": "class",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "cleanliness": {
+   "use": "clean",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "clear": {
+   "use": "clean",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "click": {
+   "use": "click",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "clip": {
+   "use": "cut",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "close": {
+   "use": "near",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "close to": {
+   "use": "near",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "closely": {
+   "use": "carefully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "coat": {
+   "use": "layer",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "coating": {
+   "use": "layer",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "cock": {
+   "use": "set",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "code": {
+   "use": "identify",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "coil": {
+   "use": "wind",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "coincide": {
+   "use": "align",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "coincident": {
+   "use": "synchronized",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "collapse": {
+   "use": "close",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "color code": {
+   "use": "identify",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "colored": {
+   "use": "color",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "combine": {
+   "use": "mix",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "combustible": {
+   "use": "flammable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "commence": {
+   "use": "start",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "common": {
+   "use": "same",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "communicate": {
+   "use": "contact",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "comparison": {
+   "use": "compare",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "compile": {
+   "use": "make a list",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "complete": {
+   "use": "full",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "completely": {
+   "use": "fully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "completion": {
+   "use": "end",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "complicated": {
+   "use": "not easy",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "comply": {
+   "use": "obey",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "comprise": {
+   "use": "have",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "compulsory": {
+   "use": "mandatory",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "compute": {
+   "use": "calculate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "concentrate": {
+   "use": "all",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "concern": {
+   "use": "applicable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "conclusion": {
+   "use": "end",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "concurrently": {
+   "use": "at the same time",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "conduct": {
+   "use": "do",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "confine to": {
+   "use": "only",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "confirm": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "conflict": {
+   "use": "different",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "conform": {
+   "use": "agree",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "conformance": {
+   "use": "agree",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "conformity": {
+   "use": "agree",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "consecutive": {
+   "use": "one (tn) after the",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "consequence": {
+   "use": "because of",
+   "pos": "prep",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "consider": {
+   "use": "think",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "considerable": {
+   "use": "large",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "consist of": {
+   "use": "have",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "consistent": {
+   "use": "agree",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "construct": {
+   "use": "assemble",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "consult": {
+   "use": "refer",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "contaminant": {
+   "use": "contamination",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "contiguous": {
+   "use": "adjacent",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "conventional": {
+   "use": "standard",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "converse": {
+   "use": "opposite",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "convert": {
+   "use": "change",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "convey": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "cool": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "coordinate": {
+   "use": "synchronized",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "copy": {
+   "use": "write",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "correctness": {
+   "use": "correct",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "correspond": {
+   "use": "agree",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "corrode": {
+   "use": "corrosion",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "corrosive": {
+   "use": "corrosion",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "couple": {
+   "use": "connect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "cover": {
+   "use": "include",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "crack": {
+   "use": "open",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "create": {
+   "use": "make",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "critical": {
+   "use": "very important",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "cross": {
+   "use": "across",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "curvature": {
+   "use": "bend",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "curve": {
+   "use": "make a curve",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "cycle": {
+   "use": "cycle",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "damage": {
+   "use": "damage",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "damp": {
+   "use": "moist",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dampen": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "danger": {
+   "use": "risk",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dangerously": {
+   "use": "dangerous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "de-ice": {
+   "use": "ice",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "deadly": {
+   "use": "kill",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "deaerate": {
+   "use": "bleed",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dearm": {
+   "use": "disarm",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "decay": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "decelerate": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "decide": {
+   "use": "select",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "decrease": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "decrement": {
+   "use": "increment",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "define": {
+   "use": "calculate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "deflect": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "deflection": {
+   "use": "movement",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "deformed": {
+   "use": "damaged",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "defueling": {
+   "use": "defuel",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "degrease": {
+   "use": "grease",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "delay": {
+   "use": "interval",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "delete": {
+   "use": "erase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "delicate": {
+   "use": "easily damaged",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "deliver": {
+   "use": "supply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "delivery": {
+   "use": "supply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "demand": {
+   "use": "necessary",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "denote": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dent": {
+   "use": "dent",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "depend": {
+   "use": "if",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "deplete": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "deposit": {
+   "use": "particle",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "depress": {
+   "use": "push",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "depressurize": {
+   "use": "pressure",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "describe": {
+   "use": "give",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "deselect": {
+   "use": "cancel",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "design": {
+   "use": "have",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "desired": {
+   "use": "necessary",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "destroy": {
+   "use": "break",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "detach": {
+   "use": "disconnect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "detail": {
+   "use": "instruction",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "detect": {
+   "use": "find",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "determine": {
+   "use": "find",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "detrimental": {
+   "use": "dangerous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "develop": {
+   "use": "start",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "deviate": {
+   "use": "obey",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "devise": {
+   "use": "make",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "diagnose": {
+   "use": "find",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "diametrically": {
+   "use": "opposite",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "differ": {
+   "use": "different",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "differentiate": {
+   "use": "identify",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "difficult": {
+   "use": "not easy",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "difficulty": {
+   "use": "not easy",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "dilute": {
+   "use": "mix",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dim": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "diminish": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dip": {
+   "use": "momentarily",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "direct": {
+   "use": "point",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "disappear": {
+   "use": "view",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "discharge": {
+   "use": "release",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "discontinue": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "discover": {
+   "use": "find",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "discrepancy": {
+   "use": "difference",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "disinfect": {
+   "use": "disinfectant",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "dismantle": {
+   "use": "disassemble",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dispatch": {
+   "use": "send",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "disperse": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "displace": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "display": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dispose of": {
+   "use": "discard",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "disposition": {
+   "use": "location",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "disregard": {
+   "use": "ignore",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "distinct": {
+   "use": "clear",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "distinctly": {
+   "use": "clearly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "distort": {
+   "use": "twist",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "distribute": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "distribution": {
+   "use": "supply",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "disturb": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "don": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "doubt": {
+   "use": "not sure",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "downward": {
+   "use": "down",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "drag": {
+   "use": "pull",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "draw": {
+   "use": "make",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dress": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "drift": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "drive": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "droop": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "drop": {
+   "use": "fall",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "due to": {
+   "use": "because of",
+   "pos": "prep",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "dull": {
+   "use": "dim",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "duration": {
+   "use": "during",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "dust": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "early": {
+   "use": "short",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "earth": {
+   "use": "ground",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ease": {
+   "use": "easily",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "effect": {
+   "use": "do",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "effective": {
+   "use": "good",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "efficacious": {
+   "use": "good",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "efficient": {
+   "use": "satisfactory",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "efflux": {
+   "use": "exhaust",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "effort": {
+   "use": "force",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "either": {
+   "use": "one (tn) of the two if there is mercury",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "ejection": {
+   "use": "eject",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "elapse": {
+   "use": "time",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "eliminate": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "emit": {
+   "use": "from",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "employ": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "empty": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "enable": {
+   "use": "let",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "encircle": {
+   "use": "around",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "enclosed": {
+   "use": "closed",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "encounter": {
+   "use": "be",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "end": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "enforce": {
+   "use": "obey",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "engagement": {
+   "use": "engage",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "enlarge": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "enough": {
+   "use": "sufficient",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ensue": {
+   "use": "cause",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ensure": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "enter": {
+   "use": "go into",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": true
+  },
+  "entire": {
+   "use": "full",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "entirely": {
+   "use": "fully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "equal": {
+   "use": "same",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "equip": {
+   "use": "install",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "equipped": {
+   "use": "have",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "erect": {
+   "use": "assemble",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "erratic": {
+   "use": "irregular",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "escape": {
+   "use": "deflate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "establish": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "estimate": {
+   "use": "estimate",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "evaluate": {
+   "use": "examine",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "evaluation": {
+   "use": "examine",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "evaporate": {
+   "use": "dry",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "even": {
+   "use": "smooth",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "evenly": {
+   "use": "gradually",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "event": {
+   "use": "if",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "eventually": {
+   "use": "some time",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "every": {
+   "use": "all",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "evidence": {
+   "use": "indication",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "evident": {
+   "use": "find",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exact": {
+   "use": "accurate",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exactly": {
+   "use": "accurately",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "examination": {
+   "use": "examine",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exceed": {
+   "use": "more than",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "exceptional": {
+   "use": "unusual",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "excess": {
+   "use": "too much",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "excessive": {
+   "use": "too much",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "excessively": {
+   "use": "too much",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "exchange": {
+   "use": "interchange",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exclude": {
+   "use": "not include",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "excluding": {
+   "use": "without",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "execute": {
+   "use": "do",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exempt": {
+   "use": "no",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exercise": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "exert": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exhale": {
+   "use": "breathe",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exhaust": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exhaustive": {
+   "use": "all",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exist": {
+   "use": "be",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "expect": {
+   "use": "possible",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "expel": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "explain": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "expose": {
+   "use": "get",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "extent": {
+   "use": "depth",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exterior": {
+   "use": "external",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "extra": {
+   "use": "more",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "extract": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "extreme": {
+   "use": "very high",
+   "pos": "adj",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "extremely": {
+   "use": "very",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "exude": {
+   "use": "out of",
+   "pos": "prep",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "fabricate": {
+   "use": "make",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "face": {
+   "use": "point",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "facilitate": {
+   "use": "help",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "factor": {
+   "use": "cause",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "failed": {
+   "use": "defective",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "faint": {
+   "use": "dim",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fall": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "false": {
+   "use": "incorrect",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "falter": {
+   "use": "smoothly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "familiar": {
+   "use": "know",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fashion": {
+   "use": "procedure",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fast": {
+   "use": "quickly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fasten": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fatal": {
+   "use": "kill",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "faulty": {
+   "use": "defective",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fear": {
+   "use": "think",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "feasible": {
+   "use": "possible",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "feature": {
+   "use": "have",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "feed": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "few": {
+   "use": "small number",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "file": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "filing": {
+   "use": "particle",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "film": {
+   "use": "layer",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "filter": {
+   "use": "filter",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": true
+  },
+  "final": {
+   "use": "last",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "finding": {
+   "use": "result",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fine": {
+   "use": "small",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "finish": {
+   "use": "complete",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "firmly": {
+   "use": "tightly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fit": {
+   "use": "install",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fix": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "flatness": {
+   "use": "flat",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "flatten": {
+   "use": "flat",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "flaw": {
+   "use": "damage",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "flex": {
+   "use": "bend",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "flood": {
+   "use": "use too much",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "fluctuate": {
+   "use": "constant",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "focus": {
+   "use": "focus",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": true
+  },
+  "fold": {
+   "use": "fold",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "following": {
+   "use": "these",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "forbidden": {
+   "use": "do not",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "force": {
+   "use": "push",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "forecast": {
+   "use": "possible",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "foreign": {
+   "use": "unwanted",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "foremost": {
+   "use": "front",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "form": {
+   "use": "shape",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fortify": {
+   "use": "strong",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "foul": {
+   "use": "catch",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fouled": {
+   "use": "dirty",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fragile": {
+   "use": "easily damaged",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "free": {
+   "use": "release",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "free from": {
+   "use": "no",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fresh": {
+   "use": "clean",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fuel": {
+   "use": "refuel",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "fulfill": {
+   "use": "obey",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "function": {
+   "use": "operate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "fundamental": {
+   "use": "important",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "further": {
+   "use": "more",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gain": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gall": {
+   "use": "galling",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "gap": {
+   "use": "clearance",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "garbled": {
+   "use": "clear",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "garner": {
+   "use": "collect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gaseous": {
+   "use": "gas",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gash": {
+   "use": "damaged",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gather": {
+   "use": "collect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gauge": {
+   "use": "measure",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "generally": {
+   "use": "usually",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "generate": {
+   "use": "be",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "generous": {
+   "use": "large",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "generously": {
+   "use": "large",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gentle": {
+   "use": "carefully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gently": {
+   "use": "carefully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "genuine": {
+   "use": "correct",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "get": {
+   "use": "become",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "get away": {
+   "use": "go away",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "get down": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "get into": {
+   "use": "go into",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "get off": {
+   "use": "move off",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "get to": {
+   "use": "be",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gleam": {
+   "use": "shiny",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "glitch": {
+   "use": "error",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gloss": {
+   "use": "shiny",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "glow": {
+   "use": "be",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "glue": {
+   "use": "bond",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gouge": {
+   "use": "gouge",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "govern": {
+   "use": "control",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "grab": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gradient": {
+   "use": "slope",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gradual": {
+   "use": "gradually",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "graph": {
+   "use": "graph",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "grasp": {
+   "use": "hold",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "grave": {
+   "use": "dangerous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "grease": {
+   "use": "lubricate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "great": {
+   "use": "large",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "greatly": {
+   "use": "very much",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "grip": {
+   "use": "hold",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "grow": {
+   "use": "become",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "guard": {
+   "use": "guard",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "guide": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "gush": {
+   "use": "flow",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "halt": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "halve": {
+   "use": "half",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "hamper": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "handle": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "happen": {
+   "use": "occur",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "harden": {
+   "use": "hard",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "harm": {
+   "use": "injury",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "harmful": {
+   "use": "dangerous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "harmonize": {
+   "use": "agree",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "haul": {
+   "use": "tow",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hazard": {
+   "use": "dangerous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hazardous": {
+   "use": "dangerous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hazy": {
+   "use": "haze",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "head": {
+   "use": "point",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "heat": {
+   "use": "heat",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "heighten": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "help": {
+   "use": "aid",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "helpful": {
+   "use": "help",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hesitation": {
+   "use": "smoothly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "highly": {
+   "use": "very",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hinder": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hinge": {
+   "use": "turn",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hitch": {
+   "use": "connect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hoist": {
+   "use": "lift",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hold": {
+   "use": "hold",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hold back": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hold off": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hook": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hook up": {
+   "use": "connect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "house": {
+   "use": "contain",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "however": {
+   "use": "but",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "huge": {
+   "use": "large",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "hum": {
+   "use": "hum",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "hurt": {
+   "use": "injury",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "identical": {
+   "use": "same",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "idle": {
+   "use": "idle",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "ignite": {
+   "use": "ignition",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "immediate": {
+   "use": "immediately",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "immerse": {
+   "use": "soak",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "immobilize": {
+   "use": "lock",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "impact": {
+   "use": "hit",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "impair": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "implement": {
+   "use": "do",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "impossible": {
+   "use": "not possible",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "impregnate": {
+   "use": "soak",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "impression": {
+   "use": "think",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "improper": {
+   "use": "incorrect",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "improperly": {
+   "use": "incorrectly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "improve": {
+   "use": "better",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "impurity": {
+   "use": "unwanted material use a filter to",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "inactive": {
+   "use": "not active",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "inadvertent": {
+   "use": "accidental",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "incline": {
+   "use": "slope",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "including": {
+   "use": "thru",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "incompatible": {
+   "use": "not compatible",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "incomplete": {
+   "use": "not full",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "incorporate": {
+   "use": "include",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "incorporation": {
+   "use": "include",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "increase": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "incur": {
+   "use": "cause",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "independent": {
+   "use": "independently (adv) this unit operates",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "indicate": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "induce": {
+   "use": "cause",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ineffective": {
+   "use": "unserviceable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "inflammable": {
+   "use": "flammable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "inform": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ingest": {
+   "use": "swallow",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ingress": {
+   "use": "go into",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "inhale": {
+   "use": "breathe",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "inhibit": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "initiate": {
+   "use": "start",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "inject": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "injection": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "injure": {
+   "use": "injury",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "inoperative": {
+   "use": "off",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "insert": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "inside": {
+   "use": "inner",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "inspect": {
+   "use": "examine",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "instead": {
+   "use": "alternative",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "instead of": {
+   "use": "alternative",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "insufficient": {
+   "use": "not sufficient",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "insure": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "intact": {
+   "use": "not damaged",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "integral": {
+   "use": "part",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "interconnect": {
+   "use": "connect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "interfere": {
+   "use": "hit",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "interference": {
+   "use": "hit",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "interior": {
+   "use": "internally",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "intermediate": {
+   "use": "middle",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "interrupt": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "intersect": {
+   "use": "intersection",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "investigate": {
+   "use": "investigation",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "inward": {
+   "use": "inner",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "irregularity": {
+   "use": "damage",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "isolation": {
+   "use": "isolate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "jack": {
+   "use": "jack",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "jam": {
+   "use": "freely",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "job": {
+   "use": "work",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "join": {
+   "use": "bond",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "just": {
+   "use": "immediately",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "key": {
+   "use": "refer",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "kind": {
+   "use": "type",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "kink": {
+   "use": "kink",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "knock": {
+   "use": "hit",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "label": {
+   "use": "identify",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "lack": {
+   "use": "not sufficient",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "land": {
+   "use": "landing",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "last": {
+   "use": "continue",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "later": {
+   "use": "subsequent",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "lay": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "lead": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "leak": {
+   "use": "leak",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "least": {
+   "use": "minimum",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "leave": {
+   "use": "keep",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "left-hand": {
+   "use": "left",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "legible": {
+   "use": "read",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "lengthen": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "lethal": {
+   "use": "kill",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "level": {
+   "use": "level",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "liberal": {
+   "use": "large",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "liberally": {
+   "use": "large",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "lie": {
+   "use": "be",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "light": {
+   "use": "come on",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "limitation": {
+   "use": "limit",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "limited": {
+   "use": "small",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "link": {
+   "use": "connect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "list": {
+   "use": "record",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "little": {
+   "use": "small",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "load": {
+   "use": "install",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "locate": {
+   "use": "find",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "log": {
+   "use": "record",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "loop": {
+   "use": "loop",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "lose": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "lost": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "lowermost": {
+   "use": "bottom",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "lukewarm": {
+   "use": "warm",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "main": {
+   "use": "primary",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "maintain": {
+   "use": "keep",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "major": {
+   "use": "primary",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "make certain": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "maladjusted": {
+   "use": "incorrectly",
+   "pos": null,
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "manipulate": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "manufacture": {
+   "use": "make",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "mark": {
+   "use": "identify",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "mask": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "match": {
+   "use": "align",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "mate": {
+   "use": "connect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "matter": {
+   "use": "material",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "may": {
+   "use": "can",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "medium": {
+   "use": "moderate",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "meet": {
+   "use": "engage",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "mention": {
+   "use": "give",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "mesh": {
+   "use": "engage",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "mid": {
+   "use": "middle",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "mild": {
+   "use": "weak",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "minimize": {
+   "use": "minimum",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "minor": {
+   "use": "small",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "misrigged": {
+   "use": "incorrectly",
+   "pos": null,
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "mix": {
+   "use": "mixture",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "modify": {
+   "use": "change",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "moisten": {
+   "use": "moist",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "momentary": {
+   "use": "momentarily",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "motion": {
+   "use": "movement",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "motor": {
+   "use": "dry-motor",
+   "pos": "TV",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "mount": {
+   "use": "install",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "nearly": {
+   "use": "almost",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "need": {
+   "use": "necessary",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "neutralize": {
+   "use": "neutral",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "never": {
+   "use": "do not",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "next": {
+   "use": "then",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "next to": {
+   "use": "adjacent to",
+   "pos": "prep",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "noisy": {
+   "use": "noise",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "nor": {
+   "use": "not",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "normal": {
+   "use": "usual",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "normally": {
+   "use": "usually",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "note": {
+   "use": "record",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "notify": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "now": {
+   "use": "at this time",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "observe": {
+   "use": "monitor",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "obstruct": {
+   "use": "catch",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "obstructed": {
+   "use": "blocked",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "obstruction": {
+   "use": "blockage",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "obtain": {
+   "use": "get",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "often": {
+   "use": "frequently",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "oil": {
+   "use": "lubricate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "oil-free": {
+   "use": "oil",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "old": {
+   "use": "remaining",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "omit": {
+   "use": "do not do",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "once": {
+   "use": "one (tn) time",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "opaque": {
+   "use": "not transparent",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "operable": {
+   "use": "operate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "operational": {
+   "use": "serviceable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "option": {
+   "use": "alternative",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "order": {
+   "use": "sequence",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "orient": {
+   "use": "point",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "origin": {
+   "use": "source",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "original": {
+   "use": "initial",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "originate": {
+   "use": "source",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "outline": {
+   "use": "give",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "outside": {
+   "use": "external",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "outwards": {
+   "use": "out",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "over": {
+   "use": "above",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "overfill": {
+   "use": "too much",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "overfull": {
+   "use": "too full",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "overhaul": {
+   "use": "overhaul",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "overheat": {
+   "use": "too hot",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "overlap": {
+   "use": "overlap",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "overtighten": {
+   "use": "tighten too much",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "pack": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "part": {
+   "use": "disconnect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "partial": {
+   "use": "not fully",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "partially": {
+   "use": "not fully",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "particular": {
+   "use": "only applicable",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "particularly": {
+   "use": "very",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "partly": {
+   "use": "not fully",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "pass": {
+   "use": "go",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "passage": {
+   "use": "flow",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "past": {
+   "use": "around",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "penetrate": {
+   "use": "go through",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "people": {
+   "use": "person",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "per": {
+   "use": "for each",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "perforated": {
+   "use": "hole",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "perform": {
+   "use": "do",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "periodically": {
+   "use": "interval",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "permissible": {
+   "use": "permitted",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "permit": {
+   "use": "let",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "persist": {
+   "use": "continue",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "persistent": {
+   "use": "continuous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "pertinent": {
+   "use": "applicable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "picket": {
+   "use": "moor",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "pierced": {
+   "use": "hole",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "placard": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "place": {
+   "use": "position",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "plot": {
+   "use": "make",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "plug": {
+   "use": "connect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "poor": {
+   "use": "unsatisfactory",
+   "pos": null,
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "pop": {
+   "use": "open",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "port": {
+   "use": "left",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "portion": {
+   "use": "piece",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "position": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "potential": {
+   "use": "possible",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "pour": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "power": {
+   "use": "supply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "precede": {
+   "use": "before",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "precise": {
+   "use": "accurate",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "precisely": {
+   "use": "accurately",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "preferable": {
+   "use": "recommend",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "preferably": {
+   "use": "if it is possible",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "preheat": {
+   "use": "heat",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "preload": {
+   "use": "load",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "premature": {
+   "use": "before",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "prematurely": {
+   "use": "before",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "preparation": {
+   "use": "prepare",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "prescribed": {
+   "use": "specified",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "presence": {
+   "use": "be",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "present": {
+   "use": "be",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "preserve": {
+   "use": "preservation",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "preset": {
+   "use": "set",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "press": {
+   "use": "push",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "preventive": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "primarily": {
+   "use": "primary",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "prime": {
+   "use": "fill",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "principal": {
+   "use": "primary",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "prior to": {
+   "use": "before",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "priority": {
+   "use": "important",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "probability": {
+   "use": "risk",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "probable": {
+   "use": "very possible",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "probe": {
+   "use": "find",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "proceed": {
+   "use": "continue",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "process": {
+   "use": "procedure",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "produce": {
+   "use": "cause",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "profile": {
+   "use": "contour",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "program": {
+   "use": "sequence",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "progress": {
+   "use": "continue",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "progressive": {
+   "use": "gradually",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "prohibit": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "prolonged": {
+   "use": "long",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "prompt": {
+   "use": "immediately",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "propagation": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "proper": {
+   "use": "correct",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "properly": {
+   "use": "correctly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "proportional": {
+   "use": "relation",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "protect": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "provide": {
+   "use": "give",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "proximity": {
+   "use": "near",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "pump": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "puncture": {
+   "use": "hole",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "purge": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "purify": {
+   "use": "clean",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "qualified": {
+   "use": "approved",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "quarterly": {
+   "use": "interval",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "questionable": {
+   "use": "not sure",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "quick": {
+   "use": "quickly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "quit": {
+   "use": "go",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "quote": {
+   "use": "give",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "raise": {
+   "use": "lift",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rapid": {
+   "use": "fast",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rapidly": {
+   "use": "quickly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reach": {
+   "use": "get",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reactivate": {
+   "use": "activate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reading": {
+   "use": "indication",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "readjust": {
+   "use": "adjust",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ready": {
+   "use": "prepare",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "real": {
+   "use": "agree",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rear of": {
+   "use": "aft of",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "rearmost": {
+   "use": "rear",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reason": {
+   "use": "cause",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reassemble": {
+   "use": "assemble",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rebuild": {
+   "use": "assemble",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "recess": {
+   "use": "recess",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "recharge": {
+   "use": "charge",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "recheck": {
+   "use": "measure",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reclaim": {
+   "use": "repair",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "recleat": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reclose": {
+   "use": "close",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "recoil": {
+   "use": "move back",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "recondition": {
+   "use": "repair",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reconstruction": {
+   "use": "repair",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "recover": {
+   "use": "collect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rectify": {
+   "use": "correct",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "recur": {
+   "use": "occur",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reduce": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reference": {
+   "use": "refer",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "referenced": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "refill": {
+   "use": "fill",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "refit": {
+   "use": "install",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reflect": {
+   "use": "reflection",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "register": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "regrease": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "regulate": {
+   "use": "control",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "regulation": {
+   "use": "adjustment",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reinflate": {
+   "use": "inflate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reinstall": {
+   "use": "install",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reinstallation": {
+   "use": "installation",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rejection": {
+   "use": "reject",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "relate": {
+   "use": "related",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "relay": {
+   "use": "send",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "relevant": {
+   "use": "related",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "relieve": {
+   "use": "release",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "remain": {
+   "use": "stay",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "remnant": {
+   "use": "remaining",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "removable": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "render": {
+   "use": "make",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "renew": {
+   "use": "new",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "renovate": {
+   "use": "repair",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "repack": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "repaint": {
+   "use": "paint",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "repairable": {
+   "use": "repair",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "repeat": {
+   "use": "again",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "repeated": {
+   "use": "again and again",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "repeatedly": {
+   "use": "again and again",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "replenish": {
+   "use": "fill",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reposition": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "represent": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "repressurize": {
+   "use": "pressurize",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "request": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "require": {
+   "use": "necessary",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reseal": {
+   "use": "seal",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reset": {
+   "use": "set",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "residual": {
+   "use": "remaining",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "residue": {
+   "use": "remaining",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "respective": {
+   "use": "related",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "respectively": {
+   "use": "related",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "respond": {
+   "use": "result",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rest": {
+   "use": "remaining",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "restart": {
+   "use": "start",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "restore": {
+   "use": "repair",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "restrain": {
+   "use": "hold",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "restrict": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "result": {
+   "use": "cause",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "resume": {
+   "use": "start",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "retain": {
+   "use": "keep",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "retorque": {
+   "use": "torque",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "retouch": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "retractable": {
+   "use": "retract",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "return": {
+   "use": "go",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "reusable": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reuse": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reveal": {
+   "use": "show",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "reverse": {
+   "use": "opposite",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "review": {
+   "use": "inspection",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "rewind": {
+   "use": "wind",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rig": {
+   "use": "adjust",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "right-hand": {
+   "use": "right",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rinse": {
+   "use": "flush",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ripped": {
+   "use": "damaged",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rise": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rope off": {
+   "use": "rope",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "rotary": {
+   "use": "turn",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rotate": {
+   "use": "turn",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rotation": {
+   "use": "turn",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "rotational": {
+   "use": "turn",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "roughen": {
+   "use": "rough",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "roughness": {
+   "use": "rough",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "round": {
+   "use": "circular",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "route": {
+   "use": "routing",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "routine": {
+   "use": "usual",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "run": {
+   "use": "operate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "running": {
+   "use": "flush",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "safety-clip": {
+   "use": "lock",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "safety-wire": {
+   "use": "lock",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "sample": {
+   "use": "sample",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "saturate": {
+   "use": "soak",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "save": {
+   "use": "keep",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "scan": {
+   "use": "examine",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "scored": {
+   "use": "score",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "scrap": {
+   "use": "discard",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "scrape": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "scratched": {
+   "use": "scratch",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "screw": {
+   "use": "turn",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "scrub": {
+   "use": "clean",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "search": {
+   "use": "examine",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "seat": {
+   "use": "install",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "secure": {
+   "use": "tight",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "securely": {
+   "use": "correctly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "security": {
+   "use": "correctly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "seek": {
+   "use": "get",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "seepage": {
+   "use": "leakage",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "seized": {
+   "use": "catch",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "separable": {
+   "use": "disassemble",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "separate": {
+   "use": "isolated",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "separately": {
+   "use": "independently (adv) the system",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "serious": {
+   "use": "important",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "serrated": {
+   "use": "serration",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "service": {
+   "use": "servicing",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "serviceability": {
+   "use": "serviceable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "setting": {
+   "use": "adjustment",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "settle": {
+   "use": "collect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "sever": {
+   "use": "cut",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "several": {
+   "use": "some",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "severe": {
+   "use": "dangerous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "shall": {
+   "use": "must",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "shape": {
+   "use": "shape",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "sharply": {
+   "use": "quickly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "shear": {
+   "use": "break",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "shield": {
+   "use": "prevent",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "shift": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "shorten": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "should": {
+   "use": "must",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "shut down": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "sideways": {
+   "use": "side",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "sight": {
+   "use": "view",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "significant": {
+   "use": "important",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "silence": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "similar": {
+   "use": "equivalent",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "situated": {
+   "use": "install",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "situation": {
+   "use": "condition",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "size": {
+   "use": "dimension",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "skid": {
+   "use": "skid",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "slack": {
+   "use": "tension",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "slacken": {
+   "use": "tension",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "slackness": {
+   "use": "tension",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "slave": {
+   "use": "control",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "slide": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "slight": {
+   "use": "small",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "slightly": {
+   "use": "small",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "slip": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "slow down": {
+   "use": "decrease",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "sluggish": {
+   "use": "slow",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "smear": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "smooth": {
+   "use": "smooth",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "snag": {
+   "use": "catch",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "snap": {
+   "use": "click",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "soapy": {
+   "use": "soap",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "soiled": {
+   "use": "dirty",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "solidify": {
+   "use": "solid",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "solve": {
+   "use": "solution",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "soon": {
+   "use": "time",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "sound": {
+   "use": "operate",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "space": {
+   "use": "distance",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "spacing": {
+   "use": "distance",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "spanwise": {
+   "use": "span",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "sparingly": {
+   "use": "quantity",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "spark": {
+   "use": "spark",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "specific": {
+   "use": "approved",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "specifically": {
+   "use": "specially",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "speck": {
+   "use": "particle",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "speech": {
+   "use": "voice",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "spillage": {
+   "use": "contamination",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "splash": {
+   "use": "get",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "splined": {
+   "use": "spline",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "split": {
+   "use": "damaged",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "spot": {
+   "use": "mark",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "spread": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "spring": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "spurious": {
+   "use": "unwanted",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stability": {
+   "use": "stable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stabilization": {
+   "use": "stable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stabilize": {
+   "use": "stable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stage": {
+   "use": "step",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stained": {
+   "use": "dirty",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stamp": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stand": {
+   "use": "stay",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "starboard": {
+   "use": "right",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "state": {
+   "use": "condition",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "station": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stationary": {
+   "use": "stable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "steadily": {
+   "use": "continuously",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "steady": {
+   "use": "stable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stick": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "sticky": {
+   "use": "tacky",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stiff": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "still": {
+   "use": "stay",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stimulate": {
+   "use": "increase",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stir": {
+   "use": "mix",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "store": {
+   "use": "keep",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "straighten": {
+   "use": "straight",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "strain": {
+   "use": "filter",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "strap": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stress": {
+   "use": "force",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "strictly": {
+   "use": "fully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "strike": {
+   "use": "hit",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "strip": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "striped": {
+   "use": "stripe",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "stroke": {
+   "use": "travel",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "submerge": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "submit": {
+   "use": "send",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "substance": {
+   "use": "material",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "substitute": {
+   "use": "equivalent",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "successful": {
+   "use": "correct",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "suck": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "suitable": {
+   "use": "applicable",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "suitably": {
+   "use": "sufficiently",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "support": {
+   "use": "support",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "surplus": {
+   "use": "unwanted",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "surrounding": {
+   "use": "adjacent",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "survey": {
+   "use": "examine",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "suspect": {
+   "use": "think",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "suspend": {
+   "use": "hang",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "swap": {
+   "use": "interchange",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "sweep": {
+   "use": "scan",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "swing": {
+   "use": "move",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "switch": {
+   "use": "set",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "switch off": {
+   "use": "set",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "switch on": {
+   "use": "set",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "synchronize": {
+   "use": "adjust",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "take": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "take care": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "talk": {
+   "use": "speak",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "tape": {
+   "use": "tape",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "taut": {
+   "use": "tension",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "tear": {
+   "use": "damage",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "technique": {
+   "use": "method",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "tension": {
+   "use": "tension",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "terminate": {
+   "use": "stop",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "test": {
+   "use": "test",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "therefore": {
+   "use": "thus",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "thin": {
+   "use": "liquid",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "thorough": {
+   "use": "full",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "thoroughly": {
+   "use": "fully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "thread": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "threaded": {
+   "use": "thread",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "throughout": {
+   "use": "during",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "tie": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "till": {
+   "use": "until",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "time": {
+   "use": "time",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "tip": {
+   "use": "point",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "top off": {
+   "use": "fill",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "toward": {
+   "use": "to",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "toxic": {
+   "use": "poisonous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "trace": {
+   "use": "sign",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "track": {
+   "use": "monitor",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "trained": {
+   "use": "approved",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "transfer": {
+   "use": "movement",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "transition": {
+   "use": "change",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "transport": {
+   "use": "send",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "trapped": {
+   "use": "caught",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "travel": {
+   "use": "go",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "treat": {
+   "use": "apply",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "trigger": {
+   "use": "cause",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "trim": {
+   "use": "cut",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "trip": {
+   "use": "open",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "troubleshoot": {
+   "use": "troubleshooting",
+   "pos": null,
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "true": {
+   "use": "correct",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "tuck": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "turn off": {
+   "use": "set",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "turn on": {
+   "use": "set",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "turn over": {
+   "use": "turn",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "twice": {
+   "use": "two",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "unable": {
+   "use": "cannot",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unauthorized": {
+   "use": "not approved",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "uncap": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unclip": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "uncoil": {
+   "use": "unwind",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "uncouple": {
+   "use": "disconnect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "uncovered": {
+   "use": "cover",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "undamaged": {
+   "use": "not damaged",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "under": {
+   "use": "below",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "underneath": {
+   "use": "below",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "underside": {
+   "use": "bottom",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "undertake": {
+   "use": "do",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "undo": {
+   "use": "loosen",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "undue": {
+   "use": "unwanted",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "uneven": {
+   "use": "equal",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "uniform": {
+   "use": "constant",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "uniformly": {
+   "use": "equally",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unintentional": {
+   "use": "accidental",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unlatch": {
+   "use": "release",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unload": {
+   "use": "release",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unnecessary": {
+   "use": "not necessary",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "unobstructed": {
+   "use": "clogged",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unpack": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unpainted": {
+   "use": "bare",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unplug": {
+   "use": "disconnect",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unprotected": {
+   "use": "protection",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unreel": {
+   "use": "unwind",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unrestricted": {
+   "use": "free",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unsafe": {
+   "use": "dangerous",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unscrew": {
+   "use": "loosen",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "unstable": {
+   "use": "not stable",
+   "pos": null,
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "unused": {
+   "use": "new",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "up to": {
+   "use": "until",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "upon": {
+   "use": "on",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "upper": {
+   "use": "maximum",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "uppermost": {
+   "use": "up",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "upward": {
+   "use": "up",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "urgently": {
+   "use": "immediately",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "usage": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "use": {
+   "use": "operation",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "utilization": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "utilize": {
+   "use": "use",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "valid": {
+   "use": "correct",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "validity": {
+   "use": "correct",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "variable": {
+   "use": "change",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "various": {
+   "use": "different",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "vary": {
+   "use": "change",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "vent": {
+   "use": "release",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ventilate": {
+   "use": "airflow",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "ventilation": {
+   "use": "airflow",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "verify": {
+   "use": "make sure",
+   "pos": "v",
+   "kind": "rewrite",
+   "domain_exempt": false
+  },
+  "via": {
+   "use": "through",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "vibrate": {
+   "use": "vibration",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "vicinity": {
+   "use": "near",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "view": {
+   "use": "see",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "vigorous": {
+   "use": "force",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "vigorously": {
+   "use": "force",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "visible": {
+   "use": "see",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "vital": {
+   "use": "mandatory",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "warm": {
+   "use": "warm",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "warn": {
+   "use": "tell",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "wash": {
+   "use": "clean",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "watch": {
+   "use": "monitor",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "watertight": {
+   "use": "seal",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "way": {
+   "use": "procedure",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "weakness": {
+   "use": "weak",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "weep": {
+   "use": "leakage",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "well": {
+   "use": "correctly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "whenever": {
+   "use": "when",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "whether": {
+   "use": "if",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "whichever": {
+   "use": "that",
+   "pos": "pron",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "whilst": {
+   "use": "while",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "whoever": {
+   "use": "who",
+   "pos": "pron",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "whole": {
+   "use": "full",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "wholly": {
+   "use": "fully",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "windy": {
+   "use": "wind",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  },
+  "wipe": {
+   "use": "clean",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "wire": {
+   "use": "attach",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "wire-lock": {
+   "use": "lock",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "withdraw": {
+   "use": "remove",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "within": {
+   "use": "in",
+   "pos": "prep",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "withstand": {
+   "use": "resistant",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "work": {
+   "use": "work",
+   "pos": "n",
+   "kind": "swap",
+   "domain_exempt": true
+  },
+  "would": {
+   "use": "can",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "wrap": {
+   "use": "put",
+   "pos": "v",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "wrong": {
+   "use": "incorrect",
+   "pos": "adj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "wrongly": {
+   "use": "incorrectly",
+   "pos": "adv",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "yet": {
+   "use": "but",
+   "pos": "conj",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "yourself": {
+   "use": "you",
+   "pos": "pron",
+   "kind": "swap",
+   "domain_exempt": false
+  },
+  "zero": {
+   "use": "zero",
+   "pos": "TN",
+   "kind": "technical-term",
+   "domain_exempt": false
+  }
+ }
+}

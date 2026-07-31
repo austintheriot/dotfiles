@@ -33,6 +33,18 @@ Does **not** apply to: code, code comments, commit messages, PR-body *git* metad
 5. **Check mechanics:** `--` never `—`; slash-joined alternatives; no manufactured certainty; no headline-and-bold of a simple message.
 6. **For teammate-facing Notability posts**, also apply the posting-disclaimer convention from `~/.claude/CLAUDE.md` (the "Posted by Claude on behalf of @austintheriotgl" line for GitHub, the platform-appropriate handle elsewhere). Voice and disclaimer compose; the disclaimer sits on top.
 
+## Optional second pass: STE clarity filter
+
+When Austin asks for an STE pass, a "clarity filter", or "make sure this can't be misread" on a draft, run the `ste` skill **after** this one, in `voice` mode. This skill owns the result; STE may only subtract ambiguity, never add flatness.
+
+Note the asymmetry: STE is the default register everywhere else, including Austin's chat replies, where banned modals and vague qualifiers *are* enforced. Teammate-facing prose is the single carve-out, and `voice` mode is what implements it.
+
+STE is allowed to: split sentences over 25 words, un-passivize where the agent is hidden, move a trailing condition to the front, collapse rotated synonyms to one term, cap noun stacks at three words, delete marketing words and Claudese tics.
+
+STE is **not** allowed to touch: hedges and confidence-marking, pressure-lowering phrases, `should`/`could`/`may` where they mark real uncertainty, the lead-with-why opening, or fluent verb phrasing (`check`, not `do a check of`).
+
+If a proposed STE change would make the draft read like a manual, skip it. Report which moves were applied and which were skipped. Verify with `python3 ~/.claude/scripts/ste_lint.py DRAFT --mode voice`.
+
 ## The fastest self-check
 
 Before handing back a draft, read it as the recipient and ask:

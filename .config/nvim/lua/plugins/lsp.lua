@@ -95,7 +95,7 @@ return {
 
       require('mason').setup()
       require('mason-tool-installer').setup {
-        ensure_installed = vim.list_extend(vim.tbl_keys(servers), { 'stylua' }),
+        ensure_installed = vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint' }),
       }
       require('mason-lspconfig').setup {
         handlers = {

@@ -86,6 +86,7 @@ return {
         cssls = {},
         cssmodules_ls = {},
         svelte = {},
+        astro = {},
         lua_ls = {
           settings = {
             Lua = { completion = { callSnippet = 'Replace' } },

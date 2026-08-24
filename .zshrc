@@ -1,9 +1,41 @@
+# HISTORY SEARCH REFERENCE #################################################################################
+# Multiple ways to search your terminal history:
+#
+# 1. fzf
+#   Ctrl+R : Search command history (fuzzy search with preview)
+#   Ctrl+T : Search files in current directory and subdirectories
+#   Alt+C : Fuzzy cd into subdirectories
+#   Ctrl+G : Fuzzy-pick a git branch and paste it onto the command line
+#
+# 2. Tmux copy mode - Search scrollback buffer (not just commands)
+#   Ctrl+b [ → Enter copy mode
+#   / → Search forward, ? → Search backward
+#   n → Next match, N → Previous match
+#   q → Exit copy mode
+#
+# 3. history | grep - Search history output with grep
+#   Example: history | grep docker
+#
+# 4. Up/Down arrows - Navigate recent commands sequentially
+#
+############################################################################################################
+
 # Lines configured by zsh-newuser-install
 HISTFILE=~/.histfile
-HISTSIZE=1000
-SAVEHIST=1000
+HISTSIZE=10000      # Number of commands to keep in memory during session
+SAVEHIST=10000      # Number of commands to save to history file
 setopt beep extendedglob nomatch notify
 unsetopt autocd
+
+# History search and sharing options
+setopt HIST_IGNORE_ALL_DUPS  # Don't record duplicate commands in history
+setopt HIST_FIND_NO_DUPS     # Don't show duplicates when searching history
+setopt SHARE_HISTORY         # Share command history between all tmux panes/sessions
+
+# Enables zsh to send the correct word-navigation command for Alt+Left/Right arrow keys
+bindkey '\e[1;3D' backward-word  # Alt+Left
+bindkey '\e[1;3C' forward-word   # Alt+Right
+
 # End of lines configured by zsh-newuser-install
 # The following lines were added by compinstall
 zstyle :compinstall filename '/home/austin/.zshrc'
@@ -17,28 +49,145 @@ export WASMTIME_HOME="$HOME/.wasmtime"
 
 export PATH="$WASMTIME_HOME/bin:$PATH"
 
-# SOURCE BRANCH-SPECIFIC CONFIG ####################################################################
-FILE=.zshrc-linux
-if test -f "$FILE"; then
-   source $FILE
-fi
-FILE=.zshrc-mac
-if test -f "$FILE"; then
-   source $FILE
+# get access to bun binaries
+export PATH="$HOME/.bun/bin:$PATH"
+
+# CONFIG BY ME ##############################################################################################
+# [s]tart - Start or attach to a tmux session
+# Examples:
+#   s              # Start/attach default session named 'zsh'
+#   s myproject    # Start/attach session named 'myproject' with splits
+alias s='source ~/.my-scripts/tmux-start.sh'
+
+# [se]tup - Setup multi-window tmux session for code projects
+# Creates windows for multiple work directories (Notability projects, staging, reviews)
+# Examples:
+#   se             # Create/attach 'code' session with predefined windows
+#   se mywork      # Create/attach 'mywork' session with predefined windows
+alias se='source ~/.my-scripts/tmux-setup.sh'
+
+# [sp]lit - Create tmux pane layouts
+# Examples:
+#   sp terms       # Create vertical terminals (default: 4 panes)
+#   sp |           # Editor on left with terminals on right
+#   sp -           # Main area above with 2 panes below
+#   sp terms 3     # Create 3 vertical terminals
+#   sp - 2 3       # Main above with 2 vertical splits and 3 horizontal splits below
+alias sp='source ~/.my-scripts/tmux-split.sh'
+
+# [c]lose - Close all tmux panes except the current one
+# Example:
+#   c              # Closes all other panes in current session
+alias c='source ~/.my-scripts/tmux-close.sh'
+
+# [r]ename - Rename tmux window names to match the branches
+# that are active in the directory each window is responsible for
+alias re='source .my-scripts/tmux-update-window-names.sh'
+
+# cleans out local yarn dependencies & re-installs
+alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn build"
+
+# GIT ALIASES ###############################################################################################
+# This allows not having to store the actual root .gitconfig in git itself, which quickly becomes problematic
+if ! git config --global --get "alias.co" >/dev/null; then
+    git config --global alias.co checkout
 fi
 
-# CONFIG BY ME #####################################################################################
-alias start='source ~/.my-scripts/tmux-start.sh'
-alias s='start'
-alias split='source ~/.my-scripts/tmux-split.sh'
-alias sp='split' 
-alias nvc='NVIM_APPNAME=nvchad nvim'
+if ! git config --global --get "alias.br" >/dev/null; then
+    git config --global alias.br branch
+fi
 
-# PLUGINS ##########################################################################################
+if ! git config --global --get "alias.cm" >/dev/null; then
+    git config --global alias.cm commit
+fi
+
+if ! git config --global --get "alias.st" >/dev/null; then
+    git config --global alias.st status
+fi
+
+if ! git config --global --get "alias.p" >/dev/null; then
+    git config --global alias.p push
+fi
+
+if ! git config --global --get "alias.pl" >/dev/null; then
+    git config --global alias.pl pull
+fi
+
+if ! git config --global --get "alias.lg" >/dev/null; then
+    git config --global alias.lg 'log --oneline'
+fi
+
+# Rewrite commits with different email
+#
+# Examples:
+# To change the author name:
+# git change-commits GIT_AUTHOR_NAME "old name" "new name"
+#
+# or the email for only the last 10 commits:
+# git change-commits GIT_AUTHOR_EMAIL "old@email.com" "new@email.com" HEAD~10..HEAD
+#
+# See https://stackoverflow.com/questions/2919878/git-rewrite-previous-commit-usernames-and-emails
+if ! git config --global --get "alias.change-commits" >/dev/null; then
+    git config --global alias.change-commits '!'"f() { VAR=\$1; OLD=\$2; NEW=\$3; shift 3; git filter-branch --env-filter \"if [[ \\\"\$\`echo \$VAR\`\\\" = '\$OLD' ]]; then export \$VAR='\$NEW'; fi\" \$@; }; f"
+fi
+
+
+# Search for PRs via CLI
+#
+# From Dan Susman
+if ! git config --global --get "alias.pr" >/dev/null; then
+    git config --global alias.pr "!gh pr ls -L 100 | fzf | sed -E \"s/^([0-9]+).*/\\1/\" | xargs gh pr checkout"
+fi
+
+if ! git config --global --get "core.editor" >/dev/null; then
+    git config --global core.editor nvim
+fi
+
+if ! git config --global --get "core.excludeFile" >/dev/null; then
+    git config --global core.excludeFile ~/.gitignore
+fi
+
+
+# ENVIRONMENT-SPECIFIC CONFIGURATIONS #######################################################################
+# mac
+if [ -f ~/.zshrc-mac ]; then
+    source ~/.zshrc-mac
+fi
+
+# linux
+if [ -f ~/.zshrc-linux ]; then
+    source ~/.zshrc-linux
+fi
+
+# wsl-specific tweaks (clipboard interop, etc.) -- no-op if this file doesn't exist
+if [ -f ~/.zshrc-wsl ]; then
+    source ~/.zshrc-wsl
+fi
+
+# work
+if [ -f ~/.zshrc-work ]; then
+    source ~/.zshrc-work
+fi
+
+# use neovim as the default editor
+export EDITOR=nvim
+export VISUAL=nvim
+export GIT_EDITOR=nvim
+
+# make sure tmux has correct config
+tmux source ~/.config/tmux/tmux.conf
+
+# ZSH PLUGINS ################################################################################################
 # git - comes with zsh
 plugin=(git)
 
-# CUSTOMIZING PROMPT ################################################################################
+# CLAUDE #####################################################################################################
+export PATH="$HOME/.local/bin:$PATH"
+export CLAUDE_CODE_DISABLE_MOUSE=1
+export CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1
+
+# CUSTOMIZING COMMAND LINE PROMPT ############################################################################
+# see https://arjanvandergaag.nl/blog/customize-zsh-prompt-with-vcs-info.html
 # creates color formatting string based on current staged status
 parse_git_dirty() {
   git_status="$(git status 2> /dev/null)"
@@ -47,13 +196,94 @@ parse_git_dirty() {
   [[ "$git_status" =~ "Untracked files:" ]] && echo -n "%F{red}"
 }
 
+# zsh-specific config stuff
+# substite of parameters inside the prompt each time the prompt is drawn.
 setopt prompt_subst
-
 autoload -Uz vcs_info # enable vcs_info
-precmd () { vcs_info } # always load before displaying the prompt
+precmd () {
+    vcs_info # always load before displaying the prompt
+    ~/.my-scripts/tmux-update-window-names.sh 2>/dev/null # update tmux window names
+}
 zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
+PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} ${VI_MODE_COLOR}λ%f '
 
-PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} %F{254}λ%f '
-
-# SETUP ZOXIDE ####################################################################################
+# SETUP ZOXIDE #############################################################################################
 eval "$(zoxide init zsh)"
+
+# SETUP FZF (FUZZY FINDER) #################################################################################
+# Enable fzf key bindings for interactive fuzzy searching
+# Ctrl+R  : Search command history (fuzzy search with preview)
+# Ctrl+T  : Search files in current directory and subdirectories
+# Alt+C   : Fuzzy cd into subdirectories
+#
+# Newer fzf (0.48+) ships `fzf --zsh`; older distro-packaged fzf (e.g. Ubuntu's
+# apt package) doesn't, so fall back to the shell-integration scripts it ships
+# under /usr/share/doc/fzf/examples instead.
+if fzf_zsh_init="$(fzf --zsh 2>/dev/null)" && [ -n "$fzf_zsh_init" ]; then
+  eval "$fzf_zsh_init"
+elif [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
+  source /usr/share/doc/fzf/examples/key-bindings.zsh
+  [ -f /usr/share/doc/fzf/examples/completion.zsh ] && source /usr/share/doc/fzf/examples/completion.zsh
+fi
+unset fzf_zsh_init
+
+# Ctrl+G  : Fuzzy-pick a git branch and paste it onto the command line
+source ~/.my-scripts/zsh-git-widgets.sh
+
+# SETUP PYENV ##############################################################################################
+export PYENV_ROOT="$HOME/.pyenv"
+if command -v pyenv >/dev/null 2>&1; then
+  [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+  eval "$(pyenv init - zsh)"
+fi
+
+# BUN SHELL COMPLETIONS ####################################################################################
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
+
+# VI MODE INDICATOR ########################################################################################
+# zsh picks the vi keymap at startup because EDITOR/VISUAL contain "vi" (nvim).
+# Colors the PS1 lambda per mode: 254 insert, red normal, 208 replace,
+# magenta visual, yellow operator-pending.
+#
+# Insert and append are indistinguishable -- i and a both land in viins with
+# identical ZLE state, so no hook can tell them apart.
+VI_MODE_COLOR='%F{254}'
+
+function vi_mode_update {
+    case $KEYMAP in
+        vicmd) VI_MODE_COLOR='%F{red}' ;;
+        viopp) VI_MODE_COLOR='%F{yellow}' ;;
+        visual) VI_MODE_COLOR='%F{magenta}' ;;
+        *)
+            if [[ $ZLE_STATE == *overwrite* ]]; then
+                VI_MODE_COLOR='%F{208}'
+            else
+                VI_MODE_COLOR='%F{254}'
+            fi
+            ;;
+    esac
+}
+
+function zle-keymap-select {
+    vi_mode_update
+    zle reset-prompt
+}
+zle -N zle-keymap-select
+
+# Catches replace mode, which changes ZLE_STATE without a keymap transition.
+function zle-line-pre-redraw {
+    vi_mode_update
+}
+zle -N zle-line-pre-redraw
+
+function zle-line-init {
+    VI_MODE_COLOR='%F{254}'
+}
+zle -N zle-line-init
+
+# The vi-* delete widgets refuse to delete past the point where insert mode was
+# last entered. The plain widgets have no such barrier. vicmd is left alone.
+bindkey -M viins '^?' backward-delete-char
+bindkey -M viins '^H' backward-delete-char
+bindkey -M viins '^W' backward-kill-word
+bindkey -M viins '^U' backward-kill-line

@@ -222,8 +222,10 @@ eval "$(zoxide init zsh)"
 if fzf_zsh_init="$(fzf --zsh 2>/dev/null)" && [ -n "$fzf_zsh_init" ]; then
   eval "$fzf_zsh_init"
 elif [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
-  source /usr/share/doc/fzf/examples/key-bindings.zsh
-  [ -f /usr/share/doc/fzf/examples/completion.zsh ] && source /usr/share/doc/fzf/examples/completion.zsh
+  # 2>/dev/null: this old script's `options=(...)` save/restore trick trips
+  # "can't change option: zle" on this zsh version -- harmless, just noisy.
+  source /usr/share/doc/fzf/examples/key-bindings.zsh 2>/dev/null
+  [ -f /usr/share/doc/fzf/examples/completion.zsh ] && source /usr/share/doc/fzf/examples/completion.zsh 2>/dev/null
 fi
 unset fzf_zsh_init
 

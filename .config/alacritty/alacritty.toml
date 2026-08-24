@@ -1,0 +1,26 @@
+[font]
+size = 14.0
+
+[font.bold]
+family = "Hack Nerd Font Mono"
+style = "Bold"
+
+[font.bold_italic]
+family = "Hack Nerd Font Mono"
+style = "Bold Italic"
+
+[font.italic]
+family = "Hack Nerd Font Mono"
+style = "Italic"
+
+[font.normal]
+family = "Hack Nerd Font Mono"
+style = "Regular"
+
+[window]
+startup_mode = "Maximized"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Shift"
+chars = "\u001B\r"

@@ -61,6 +61,7 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`audio-programming`** -- real-time audio thread discipline, DSP fundamentals, JUCE / Web Audio / mobile audio, plugin formats, MIDI.
 - **`webassembly`** -- WASM spec / proposals, runtimes, JS↔WASM boundary, Component Model + WIT, WASI capability model, toolchain.
 - **`mobile-native`** -- iOS (Swift / SwiftUI / UIKit / Swift Concurrency / SwiftData), Android (Kotlin / Compose / Coroutines / Room), platform lifecycle, store policy.
+- **`sync-and-offline`** -- local-first / offline-first architecture, CRDTs vs operational transformation vs server-authoritative rebase, conflict resolution, tombstones, partial replication, schema migration across un-upgradeable clients, local storage substrate, sync observability.
 - **`llm-app`** -- prompt engineering, tool use, RAG, evals, context management (caching / compaction), prompt-injection defense, agentic patterns.
 - **`browser-spec`** -- WhatWG specs, DOM event model, modern platform primitives (`<dialog>`, Popover, AbortController, `Intl.*`), Web Components.
 - **`web-analytics`** -- Mixpanel / Amplitude / Segment / PostHog; event taxonomy, identity correctness, funnels / retention, A/B test instrumentation, privacy.
@@ -135,6 +136,7 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "How do I structure my AudioWorklet / DSP code / plugin" | `audio-programming` |
 | "Should I use Component Model / WASI Preview 2 / wasm-bindgen" | `webassembly` |
 | "How should I structure this SwiftUI / Compose / lifecycle" | `mobile-native` |
+| "How do I sync offline edits / resolve conflicts / pick a CRDT vs a sync engine" | `sync-and-offline` |
 | "How should I prompt Claude / structure tool use / design my RAG" | `llm-app` |
 | "Is there a platform API for this / should I use `<dialog>` / `Intl.*`" | `browser-spec` |
 | "How should I name this event / structure my funnel / track this A/B test" | `web-analytics` |

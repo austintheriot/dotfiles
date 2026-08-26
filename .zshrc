@@ -68,7 +68,7 @@ alias se='source ~/.my-scripts/tmux-setup.sh'
 
 # [sp]lit - Create tmux pane layouts
 # Examples:
-#   sp terms       # Create vertical terminals (default: 4 panes)
+#   sp terms       # Create vertical terminals (default: 2 panes)
 #   sp |           # Editor on left with terminals on right
 #   sp -           # Main area above with 2 panes below
 #   sp terms 3     # Create 3 vertical terminals
@@ -77,13 +77,13 @@ alias sp='source ~/.my-scripts/tmux-split.sh'
 
 # [c]lose - Close all tmux panes except the current one
 # Example:
-#   c              # Closes all other panes in current session
+#   c              # Closes all other panes in current window
 alias c='source ~/.my-scripts/tmux-close.sh'
 
 
 # [r]ename - Rename tmux window names to match the branches
 # that are active in the directory each window is responsible for
-alias re='source .my-scripts/tmux-update-window-names.sh'
+alias re='source ~/.my-scripts/tmux-update-window-names.sh'
 
 # cleans out local yarn dependencies & re-installs
 alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn build"

@@ -2,14 +2,12 @@
 #
 # Integration tests for .my-scripts/tmux-close.sh
 #
-# The script is zsh-only despite its /bin/sh shebang: it uses ${(f)...} to split
-# on newlines and [[ ]] for comparison. It is sourced from zsh in real use, so
-# it is sourced from zsh here.
+# The script is sourced from zsh in real use (`alias c`), so it is sourced from
+# zsh here rather than executed.
 #
-# Note what the assertions record: the script's comment says it closes every
-# other pane "in the current session", but `tmux list-panes` with no arguments
-# lists only the current window, so it closes the current window's other panes
-# and leaves other windows untouched.
+# Its scope is the current window, not the current session: `kill-pane -a` kills
+# every pane in the target's window and leaves other windows and other sessions
+# alone. The bystander assertions below pin that down.
 #
 # Usage: ~/tests/tmux-close.test.sh
 

@@ -1,6 +1,9 @@
-#!/bin/sh
+#!/bin/zsh
 
 # Setup tmux session for code projects with multiple windows
+#
+# Sourced from .zshrc (`alias se`), never executed: the early `return`
+# statements below need a calling shell to return to.
 
 # Return early if already inside a tmux session
 if [ -n "$TMUX" ]; then

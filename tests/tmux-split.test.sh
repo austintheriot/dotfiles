@@ -6,10 +6,9 @@
 # points at. Each case sources it against a fresh single-pane window and counts
 # the panes that result.
 #
-# These assertions record what the script actually does. Two of them disagree
-# with its own usage text, which advertises a default of 4 for the terminal
-# layouts; the code defaults those to DEFAULT_VERTICAL_SPLITS (2) instead,
-# because VERTICAL_SPLITS is resolved before the layout is known.
+# Every layout defaults to DEFAULT_VERTICAL_SPLITS (2). An unknown layout must
+# leave the sourcing shell alive, which is why show_usage returns rather than
+# exits.
 #
 # Usage: ~/tests/tmux-split.test.sh
 
@@ -48,8 +47,7 @@ split_in_new_window() {
 
 # --- layouts -----------------------------------------------------------
 
-assert_equals 'terms with no count gives 2 panes, not the 4 in the usage text' \
-    '2' "$(split_in_new_window terms)"
+assert_equals 'terms with no count gives 2 panes' '2' "$(split_in_new_window terms)"
 assert_equals 'terms honours an explicit count' '3' "$(split_in_new_window terms 3)"
 assert_equals 'terms with a count of 1 does not split' '1' "$(split_in_new_window terms 1)"
 
@@ -91,6 +89,24 @@ target_window "$window"
 pane=$(first_pane "$window")
 in_pane "$pane" zsh -c 'source "$1"' zsh "$SCRIPT" >/dev/null 2>&1
 assert_equals 'no layout argument splits nothing' '1' "$(pane_count "$window")"
+tmux kill-window -t "$window" 2>/dev/null
+
+# --- usage must not take the sourcing shell down with it ---------------
+#
+# The script is sourced into an interactive shell, so `exit` in show_usage
+# would close the user's terminal on a typo'd layout name. These two check that
+# the shell reaches the statement after the `source`.
+
+window=$(fresh_window)
+target_window "$window"
+pane=$(first_pane "$window")
+survived=$(in_pane "$pane" zsh -c \
+    'source "$1" "$2" >/dev/null 2>&1; print -r -- SURVIVED' zsh "$SCRIPT" bogus-layout)
+assert_equals 'an unknown layout leaves the sourcing shell alive' 'SURVIVED' "$survived"
+
+survived=$(in_pane "$pane" zsh -c \
+    'source "$1" >/dev/null 2>&1; print -r -- SURVIVED' zsh "$SCRIPT")
+assert_equals 'no layout argument leaves the sourcing shell alive' 'SURVIVED' "$survived"
 tmux kill-window -t "$window" 2>/dev/null
 
 finish

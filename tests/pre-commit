@@ -11,6 +11,19 @@
 
 set -u
 
+# Leak guard first: it is fast, and this repo is public, so internal content
+# should fail before the slower suite runs. See tests/leak-check.sh.
+if [ ! -x "$HOME/tests/leak-check.sh" ]; then
+    printf 'pre-commit: ~/tests/leak-check.sh is missing or not executable\n' >&2
+    exit 1
+fi
+
+if ! "$HOME/tests/leak-check.sh"; then
+    exit 1
+fi
+
+printf 'pre-commit: leak check passed\n'
+
 TRIGGER_PATHS='^\.my-scripts/.*\.sh$|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/'
 
 staged=$(git diff --cached --name-only --diff-filter=ACMR)

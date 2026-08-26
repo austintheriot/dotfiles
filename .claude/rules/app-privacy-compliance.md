@@ -34,7 +34,34 @@ The compliance question is not whether a banner exists. It is **what executed be
 
 ### Storage and access on a device is a separate obligation
 
-The ePrivacy rule on storing or accessing information on a device is **independent of** the personal-data question, and applies to more than cookies: local storage, IndexedDB, device identifiers, and SDK fingerprinting all count. This is widely misunderstood, and "no cookies, so no banner" is not a defense.
+**This is the highest-yield misunderstanding in the domain, and it is settled rather than arguable.** Source: EDPB Guidelines 2/2023, final v2.0, 2024-10-16 [V].
+
+The rule turns on four cumulative criteria, and the guidelines stress that the term used is **"information", not "personal data"**. Consequences, quoting the source:
+
+- **Not limited to personal data.** Citing CJEU *Planet49*: protection *"applies to any information stored in such terminal equipment, regardless of whether or not it is personal data."* **"We only store a random ID, not personal information" is not a defense.**
+- **Not limited to cookies.** The guidelines name *"cookies, local storage, WebSQL"* and system APIs.
+- **Read-only access counts**: *"The consent requirement also applies when a read-only value is accessed."* **Fingerprinting is explicitly in technical scope.**
+- **Storage and access are independent** and need not involve the same party.
+- **Any medium, any duration** -- RAM and CPU cache are explicitly not excluded; there is no minimum persistence or size.
+- **Local processing does not save you**: if locally computed information is later transmitted, that is gaining access to information already stored.
+- **Tracking pixels, tracked URLs, IP-only tracking, and hashed emails computed on device are all in scope.**
+
+**The only genuine carve-out** is information used strictly on-device that never leaves.
+
+**Two obligations stack.** GDPR lawful-basis reasoning does not substitute, and **legitimate interest is unavailable here** -- the rule admits only consent or strict necessity.
+
+### The GDPR articles a reviewer can actually check
+
+Beyond the principles, four articles produce mechanically checkable artifacts [V]:
+
+- **Art. 25(2)** by default: only necessary data per purpose, applying to *"the amount collected, processing extent, storage duration, and accessibility"*, and by default personal data must **not be accessible without the individual's intervention to an indefinite number of natural persons.** That is a statement about default sharing settings, world-readable storage, and public-by-default profiles -- directly checkable in code.
+- **Art. 30(1)** requires recording **envisaged erasure timelines**, so the retention period is supposed to already be written down. The sub-250-employee exemption is nearly useless: it evaporates if processing is risky, involves special categories, **or is "not occasional"** -- and ordinary product processing is occasional for nobody.
+- **Art. 28** requires eight specific processor terms, and **28(4) keeps the initial processor fully liable for its sub-processors.** Under general sub-processor authorisation, the vendor must **inform you of intended additions** so you can object -- meaning someone must actually watch that list.
+- **Art. 20 portability applies only to consent- or contract-based automated processing.** Legitimate-interest processing is out of scope, which surprises people.
+
+**Art. 7(3) is the one to quote on consent design**: *"It shall be as easy to withdraw as to give consent."* A one-click Accept All paired with a settings-panel-only withdrawal fails on the face of the statute. Recital 32 supplies the rest: *"Silence, pre-ticked boxes or inactivity should not therefore constitute consent"*, and separate consent is required per purpose.
+
+**Fines are two-tier** [V]: **€10M or 2%** for by-design, records, security, breach, and DPIA failures; **€20M or 4%** for principles, consent, rights, and transfers. Enforcement to date totals roughly **€6.3 billion across 3,206 actions**, with Meta at €1.2B the largest.
 
 ### Data minimization is a property of code
 
@@ -146,6 +173,16 @@ The Healthline action is the most instructive for engineers: failure to honor op
 
 **APRA died** at the end of the 118th Congress in January 2025 without a floor vote, and no successor comprehensive bill was confirmed in the 119th -- **though that negative rests on thin sourcing** [U]. KOSA was reintroduced as S. 1748. Treat any claim of a federal comprehensive law as requiring verification.
 
+### International transfers: the live crisis
+
+**The EU-US Data Privacy Framework adequacy decision remains formally in force** [V], but its foundation has been substantially undermined **[EXPIRES -- actively contested]**.
+
+The Privacy and Civil Liberties Oversight Board was paralysed in January 2025. Then in **June 2026, *Trump v. Slaughter*** held that the Federal Trade Commission cannot maintain independence -- and **the Commission's adequacy decision referenced FTC independence 259 times** [V]. The Data Protection Review Court sits inside the Department of Justice under a revocable executive order. An annulment action was announced.
+
+**The engineering posture that follows**: self-certification is currently valid but is the **least durable transfer mechanism available**. Anything architected so that only this framework makes it lawful is one Commission decision or one court ruling away from illegality. Standard contractual clauses plus a transfer impact assessment, or EU regional processing, are the defensible positions.
+
+**A reviewer seeing a new US sub-processor added with the framework as its sole basis should flag concentration risk, not a violation.**
+
 ---
 
 ## Beyond the US and EU
@@ -192,7 +229,15 @@ Enforcement: GoodRx $1.5M (2023, first ever, with a permanent ban on sharing hea
 
 ### Apple
 
-**Privacy Manifests** (`PrivacyInfo.xcprivacy`) declare collected data types, tracking domains, and **required-reason API usage** across the file-timestamp, system-boot-time, disk-space, active-keyboard, and user-defaults categories. Third-party SDKs must ship their own; **they cannot rely on the application's manifest** [V]. Enforcement has been hard since 2024-05-01.
+**Privacy Manifests** (`PrivacyInfo.xcprivacy`) carry four keys: `NSPrivacyTracking`, `NSPrivacyTrackingDomains`, `NSPrivacyCollectedDataTypes`, and `NSPrivacyAccessedAPITypes` [V]. Enforcement is verbatim: *"Starting May 1, 2024, apps that don't describe their use of required reason API in their privacy manifest file are not accepted by App Store Connect"* -- an automated rejection, not a judgment call.
+
+The five required-reason categories cover file timestamps, system boot time, disk space, active keyboards, and **`NSUserDefaults`** -- the last being the one ordinary code hits without realizing. **Third-party SDKs cannot rely on the app's manifest**: *"Each executable or dynamic library using required reason APIs must include a privacy manifest file."* Apple publishes a list of roughly 90 SDKs requiring both a manifest and a signature, including Firebase, Flutter and its plugins, Capacitor, and Cordova -- applying to **any version, including repackaged copies**.
+
+Note the transitive trap: cross-platform runtimes touch these APIs themselves, so an app whose own code never calls them may still need the declarations.
+
+**Fingerprinting is prohibited outright**, verbatim: *"Fingerprinting is not allowed regardless of user tracking permission"* [V]. Consent does not unlock it, and apps merely **referencing an SDK that does it may be rejected**.
+
+**Account deletion has been required since 2022-06-30**, must be **initiated in-app**, and must remove the entire account record plus user-generated content. Deactivation does not qualify, and requiring a phone call or website visit to *initiate* is insufficient.
 
 **App Privacy labels** require accurate data-type disclosure with linked-versus-not-linked and tracking distinctions. **App Tracking Transparency** governs cross-app identifiers, and **fingerprinting remains banned regardless of ATT status** -- a point teams routinely miss when replacing the advertising identifier with a device signature.
 
@@ -212,7 +257,8 @@ The **Data Safety** form is the declaration surface, with the same accuracy expo
 
 - **Retention**: automated deletion, time-to-live on records, **log retention (logs are personal data)**, backup retention against erasure requests.
 - **Data-subject access**: can you enumerate all of a person's data across primary storage, caches, warehouse, logs, crash reports, support tooling, and sub-processors? Export format and identity verification, on a 30-day clock.
-- **Deletion propagation**: to sub-processors and downstream systems. **Pseudonymized data is still personal data**; true anonymization requires that re-identification be infeasible, which most "we hashed the ID" schemes do not achieve.
+- **Deletion propagation**: to sub-processors and downstream systems, with an actual fan-out step per vendor and acknowledgement -- not a hope that the vendor's retention policy eventually catches up.
+- **Pseudonymized data is still personal data.** EDPB Guidelines 01/2025, verbatim [V]: pseudonymised data *"is to be considered information on an identifiable natural person, and is therefore personal. **This statement also holds true if pseudonymised data and additional information are not in the hands of the same person.**"* So "we send the vendor only a hashed ID and they lack the mapping" **does not make the data non-personal**. Anonymization's test is all means *"reasonably likely to be used, such as singling out"* -- and most product analytics retains a stable identifier, therefore permits singling out, therefore is pseudonymous. It needs a lawful basis, is in scope for access requests, and must be declared. **Apple's "not linked to the user" bar is essentially the same test.**
 - **Personal data in the wrong places**: logs, analytics event properties, crash reports (stack frames, breadcrumbs, request bodies), URLs and query strings, third-party SDK payloads, **prompts sent to a model vendor**, and support tooling.
 - **Data residency** and sub-processor change notification.
 - **Consent records**: what was consented to, when, under which policy version, and that **withdrawal is as easy as granting**.

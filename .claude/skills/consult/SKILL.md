@@ -67,6 +67,7 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`desktop-native`** -- Windows / macOS / Linux desktop runtime: windowing and DPI, lifecycle and single-instance, OS integration, sandbox and filesystem, the Wayland transition, desktop UX conventions.
 - **`app-privacy-compliance`** -- GDPR / US state patchwork / COPPA, consent ordering, data minimization, deletion propagation, privacy manifests and store declarations. Engineering guidance, not legal advice.
 - **`native-bridge`** -- Electron / Tauri / React Native / Flutter / KMP / Capacitor bridges, IPC contract design, the renderer trust boundary, WebView-in-native, serialization and version skew.
+- **`input-and-peripherals`** -- pointer / stylus / touch / keyboard / gamepad input fidelity, and camera / mic / Bluetooth / location / file / USB access with their permission models.
 - **`llm-app`** -- prompt engineering, tool use, RAG, evals, context management (caching / compaction), prompt-injection defense, agentic patterns.
 - **`browser-spec`** -- WhatWG specs, DOM event model, modern platform primitives (`<dialog>`, Popover, AbortController, `Intl.*`), Web Components.
 - **`web-analytics`** -- Mixpanel / Amplitude / Segment / PostHog; event taxonomy, identity correctness, funnels / retention, A/B test instrumentation, privacy.
@@ -147,6 +148,7 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "How should this behave on the desktop / handle windows / DPI / tray / Wayland" | `desktop-native` |
 | "Do we need consent for this / how do I handle deletion requests / what goes in the privacy label" | `app-privacy-compliance` |
 | "How should I design this IPC / expose native code to JS / secure my Electron or Tauri app" | `native-bridge` |
+| "How do I handle stylus input / request this permission / access this device" | `input-and-peripherals` |
 | "How should I prompt Claude / structure tool use / design my RAG" | `llm-app` |
 | "Is there a platform API for this / should I use `<dialog>` / `Intl.*`" | `browser-spec` |
 | "How should I name this event / structure my funnel / track this A/B test" | `web-analytics` |

@@ -19,15 +19,32 @@ get_branch() {
     git -C "$dir" branch --show-current 2>/dev/null || echo "Free"
 }
 
+# Rename a window only when its panes actually sit in the expected directory.
+# Renaming by index alone clobbers a session whose layout predates a change to
+# WORKTREE_COUNT: the named windows (Reviews, Staging, Config, ...) shift index
+# and would otherwise be overwritten with worktree names.
 update_window_if_exists() {
     local window_num=$1
     local window_name=$2
     local dir=$3
 
-    if tmux list-windows -t $SESSION_NAME -F '#I' | grep -q "^${window_num}$"; then
-        local branch=$(get_branch "$dir")
-        tmux rename-window -t $SESSION_NAME:$window_num "$window_name - $branch"
+    if ! tmux list-windows -t $SESSION_NAME -F '#I' | grep -q "^${window_num}$"; then
+        return
     fi
+
+    local expected=$(cd "$dir" 2>/dev/null && pwd -P)
+    if [ -z "$expected" ]; then
+        return
+    fi
+
+    local actual=$(tmux display-message -p -t $SESSION_NAME:$window_num.1 '#{pane_current_path}' 2>/dev/null)
+    actual=$(cd "$actual" 2>/dev/null && pwd -P)
+    if [ "$expected" != "$actual" ]; then
+        return
+    fi
+
+    local branch=$(get_branch "$dir")
+    tmux rename-window -t $SESSION_NAME:$window_num "$window_name - $branch"
 }
 
 worktree=1

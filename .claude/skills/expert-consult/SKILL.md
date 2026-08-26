@@ -55,7 +55,7 @@ Eligible agents are the 35 consult-capable ones from `/consult`. Run `ls ~/.clau
 
 ### Multi-mode (preload `agent-modes`)
 
-- **`security`**, **`performance`**, **`accessibility`**, **`api-design`**, **`concurrency`**, **`i18n`**, **`ci-pipeline`**, **`devops-infrastructure`**, **`graphics-programming`**, **`audio-programming`**, **`pdf`**, **`webassembly`**, **`mobile-native`**, **`sync-and-offline`**, **`platform-payments`**, **`platform-release`**, **`desktop-native`**, **`app-privacy-compliance`**, **`native-bridge`**, **`input-and-peripherals`**, **`licensing-and-oss`**, **`llm-app`**, **`browser-spec`**, **`web-analytics`**, **`data-flow`**.
+- **`security`**, **`performance`**, **`accessibility`**, **`api-design`**, **`concurrency`**, **`i18n`**, **`ci-pipeline`**, **`devops-infrastructure`**, **`graphics-programming`**, **`audio-programming`**, **`pdf`**, **`webassembly`**, **`mobile-native`**, **`sync-and-offline`**, **`platform-payments`**, **`platform-release`**, **`desktop-native`**, **`app-privacy-compliance`**, **`native-bridge`**, **`input-and-peripherals`**, **`licensing-and-oss`**, **`build-systems`**, **`llm-app`**, **`browser-spec`**, **`web-analytics`**, **`data-flow`**.
 
 See their frontmatter `description` fields for the exact lens of each.
 

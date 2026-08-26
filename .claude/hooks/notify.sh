@@ -11,6 +11,11 @@ set -u
 
 kind="${1:-stop}"
 
+# Overridable so the tests can point these at stubs. The defaults are the real
+# absolute paths, which is what a hook running outside a login shell needs.
+AEROSPACE_BIN=${AEROSPACE_BIN:-/opt/homebrew/bin/aerospace}
+OSASCRIPT_BIN=${OSASCRIPT_BIN:-/usr/bin/osascript}
+
 # Drain stdin so the hook returns quickly even though we don't parse it.
 payload="$(cat || true)"
 
@@ -22,7 +27,7 @@ payload="$(cat || true)"
 is_focused() {
   # 1. Frontmost app must be Alacritty.
   local front
-  front="$(/opt/homebrew/bin/aerospace list-windows --focused --format '%{app-name}' 2>/dev/null | head -n1)"
+  front="$("$AEROSPACE_BIN" list-windows --focused --format '%{app-name}' 2>/dev/null | head -n1)"
   [[ "$front" == "Alacritty" ]] || return 1
 
   # 2. If we're inside tmux, this pane must be the active one in the
@@ -63,7 +68,7 @@ esac
 # Escape double quotes for AppleScript string literals.
 esc() { printf '%s' "$1" | sed 's/"/\\"/g'; }
 
-/usr/bin/osascript \
+"$OSASCRIPT_BIN" \
   -e "display notification \"$(esc "$message")\" with title \"$(esc "$title")\"" \
   >/dev/null 2>&1 || true
 

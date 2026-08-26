@@ -1,44 +1,12 @@
 #!/bin/bash
 #
-# Tests for tmux-update-window-names.sh
+# Integration tests for .my-scripts/tmux-update-window-names.sh
 #
-# Runs against a throwaway tmux session and throwaway git repos under a
-# temp dir. Never touches live sessions.
-#
-# Usage: ./tests/tmux-update-window-names.test.sh
+# Usage: ~/tests/tmux-update-window-names.test.sh
 
-set -u
+. "$(dirname "$0")/lib.sh"
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/tmux-update-window-names.sh"
-SESSION="wname-test-$$"
-FIXTURES="$(mktemp -d "${TMPDIR:-/tmp}/wname-test-XXXXXX")"
-
-passed=0
-failed=0
-
-cleanup() {
-    tmux kill-session -t "$SESSION" 2>/dev/null
-    tmux kill-session -t "${SESSION}-b" 2>/dev/null
-    rm -rf "$FIXTURES"
-}
-trap cleanup EXIT
-
-fail() {
-    failed=$((failed + 1))
-    printf 'FAIL: %s\n' "$1"
-    printf '      expected: [%s]\n' "$2"
-    printf '      actual:   [%s]\n' "$3"
-}
-
-assert_equals() {
-    local description=$1 expected=$2 actual=$3
-    if [ "$expected" = "$actual" ]; then
-        passed=$((passed + 1))
-        printf 'ok: %s\n' "$description"
-    else
-        fail "$description" "$expected" "$actual"
-    fi
-}
+SCRIPT="$DOTFILES_ROOT/.my-scripts/tmux-update-window-names.sh"
 
 window_name() {
     tmux display-message -p -t "$1" '#{window_name}'
@@ -48,31 +16,6 @@ window_name() {
 # is not valid pane-target syntax.
 pane_id() {
     tmux list-panes -t "$1" -F '#{pane_id}' | sed -n "$2p"
-}
-
-# The real config installs these hooks globally. A test session inherits them
-# and would race the assertions, so each test session overrides them with a
-# no-op and drives the script explicitly instead.
-isolate_hooks() {
-    local session=$1 hook
-    for hook in after-new-window after-split-window after-select-window \
-                after-select-pane after-kill-pane client-session-changed; do
-        tmux set-hook -t "$session" "$hook" '' 2>/dev/null
-    done
-}
-
-make_repo() {
-    local path="$FIXTURES/$1" branch=$2
-    mkdir -p "$path"
-    git -C "$path" init -q -b "$branch"
-    git -C "$path" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
-    printf '%s' "$path"
-}
-
-make_worktree() {
-    local repo=$1 branch=$2 path="$FIXTURES/$3"
-    git -C "$repo" worktree add -q -b "$branch" "$path"
-    printf '%s' "$path"
 }
 
 # Windows created without -n keep tmux's automatic-rename flag on, which is
@@ -89,8 +32,7 @@ repo_feature=$(make_repo repo-feature feature/login)
 plain_dir="$FIXTURES/not-a-repo"
 mkdir -p "$plain_dir"
 
-tmux new-session -d -s "$SESSION" -n placeholder -c "$FIXTURES"
-isolate_hooks "$SESSION"
+SESSION=$(new_test_session main "$FIXTURES")
 
 # --- tier 1: cwd basename ----------------------------------------------
 
@@ -231,9 +173,8 @@ assert_equals 'switching active pane updates the name' 'repo-main/another' "$(wi
 
 # --- target selection --------------------------------------------------
 
-tmux new-session -d -s "${SESSION}-b" -n placeholder -c "$plain_dir"
-isolate_hooks "${SESSION}-b"
-other=$(tmux new-window -d -t "${SESSION}-b" -c "$repo_feature" -P -F '#{window_id}')
+SESSION_B=$(new_test_session other "$plain_dir")
+other=$(tmux new-window -d -t "$SESSION_B" -c "$repo_feature" -P -F '#{window_id}')
 
 tmux rename-window -t "$win" 'stale'
 tmux set -w -t "$win" @wname_auto 'stale'
@@ -265,7 +206,4 @@ before=$(window_name "$win_repo")
 "$SCRIPT" -w "$win_repo"
 assert_equals 'repeated runs are stable' "$before" "$(window_name "$win_repo")"
 
-# --- summary -----------------------------------------------------------
-
-printf '\n%d passed, %d failed\n' "$passed" "$failed"
-[ "$failed" -eq 0 ]
+finish

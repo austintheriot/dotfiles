@@ -171,7 +171,7 @@ export VISUAL=nvim
 export GIT_EDITOR=nvim
 
 # make sure tmux has correct config
-tmux source ~/.config/tmux/tmux.conf
+[[ -n "$TMUX" ]] && tmux source ~/.config/tmux/tmux.conf
 
 # ZSH PLUGINS ################################################################################################
 # git - comes with zsh

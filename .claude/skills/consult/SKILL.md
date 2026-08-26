@@ -70,6 +70,7 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`input-and-peripherals`** -- pointer / stylus / touch / keyboard / gamepad input fidelity, and camera / mic / Bluetooth / location / file / USB access with their permission models.
 - **`licensing-and-oss`** -- license compatibility, copyleft scope, attribution and NOTICE obligations, source-available licenses, SBOM and scanning, policy-as-code. Engineering guidance, not legal advice.
 - **`build-systems`** -- the build graph: incrementality and correctness, hermeticity, reproducibility, cache keys and poisoning, per-toolchain mechanics, monorepo build shape.
+- **`crash-and-release-health`** -- crash capture and symbolication, crash-free metrics and their vendor incomparability, staged-rollout gating, and the client telemetry problems servers do not have.
 - **`llm-app`** -- prompt engineering, tool use, RAG, evals, context management (caching / compaction), prompt-injection defense, agentic patterns.
 - **`browser-spec`** -- WhatWG specs, DOM event model, modern platform primitives (`<dialog>`, Popover, AbortController, `Intl.*`), Web Components.
 - **`web-analytics`** -- Mixpanel / Amplitude / Segment / PostHog; event taxonomy, identity correctness, funnels / retention, A/B test instrumentation, privacy.
@@ -153,6 +154,7 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "How do I handle stylus input / request this permission / access this device" | `input-and-peripherals` |
 | "Can I use this dependency / what does this license require / is this compatible" | `licensing-and-oss` |
 | "Why does this rebuild / how do I make the build cacheable / is this build hermetic" | `build-systems` |
+| "How do I set up crash reporting / symbolicate this / decide whether to halt a rollout" | `crash-and-release-health` |
 | "How should I prompt Claude / structure tool use / design my RAG" | `llm-app` |
 | "Is there a platform API for this / should I use `<dialog>` / `Intl.*`" | `browser-spec` |
 | "How should I name this event / structure my funnel / track this A/B test" | `web-analytics` |

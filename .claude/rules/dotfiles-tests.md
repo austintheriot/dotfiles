@@ -15,7 +15,8 @@ tests themselves.
 ## Run the suite before you commit
 
 Run `~/tests/run-all.sh` and confirm it passes before committing a change to any
-of the paths above. It takes about 22 seconds.
+of the paths above. It takes about 25 seconds, and announces each suite as
+`[n/total]` while it runs.
 
 A pre-commit hook at `~/tests/pre-commit` (symlinked from `~/.cfg/hooks/pre-commit`)
 runs the same suite and blocks the commit on failure. Run the suite yourself

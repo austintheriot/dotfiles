@@ -37,7 +37,7 @@ The high-yield findings in review mode:
 - Wrong dependency direction (domain importing from infrastructure).
 - Implicit ordering / temporal coupling encoded nowhere.
 
-For each finding, **propose the fix as a reassignment or a diagram**, not as a principle. Example -- bad: "Renderer has too many responsibilities." Good: "Renderer owns rendering AND priority decisions. Split: priority decisions to PageTaskManager at the InstanceManager (singleton) or Session (per-note) altitude. Renderer becomes a consumer. Data flow: user scroll → Redux → PageTaskManager → Renderer / PDF systems."
+For each finding, **propose the fix as a reassignment or a diagram**, not as a principle. Example -- bad: "Renderer has too many responsibilities." Good: "Renderer owns rendering AND priority decisions. Split: priority decisions to a page-task manager at the app-instance (singleton) or session (per-document) altitude. Renderer becomes a consumer. Data flow: user scroll → store → page-task manager → Renderer / PDF systems."
 
 ### Plan mode
 

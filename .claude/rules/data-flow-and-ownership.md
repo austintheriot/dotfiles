@@ -28,7 +28,7 @@ A clean design has these four answers crisp, and the answers *match the concept*
 
 - The user's scroll position is created by the UI, owned by Redux (because it lives across renders), consumed by the priority-queue manager (to decide what to render next), and decisions about it are made by Redux reducers from user input.
 - A note's render state is created at note-open, owned by the per-note `Session` (because its lifetime is the note's lifetime), consumed by `Renderer`, decisions by user input + scroll position.
-- A `PageTaskManager` priority queue: created and owned by ??? -- this is exactly the question the user's review on Notability PR #52822 asked. If it's app-singleton (lifetime = app lifetime), it lives in `InstanceManager`. If it's per-note (lifetime = note's lifetime), it lives in `Session`. The bug is when it's a singleton conceptually but created inside the constructor of a per-note `Renderer` -- the lifetime claim and the construction site disagree.
+- A page-task priority queue: created and owned by ??? -- this is the question worth asking out loud, because the answer determines where it lives. If it's app-singleton (lifetime = app lifetime), it belongs in the app-level instance holder. If it's per-document (lifetime = the document's lifetime), it belongs in the per-document session. The bug is when it's a singleton conceptually but created inside the constructor of a per-document renderer -- the lifetime claim and the construction site disagree.
 
 **Flag**: any code under review whose answers to the four questions disagree with each other, or whose construction site reveals a different scope than the conceptual lifetime would imply.
 
@@ -42,7 +42,7 @@ The constructor of class A creates a singleton, opens a connection, registers a 
 
 **Right shape**: constructors are nearly pure. They accept their dependencies (passed in by the caller), assign fields, validate invariants. They do not *create* their collaborators; they *receive* them. ("Write the call site before the body" applies at construction too.)
 
-**The user's review comment, verbatim** (Notability PR #52822): "I typically think of constructors as being fairly pure and/or scoped mostly to just the initialization they need to do inside themselves." Exact statement of this anti-pattern.
+**The user's own formulation**: "I typically think of constructors as being fairly pure and/or scoped mostly to just the initialization they need to do inside themselves." Exact statement of this anti-pattern.
 
 **Specific shapes to flag**:
 - Constructor body that calls `SomeSingleton.getInstance()` and assigns the result to a field.
@@ -60,7 +60,7 @@ The object's conceptual scope (when it should exist) does not match its instanti
 - **Per-note object with app-scoped responsibility**: a per-note class holds work that should outlive the note. Switching notes destroys queued work; the system rebuilds expensive state on every note change.
 - **Per-request object with cross-request invariants**: a request-scoped object holds rate-limit counters / dedup keys / idempotency tokens; the limits and dedup don't work because each request gets fresh state.
 
-**The user's review comment**: "This class feels like something that either would make sense to be part of the `InstanceManager` if really is intended to be a singleton, or moved to per-note setup, like the session & Renderer if it's intended as a per-note thing. Not having to track if stale note values/calls are hanging on is a really freeing thing if it would make sense in this context."
+**The user's own formulation**: "This class feels like something that either would make sense to be part of the app-level instance holder if it really is intended to be a singleton, or moved to per-document setup, like the session and renderer, if it's intended as a per-document thing. Not having to track if stale values/calls are hanging on is a really freeing thing if it would make sense in this context."
 
 **Fix shape**: name the conceptual lifetime explicitly (process / session / note / request / transaction / job). Place the object's creation, ownership, and disposal at that exact altitude. If a single class needs *both* lifetimes' worth of state, decompose it -- pull the long-lived part up, push the short-lived part down.
 
@@ -160,7 +160,7 @@ If you can't answer these crisply from the code, **that's the finding** -- the t
 
 **For each candidate finding, state the fix as a diagram or as a reassignment**, not as a vague principle:
 - Bad: "Renderer has too many responsibilities."
-- Good: "Renderer owns rendering decisions AND priority decisions. Split: priority decisions go to a PageTaskManager that lives at the InstanceManager (singleton) or Session (per-note) altitude. Renderer becomes a consumer of priority output. Data flow: user scroll → Redux → PageTaskManager → Renderer / PDF systems."
+- Good: "Renderer owns rendering decisions AND priority decisions. Split: priority decisions go to a page-task manager that lives at the app-instance (singleton) or session (per-document) altitude. Renderer becomes a consumer of priority output. Data flow: user scroll → store → page-task manager → renderer / export systems."
 
 The user's PR review comments are the model. Specific, diagrammed, alternative proposed, room left for pushback.
 
@@ -194,10 +194,10 @@ The dual lens matters; without it, this becomes "every class is wrong."
 Using `~/.claude/rules/panel-contract.md`'s rubric:
 
 - **blocker**: ownership / lifetime defects with reachable trigger -- stale state across sessions on a path the user actually hits; data race from shared mutable state; resource leak from missing teardown on owned object; constructor reaching into the world in a way that makes the class untestable in CI.
-- **major**: structural mismatch with concrete cost -- singleton inside per-note constructor (the Notability PR #52822 shape); two classes splitting one responsibility, or one class holding two; wrong dependency direction (domain depending on infrastructure); consumer reaching up into producer where the data flow should be inverted; hidden state where module-mutable should be class-owned.
+- **major**: structural mismatch with concrete cost -- singleton inside a per-document constructor (the lifetime-mismatch shape above); two classes splitting one responsibility, or one class holding two; wrong dependency direction (domain depending on infrastructure); consumer reaching up into producer where the data flow should be inverted; hidden state where module-mutable should be class-owned.
 - **minor**: topology that works but could be cleaner -- a class that's grown a second responsibility but isn't broken yet; a boundary that's the wrong level of abstraction but the cost is small.
 - **nit**: name-of-class vs class's actual responsibility mismatch; doc-comment that describes a different ownership than the code expresses.
-- **insight**: structural reframes -- "this whole pipeline would read more clearly as input → decider → consumer with a single source of truth at the decider"; "consider DDD aggregates here"; "the boundary between Renderer and PageTaskManager would land more naturally if pulled to <X>."
+- **insight**: structural reframes -- "this whole pipeline would read more clearly as input → decider → consumer with a single source of truth at the decider"; "consider DDD aggregates here"; "the boundary between the renderer and the page-task manager would land more naturally if pulled to <X>."
 
 Confidence is high when the trigger is concrete (the constructor at file:line creates a singleton with note-scoped state that survives note-close); medium when the topology is inferred from a class API (the agent reads the public methods and the dependency direction).
 

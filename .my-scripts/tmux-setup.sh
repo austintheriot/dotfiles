@@ -13,6 +13,9 @@ fi
 
 SESSION_NAME="${1:-code}"
 
+# Shared layout constants (WORKTREE_COUNT)
+. ~/.my-scripts/tmux-worktree-config.sh
+
 # Check if session already exists
 if tmux has-session -t $SESSION_NAME 2>/dev/null; then
     echo "Session '$SESSION_NAME' already exists. Attaching..."
@@ -46,22 +49,28 @@ create_window() {
     setup_code_layout $window
 }
 
+next_window=$((WORKTREE_COUNT + 1))
+
+# The named windows follow the numbered worktrees, so their indexes move with
+# WORKTREE_COUNT.
+create_named_window() {
+    create_window $next_window "$1" "$2"
+    next_window=$((next_window + 1))
+}
+
 # Create the session and its windows (Notability worktrees first)
-create_window 1 ~/Documents/code/Notability/1
-create_window 2 ~/Documents/code/Notability/2
-create_window 3 ~/Documents/code/Notability/3
-create_window 4 ~/Documents/code/Notability/4
-create_window 5 ~/Documents/code/Notability/5
-create_window 6 ~/Documents/code/Notability/6
-create_window 7 ~/Documents/code/Notability/7
-create_window 8 ~/Documents/code/Notability/8
-create_window 9 ~/Documents/code/Notability/9
-create_window 10 ~/Documents/code/Notability/reviews "Reviews"
-create_window 11 ~/Documents/code/Notability/staging "Staging"
-create_window 12 ~ "Config"
-create_window 13 ~/Documents/code "Other"
-create_window 14 ~/Documents/code/gingerlabs-claude-plugins "Plugins"
-create_window 15 ~/Documents/code/notability-dev-tool "DevTool"
+worktree=1
+while [ $worktree -le $WORKTREE_COUNT ]; do
+    create_window $worktree ~/Documents/code/Notability/$worktree
+    worktree=$((worktree + 1))
+done
+
+create_named_window ~/Documents/code/Notability/reviews "Reviews"
+create_named_window ~/Documents/code/Notability/staging "Staging"
+create_named_window ~ "Config"
+create_named_window ~/Documents/code "Other"
+create_named_window ~/Documents/code/gingerlabs-claude-plugins "Plugins"
+create_named_window ~/Documents/code/notability-dev-tool "DevTool"
 
 # Update window names with git branches
 ~/.my-scripts/tmux-update-window-names.sh -s $SESSION_NAME

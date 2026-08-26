@@ -204,7 +204,7 @@ precmd () {
     ~/.my-scripts/tmux-update-window-names.sh 2>/dev/null # update tmux window names
 }
 zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
-PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} %F{254}λ%f '
+PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} ${VI_MODE_COLOR}λ%f '
 
 # SETUP ZOXIDE #############################################################################################
 eval "$(zoxide init zsh)"
@@ -226,3 +226,51 @@ eval "$(pyenv init - zsh)"
 
 # BUN SHELL COMPLETIONS ####################################################################################
 [ -s "/Users/austin/.bun/_bun" ] && source "/Users/austin/.bun/_bun"
+
+# VI MODE INDICATOR ########################################################################################
+# zsh picks the vi keymap at startup because EDITOR/VISUAL contain "vi" (nvim).
+# Colors the PS1 lambda per mode: 254 insert, red normal, 208 replace,
+# magenta visual, yellow operator-pending.
+#
+# Insert and append are indistinguishable -- i and a both land in viins with
+# identical ZLE state, so no hook can tell them apart.
+VI_MODE_COLOR='%F{254}'
+
+function vi_mode_update {
+    case $KEYMAP in
+        vicmd) VI_MODE_COLOR='%F{red}' ;;
+        viopp) VI_MODE_COLOR='%F{yellow}' ;;
+        visual) VI_MODE_COLOR='%F{magenta}' ;;
+        *)
+            if [[ $ZLE_STATE == *overwrite* ]]; then
+                VI_MODE_COLOR='%F{208}'
+            else
+                VI_MODE_COLOR='%F{254}'
+            fi
+            ;;
+    esac
+}
+
+function zle-keymap-select {
+    vi_mode_update
+    zle reset-prompt
+}
+zle -N zle-keymap-select
+
+# Catches replace mode, which changes ZLE_STATE without a keymap transition.
+function zle-line-pre-redraw {
+    vi_mode_update
+}
+zle -N zle-line-pre-redraw
+
+function zle-line-init {
+    VI_MODE_COLOR='%F{254}'
+}
+zle -N zle-line-init
+
+# The vi-* delete widgets refuse to delete past the point where insert mode was
+# last entered. The plain widgets have no such barrier. vicmd is left alone.
+bindkey -M viins '^?' backward-delete-char
+bindkey -M viins '^H' backward-delete-char
+bindkey -M viins '^W' backward-kill-word
+bindkey -M viins '^U' backward-kill-line

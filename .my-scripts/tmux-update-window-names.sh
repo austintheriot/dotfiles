@@ -4,9 +4,14 @@
 #
 # Precedence, lowest to highest:
 #   1. basename of the active pane's working directory ("~" for $HOME)
-#   2. the git branch of that directory, if it is a repository
-#      (a short commit sha in parentheses when HEAD is detached)
+#   2. "repo/branch" when that directory is a git repository, where repo is the
+#      main repository's name even inside a linked worktree, and branch is a
+#      short commit sha in parentheses when HEAD is detached
 #   3. a name you set yourself with `prefix ,`
+#
+# Repositories matching @wname_bare_repos are named by branch alone, without the
+# repo prefix. Those are the ones whose name is already obvious from context.
+# The value is a list of glob patterns separated by "|".
 #
 # Rename a window to an empty name to drop back to automatic naming.
 #
@@ -30,37 +35,104 @@
 set -u
 
 TAB=$(printf '\t')
+NEWLINE='
+'
 OWNERSHIP_OPTION='@wname_auto'
 LABEL_OPTION='@wname_label'
+BARE_REPOS_OPTION='@wname_bare_repos'
+DEFAULT_BARE_REPOS='Notability*|notability-*|gingerlabs-*'
 
 usage() {
-    sed -n '3,28p' "$0" | sed 's/^#\{1,2\} \{0,1\}//'
+    sed -n '3,34p' "$0" | sed 's/^#\{1,2\} \{0,1\}//'
     exit "${1:-0}"
 }
 
-# The automatic part of the name: branch if we are in a repository,
+# The name of the repository a directory belongs to. Uses the common git dir so
+# that a linked worktree reports its main repository rather than the worktree
+# directory, which is usually named after the task and not the project.
+repository_name() {
+    repo_path=${1%/}
+    [ "${repo_path##*/}" != '.git' ] || repo_path=${repo_path%/.git}
+    repo_path=${repo_path##*/}
+    printf '%s' "${repo_path%.git}"
+}
+
+matches_any_pattern() {
+    subject=$1
+    patterns=$2
+
+    # Splitting on "|" leaves the patterns unquoted, so pathname expansion has
+    # to be off or a pattern like "Notability*" would expand against the cwd.
+    set -f
+    saved_ifs=$IFS
+    IFS='|'
+    for pattern in $patterns; do
+        case $subject in
+            $pattern) IFS=$saved_ifs; set +f; return 0 ;;
+        esac
+    done
+    IFS=$saved_ifs
+    set +f
+    return 1
+}
+
+directory_name() {
+    if [ "$1" = "$HOME" ]; then
+        printf '~'
+    else
+        printf '%s' "${1##*/}"
+    fi
+}
+
+# The automatic part of the name: repo and branch if we are in a repository,
 # otherwise the directory basename.
 automatic_name() {
     directory=$1
+    bare_patterns=$2
 
-    branch=$(git -C "$directory" branch --show-current 2>/dev/null)
-    if [ -n "$branch" ]; then
-        printf '%s' "$branch"
+    # One rev-parse for both facts. This runs on every pane and window switch.
+    # An empty repository exits non-zero here but still prints both lines, so
+    # the exit status is deliberately ignored in favour of checking the output.
+    info=$(git -C "$directory" rev-parse --path-format=absolute \
+        --git-common-dir --abbrev-ref HEAD 2>/dev/null)
+    common_dir=${info%%"$NEWLINE"*}
+    revision=${info#*"$NEWLINE"}
+
+    # --path-format arrived in git 2.31. Older versions report a path relative
+    # to the directory we asked about.
+    if [ -z "$info" ]; then
+        info=$(git -C "$directory" rev-parse --git-common-dir --abbrev-ref HEAD 2>/dev/null)
+        common_dir=${info%%"$NEWLINE"*}
+        revision=${info#*"$NEWLINE"}
+        case $common_dir in
+            ''|/*) ;;
+            *) common_dir="$directory/$common_dir" ;;
+        esac
+    fi
+
+    if [ -z "$info" ] || [ "$common_dir" = "$revision" ]; then
+        directory_name "$directory"
         return
     fi
 
-    if git -C "$directory" rev-parse --git-dir >/dev/null 2>&1; then
-        sha=$(git -C "$directory" rev-parse --short HEAD 2>/dev/null)
-        if [ -n "$sha" ]; then
-            printf '(%s)' "$sha"
-            return
+    # "HEAD" means detached, or a repository with no commits yet.
+    if [ "$revision" = 'HEAD' ]; then
+        revision=$(git -C "$directory" branch --show-current 2>/dev/null)
+        if [ -z "$revision" ]; then
+            sha=$(git -C "$directory" rev-parse --short HEAD 2>/dev/null)
+            if [ -z "$sha" ]; then
+                directory_name "$directory"
+                return
+            fi
+            revision="($sha)"
         fi
     fi
 
-    if [ "$directory" = "$HOME" ]; then
-        printf '~'
+    repo_name=$(repository_name "$common_dir")
+    if [ -z "$repo_name" ] || matches_any_pattern "$repo_name" "$bare_patterns"; then
+        printf '%s' "$revision"
     else
-        printf '%s' "${directory##*/}"
+        printf '%s/%s' "$repo_name" "$revision"
     fi
 }
 
@@ -70,7 +142,7 @@ update_window() {
     window=$1
 
     state=$(tmux display-message -p -t "$window" -F \
-        "#{window_name}$TAB#{$OWNERSHIP_OPTION}$TAB#{$LABEL_OPTION}$TAB#{automatic-rename}$TAB#{pane_current_path}" \
+        "#{window_name}$TAB#{$OWNERSHIP_OPTION}$TAB#{$LABEL_OPTION}$TAB#{$BARE_REPOS_OPTION}$TAB#{automatic-rename}$TAB#{pane_current_path}" \
         2>/dev/null) || return 0
     [ -n "$state" ] || return 0
 
@@ -80,6 +152,7 @@ update_window() {
     current_name=${state%%"$TAB"*}; state=${state#*"$TAB"}
     owned_name=${state%%"$TAB"*}; state=${state#*"$TAB"}
     label=${state%%"$TAB"*}; state=${state#*"$TAB"}
+    bare_repos=${state%%"$TAB"*}; state=${state#*"$TAB"}
     automatic_rename=${state%%"$TAB"*}; directory=${state#*"$TAB"}
 
     if [ -n "$current_name" ] \
@@ -90,7 +163,8 @@ update_window() {
 
     [ -n "$directory" ] || return 0
 
-    computed=$(automatic_name "$directory")
+    [ -n "$bare_repos" ] || bare_repos=$DEFAULT_BARE_REPOS
+    computed=$(automatic_name "$directory" "$bare_repos")
     [ -z "$label" ] || computed="$label - $computed"
 
     if [ "$computed" != "$current_name" ]; then

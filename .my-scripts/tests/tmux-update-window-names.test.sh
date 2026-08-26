@@ -69,6 +69,12 @@ make_repo() {
     printf '%s' "$path"
 }
 
+make_worktree() {
+    local repo=$1 branch=$2 path="$FIXTURES/$3"
+    git -C "$repo" worktree add -q -b "$branch" "$path"
+    printf '%s' "$path"
+}
+
 # Windows created without -n keep tmux's automatic-rename flag on, which is
 # what a window made by a keybinding looks like.
 new_window() {
@@ -100,20 +106,20 @@ assert_equals 'home directory yields tilde' '~' "$(window_name "$win_home")"
 
 win_repo=$(new_window "$repo_main")
 "$SCRIPT" -w "$win_repo"
-assert_equals 'git repo yields branch, not basename' 'main' "$(window_name "$win_repo")"
+assert_equals 'git repo yields repo/branch, not basename' 'repo-main/main' "$(window_name "$win_repo")"
 
 win_slash=$(new_window "$repo_feature")
 "$SCRIPT" -w "$win_slash"
-assert_equals 'branch name with slash is preserved' 'feature/login' "$(window_name "$win_slash")"
+assert_equals 'branch name with slash is preserved' 'repo-feature/feature/login' "$(window_name "$win_slash")"
 
 git -C "$repo_main" checkout -q -b renamed
 "$SCRIPT" -w "$win_repo"
-assert_equals 'owned window follows branch changes' 'renamed' "$(window_name "$win_repo")"
+assert_equals 'owned window follows branch changes' 'repo-main/renamed' "$(window_name "$win_repo")"
 
 git -C "$repo_main" checkout -q --detach
 detached_sha=$(git -C "$repo_main" rev-parse --short HEAD)
 "$SCRIPT" -w "$win_repo"
-assert_equals 'detached HEAD yields short sha' "($detached_sha)" "$(window_name "$win_repo")"
+assert_equals 'detached HEAD yields short sha' "repo-main/($detached_sha)" "$(window_name "$win_repo")"
 git -C "$repo_main" checkout -q renamed
 
 # --- tier 3: manual rename supersedes ----------------------------------
@@ -130,17 +136,17 @@ assert_equals 'manual rename survives a branch change' 'MyName' "$(window_name "
 
 tmux rename-window -t "$win_repo" ''
 "$SCRIPT" -w "$win_repo"
-assert_equals 'empty name reverts to automatic naming' 'another' "$(window_name "$win_repo")"
+assert_equals 'empty name reverts to automatic naming' 'repo-main/another' "$(window_name "$win_repo")"
 
 # --- label prefix ------------------------------------------------------
 
 win_label=$(new_window "$repo_feature")
 tmux set -w -t "$win_label" @wname_label 'Reviews'
 "$SCRIPT" -w "$win_label"
-assert_equals 'label prefixes the automatic name' 'Reviews - feature/login' "$(window_name "$win_label")"
+assert_equals 'label prefixes the automatic name' 'Reviews - repo-feature/feature/login' "$(window_name "$win_label")"
 
 "$SCRIPT" -w "$win_label"
-assert_equals 'labelled window stays owned across runs' 'Reviews - feature/login' "$(window_name "$win_label")"
+assert_equals 'labelled window stays owned across runs' 'Reviews - repo-feature/feature/login' "$(window_name "$win_label")"
 
 tmux rename-window -t "$win_label" 'Override'
 "$SCRIPT" -w "$win_label"
@@ -148,12 +154,63 @@ assert_equals 'manual rename beats the label' 'Override' "$(window_name "$win_la
 
 tmux rename-window -t "$win_label" ''
 "$SCRIPT" -w "$win_label"
-assert_equals 'empty name restores the labelled name' 'Reviews - feature/login' "$(window_name "$win_label")"
+assert_equals 'empty name restores the labelled name' 'Reviews - repo-feature/feature/login' "$(window_name "$win_label")"
 
 win_label_plain=$(new_window "$plain_dir")
 tmux set -w -t "$win_label_plain" @wname_label 'Config'
 "$SCRIPT" -w "$win_label_plain"
 assert_equals 'label prefixes a cwd-derived name' 'Config - not-a-repo' "$(window_name "$win_label_plain")"
+
+# --- repo name prefixes the branch outside the work repos ---
+
+win_prefixed=$(new_window "$repo_feature")
+"$SCRIPT" -w "$win_prefixed"
+assert_equals 'personal repo is named repo/branch' 'repo-feature/feature/login' "$(window_name "$win_prefixed")"
+
+personal_worktree=$(make_worktree "$repo_feature" side-branch personal-wt)
+win_personal_wt=$(new_window "$personal_worktree")
+"$SCRIPT" -w "$win_personal_wt"
+assert_equals 'worktree uses the main repo name, not the worktree directory' \
+    'repo-feature/side-branch' "$(window_name "$win_personal_wt")"
+
+win_prefixed_label=$(new_window "$repo_feature")
+tmux set -w -t "$win_prefixed_label" @wname_label 'Side'
+"$SCRIPT" -w "$win_prefixed_label"
+assert_equals 'label sits in front of repo/branch' 'Side - repo-feature/feature/login' \
+    "$(window_name "$win_prefixed_label")"
+
+# --- work repos are named by branch alone ---
+
+for work_repo in Notability notability-dev-tool gingerlabs-claude-plugins; do
+    work_path=$(make_repo "$work_repo" work-branch)
+    win_work=$(new_window "$work_path")
+    "$SCRIPT" -w "$win_work"
+    assert_equals "$work_repo is named by branch alone" 'work-branch' "$(window_name "$win_work")"
+done
+
+work_worktree=$(make_worktree "$FIXTURES/Notability" wt-branch Notability-2)
+win_work_wt=$(new_window "$work_worktree")
+"$SCRIPT" -w "$win_work_wt"
+assert_equals 'work worktree is named by branch alone' 'wt-branch' "$(window_name "$win_work_wt")"
+
+win_work_label=$(new_window "$FIXTURES/Notability")
+tmux set -w -t "$win_work_label" @wname_label 'Reviews'
+"$SCRIPT" -w "$win_work_label"
+assert_equals 'work repo with a label stays short' 'Reviews - work-branch' "$(window_name "$win_work_label")"
+
+# --- the bare-branch pattern is configurable ---
+
+win_configurable=$(new_window "$repo_feature")
+tmux set -w -t "$win_configurable" @wname_bare_repos 'repo-*'
+"$SCRIPT" -w "$win_configurable"
+assert_equals '@wname_bare_repos drops the prefix for a matching repo' 'feature/login' \
+    "$(window_name "$win_configurable")"
+
+win_unmatched=$(new_window "$FIXTURES/Notability")
+tmux set -w -t "$win_unmatched" @wname_bare_repos 'nothing-*'
+"$SCRIPT" -w "$win_unmatched"
+assert_equals '@wname_bare_repos adds the prefix back when nothing matches' 'Notability/work-branch' \
+    "$(window_name "$win_unmatched")"
 
 # --- an explicitly named window counts as manual ---
 
@@ -167,10 +224,10 @@ win_multi=$(new_window "$repo_main")
 tmux split-window -d -t "$win_multi" -c "$repo_feature"
 tmux select-pane -t "$(pane_id "$win_multi" 2)"
 "$SCRIPT" -w "$win_multi"
-assert_equals 'active pane cwd drives the name' 'feature/login' "$(window_name "$win_multi")"
+assert_equals 'active pane cwd drives the name' 'repo-feature/feature/login' "$(window_name "$win_multi")"
 tmux select-pane -t "$(pane_id "$win_multi" 1)"
 "$SCRIPT" -w "$win_multi"
-assert_equals 'switching active pane updates the name' 'another' "$(window_name "$win_multi")"
+assert_equals 'switching active pane updates the name' 'repo-main/another' "$(window_name "$win_multi")"
 
 # --- target selection --------------------------------------------------
 
@@ -188,7 +245,7 @@ assert_equals 'session mode updates the named session' 'not-a-repo' "$(window_na
 assert_equals 'session mode leaves other sessions alone' 'stale' "$(window_name "$other")"
 
 "$SCRIPT" --all
-assert_equals 'all mode updates every session' 'feature/login' "$(window_name "$other")"
+assert_equals 'all mode updates every session' 'repo-feature/feature/login' "$(window_name "$other")"
 
 tmux rename-window -t "$win" 'stale'
 tmux set -w -t "$win" @wname_auto 'stale'

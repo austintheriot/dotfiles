@@ -65,6 +65,7 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`platform-payments`** -- StoreKit, Play Billing, Stripe and merchant-of-record, cross-platform entitlement architecture, webhook idempotency and reconciliation, store payment policy, subscription metrics.
 - **`platform-release`** -- code signing and notarization, store submission and review, phased / staged rollout and the absence of rollback, versioning rules, desktop packaging and auto-update.
 - **`desktop-native`** -- Windows / macOS / Linux desktop runtime: windowing and DPI, lifecycle and single-instance, OS integration, sandbox and filesystem, the Wayland transition, desktop UX conventions.
+- **`app-privacy-compliance`** -- GDPR / US state patchwork / COPPA, consent ordering, data minimization, deletion propagation, privacy manifests and store declarations. Engineering guidance, not legal advice.
 - **`llm-app`** -- prompt engineering, tool use, RAG, evals, context management (caching / compaction), prompt-injection defense, agentic patterns.
 - **`browser-spec`** -- WhatWG specs, DOM event model, modern platform primitives (`<dialog>`, Popover, AbortController, `Intl.*`), Web Components.
 - **`web-analytics`** -- Mixpanel / Amplitude / Segment / PostHog; event taxonomy, identity correctness, funnels / retention, A/B test instrumentation, privacy.
@@ -143,6 +144,7 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "How should I model subscriptions / validate receipts / handle entitlements across platforms" | `platform-payments` |
 | "How do I sign / notarize / ship this / set up auto-update / stage a rollout" | `platform-release` |
 | "How should this behave on the desktop / handle windows / DPI / tray / Wayland" | `desktop-native` |
+| "Do we need consent for this / how do I handle deletion requests / what goes in the privacy label" | `app-privacy-compliance` |
 | "How should I prompt Claude / structure tool use / design my RAG" | `llm-app` |
 | "Is there a platform API for this / should I use `<dialog>` / `Intl.*`" | `browser-spec` |
 | "How should I name this event / structure my funnel / track this A/B test" | `web-analytics` |

@@ -10,6 +10,9 @@ fi
 
 SESSION_NAME="${1:-code}"
 
+# Shared layout constants (WORKTREE_COUNT)
+. ~/.my-scripts/tmux-worktree-config.sh
+
 # Check if session already exists
 if tmux has-session -t $SESSION_NAME 2>/dev/null; then
     echo "Session '$SESSION_NAME' already exists. Attaching..."
@@ -31,48 +34,28 @@ setup_code_layout() {
 tmux new-session -d -s $SESSION_NAME -n "1" -c ~/Documents/code/Notability/1
 setup_code_layout 1
 
-# Create additional windows
-tmux new-window -t $SESSION_NAME -n "2" -c ~/Documents/code/Notability/2
-setup_code_layout 2
+# Create the remaining numbered worktree windows
+worktree=2
+while [ $worktree -le $WORKTREE_COUNT ]; do
+    tmux new-window -t $SESSION_NAME -n "$worktree" -c ~/Documents/code/Notability/$worktree
+    setup_code_layout $worktree
+    worktree=$((worktree + 1))
+done
 
-tmux new-window -t $SESSION_NAME -n "3" -c ~/Documents/code/Notability/3
-setup_code_layout 3
+# Create the named windows after the numbered worktrees
+next_window=$((WORKTREE_COUNT + 1))
+add_named_window() {
+    tmux new-window -t $SESSION_NAME -n "$1" -c "$2"
+    setup_code_layout $next_window
+    next_window=$((next_window + 1))
+}
 
-tmux new-window -t $SESSION_NAME -n "4" -c ~/Documents/code/Notability/4
-setup_code_layout 4
-
-tmux new-window -t $SESSION_NAME -n "5" -c ~/Documents/code/Notability/5
-setup_code_layout 5
-
-tmux new-window -t $SESSION_NAME -n "6" -c ~/Documents/code/Notability/6
-setup_code_layout 6
-
-tmux new-window -t $SESSION_NAME -n "7" -c ~/Documents/code/Notability/7
-setup_code_layout 7
-
-tmux new-window -t $SESSION_NAME -n "8" -c ~/Documents/code/Notability/8
-setup_code_layout 8
-
-tmux new-window -t $SESSION_NAME -n "9" -c ~/Documents/code/Notability/9
-setup_code_layout 9
-
-tmux new-window -t $SESSION_NAME -n "Reviews" -c ~/Documents/code/Notability/reviews
-setup_code_layout 10
-
-tmux new-window -t $SESSION_NAME -n "Staging" -c ~/Documents/code/Notability/staging
-setup_code_layout 11
-
-tmux new-window -t $SESSION_NAME -n "Config" -c ~
-setup_code_layout 12
-
-tmux new-window -t $SESSION_NAME -n "Other" -c ~/Documents/code
-setup_code_layout 13
-
-tmux new-window -t $SESSION_NAME -n "Plugins" -c ~/Documents/code/gingerlabs-claude-plugins
-setup_code_layout 14
-
-tmux new-window -t $SESSION_NAME -n "DevTool" -c ~/Documents/code/notability-dev-tool
-setup_code_layout 15
+add_named_window "Reviews" ~/Documents/code/Notability/reviews
+add_named_window "Staging" ~/Documents/code/Notability/staging
+add_named_window "Config" ~
+add_named_window "Other" ~/Documents/code
+add_named_window "Plugins" ~/Documents/code/gingerlabs-claude-plugins
+add_named_window "DevTool" ~/Documents/code/notability-dev-tool
 
 # Update window names with git branches
 ~/.my-scripts/tmux-update-window-names.sh $SESSION_NAME

@@ -4,6 +4,9 @@
 
 SESSION_NAME="${1:-code}"
 
+# Shared layout constants (WORKTREE_COUNT)
+. ~/.my-scripts/tmux-worktree-config.sh
+
 # Check if session exists
 if ! tmux has-session -t $SESSION_NAME 2>/dev/null; then
     echo "Session '$SESSION_NAME' does not exist."
@@ -16,7 +19,6 @@ get_branch() {
     git -C "$dir" branch --show-current 2>/dev/null || echo "Free"
 }
 
-# Update Notability work windows (1-4)
 update_window_if_exists() {
     local window_num=$1
     local window_name=$2
@@ -28,14 +30,11 @@ update_window_if_exists() {
     fi
 }
 
-update_window_if_exists 1 "1" ~/Documents/code/Notability/1
-update_window_if_exists 2 "2" ~/Documents/code/Notability/2
-update_window_if_exists 3 "3" ~/Documents/code/Notability/3
-update_window_if_exists 4 "4" ~/Documents/code/Notability/4
-update_window_if_exists 5 "5" ~/Documents/code/Notability/5
-update_window_if_exists 6 "6" ~/Documents/code/Notability/6
-update_window_if_exists 7 "7" ~/Documents/code/Notability/7
-update_window_if_exists 8 "8" ~/Documents/code/Notability/8
-update_window_if_exists 9 "9" ~/Documents/code/Notability/9
-update_window_if_exists 10 "Reviews" ~/Documents/code/Notability/reviews
-update_window_if_exists 11 "Staging" ~/Documents/code/Notability/staging
+worktree=1
+while [ $worktree -le $WORKTREE_COUNT ]; do
+    update_window_if_exists $worktree "$worktree" ~/Documents/code/Notability/$worktree
+    worktree=$((worktree + 1))
+done
+
+update_window_if_exists $((WORKTREE_COUNT + 1)) "Reviews" ~/Documents/code/Notability/reviews
+update_window_if_exists $((WORKTREE_COUNT + 2)) "Staging" ~/Documents/code/Notability/staging

@@ -29,7 +29,7 @@ Sibling to:
 
 ## The roster
 
-Eligible agents are the 35 consult-capable ones from `/consult`. Run `ls ~/.claude/agents/` at session start to pick up new ones.
+Eligible agents are the 42 consult-capable ones from `/consult`. Run `ls ~/.claude/agents/` at session start to pick up new ones.
 
 ### Already advisor-shaped
 
@@ -56,6 +56,9 @@ Eligible agents are the 35 consult-capable ones from `/consult`. Run `ls ~/.clau
 ### Multi-mode (preload `agent-modes`)
 
 - **`security`**, **`performance`**, **`accessibility`**, **`api-design`**, **`concurrency`**, **`i18n`**, **`ci-pipeline`**, **`devops-infrastructure`**, **`graphics-programming`**, **`audio-programming`**, **`pdf`**, **`webassembly`**, **`mobile-native`**, **`sync-and-offline`**, **`platform-payments`**, **`platform-release`**, **`desktop-native`**, **`app-privacy-compliance`**, **`native-bridge`**, **`input-and-peripherals`**, **`licensing-and-oss`**, **`build-systems`**, **`crash-and-release-health`**, **`llm-app`**, **`browser-spec`**, **`web-analytics`**, **`data-flow`**.
+- Design and user experience: **`interaction-design`**, **`visual-hierarchy`**, **`design-systems`**, **`ai-interface-design`**, **`information-architecture`**, **`content-design`**, **`expert-user-efficiency`**.
+
+**One deliberate opposition in this roster.** `interaction-design` argues novice-first defaults (guidance, confirmation, air); `expert-user-efficiency` argues for the practiced daily user of a professional tool (density, keyboard, no friction on routine reversible actions). On any question about a high-frequency working surface, dispatch **both** and preserve the disagreement in synthesis. Averaging them produces the bland answer neither would give.
 
 See their frontmatter `description` fields for the exact lens of each.
 

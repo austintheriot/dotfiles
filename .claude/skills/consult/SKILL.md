@@ -58,6 +58,13 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`ci-pipeline`** -- GitHub Actions / GitLab CI / Buildkite / Jenkins workflows, Dockerfiles, branch protection, OIDC, signing, SLSA.
 - **`devops-infrastructure`** -- Terraform / Pulumi / CloudFormation / Helm; state management, IAM, networking, secrets, K8s manifests, GitOps, FinOps, DR.
 - **`graphics-programming`** -- WebGL / WebGPU, 2D vector graphics, text shaping (HarfBuzz / SDF / MSDF), shaders, GPU best practices.
+- **`interaction-design`** -- Norman's gulfs and slips-vs-mistakes, Nielsen's heuristics, the Laws of UX with their misapplications corrected, state completeness (empty / loading / partial / error / unauthorized), undo versus confirm, response-time thresholds, validation timing, motion duration and easing, deceptive design and its current enforcement.
+- **`visual-hierarchy`** -- typography (measure, scale, leading, tabular figures), Gestalt grouping, spacing and grid, OKLCH and perceptually uniform colour, APCA versus WCAG 2.x, data-table craft, and the density argument for professional tools.
+- **`design-systems`** -- three-tier token architecture, DTCG format, token naming, component API design (variants over boolean piles, escape hatches, ref forwarding), theming, governance, component versioning, and design-to-code drift.
+- **`ai-interface-design`** -- calibrated trust, the HAX eighteen guidelines, PAIR's chapters, automation bias and anchoring, what to show instead of a confidence number, citation granularity, streaming and cancellation semantics, agent approval gates.
+- **`information-architecture`** -- organization schemes, labeling and information scent, navigation and wayfinding, search versus browse, faceted classification, URLs as architecture, card sorting and tree testing.
+- **`content-design`** -- error-message anatomy, empty-state kinds, button and confirmation labels, voice and tone against stakes, terminology governance, and the limit of plain language in specialist domains.
+- **`expert-user-efficiency`** -- the practiced daily user: Raskin's modelessness and quasimodes, Cooper's perpetual intermediates, the Keystroke-Level Model, keyboard-first design, spatial memory and density, bulk operations. **Deliberately opposed to `interaction-design` on professional tools.**
 - **`audio-programming`** -- real-time audio thread discipline, DSP fundamentals, JUCE / Web Audio / mobile audio, plugin formats, MIDI.
 - **`webassembly`** -- WASM spec / proposals, runtimes, JS↔WASM boundary, Component Model + WIT, WASI capability model, toolchain.
 - **`mobile-native`** -- iOS (Swift / SwiftUI / UIKit / Swift Concurrency / SwiftData), Android (Kotlin / Compose / Coroutines / Room), platform lifecycle, store policy.
@@ -135,6 +142,13 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "Is this design vulnerable to X / how do I protect against Y" | `security` |
 | "Why is this slow / how do I optimize" | `performance` |
 | "How do I make this accessible / WCAG / focus management" | `accessibility` |
+| "What should this screen do when it is empty / loading / failed" or "undo or confirm here" | `interaction-design` |
+| "Why does this screen feel flat / what type scale / what spacing / how do I do colour" | `visual-hierarchy` |
+| "How should I name and layer my tokens / design this component API / stop the system drifting" | `design-systems` |
+| "How do I show model confidence / cite sources / gate an agent action / avoid over-trust" | `ai-interface-design` |
+| "How should I organize and name these sections / why can nobody find this" | `information-architecture` |
+| "How should this error message / empty state / button read" | `content-design` |
+| "How do I make this fast for someone who does it 900 times a day" | `expert-user-efficiency` |
 | "Should this be REST / gRPC / GraphQL / how do I version" | `api-design` |
 | "How do I synchronize threads / avoid deadlock / use channels" (non-Rust) | `concurrency` |
 | "How do I handle Unicode / timezones / currencies / RTL / IDN" | `i18n` |

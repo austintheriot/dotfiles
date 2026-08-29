@@ -23,7 +23,17 @@ runs the same suite and blocks the commit on failure. Run the suite yourself
 first anyway. Discovering a failure from a blocked commit costs a round trip,
 and the hook's output is quieter than the suite's.
 
-Never pass `--no-verify` to get around the hook.
+The same hook runs a leak guard (`~/tests/leak-check.sh`) before the suite. This
+repo is public, so the guard refuses staged content that looks like a credential
+or like internal project detail. Its project-term patterns load from an
+untracked local file, so the guard names nothing specific in this repo.
+
+If the guard blocks a commit, genericize the wording or move the specifics to a
+machine-local file the tracked file reads at runtime. For a verified false
+positive, use `SKIP_LEAK_CHECK=1 config commit ...`.
+
+Never pass `--no-verify` to get around either gate. It skips every hook, so
+bypassing the leak guard would silently take the test suite with it.
 
 ## Where tests live
 

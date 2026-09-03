@@ -83,20 +83,28 @@ jobs:
       # display-message output. The window-naming script uses a tab as its
       # field separator, so every field parse breaks and most of that suite's
       # assertions fail with mangled names.
+      # .config/tmux/tmux.conf opens with
+      # `source-file ~/.config/tmux/tmux-common.conf`, and tmux expands that
+      # `~` against HOME rather than $DOTFILES_ROOT. Without this link the
+      # source-file silently resolves to nothing, so no binding, hook, or
+      # mouse setting is applied and tmux-conf-split.test.sh fails three
+      # assertions.
       #
-      # HOME is the checkout, not just $DOTFILES_ROOT. The suite loads the
-      # real .config/tmux/tmux.conf, whose first line is
-      # `source-file ~/.config/tmux/tmux-common.conf`; tmux expands that `~`
-      # against HOME, not against $DOTFILES_ROOT. With HOME left as the
-      # runner's own, the source-file silently resolves to nothing, so no
-      # binding, hook, or mouse setting is ever applied and
-      # tmux-conf-split.test.sh fails on three assertions. lib.sh and
-      # run-all.sh only read HOME as the DOTFILES_ROOT default, so pointing it
-      # at the checkout is what makes CI match a developer machine, where the
-      # two are the same directory.
+      # Linking rather than setting HOME to the checkout, which was the first
+      # attempt: the checkout is a git repository, and
+      # tmux-update-window-names.test.sh asserts that $HOME renders as "~".
+      # The naming script only reaches that branch for a directory that is not
+      # a repository, so a repository HOME renamed it "dotfiles/mac" and broke
+      # the assertion. On a developer machine $HOME is not a worktree -- the
+      # dotfiles repo is bare at ~/.cfg -- so both invariants hold there, and
+      # linking is what reproduces that arrangement.
+      - name: Link the tmux config into HOME
+        run: |
+          mkdir -p "$HOME/.config"
+          ln -sfn "$GITHUB_WORKSPACE/.config/tmux" "$HOME/.config/tmux"
+
       - name: Run the test suite
         env:
-          HOME: ${{ github.workspace }}
           DOTFILES_ROOT: ${{ github.workspace }}
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8

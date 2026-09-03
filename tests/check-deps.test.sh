@@ -364,6 +364,13 @@ assert_contains 'aerospace installs as a cask' '--cask aerospace' "$output"
 assert_contains 'aerospace taps its third-party tap first' \
     'nikitabobko' "$output"
 
+# Tapping is not enough on its own. Current Homebrew refuses to load a cask
+# from a tap that has not been trusted -- "Refusing to load cask
+# nikitabobko/tap/aerospace from untrusted tap" -- which is what the second
+# deps-check run hit after the tap itself succeeded.
+assert_contains 'aerospace trusts the tap before installing' \
+    'brew trust' "$output"
+
 # --- a macOS-only dependency never fails --fix on Linux -----------------
 #
 # The deps-check workflow checks out one branch and runs every platform job

@@ -104,8 +104,13 @@ install_cmd_for() {
             #
             # macOS-only. Every non-brew manager reports it as manual-only
             # rather than guessing, because there is no Linux build.
+            #
+            # Tapping alone is not enough: current Homebrew refuses to load a
+            # cask from an untrusted tap. `brew trust` is a recent
+            # subcommand, so its failure is tolerated for an older Homebrew
+            # that does not have it and does not need it.
             case "$manager" in
-                brew) printf 'brew tap nikitabobko/tap && brew install --cask aerospace' ;;
+                brew) printf 'brew tap nikitabobko/tap && { brew trust nikitabobko/tap || true; } && brew install --cask aerospace' ;;
             esac
             ;;
         zoxide)

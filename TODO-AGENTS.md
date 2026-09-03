@@ -13,7 +13,29 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # DEFERRED TODOS
 
-- There do appear to be macos Docker images. See if we can leverage any of them (e.g. https://github.com/dockur/macos)
+- macOS Docker images (e.g. https://github.com/dockur/macos): investigated,
+  not viable. Recorded so it is not re-researched.
+  `dockur/macos` is not a macOS container; it is QEMU/KVM booting a macOS VM
+  inside a container (base image `qemux/qemu`, OpenCore + OVMF). Three
+  independent blockers, each disqualifying on its own:
+  (1) It cannot run on a Mac. Its README: "Docker Desktop on Linux, macOS,
+  and Windows 10 does not currently provide KVM access to containers and is
+  therefore not supported." It needs `/dev/kvm` on a Linux or Windows 11
+  host, so it is useless for the local pre-push gate.
+  (2) Setup is a manual twelve-step click-through of Disk Utility and Setup
+  Assistant in a browser VNC viewer. Nothing scriptable for a hook or CI.
+  (3) The guest is x86_64 only (AVX2 requirement, amd64-pinned, no ARM64
+  option), so it would test Intel macOS. `.claude/hooks/notify.sh` hardcodes
+  `/opt/homebrew/bin/aerospace` and `.zshrc-mac` uses `$(brew --prefix)`,
+  both Apple Silicon paths -- it would exercise the wrong architecture.
+  Plus a licensing bind: Apple's EULA restricts macOS virtualization to
+  Apple hardware, while the technical requirements exclude macOS hosts. The
+  only compliant setup is Linux on Apple-branded hardware. `sickcodes/Docker-OSX`
+  is more scriptable but carries the same host and EULA constraints.
+  Already solved a better way: `.github/workflows/test-suite.yml` runs the
+  full suite on `macos-latest`, a real macOS VM on Apple hardware, licensed,
+  with Homebrew preinstalled. All 16 suites pass there, and no tmux suite
+  flakes, because a fresh runner never loads `.config/tmux/tmux-common.conf`.
 - Isolate the test suite onto its own tmux server. `tests/lib.sh` calls bare
   `tmux`, so every tmux suite runs on the live server -- currently 23 windows,
   an attached client, and 6 global `after-*` hooks that fire

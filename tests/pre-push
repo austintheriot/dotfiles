@@ -1,0 +1,99 @@
+#!/bin/sh
+#
+# Runs the branch-drift check and the dotfiles test suite before a push.
+#
+# Installed for the bare dotfiles repo at ~/.cfg. Git finds it through the
+# symlink at ~/.cfg/hooks/pre-push; core.hooksPath is not set. See the
+# install note in ~/.claude/rules/dotfiles-tests.md.
+#
+# The leak guard stays at pre-commit (tests/pre-commit): a leak should never
+# even land in a local commit. The branch-drift check and the full suite run
+# here instead, so their ~25s cost is paid once per push, not once per commit.
+#
+# Reads git's pre-push stdin protocol: one line per ref being pushed,
+# "<local ref> <local sha> <remote ref> <remote sha>".
+
+set -u
+
+zero='0000000000000000000000000000000000000000'
+empty_tree='4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+
+TRIGGER_PATHS='^\.my-scripts/.*\.sh$|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/'
+
+pushing_synced_branch=0
+changed_paths=''
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue
+
+    case $local_ref in
+        refs/heads/mac|refs/heads/linux) pushing_synced_branch=1 ;;
+    esac
+
+    if [ "$remote_sha" = "$zero" ]; then
+        range_paths=$(git diff --name-only "$empty_tree" "$local_sha")
+    else
+        range_paths=$(git diff --name-only "$remote_sha" "$local_sha")
+    fi
+    changed_paths="$changed_paths
+$range_paths"
+done
+
+# --- branch-drift check -------------------------------------------------
+#
+# Only runs when mac or linux is among the pushed refs, so pushing an
+# unrelated branch (home, a feature branch) is never blocked by drift
+# between two branches it has nothing to do with.
+#
+# Compares the local mac and linux branches, not their origin/* counterparts,
+# so drift is caught from what is about to be pushed rather than from
+# whatever either branch looked like at its last fetch. The branch-drift
+# GitHub Action re-checks origin/mac against origin/linux after the push, so
+# a stale local ref here is a fast pre-flight, not the only gate.
+
+if [ "$pushing_synced_branch" -eq 1 ]; then
+    if [ ! -x "$HOME/tests/check-branch-drift.sh" ]; then
+        printf 'pre-push: ~/tests/check-branch-drift.sh is missing or not executable\n' >&2
+        exit 1
+    fi
+
+    if ! "$HOME/tests/check-branch-drift.sh" mac linux; then
+        printf '\npre-push: mac and linux have diverged on a shared path, push blocked.\n' >&2
+        printf 'Fix the drift, or run `git push --no-verify` only if you have a\n' >&2
+        printf 'genuine reason to bypass the gate.\n' >&2
+        exit 1
+    fi
+
+    printf 'pre-push: branch-drift check passed\n'
+fi
+
+# --- dotfiles test suite -------------------------------------------------
+#
+# Reported on both paths on purpose. A hook that says nothing when it skips
+# is indistinguishable from a hook that is not installed at all.
+
+if ! printf '%s\n' "$changed_paths" | grep -qE "$TRIGGER_PATHS"; then
+    printf 'pre-push: no pushed path touches tested code, skipping ~/tests/run-all.sh\n'
+    exit 0
+fi
+
+printf 'pre-push: pushed changes touch tested code, running ~/tests/run-all.sh\n'
+
+if [ ! -x "$HOME/tests/run-all.sh" ]; then
+    printf 'pre-push: ~/tests/run-all.sh is missing or not executable\n' >&2
+    exit 1
+fi
+
+# GIT_DIR and GIT_WORK_TREE are exported into a hook. The tests build throwaway
+# git repositories as fixtures, and with those variables set every `git init`
+# and `git commit` inside a fixture would operate on the dotfiles repo instead.
+if env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
+        "$HOME/tests/run-all.sh" -q; then
+    printf 'pre-push: tests passed\n'
+    exit 0
+fi
+
+printf '\npre-push: tests failed, push blocked.\n' >&2
+printf 'Fix the failures, or run `git push --no-verify` only if you have a\n' >&2
+printf 'genuine reason to bypass the gate.\n' >&2
+exit 1

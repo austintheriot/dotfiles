@@ -1,18 +1,18 @@
 #!/bin/sh
 #
-# Runs the dotfiles test suite before a commit that touches tested code.
+# Runs the leak guard before a commit. See tests/leak-check.sh.
 #
 # Installed for the bare dotfiles repo at ~/.cfg. Git finds it through the
-# symlink at ~/.cfg/hooks/pre-commit; core.hooksPath is not set. See the install
-# note in ~/.claude/rules/dotfiles-tests.md.
+# symlink at ~/.cfg/hooks/pre-commit; core.hooksPath is not set. See the
+# install note in ~/.claude/rules/dotfiles-tests.md.
 #
-# The suite only runs when the staged paths include something it covers, so a
-# commit that only touches nvim config or a rules markdown file is not delayed.
+# The branch-drift check and the dotfiles test suite run at pre-push instead
+# (tests/pre-push): the suite costs ~25s, and paying that once per push beats
+# paying it once per commit. The leak guard stays here because a leak should
+# never even land in a local commit, not just never reach GitHub.
 
 set -u
 
-# Leak guard first: it is fast, and this repo is public, so internal content
-# should fail before the slower suite runs. See tests/leak-check.sh.
 if [ ! -x "$HOME/tests/leak-check.sh" ]; then
     printf 'pre-commit: ~/tests/leak-check.sh is missing or not executable\n' >&2
     exit 1
@@ -23,35 +23,3 @@ if ! "$HOME/tests/leak-check.sh"; then
 fi
 
 printf 'pre-commit: leak check passed\n'
-
-TRIGGER_PATHS='^\.my-scripts/.*\.sh$|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/'
-
-staged=$(git diff --cached --name-only --diff-filter=ACMR)
-
-# Reported on both paths on purpose. A hook that says nothing when it skips is
-# indistinguishable from a hook that is not installed at all.
-if ! printf '%s\n' "$staged" | grep -qE "$TRIGGER_PATHS"; then
-    printf 'pre-commit: no staged path touches tested code, skipping ~/tests/run-all.sh\n'
-    exit 0
-fi
-
-printf 'pre-commit: staged changes touch tested code, running ~/tests/run-all.sh\n'
-
-if [ ! -x "$HOME/tests/run-all.sh" ]; then
-    printf 'pre-commit: ~/tests/run-all.sh is missing or not executable\n' >&2
-    exit 1
-fi
-
-# GIT_DIR and GIT_WORK_TREE are exported into a hook. The tests build throwaway
-# git repositories as fixtures, and with those variables set every `git init`
-# and `git commit` inside a fixture would operate on the dotfiles repo instead.
-if env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
-        "$HOME/tests/run-all.sh" -q; then
-    printf 'pre-commit: tests passed\n'
-    exit 0
-fi
-
-printf '\npre-commit: tests failed, commit blocked.\n' >&2
-printf 'Fix the failures, or run `git commit --no-verify` only if you have a\n' >&2
-printf 'genuine reason to bypass the gate.\n' >&2
-exit 1

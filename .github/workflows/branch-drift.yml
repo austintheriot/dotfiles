@@ -32,9 +32,24 @@ jobs:
           echo "$output"
           if [ -n "$GITHUB_STEP_SUMMARY" ]; then
             {
+              has_drift=0
+              has_unlabeled=0
+              printf '%s' "$output" | grep -q '^diverged: ' && has_drift=1
+              printf '%s' "$output" | grep -q 'match no .sync-manifest rule' && has_unlabeled=1
+
               if [ "$status" -eq 0 ]; then
                 echo '### Branch drift check passed'
-              elif printf '%s' "$output" | grep -q 'match no .sync-manifest rule'; then
+              elif [ "$has_drift" -eq 1 ] && [ "$has_unlabeled" -eq 1 ]; then
+                # Both failure modes can fire in the same run: the drift loop
+                # prints to stdout and the exhaustiveness phase prints to
+                # stderr and exits first, so either signal alone would tell
+                # only half the story.
+                echo '### Branch drift and unlabeled files'
+                echo
+                echo 'Both problems are present: a shared path differs'
+                echo 'between `mac` and `linux`, and a tracked file matches'
+                echo 'no `.sync-manifest` rule. Both need fixing.'
+              elif [ "$has_unlabeled" -eq 1 ]; then
                 # Two distinct failures with two distinct fixes. Naming which
                 # one fired saves the reader from reading the log to find out.
                 echo '### Unlabeled files'

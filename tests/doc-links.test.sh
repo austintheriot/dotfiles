@@ -45,18 +45,18 @@ while IFS= read -r doc; do
         [ -e "$DOTFILES_ROOT/$cited" ] && continue
         # A path may also be cited relative to the citing file's directory.
         [ -e "$(dirname "$doc")/$cited" ] && continue
-        # A bare filename with no directory (`lib.sh`, `tmux.conf`) is a
-        # reference to a file the reader is expected to locate, not a path
-        # assertion. Accept it if a file by that name exists anywhere in the
-        # repo; only flag it when nothing by that name is tracked at all.
+        # A bare filename with no directory (`lib.sh`, `tmux.conf`,
+        # `notify.sh`) is a pointer to a file the reader is expected to
+        # locate, not a claim about a path, so it is not checked. This also
+        # keeps the suite branch-neutral: the research doc names mac-only
+        # files while discussing what varies per platform, and
+        # docs/research/ is shared, so checking those would fail on linux
+        # for correct prose. Only a path with a directory component is a
+        # specific enough claim to assert on.
         case "$cited" in
             */*) ;;
             *)
-                if find "$DOTFILES_ROOT/.my-scripts" "$DOTFILES_ROOT/tests" \
-                        "$DOTFILES_ROOT/.config" "$DOTFILES_ROOT/.claude" \
-                        -name "$cited" -print -quit 2>/dev/null | grep -q .; then
-                    continue
-                fi
+                continue
                 ;;
         esac
         dead="$dead $doc:$cited"

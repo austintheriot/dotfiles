@@ -240,6 +240,16 @@ facts = {
         if is_checkout(step) and step.get('with', {}).get('persist-credentials') is not False
     )),
     'macos_runner': jobs.get('macos', {}).get('runs-on', ''),
+    'push_paths': ' '.join(
+        (triggers.get('push') or {}).get('paths', []) if isinstance(triggers.get('push'), dict) else []
+    ),
+    'push_is_filtered': (
+        'yes' if isinstance(triggers.get('push'), dict)
+        and (triggers.get('push') or {}).get('paths') else 'no'
+    ),
+    'macos_env': ' '.join(sorted(
+        key for step in steps_of('macos') for key in (step.get('env') or {})
+    )),
     'ubuntu_run': run_text('ubuntu'),
     'macos_run': run_text('macos'),
     'arch_run': run_text('arch'),
@@ -263,17 +273,34 @@ wf() {
     sed -n "s/^$1=//p" "$WF_FACTS"
 }
 
-assert_equals 'the workflow triggers on schedule and workflow_dispatch only' \
-    'schedule workflow_dispatch' "$(wf triggers)"
+assert_equals 'the workflow triggers on push, schedule and workflow_dispatch' \
+    'push schedule workflow_dispatch' "$(wf triggers)"
 
-# Named separately from the trigger-set assertion above. A push trigger is the
-# specific regression that matters: every job installs packages off the
-# network, so push would make unrelated commits fail on an upstream outage.
-assert_equals 'the workflow has no push trigger' 'no' "$(wf has_push)"
+# An unfiltered push trigger is the specific regression that matters. Every
+# job installs packages off the network, so a push trigger that fires for
+# every commit would make unrelated work fail on an upstream outage -- a
+# GitHub API rate limit already failed the zoxide install on one run. The
+# path filter is what keeps that exposure proportional: only about 3% of
+# recent commits touched the dependency files at all, and a commit that does
+# not touch them cannot break the bootstrap.
+assert_equals 'the push trigger is path-filtered' 'yes' "$(wf push_is_filtered)"
+assert_contains 'the push filter covers the deps directory' \
+    '.my-scripts/deps/' "$(wf push_paths)"
+assert_contains 'the push filter covers the workflow itself' \
+    'deps-check.yml' "$(wf push_paths)"
 
 # `contents: read` and nothing else. A bare `permissions:` block is what
 # demotes the default write-scoped token for a scheduled run on a public repo,
 # so both the scope list and the one value are asserted.
+# GitHub's macOS runner image ships an untrusted `aws/tap`, and Homebrew
+# responds by degrading every cask install: `brew install --cask alacritty`
+# printed "Would install 1 cask" and changed nothing, so the check that
+# follows it failed. Trusting taps is scoped to the macOS bootstrap step
+# rather than the whole workflow, because it is a property of this runner
+# image and nothing else here installs a cask.
+assert_contains 'the macOS bootstrap disables the tap-trust requirement' \
+    'HOMEBREW_NO_REQUIRE_TAP_TRUST' "$(wf macos_env)"
+
 assert_equals 'the workflow permissions are contents only' \
     'contents' "$(wf permission_scopes)"
 assert_equals 'the workflow grants contents: read' 'read' "$(wf contents_permission)"

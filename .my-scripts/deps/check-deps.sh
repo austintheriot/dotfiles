@@ -34,6 +34,15 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 DEPS_CONF=${DEPS_CONF:-"$SCRIPT_DIR/deps.conf"}
 DEPS_LOCAL_CONF=${DEPS_LOCAL_CONF:-"$SCRIPT_DIR/deps-local.conf"}
 
+# The curl-to-shell installers below write outside a default non-login PATH:
+# zoxide to ~/.local/bin, rustup to ~/.cargo/bin. Without these, a `command
+# -v` check fails on the line after its own install succeeded, so --fix can
+# never converge and the CI exit code stops meaning anything. An interactive
+# shell usually exports these already, which is what hides the bug on a
+# developer machine.
+PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+export PATH
+
 fix=0
 yes=0
 dry_run=0
@@ -93,7 +102,22 @@ install_cmd_for() {
             printf 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
             ;;
         zsh-autosuggestions)
-            printf 'git clone https://github.com/zsh-users/zsh-autosuggestions "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"'
+            # The oh-my-zsh custom-plugin clone only satisfies the check on a
+            # machine that actually has oh-my-zsh. On brew the plugin comes
+            # from its own formula, and cloning into a nonexistent
+            # ~/.oh-my-zsh would leave a directory nothing ever sources.
+            # `git clone` creates its parent directories, so cloning on a
+            # machine with no oh-my-zsh lands the plugin somewhere nothing
+            # sources -- and the check then reports success for an install
+            # that will never load. Report it as manual-only instead.
+            case "$manager" in
+                brew) printf 'brew install zsh-autosuggestions' ;;
+                *)
+                    if [ -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}" ]; then
+                        printf 'git clone https://github.com/zsh-users/zsh-autosuggestions "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"'
+                    fi
+                    ;;
+            esac
             ;;
         tpm)
             printf 'git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"'

@@ -14,5 +14,6 @@
 tests/
 !tests/notify.test.sh
 .my-scripts/
+!.my-scripts/deps/deps-local.conf
 docs/research/
 .config/tmux/tmux-common.conf

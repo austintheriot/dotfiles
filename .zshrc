@@ -293,3 +293,6 @@ bindkey -M viins '^U' backward-kill-line
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+# DEPENDENCY CHECK #########################################################################################
+[ -f ~/.my-scripts/deps/depcheck-hook.sh ] && source ~/.my-scripts/deps/depcheck-hook.sh

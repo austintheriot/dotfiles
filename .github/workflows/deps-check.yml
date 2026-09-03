@@ -1,0 +1,69 @@
+name: deps-check
+
+# Runs the real bootstrap (`check-deps.sh --fix --yes`) against throwaway
+# runners, so a stale install command in .my-scripts/deps/check-deps.sh is
+# caught on a schedule rather than the next time a machine gets set up.
+#
+# Not run on push: every job here installs packages from the network, so a
+# push trigger would make unrelated commits fail on an upstream outage.
+
+on:
+  schedule:
+    - cron: '0 13 1,15 * *'
+  workflow_dispatch:
+
+# Read-only. No job here needs to write to the repository, and the default
+# token for a scheduled run on a public repo is otherwise write-scoped.
+permissions:
+  contents: read
+
+# A scheduled run and a manual run can overlap. Nothing here mutates shared
+# state, so cancelling the older one is safe and avoids paying for two.
+concurrency:
+  group: deps-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Bootstrap and check dependencies (apt)
+        run: .my-scripts/deps/check-deps.sh --fix --yes
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Bootstrap and check dependencies (brew)
+        run: .my-scripts/deps/check-deps.sh --fix --yes
+
+  arch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # No --platform here: ubuntu-latest is amd64, which is the only
+      # architecture upstream publishes an archlinux image for. The local
+      # harness (.my-scripts/deps/test-local.sh) passes --platform
+      # linux/amd64 because it also runs on Apple Silicon.
+      - name: Build the Arch test image
+        run: |
+          docker build \
+            -f .my-scripts/deps/docker/Dockerfile.arch \
+            -t depcheck-arch \
+            .
+
+      - name: Bootstrap and check dependencies (pacman)
+        run: docker run --rm depcheck-arch

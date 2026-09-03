@@ -126,4 +126,207 @@ assert_contains 'names it as manual-only' 'no automated install' "$output"
 assert_contains 'links the docs' 'https://github.com/nvm-sh/nvm' "$output"
 assert_equals 'a manual-only dependency does not fail --fix' '0' "$status"
 
+# --- checks see the conventional curl-installer locations -----------------
+#
+# zoxide installs to ~/.local/bin and rustup to ~/.cargo/bin. Neither is on a
+# default non-login PATH, so a bare `command -v` check fails immediately
+# after a successful install and --fix can never converge. This masks itself
+# on a machine whose shell rc already exports those directories.
+
+pathless_home="$FIXTURES/pathless-home"
+mkdir -p "$pathless_home/.local/bin" "$pathless_home/.cargo/bin"
+printf '#!/bin/sh\nexit 0\n' > "$pathless_home/.local/bin/fake-local-tool"
+printf '#!/bin/sh\nexit 0\n' > "$pathless_home/.cargo/bin/fake-cargo-tool"
+chmod +x "$pathless_home/.local/bin/fake-local-tool" "$pathless_home/.cargo/bin/fake-cargo-tool"
+
+conf="$FIXTURES/deps-localbin.conf"
+printf 'fake-local-tool|command -v fake-local-tool|https://example.invalid\n' > "$conf"
+output=$(env HOME="$pathless_home" PATH="/usr/bin:/bin" DEPS_CONF="$conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" "$SCRIPT" 2>&1)
+status=$?
+assert_equals 'a binary in ~/.local/bin counts as present' '0' "$status"
+
+conf="$FIXTURES/deps-cargobin.conf"
+printf 'fake-cargo-tool|command -v fake-cargo-tool|https://example.invalid\n' > "$conf"
+output=$(env HOME="$pathless_home" PATH="/usr/bin:/bin" DEPS_CONF="$conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" "$SCRIPT" 2>&1)
+status=$?
+assert_equals 'a binary in ~/.cargo/bin counts as present' '0' "$status"
+
+# The widened PATH must not invent dependencies that are genuinely absent.
+conf="$FIXTURES/deps-still-missing.conf"
+printf 'definitely-not-installed|command -v definitely-not-installed|https://example.invalid\n' > "$conf"
+output=$(env HOME="$pathless_home" PATH="/usr/bin:/bin" DEPS_CONF="$conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" "$SCRIPT" 2>&1)
+status=$?
+assert_equals 'a genuinely absent binary is still missing' '1' "$status"
+
+# --- zsh-autosuggestions installs per package manager ---------------------
+#
+# The plugin ships as an oh-my-zsh custom clone on Linux and as its own brew
+# formula on macOS. Cloning into ~/.oh-my-zsh on a machine with no oh-my-zsh
+# leaves a directory nothing ever sources, so this must follow the manager.
+
+cat > "$BIN/brew" <<EOF
+#!/bin/sh
+printf 'brew %s\n' "\$*" >> "$FIXTURES/brew.log"
+exit 0
+EOF
+chmod +x "$BIN/brew"
+
+# detect_pm prefers pacman, then apt, then brew, so a brew-only machine needs
+# a PATH carrying neither of the others. That means the fixture directory has
+# to be the ENTIRE PATH: appending /usr/bin would pick up the real apt-get on
+# a Debian host (including the test container), and detect_pm would answer
+# "apt" before it ever considered brew. The stub set therefore has to carry
+# every binary check-deps.sh shells out to.
+BREW_ONLY="$FIXTURES/brew-only"
+mkdir -p "$BREW_ONLY"
+cp "$BIN/brew" "$BIN/sudo" "$BREW_ONLY/"
+for passthrough in sh env printf command test grep sed cut mkdir rm cat; do
+    real=$(command -v "$passthrough" 2>/dev/null) || continue
+    [ -f "$real" ] && ln -sf "$real" "$BREW_ONLY/$passthrough"
+done
+
+conf="$FIXTURES/deps-autosuggestions.conf"
+printf 'zsh-autosuggestions|[ -f "%s/never" ]|https://example.invalid\n' "$FIXTURES" > "$conf"
+
+: > "$FIXTURES/brew.log"
+# HOME is redirected to a fixture: on a real mac the developer's own
+# ~/.oh-my-zsh would decide which branch the install logic takes, so the
+# assertion would pass or fail based on the host rather than the manager.
+output=$(env HOME="$FIXTURES/brew-home" PATH="$BREW_ONLY" \
+    DEPS_CONF="$conf" DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+    "$SCRIPT" --fix --yes --dry-run)
+assert_contains 'installs zsh-autosuggestions from brew on a brew machine' \
+    'brew install zsh-autosuggestions' "$output"
+assert_equals 'does not clone into oh-my-zsh on a brew machine' \
+    '0' "$(printf '%s' "$output" | grep -c 'oh-my-zsh')"
+
+# A machine with no oh-my-zsh must never be given the custom-plugin clone.
+# The clone's own `git clone` creates the parent directories, so it lands a
+# plugin in a ~/.oh-my-zsh that nothing sources, and the check then reports
+# success for an install that will never load. Observed for real: a test run
+# created ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions on a machine that
+# does not use oh-my-zsh.
+omz_absent="$FIXTURES/omz-absent-home"
+mkdir -p "$omz_absent"
+output=$(env HOME="$omz_absent" PATH="$BIN:/usr/bin:/bin" DEPS_CONF="$conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" "$SCRIPT" --fix --yes --dry-run)
+assert_equals 'never clones into a nonexistent oh-my-zsh' \
+    '0' "$(printf '%s' "$output" | grep -c 'oh-my-zsh')"
+assert_succeeds 'a dry run creates no oh-my-zsh directory' \
+    test ! -d "$omz_absent/.oh-my-zsh"
+
+# With oh-my-zsh genuinely installed, the custom-plugin clone is correct.
+omz_present="$FIXTURES/omz-present-home"
+mkdir -p "$omz_present/.oh-my-zsh/custom/plugins"
+output=$(env HOME="$omz_present" PATH="$BIN:/usr/bin:/bin" DEPS_CONF="$conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" "$SCRIPT" --fix --yes --dry-run)
+assert_contains 'clones into an existing oh-my-zsh' \
+    'zsh-users/zsh-autosuggestions' "$output"
+
+# --- the shared checks accept either platform's install shape -------------
+#
+# deps.conf is byte-identical on the mac and linux branches, so each check in
+# it has to pass against the macOS shape and the Linux shape of the same
+# dependency. These read the checks out of the real file rather than
+# restating them, so the test fails if the shipped file regresses.
+
+DEPS_CONF_REAL="$DOTFILES_ROOT/.my-scripts/deps/deps.conf"
+
+check_for() {
+    grep "^$1|" "$DEPS_CONF_REAL" | cut -d'|' -f2
+}
+
+# A Linux machine: the plugin is an oh-my-zsh custom clone, no brew present.
+linux_home="$FIXTURES/linux-home"
+mkdir -p "$linux_home/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
+touch "$linux_home/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+assert_succeeds 'zsh-autosuggestions resolves via the oh-my-zsh plugin path' \
+    env HOME="$linux_home" PATH="/usr/bin:/bin" sh -c "$(check_for zsh-autosuggestions)"
+
+# This machine: the plugin comes from brew, and there is no ~/.oh-my-zsh.
+if command -v brew >/dev/null 2>&1; then
+    assert_succeeds 'zsh-autosuggestions resolves via the brew share path' \
+        env HOME="$FIXTURES/empty-home" sh -c "$(check_for zsh-autosuggestions)"
+fi
+
+# A machine with neither shape must still report it missing, or the widened
+# check has become a tautology. PATH carries no brew, so the brew operand
+# expands to an empty prefix and cannot accidentally match.
+bare_home="$FIXTURES/bare-home"
+mkdir -p "$bare_home"
+if env HOME="$bare_home" PATH="/usr/bin:/bin" sh -c "$(check_for zsh-autosuggestions)" \
+        >/dev/null 2>&1; then
+    bare_result=present
+else
+    bare_result=missing
+fi
+assert_equals 'zsh-autosuggestions is missing on a bare machine' \
+    'missing' "$bare_result"
+
+# alacritty is a .app bundle on macOS and a PATH binary on Linux.
+alacritty_bin="$FIXTURES/alacritty-bin"
+mkdir -p "$alacritty_bin"
+printf '#!/bin/sh\nexit 0\n' > "$alacritty_bin/alacritty"
+chmod +x "$alacritty_bin/alacritty"
+assert_succeeds 'alacritty resolves via a binary on PATH' \
+    env PATH="$alacritty_bin:/usr/bin:/bin" sh -c "$(check_for alacritty)"
+
+if [ -d /Applications/Alacritty.app ]; then
+    assert_succeeds 'alacritty resolves via the macOS app bundle' \
+        env PATH="/usr/bin:/bin" sh -c "$(check_for alacritty)"
+fi
+
+# --- no check command may contain the field delimiter --------------------
+#
+# read_entries splits on `|`, so a pipe or `||` in a check silently truncates
+# it and leaks the rest into the docs URL. The truncated check still evals,
+# so this fails as a wrong answer rather than an error.
+
+bad_delimiter=$(awk -F'|' '!/^#/ && NF > 3 { print $1 }' "$DEPS_CONF_REAL")
+assert_equals 'no check command contains a pipe' '' "$bad_delimiter"
+
+# A leaked pipe shows up as a docs field that is no longer a bare URL, which
+# is the visible symptom of the truncation described above.
+malformed_docs=$(grep -v '^#' "$DEPS_CONF_REAL" | grep -v '^$' \
+    | awk -F'|' '$3 !~ /^http/ { printf "%s ", $1 }')
+assert_equals 'every docs url survives parsing' '' "$malformed_docs"
+
+# --- oh-my-zsh must be tracked on a branch whose shell sources it --------
+#
+# zsh-autosuggestions is installed two different ways. On this repo's mac
+# branch .zshrc-mac sources it from Homebrew's share directory; on the linux
+# branch .zshrc-linux sources it from $HOME/.oh-my-zsh/custom/plugins. The
+# shared deps.conf check accepts either path, so the check alone cannot say
+# whether this machine needs oh-my-zsh -- the branch's own zshrc can.
+#
+# Moving oh-my-zsh out of the shared deps.conf into deps-local.conf is
+# correct, because the mac machine does not use it. The move is only safe
+# while the branch that sources from the oh-my-zsh path still lists it: drop
+# it there and the shell sources a plugin nothing installs, silently losing
+# autosuggestions with every check still reporting success.
+#
+# Both manifests count, because which file owns oh-my-zsh is per-branch.
+
+DEPS_LOCAL_REAL="$DOTFILES_ROOT/.my-scripts/deps/deps-local.conf"
+all_tracked=$(cat "$DEPS_CONF_REAL" "$DEPS_LOCAL_REAL" 2>/dev/null \
+    | sed -e 's/#.*//' | cut -d'|' -f1 | grep -E '^[a-z]' | sort -u)
+
+sources_from_oh_my_zsh=0
+for zshrc in "$DOTFILES_ROOT"/.zshrc "$DOTFILES_ROOT"/.zshrc-*; do
+    [ -f "$zshrc" ] || continue
+    grep -q '^[^#]*source.*\.oh-my-zsh' "$zshrc" && sources_from_oh_my_zsh=1
+done
+
+if [ "$sources_from_oh_my_zsh" -eq 1 ]; then
+    oh_my_zsh_tracked=$(printf '%s\n' "$all_tracked" | grep -cx 'oh-my-zsh')
+    assert_equals 'oh-my-zsh is tracked on a branch whose shell sources it' \
+        '1' "$oh_my_zsh_tracked"
+else
+    assert_equals 'no zshrc on this branch sources from oh-my-zsh' \
+        '0' "$sources_from_oh_my_zsh"
+fi
+
 finish

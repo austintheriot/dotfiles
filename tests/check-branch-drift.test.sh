@@ -18,7 +18,7 @@ SCRIPT="$DOTFILES_ROOT/tests/check-branch-drift.sh"
 make_manifest_repo() {
     local repo
     repo=$(make_repo "$1" linux)
-    printf '# comment, ignored\n\nshared.txt\n' > "$repo/.sync-manifest"
+    printf '# comment, ignored\n\n.sync-manifest\nshared.txt\n' > "$repo/.sync-manifest"
     printf 'same content\n' > "$repo/shared.txt"
     git -C "$repo" add .sync-manifest shared.txt
     git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add manifest"
@@ -37,7 +37,7 @@ repo=$(make_manifest_repo repo-match)
 output=$(run_check "$repo" mac linux)
 status=$?
 assert_equals 'matching paths exit 0' '0' "$status"
-assert_contains 'reports the match' 'match on all 1 shared path' "$output"
+assert_contains 'reports the match' 'match on all 2 shared path' "$output"
 
 # --- a diverged manifest path fails --------------------------------------
 
@@ -56,7 +56,7 @@ assert_contains 'names the diverged path' 'diverged: shared.txt' "$output"
 # --- comments and blank lines in the manifest are ignored ----------------
 
 repo=$(make_repo repo-comments linux)
-printf '# just a comment\n\n\n' > "$repo/.sync-manifest"
+printf '# just a comment\n\n.sync-manifest\n' > "$repo/.sync-manifest"
 git -C "$repo" add .sync-manifest
 git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "empty manifest"
 git -C "$repo" branch mac
@@ -64,7 +64,8 @@ git -C "$repo" branch mac
 output=$(run_check "$repo" mac linux)
 status=$?
 assert_equals 'a manifest with only comments passes' '0' "$status"
-assert_contains 'reports zero paths checked' 'match on all 0 shared path' "$output"
+assert_contains 'reports only the self-listed manifest as checked' \
+    'match on all 1 shared path' "$output"
 
 # --- excluded paths (! prefix) may differ without counting as drift -----
 
@@ -72,7 +73,7 @@ repo=$(make_repo repo-exclude linux)
 mkdir -p "$repo/dir"
 printf 'shared\n' > "$repo/dir/common.txt"
 printf 'linux-only\n' > "$repo/dir/platform.txt"
-printf 'dir/\n!dir/platform.txt\n' > "$repo/.sync-manifest"
+printf '.sync-manifest\ndir/\n!dir/platform.txt\n' > "$repo/.sync-manifest"
 git -C "$repo" add .sync-manifest dir
 git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add dir with an excluded file"
 git -C "$repo" branch mac
@@ -85,7 +86,7 @@ git -C "$repo" checkout -q linux
 output=$(run_check "$repo" mac linux)
 status=$?
 assert_equals 'a diverged but excluded path still passes' '0' "$status"
-assert_contains 'reports the directory as matched' 'match on all 1 shared path' "$output"
+assert_contains 'reports the directory as matched' 'match on all 2 shared path' "$output"
 
 # --- a missing manifest fails loudly, not silently ------------------------
 
@@ -106,12 +107,12 @@ assert_contains 'names the missing manifest' '.sync-manifest' "$output"
 
 repo=$(make_manifest_repo repo-tilde)
 git -C "$repo" checkout -q mac
-printf '# comment, ignored\n\nshared.txt\n~per-branch.txt\n' > "$repo/.sync-manifest"
+printf '# comment, ignored\n\n.sync-manifest\nshared.txt\n~per-branch.txt\n' > "$repo/.sync-manifest"
 printf 'mac version\n' > "$repo/per-branch.txt"
 git -C "$repo" add .sync-manifest per-branch.txt
 git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add tilde rule"
 git -C "$repo" checkout -q linux
-printf '# comment, ignored\n\nshared.txt\n~per-branch.txt\n' > "$repo/.sync-manifest"
+printf '# comment, ignored\n\n.sync-manifest\nshared.txt\n~per-branch.txt\n' > "$repo/.sync-manifest"
 printf 'linux version\n' > "$repo/per-branch.txt"
 git -C "$repo" add .sync-manifest per-branch.txt
 git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "diverge per-branch file on linux"
@@ -120,6 +121,104 @@ output=$(run_check "$repo" mac linux)
 status=$?
 assert_equals 'a tilde path does not fail the check' '0' "$status"
 assert_contains 'a tilde path is not counted as shared' \
-    'match on all 1 shared path' "$output"
+    'match on all 2 shared path' "$output"
+
+# --- a tracked file matching no rule fails the check ---------------------
+#
+# This is the gap the exhaustiveness phase closes. A new file inside a
+# listed directory is already caught, because rules are path prefixes; a new
+# path outside every rule was previously invisible, and the check reported
+# "match on all" while the branches genuinely differed.
+
+repo=$(make_manifest_repo repo-unlabeled)
+git -C "$repo" checkout -q mac
+printf 'brand new\n' > "$repo/brand-new.txt"
+git -C "$repo" add brand-new.txt
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add unlabeled file"
+git -C "$repo" checkout -q linux
+
+output=$(run_check "$repo" mac linux 2>&1)
+status=$?
+assert_equals 'an unlabeled file exits non-zero' '1' "$status"
+assert_contains 'names the unlabeled file' 'brand-new.txt' "$output"
+assert_contains 'says how many are unlabeled' 'match no .sync-manifest rule' "$output"
+assert_contains 'offers the shared label' 'shared: must be identical' "$output"
+assert_contains 'offers the per-branch label' 'per-branch: tracked, never compared' "$output"
+
+# --- the annotation names the branch the file is really on ---------------
+#
+# A file present on one branch only usually tells the reader which label it
+# wants, so the branch is reported rather than left to be guessed.
+
+assert_contains 'annotates the branch the file is on' '(on mac)' "$output"
+
+# --- a file unlabeled on the SECOND ref is caught too --------------------
+#
+# The file lists must be unioned across both refs. Scanning ref-a alone
+# would let a file added only on ref-b escape, which is the same class of
+# bug this phase exists to close.
+
+repo=$(make_manifest_repo repo-unlabeled-b)
+git -C "$repo" checkout -q linux
+printf 'linux only\n' > "$repo/linux-only.txt"
+git -C "$repo" add linux-only.txt
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add linux-only file"
+git -C "$repo" checkout -q mac
+
+output=$(run_check "$repo" mac linux 2>&1)
+status=$?
+assert_equals 'an unlabeled file on ref-b exits non-zero' '1' "$status"
+assert_contains 'names the ref-b file' 'linux-only.txt' "$output"
+assert_contains 'annotates it as linux' '(on linux)' "$output"
+
+# --- a ~ label satisfies the check --------------------------------------
+
+repo=$(make_manifest_repo repo-tilde-labeled)
+printf '# comment, ignored\n\n.sync-manifest\nshared.txt\n~per-branch.txt\n' > "$repo/.sync-manifest"
+printf 'mac version\n' > "$repo/per-branch.txt"
+git -C "$repo" add .sync-manifest per-branch.txt
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "label per-branch"
+git -C "$repo" branch -f mac linux
+
+output=$(run_check "$repo" mac linux 2>&1)
+status=$?
+assert_equals 'a labeled per-branch file passes' '0' "$status"
+
+# --- a new file under a shared directory needs no manifest edit ----------
+#
+# Rules ending in "/" cover everything beneath them, so adding a test or an
+# nvim plugin does not require touching the manifest. Only a genuinely new
+# top-level path does.
+
+repo=$(make_manifest_repo repo-under-dir)
+printf '# comment, ignored\n\n.sync-manifest\nshared.txt\nsub/\n' > "$repo/.sync-manifest"
+mkdir -p "$repo/sub"
+printf 'x\n' > "$repo/sub/thing.txt"
+git -C "$repo" add .sync-manifest sub/thing.txt
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add file under shared dir"
+git -C "$repo" branch -f mac linux
+
+output=$(run_check "$repo" mac linux 2>&1)
+status=$?
+assert_equals 'a file under a shared directory passes' '0' "$status"
+
+# --- a non-directory rule does not match by prefix -----------------------
+#
+# "DOTFILES.md" must not cover "DOTFILES.md.bak". Without the trailing-slash
+# requirement, a rule would silently absorb every path that merely starts
+# with its name.
+
+repo=$(make_manifest_repo repo-prefix)
+printf '# comment, ignored\n\n.sync-manifest\nshared.txt\nfile.txt\n' > "$repo/.sync-manifest"
+printf 'a\n' > "$repo/file.txt"
+printf 'b\n' > "$repo/file.txt.bak"
+git -C "$repo" add .sync-manifest file.txt file.txt.bak
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add lookalike path"
+git -C "$repo" branch -f mac linux
+
+output=$(run_check "$repo" mac linux 2>&1)
+status=$?
+assert_equals 'a lookalike path is not absorbed by prefix' '1' "$status"
+assert_contains 'names the lookalike path' 'file.txt.bak' "$output"
 
 finish

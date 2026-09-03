@@ -66,6 +66,27 @@ status=$?
 assert_equals 'a manifest with only comments passes' '0' "$status"
 assert_contains 'reports zero paths checked' 'match on all 0 shared path' "$output"
 
+# --- excluded paths (! prefix) may differ without counting as drift -----
+
+repo=$(make_repo repo-exclude linux)
+mkdir -p "$repo/dir"
+printf 'shared\n' > "$repo/dir/common.txt"
+printf 'linux-only\n' > "$repo/dir/platform.txt"
+printf 'dir/\n!dir/platform.txt\n' > "$repo/.sync-manifest"
+git -C "$repo" add .sync-manifest dir
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add dir with an excluded file"
+git -C "$repo" branch mac
+git -C "$repo" checkout -q mac
+printf 'mac-only\n' > "$repo/dir/platform.txt"
+git -C "$repo" add dir/platform.txt
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "diverge the excluded file on mac"
+git -C "$repo" checkout -q linux
+
+output=$(run_check "$repo" mac linux)
+status=$?
+assert_equals 'a diverged but excluded path still passes' '0' "$status"
+assert_contains 'reports the directory as matched' 'match on all 1 shared path' "$output"
+
 # --- a missing manifest fails loudly, not silently ------------------------
 
 repo=$(make_repo repo-no-manifest linux)

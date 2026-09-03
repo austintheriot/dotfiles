@@ -41,7 +41,13 @@ assert_contains 'the window-naming after-new-window hook survives the split' \
 
 assert_equals 'mouse mode is on' 'on' "$(tmux_t show-options -g -v mouse)"
 
+# Reads the actually-configured command from the file rather than hardcoding
+# xclip or pbcopy: this test file is itself one of the paths .sync-manifest
+# requires to be identical between the mac and linux branches, so it can't
+# hardcode either platform's command without recreating the exact drift this
+# whole mechanism exists to catch.
+expected_yank_cmd=$(sed -n "s/.*copy-mode-vi 'y'.*copy-pipe \"\([^\"]*\)\".*/\1/p" "$CONFIG")
 yank_binding=$(tmux_t list-keys -T copy-mode-vi | grep "copy-pipe")
-assert_contains 'the platform yank command is present' 'xclip' "$yank_binding"
+assert_contains 'the platform yank command is present' "$expected_yank_cmd" "$yank_binding"
 
 finish

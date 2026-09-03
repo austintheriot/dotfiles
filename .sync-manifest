@@ -12,6 +12,7 @@
 .claude/scripts/
 .claude/CLAUDE.md
 tests/
+!tests/notify.test.sh
 .my-scripts/
 docs/research/
 .config/tmux/tmux-common.conf

@@ -1,12 +1,15 @@
-#!/bin/sh
+#!/bin/zsh
 
 # tmux Layout Manager
 # Creates pre-configured tmux pane layouts with customizable splits
+#
+# Sourced from .zshrc (`alias sp`) and from tmux-start.sh, never executed:
+# it splits the caller's own pane, and `return` below has to reach the calling
+# shell rather than killing it.
 
 # Constants
 DEFAULT_VERTICAL_SPLITS=2
 DEFAULT_HORIZONTAL_SPLITS=2
-DEFAULT_TERMINAL_SPLITS=4
 
 # --- Layout Functions ---
 
@@ -31,27 +34,27 @@ create_horizontal_splits() {
 create_main_above_two_below() {
   local vertical_splits=${1:-$DEFAULT_VERTICAL_SPLITS}
   local horizontal_splits=${2:-$DEFAULT_HORIZONTAL_SPLITS}
-  
+
   # Create main area (vertical splits)
   create_vertical_splits "$vertical_splits"
-  
+
   # Create bottom area (horizontal splits)
   tmux select-pane -D
   create_horizontal_splits "$horizontal_splits"
-  
+
   # Return to main area
   tmux select-pane -U
 }
 
-# Creates multiple vertical terminals (default: 4 panes)
+# Creates multiple vertical terminals (default: 2 panes)
 create_vertical_terminals() {
-  local splits=${1:-$DEFAULT_TERMINAL_SPLITS}
+  local splits=${1:-$DEFAULT_VERTICAL_SPLITS}
   create_vertical_splits "$splits"
 }
 
-# Creates editor on left with terminals on right (default: 4 terminals)
+# Creates editor on left with terminals on right (default: 2 terminals)
 create_editor_with_terminals() {
-  local vertical_splits=${1:-$DEFAULT_TERMINAL_SPLITS}
+  local vertical_splits=${1:-$DEFAULT_VERTICAL_SPLITS}
   tmux split-window -h
   create_vertical_terminals "$vertical_splits"
   tmux select-pane -L  # Focus editor pane
@@ -63,10 +66,12 @@ create_editor_with_terminals() {
 show_usage() {
   echo "Usage: $0 <layout_type> [vertical_splits] [horizontal_splits]"
   echo "Available layouts:"
-  echo "  terms    - Vertical terminals (default: $DEFAULT_TERMINAL_SPLITS)"
-  echo "  | or \\   - Editor with terminals (default: $DEFAULT_TERMINAL_SPLITS)"
+  echo "  terms    - Vertical terminals (default: $DEFAULT_VERTICAL_SPLITS)"
+  echo "  | or \\   - Editor with terminals (default: $DEFAULT_VERTICAL_SPLITS)"
   echo "  - or _   - Main above with panes below (default: ${DEFAULT_VERTICAL_SPLITS}x${DEFAULT_HORIZONTAL_SPLITS})"
-  exit 1
+  # `return`, not `exit`: this script is sourced, so `exit` would close the
+  # caller's interactive shell on a typo'd layout name.
+  return 1
 }
 
 # Parse arguments

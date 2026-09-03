@@ -8,7 +8,10 @@
 #
 # The leak guard stays at pre-commit (tests/pre-commit): a leak should never
 # even land in a local commit. The branch-drift check and the full suite run
-# here instead, so their ~25s cost is paid once per push, not once per commit.
+# here instead, so their cost is paid once per push, not once per commit.
+#
+# The suite runs in Docker (tests/run-in-docker.sh), against the ref being
+# pushed rather than the working tree. Requires a running Docker daemon.
 #
 # Reads git's pre-push stdin protocol: one line per ref being pushed,
 # "<local ref> <local sha> <remote ref> <remote sha>".
@@ -22,6 +25,7 @@ TRIGGER_PATHS='^\.my-scripts/.*\.sh$|^\.claude/scripts/.*\.py$|^\.claude/hooks/.
 
 pushing_synced_branch=0
 changed_paths=''
+push_ref=''
 
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$local_sha" = "$zero" ] && continue
@@ -29,6 +33,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     case $local_ref in
         refs/heads/mac|refs/heads/linux) pushing_synced_branch=1 ;;
     esac
+
+    # The suite runs against the ref being pushed, which is not always the
+    # checked-out branch. Pushing a second ref in one invocation is rare
+    # enough that testing the first is the honest simple behavior; the
+    # branch-drift Action re-checks both after the push.
+    [ -z "$push_ref" ] && push_ref=$local_sha
 
     if [ "$remote_sha" = "$zero" ]; then
         range_paths=$(git diff --name-only "$empty_tree" "$local_sha")
@@ -73,22 +83,32 @@ fi
 # is indistinguishable from a hook that is not installed at all.
 
 if ! printf '%s\n' "$changed_paths" | grep -qE "$TRIGGER_PATHS"; then
-    printf 'pre-push: no pushed path touches tested code, skipping ~/tests/run-all.sh\n'
+    printf 'pre-push: no pushed path touches tested code, skipping the suite\n'
     exit 0
 fi
 
-printf 'pre-push: pushed changes touch tested code, running ~/tests/run-all.sh\n'
+printf 'pre-push: pushed changes touch tested code, running the suite in Docker\n'
 
-if [ ! -x "$HOME/tests/run-all.sh" ]; then
-    printf 'pre-push: ~/tests/run-all.sh is missing or not executable\n' >&2
+if [ ! -x "$HOME/tests/run-in-docker.sh" ]; then
+    printf 'pre-push: ~/tests/run-in-docker.sh is missing or not executable\n' >&2
     exit 1
 fi
 
-# GIT_DIR and GIT_WORK_TREE are exported into a hook. The tests build throwaway
-# git repositories as fixtures, and with those variables set every `git init`
-# and `git commit` inside a fixture would operate on the dotfiles repo instead.
+# The suite runs in a container, never on this machine. On the host it spawns
+# tmux sessions on the real server and writes fixture repos under $HOME,
+# which made tmux-update-window-names.test.sh flaky enough to block a push
+# whose code was fine. The container is thrown away with its side effects.
+#
+# There is deliberately no host fallback. Falling back when the daemon is
+# down would reintroduce the flake silently, and a gate that quietly changes
+# what it tests is worse than one that tells you to start Docker.
+#
+# GIT_DIR and GIT_WORK_TREE are exported into a hook. The tests build
+# throwaway git repositories as fixtures, and with those variables set every
+# `git init` and `git commit` inside a fixture would operate on the dotfiles
+# repo instead.
 if env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
-        "$HOME/tests/run-all.sh" -q; then
+        DOTFILES_TEST_REF="$push_ref" "$HOME/tests/run-in-docker.sh"; then
     printf 'pre-push: tests passed\n'
     exit 0
 fi

@@ -1,0 +1,17 @@
+# Paths that must be byte-identical between the mac and linux branches.
+# Checked by tests/check-branch-drift.sh and .github/workflows/branch-drift.yml.
+#
+# The manifest lists itself and the workflow directory: both must be
+# identical on both branches for the mechanism to bootstrap correctly.
+
+.sync-manifest
+.github/workflows/
+.claude/agents/
+.claude/rules/
+.claude/skills/
+.claude/scripts/
+.claude/CLAUDE.md
+tests/
+.my-scripts/
+docs/research/
+.config/tmux/tmux-common.conf

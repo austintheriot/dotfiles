@@ -85,6 +85,94 @@ for path in $manifest; do
 done
 IFS=$old_ifs
 
+# --- every tracked file must match a rule -------------------------------
+#
+# The comparison above only inspects paths the manifest names. A file
+# outside every rule was invisible to it: the check reported "match on all"
+# while the branches genuinely differed. This phase closes that by requiring
+# each tracked file to match some rule.
+#
+# The file lists are unioned across both refs on purpose. The branches do
+# not carry identical file sets, so scanning ref-a alone would let a file
+# added only on ref-b escape -- the same bug in a different place.
+
+files_a=$(git_cmd ls-tree -r --name-only "$REF_A" 2>/dev/null)
+files_b=$(git_cmd ls-tree -r --name-only "$REF_B" 2>/dev/null)
+
+# Reports which refs a path is on. A file present on one branch only is
+# usually a file that wants the ~ label, so saying so saves the reader a
+# lookup.
+branches_for() {
+    found=''
+    printf '%s\n' "$files_a" | grep -qxF "$1" && found=$REF_A
+    if printf '%s\n' "$files_b" | grep -qxF "$1"; then
+        if [ -n "$found" ]; then found="$found, $REF_B"; else found=$REF_B; fi
+    fi
+    printf '%s' "$found"
+}
+
+# A rule ending in "/" covers everything beneath it. Any other rule matches
+# that exact path only, so a rule named DOTFILES.md must not absorb
+# DOTFILES.md.bak.
+is_covered() {
+    file=$1
+    inner_ifs=$IFS
+    IFS='
+'
+    for rule in $manifest; do
+        IFS=$inner_ifs
+        case $rule in
+            ''|'#'*) IFS='
+'; continue ;;
+            '!'*|'~'*) rule=${rule#?} ;;
+        esac
+        [ -n "$rule" ] || { IFS='
+'; continue; }
+        case $file in
+            "$rule") return 0 ;;
+            "$rule"*) case $rule in */) return 0 ;; esac ;;
+        esac
+        IFS='
+'
+    done
+    IFS=$inner_ifs
+    return 1
+}
+
+unlabeled=''
+unlabeled_count=0
+old_ifs=$IFS
+IFS='
+'
+for file in $(printf '%s\n%s\n' "$files_a" "$files_b" | sort -u); do
+    IFS=$old_ifs
+    [ -n "$file" ] || { IFS='
+'; continue; }
+    if ! is_covered "$file"; then
+        unlabeled="$unlabeled$file	$(branches_for "$file")
+"
+        unlabeled_count=$((unlabeled_count + 1))
+    fi
+    IFS='
+'
+done
+IFS=$old_ifs
+
+if [ "$unlabeled_count" -gt 0 ]; then
+    printf '\ncheck-branch-drift: %d tracked file(s) match no .sync-manifest rule\n\n' \
+        "$unlabeled_count" >&2
+    printf '%s' "$unlabeled" | while IFS='	' read -r file refs; do
+        [ -n "$file" ] || continue
+        printf '  %-44s (on %s)\n' "$file" "$refs" >&2
+    done
+    printf '\nEvery tracked file must match a rule, so a file added on one branch\n' >&2
+    printf 'cannot escape this check. Add one of these to .sync-manifest:\n\n' >&2
+    printf '  %-44s shared: must be identical on both branches\n' 'path/to/file' >&2
+    printf '  %-44s per-branch: tracked, never compared\n' '~path/to/file' >&2
+    printf '  %-44s excluded from an enclosing shared path\n\n' '!path/to/file' >&2
+    exit 1
+fi
+
 if [ "$diverged_count" -gt 0 ]; then
     printf '\ncheck-branch-drift: %s and %s diverged on %d of %d shared path(s)\n' \
         "$REF_A" "$REF_B" "$diverged_count" "$checked_count" >&2

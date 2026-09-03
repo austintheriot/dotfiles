@@ -157,4 +157,42 @@ assert_contains 'the hook passes the pushed ref to the runner' \
 assert_equals 'the hook does not invoke run-all.sh directly' \
     '0' "$(printf '%s' "$hook_text" | grep -c 'tests/run-all\.sh')"
 
+# --- TRIGGER_PATHS covers every path a routine sync-manifest edit touches -
+#
+# Five suites reference .sync-manifest (check-branch-drift, deps-docs,
+# deps-harness, depcheck-hook, tmux-conf-split) and two assert on workflow
+# files (deps-harness, workflow-labels). Exhaustiveness now requires a
+# .sync-manifest edit for every new top-level path, which is exactly the
+# routine edit that skipped the suite before these two patterns were added:
+# a push touching only .sync-manifest or .github/workflows/ ran no tests at
+# all.
+#
+# The pattern is matched against real example paths with `grep -E`, not
+# read as a substring of the hook text, so the assertion fails if the regex
+# stops matching even though the literal text `.sync-manifest` still
+# appears somewhere in TRIGGER_PATHS.
+
+trigger_paths=$(printf '%s\n' "$hook_text" | sed -n "s/^TRIGGER_PATHS='\(.*\)'$/\1/p")
+assert_succeeds 'TRIGGER_PATHS is defined in the hook' test -n "$trigger_paths"
+
+path_matches_trigger() {
+    printf '%s\n' "$1" | grep -Eq "$trigger_paths"
+}
+
+assert_succeeds 'TRIGGER_PATHS matches a .sync-manifest edit' \
+    path_matches_trigger '.sync-manifest'
+assert_succeeds 'TRIGGER_PATHS matches a workflow file edit' \
+    path_matches_trigger '.github/workflows/branch-drift.yml'
+
+# The new patterns must not have come at the cost of the ones already
+# guarding this hook.
+assert_succeeds 'TRIGGER_PATHS still matches a my-scripts shell edit' \
+    path_matches_trigger '.my-scripts/foo.sh'
+assert_succeeds 'TRIGGER_PATHS still matches a claude scripts edit' \
+    path_matches_trigger '.claude/scripts/foo.py'
+assert_succeeds 'TRIGGER_PATHS still matches a claude hooks edit' \
+    path_matches_trigger '.claude/hooks/foo.sh'
+assert_succeeds 'TRIGGER_PATHS still matches a tests edit' \
+    path_matches_trigger 'tests/some-suite.test.sh'
+
 finish

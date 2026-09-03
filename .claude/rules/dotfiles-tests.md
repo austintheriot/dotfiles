@@ -12,28 +12,38 @@ These apply when editing tooling tracked in the dotfiles repo: shell scripts in
 `.my-scripts/`, Python in `.claude/scripts/`, hooks in `.claude/hooks/`, and the
 tests themselves.
 
-## Run the suite before you commit
+## Run the suite before you push
 
-Run `~/tests/run-all.sh` and confirm it passes before committing a change to any
+Run `~/tests/run-all.sh` and confirm it passes before pushing a change to any
 of the paths above. It takes about 25 seconds, and announces each suite as
 `[n/total]` while it runs.
 
-A pre-commit hook at `~/tests/pre-commit` (symlinked from `~/.cfg/hooks/pre-commit`)
-runs the same suite and blocks the commit on failure. Run the suite yourself
-first anyway. Discovering a failure from a blocked commit costs a round trip,
-and the hook's output is quieter than the suite's.
+A pre-push hook at `~/tests/pre-push` (symlinked from `~/.cfg/hooks/pre-push`)
+runs the same suite, gated to pushes whose commits touch tested code, and
+blocks the push on failure. Run the suite yourself first anyway. Discovering a
+failure from a blocked push costs a round trip, and the hook's output is
+quieter than the suite's.
 
-The same hook runs a leak guard (`~/tests/leak-check.sh`) before the suite. This
-repo is public, so the guard refuses staged content that looks like a credential
-or like internal project detail. Its project-term patterns load from an
-untracked local file, so the guard names nothing specific in this repo.
+The same hook runs `~/tests/check-branch-drift.sh mac linux` when the push
+includes the `mac` or `linux` branch, and blocks the push if a path listed in
+`.sync-manifest` differs between the two. This is a local pre-flight: the
+`branch-drift` GitHub Action re-checks `origin/mac` against `origin/linux`
+after the push and is the authoritative gate.
+
+A separate pre-commit hook at `~/tests/pre-commit` (symlinked from
+`~/.cfg/hooks/pre-commit`) runs a leak guard (`~/tests/leak-check.sh`) on every
+commit, regardless of which paths are staged. This repo is public, so the
+guard refuses staged content that looks like a credential or like internal
+project detail. Its project-term patterns load from an untracked local file,
+so the guard names nothing specific in this repo. The guard stays at
+pre-commit, not pre-push, so a leak never even lands in a local commit.
 
 If the guard blocks a commit, genericize the wording or move the specifics to a
 machine-local file the tracked file reads at runtime. For a verified false
 positive, use `SKIP_LEAK_CHECK=1 config commit ...`.
 
-Never pass `--no-verify` to get around either gate. It skips every hook, so
-bypassing the leak guard would silently take the test suite with it.
+Never pass `--no-verify` to get around any of these gates. It skips every hook
+at that stage, so bypassing one gate would silently take the others with it.
 
 ## Where tests live
 
@@ -64,13 +74,15 @@ Two failure modes are worth knowing about, because both have bitten this repo:
 - A test that creates tmux sessions must clean them up on signals, not only on
   exit. `lib.sh` traps `INT`, `TERM`, and `HUP` alongside `EXIT` for this
   reason. Enough orphaned sessions will bog the tmux server down.
-- A caller that exports a git environment, which a pre-commit hook does, would
-  otherwise redirect every fixture `git init` and `git commit` at the dotfiles
-  repo. `lib.sh` unsets those variables, and the hook clears them too.
+- A caller that exports a git environment, which a pre-commit or pre-push hook
+  does, would otherwise redirect every fixture `git init` and `git commit` at
+  the dotfiles repo. `lib.sh` unsets those variables, and the pre-push hook
+  clears them too before it runs `run-all.sh`.
 
-## Installing the hook on another machine
+## Installing the hooks on another machine
 
-The hook lives in the work tree so it travels with the repo. The symlink does
-not, so create it once per machine:
+Both hooks live in the work tree so they travel with the repo. The symlinks do
+not, so create them once per machine:
 
     ln -sf "$HOME/tests/pre-commit" "$HOME/.cfg/hooks/pre-commit"
+    ln -sf "$HOME/tests/pre-push" "$HOME/.cfg/hooks/pre-push"

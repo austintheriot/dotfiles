@@ -79,6 +79,26 @@ Two failure modes are worth knowing about, because both have bitten this repo:
   the dotfiles repo. `lib.sh` unsets those variables, and the pre-push hook
   clears them too before it runs `run-all.sh`.
 
+## The fetch refspec on another machine
+
+A bare repo cloned with `--bare` has no `remote.origin.fetch`, so
+`config fetch origin` updates `FETCH_HEAD` and leaves `refs/remotes/origin/*`
+frozen at whatever they were when the remote was added. Nothing warns about
+this.
+
+`check-branch-drift.sh` defaults to comparing `origin/mac` against
+`origin/linux`, so on a machine missing the refspec it reads stale refs and
+reports drift that does not exist (or, worse, misses drift that does). Set it
+once per machine:
+
+    config config --add remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+    config fetch origin
+
+Confirm with `config rev-list --left-right --count origin/mac...mac`. A local
+branch that is level with the remote reports `0 0`. A nonzero left count on a
+branch you just pushed means the tracking refs are stale, not that the push
+failed.
+
 ## Installing the hooks on another machine
 
 Both hooks live in the work tree so they travel with the repo. The symlinks do

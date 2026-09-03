@@ -1,0 +1,50 @@
+# Minimal apt environment for exercising check-deps.sh --fix --yes from
+# scratch. Used by ../test-local.sh and mirrored by the `ubuntu` leg of
+# .github/workflows/deps-check.yml (which runs on a bare ubuntu-latest
+# runner rather than this image).
+#
+# 24.04, not the 22.04 the plan specified: GitHub's `ubuntu-latest` runner
+# is 24.04, and the `ubuntu` leg of deps-check.yml runs on that runner
+# directly. A 22.04 image here makes the local harness disagree with CI on
+# real package availability -- `alacritty` is in 24.04's universe
+# repository and has no installation candidate at all in 22.04, so the
+# plan's 22.04 pin reports a permanent alacritty failure that CI never
+# sees. Match the runner.
+#
+# Pinned by digest, not by the `24.04` tag alone: `ubuntu:24.04` is
+# republished for every point release, so a tag-only reference makes this
+# image silently change under a passing test. The tag is kept alongside the
+# digest for human readability; Docker uses the digest.
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
+
+# The bootstrap's own prerequisites, not dependencies under test:
+# check-deps.sh's install commands invoke sudo, curl, wget, and git, and
+# ca-certificates is what makes the https fetches work at all. `git` is
+# also a deps.conf entry, so it is already satisfied here -- that is
+# deliberate. This image tests the install path of everything else, not
+# git's.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        sudo curl git wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Only the dependency-checking tree, not the whole dotfiles repo. The repo
+# root carries .claude/ and other machine-local content with no business in
+# a build context.
+COPY .my-scripts/deps /dotfiles/.my-scripts/deps
+WORKDIR /dotfiles
+
+ENV HOME=/root
+# deps-local.conf is per-branch and platform-exclusive by design (see the
+# `!.my-scripts/deps/deps-local.conf` line in .sync-manifest). On the mac
+# branch it lists aerospace, a macOS window manager with no Linux package,
+# so leaving it active here would make every Linux run fail on a dependency
+# that is correctly absent. Point DEPS_LOCAL_CONF at a path that does not
+# exist: check-deps.sh's read_entries() skips a missing file, so these
+# containers test the shared deps.conf only. That is the right scope --
+# these images verify the cross-platform manifest, and a mac-exclusive
+# dependency is by definition not verifiable on Linux.
+ENV DEPS_LOCAL_CONF=/nonexistent/deps-local.conf
+ENV DEBIAN_FRONTEND=noninteractive
+ENTRYPOINT ["/dotfiles/.my-scripts/deps/check-deps.sh"]
+CMD ["--fix", "--yes"]

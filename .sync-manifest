@@ -1,8 +1,21 @@
-# Paths that must be byte-identical between the mac and linux branches.
-# Checked by tests/check-branch-drift.sh and .github/workflows/branch-drift.yml.
+# Every tracked file must match a rule in this file. A file matching nothing
+# fails tests/check-branch-drift.sh, which is what stops a file added on one
+# branch from silently escaping the comparison.
 #
-# The manifest lists itself and the workflow directory: both must be
-# identical on both branches for the mechanism to bootstrap correctly.
+# Three kinds of rule:
+#   path     shared: must be byte-identical on both branches
+#   !path    excluded from an enclosing shared path
+#   ~path    per-branch: tracked on purpose, never compared
+#
+# A trailing slash means "this directory and everything under it". Without
+# one, the rule matches that exact path only, so DOTFILES.md does not cover
+# DOTFILES.md.bak.
+#
+# This file lists itself, so both branches carry identical rules. A ~ rule
+# naming a path that does not exist on this branch is normal, not an error:
+# ~.zshrc-mac is listed on linux too.
+
+# --- shared -------------------------------------------------------------
 
 .sync-manifest
 .github/workflows/
@@ -10,10 +23,33 @@
 .claude/rules/
 .claude/skills/
 .claude/scripts/
+.claude/data/
 .claude/CLAUDE.md
 tests/
-!tests/notify.test.sh
 .my-scripts/
-!.my-scripts/deps/deps-local.conf
 docs/research/
+docs/superpowers/
 .config/tmux/tmux-common.conf
+.config/nvim/
+.agents/
+DOTFILES.md
+
+# --- excluded from a shared path ----------------------------------------
+
+# macOS-only: drives aerospace and osascript, so it cannot pass on linux.
+!tests/notify.test.sh
+# Per-branch by design: each machine's own extra dependencies.
+!.my-scripts/deps/deps-local.conf
+
+# --- per-branch by design -----------------------------------------------
+
+~.zshrc
+~.zshrc-mac
+~.zshrc-linux
+~.claude/hooks/notify.sh
+~.config/aerospace/
+~.config/alacritty/
+~.config/iterm-profiles/
+~.config/tmux/tmux.conf
+~README.md
+~TODO-AGENTS.md

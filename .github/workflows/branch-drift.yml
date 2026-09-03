@@ -1,4 +1,4 @@
-name: branch-drift
+name: Branch drift (mac vs linux)
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
 
 jobs:
   check:
+    name: Compare shared paths
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

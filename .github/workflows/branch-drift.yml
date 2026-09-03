@@ -1,0 +1,37 @@
+name: branch-drift
+
+on:
+  push:
+    branches: [mac, linux]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch both branches
+        run: |
+          git fetch origin mac:refs/remotes/origin/mac
+          git fetch origin linux:refs/remotes/origin/linux
+
+      - name: Check for drift
+        env:
+          DOTFILES_ROOT: ${{ github.workspace }}
+        run: |
+          # No `set -e`: the assignment below must survive a non-zero exit so
+          # the output and step summary are still written before exiting.
+          output=$(tests/check-branch-drift.sh)
+          status=$?
+          echo "$output"
+          if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+            {
+              echo '### Branch drift check'
+              echo '```'
+              echo "$output"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"

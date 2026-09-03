@@ -120,3 +120,10 @@ not, so create them once per machine:
 
     ln -sf "$HOME/tests/pre-commit" "$HOME/.cfg/hooks/pre-commit"
     ln -sf "$HOME/tests/pre-push" "$HOME/.cfg/hooks/pre-push"
+
+`tests/githooks-installed.test.sh` asserts both symlinks exist, are
+executable, and point at the tracked scripts, so a machine that skipped this
+step fails the suite instead of pushing with no gates. It also asserts
+`core.hooksPath` is unset, because setting it replaces `.cfg/hooks` wholesale
+and would stop git running these hooks at all. The suite skips the whole file
+where there is no `.cfg` repository, which is the case inside the test image.

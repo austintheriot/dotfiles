@@ -329,4 +329,68 @@ else
         '0' "$sources_from_oh_my_zsh"
 fi
 
+# --- a cask from a third-party tap taps first ----------------------------
+#
+# aerospace is a cask, not a formula, and it lives in a third-party tap
+# (nikitabobko/homebrew-tap). The default brew branch emits
+# `brew install <name>`, which fails twice over: "No available formula with
+# the name aerospace" because it is a cask, and an untapped third-party cask
+# is not findable even with --cask. The first real deps-check run failed on
+# exactly this on macOS.
+#
+# Asserted through --dry-run so no tap or cask is touched here.
+
+# detect_pm prefers pacman, then apt, then brew, so a brew-only PATH is the
+# only way to reach the brew branch. /usr/bin must stay off it: the test
+# image is Debian and carries a real apt-get, which would otherwise win and
+# make this assertion pass on macOS while failing in the container.
+brew_bin="$FIXTURES/brew-only-bin"
+mkdir -p "$brew_bin"
+printf '#!/bin/sh\nexit 0\n' > "$brew_bin/brew"
+chmod +x "$brew_bin/brew"
+for passthrough in sh dirname cd pwd command printf; do
+    real=$(command -v "$passthrough" 2>/dev/null) || continue
+    ln -sf "$real" "$brew_bin/$passthrough"
+done
+
+conf="$FIXTURES/deps-cask.conf"
+printf 'aerospace|command -v aerospace-not-installed|https://github.com/nikitabobko/AeroSpace\n' > "$conf"
+
+output=$(PATH="$brew_bin" DEPS_CONF="$conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+    "$SCRIPT" --fix --dry-run 2>&1)
+
+assert_contains 'aerospace installs as a cask' '--cask aerospace' "$output"
+assert_contains 'aerospace taps its third-party tap first' \
+    'nikitabobko' "$output"
+
+# --- a macOS-only dependency never fails --fix on Linux -----------------
+#
+# The deps-check workflow checks out one branch and runs every platform job
+# against it, so mac's deps-local.conf reaches the Ubuntu and Arch jobs.
+# aerospace has no Linux build at all. Emitting the default
+# `apt-get install aerospace` there produced "E: Unable to locate package
+# aerospace" and failed the whole job, which is what the first real
+# deps-check run hit on Ubuntu.
+#
+# Manual-only is the honest answer for a dependency this system cannot
+# install: --fix reports it and still exits 0, which is the same contract
+# nvm already relies on.
+
+apt_only_bin="$FIXTURES/apt-only-bin"
+mkdir -p "$apt_only_bin"
+printf '#!/bin/sh\nexit 0\n' > "$apt_only_bin/apt-get"
+printf '#!/bin/sh\nexec "$@"\n' > "$apt_only_bin/sudo"
+chmod +x "$apt_only_bin/apt-get" "$apt_only_bin/sudo"
+
+output=$(PATH="$apt_only_bin:/usr/bin:/bin" DEPS_CONF="$conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+    "$SCRIPT" --fix --yes 2>&1)
+status=$?
+
+assert_contains 'aerospace is manual-only on a non-brew system' \
+    'no automated install for aerospace' "$output"
+assert_equals 'a macOS-only dependency does not fail --fix on Linux' \
+    '0' "$status"
+
 finish

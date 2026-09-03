@@ -95,6 +95,19 @@ install_cmd_for() {
                 pacman) printf 'sudo pacman -Sy --noconfirm alacritty' ;;
             esac
             ;;
+        aerospace)
+            # A cask, not a formula, and one that lives in a third-party tap.
+            # The default `brew install <name>` fails twice over: "No
+            # available formula with the name aerospace" because it is a cask,
+            # and an untapped third-party cask is not findable even with
+            # --cask. `brew tap` is idempotent, so re-running costs a no-op.
+            #
+            # macOS-only. Every non-brew manager reports it as manual-only
+            # rather than guessing, because there is no Linux build.
+            case "$manager" in
+                brew) printf 'brew tap nikitabobko/tap && brew install --cask aerospace' ;;
+            esac
+            ;;
         zoxide)
             printf 'curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh'
             ;;

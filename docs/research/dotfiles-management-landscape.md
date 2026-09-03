@@ -1,7 +1,6 @@
 # Dotfiles management landscape (2026-09-02)
 
-Research pass done while designing the mac/linux branch drift-check
-(see `docs/superpowers/specs/2026-09-02-branch-drift-sync-design.md`).
+Research pass done while designing the mac/linux branch drift-check.
 Question: is there a better model than branch-per-machine for keeping
 platform-varying dotfiles in sync? Revisit this if drift keeps recurring
 even after the manifest + GitHub Action + tmux.conf split are in place.

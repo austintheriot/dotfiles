@@ -294,4 +294,39 @@ malformed_docs=$(grep -v '^#' "$DEPS_CONF_REAL" | grep -v '^$' \
     | awk -F'|' '$3 !~ /^http/ { printf "%s ", $1 }')
 assert_equals 'every docs url survives parsing' '' "$malformed_docs"
 
+# --- oh-my-zsh must be tracked on a branch whose shell sources it --------
+#
+# zsh-autosuggestions is installed two different ways. On this repo's mac
+# branch .zshrc-mac sources it from Homebrew's share directory; on the linux
+# branch .zshrc-linux sources it from $HOME/.oh-my-zsh/custom/plugins. The
+# shared deps.conf check accepts either path, so the check alone cannot say
+# whether this machine needs oh-my-zsh -- the branch's own zshrc can.
+#
+# Moving oh-my-zsh out of the shared deps.conf into deps-local.conf is
+# correct, because the mac machine does not use it. The move is only safe
+# while the branch that sources from the oh-my-zsh path still lists it: drop
+# it there and the shell sources a plugin nothing installs, silently losing
+# autosuggestions with every check still reporting success.
+#
+# Both manifests count, because which file owns oh-my-zsh is per-branch.
+
+DEPS_LOCAL_REAL="$DOTFILES_ROOT/.my-scripts/deps/deps-local.conf"
+all_tracked=$(cat "$DEPS_CONF_REAL" "$DEPS_LOCAL_REAL" 2>/dev/null \
+    | sed -e 's/#.*//' | cut -d'|' -f1 | grep -E '^[a-z]' | sort -u)
+
+sources_from_oh_my_zsh=0
+for zshrc in "$DOTFILES_ROOT"/.zshrc "$DOTFILES_ROOT"/.zshrc-*; do
+    [ -f "$zshrc" ] || continue
+    grep -q '^[^#]*source.*\.oh-my-zsh' "$zshrc" && sources_from_oh_my_zsh=1
+done
+
+if [ "$sources_from_oh_my_zsh" -eq 1 ]; then
+    oh_my_zsh_tracked=$(printf '%s\n' "$all_tracked" | grep -cx 'oh-my-zsh')
+    assert_equals 'oh-my-zsh is tracked on a branch whose shell sources it' \
+        '1' "$oh_my_zsh_tracked"
+else
+    assert_equals 'no zshrc on this branch sources from oh-my-zsh' \
+        '0' "$sources_from_oh_my_zsh"
+fi
+
 finish

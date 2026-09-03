@@ -14,6 +14,13 @@
 # (e.g. a mac-only test file that lives inside an otherwise-shared
 # directory), regardless of where the "!" line sits relative to the
 # directory it excludes from.
+#
+# A manifest line starting with "~" marks a path as tracked on purpose but
+# never compared, because it is meant to differ per branch (.zshrc, a
+# platform-only config). It is distinct from "!": "!" means "inside a shared
+# path, skip this one", while "~" means "accounted for, never compared".
+# Only "~" satisfies the exhaustiveness check below, which is what stops a
+# new file from escaping by simply not being mentioned.
 
 set -u
 
@@ -65,7 +72,7 @@ IFS='
 for path in $manifest; do
     IFS=$old_ifs
     case $path in
-        ''|'#'*|'!'*) continue ;;
+        ''|'#'*|'!'*|'~'*) continue ;;
     esac
     checked_count=$((checked_count + 1))
 

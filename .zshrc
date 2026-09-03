@@ -274,3 +274,6 @@ bindkey -M viins '^?' backward-delete-char
 bindkey -M viins '^H' backward-delete-char
 bindkey -M viins '^W' backward-kill-word
 bindkey -M viins '^U' backward-kill-line
+
+# DEPENDENCY CHECK #########################################################################################
+[ -f ~/.my-scripts/deps/depcheck-hook.sh ] && source ~/.my-scripts/deps/depcheck-hook.sh

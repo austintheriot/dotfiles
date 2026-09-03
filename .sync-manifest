@@ -28,7 +28,6 @@
 tests/
 .my-scripts/
 docs/research/
-docs/superpowers/
 .config/tmux/tmux-common.conf
 .config/nvim/
 .agents/
@@ -53,3 +52,4 @@ DOTFILES.md
 ~.config/tmux/tmux.conf
 ~README.md
 ~TODO-AGENTS.md
+~docs/superpowers/

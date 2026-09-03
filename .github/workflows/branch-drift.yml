@@ -24,16 +24,30 @@ jobs:
         run: |
           # No `set -e`: the assignment below must survive a non-zero exit so
           # the output and step summary are still written before exiting.
-          # 2>&1 because the script writes its failure summary to stderr,
-          # and command substitution captures stdout only. Without this the
-          # step summary shows the diverged paths but silently drops the
-          # count line that says how many of how many.
+          #
+          # 2>&1 because the script writes its failure summary to stderr, and
+          # command substitution captures stdout only.
           output=$(tests/check-branch-drift.sh 2>&1)
           status=$?
           echo "$output"
           if [ -n "$GITHUB_STEP_SUMMARY" ]; then
             {
-              echo '### Branch drift check'
+              if [ "$status" -eq 0 ]; then
+                echo '### Branch drift check passed'
+              elif printf '%s' "$output" | grep -q 'match no .sync-manifest rule'; then
+                # Two distinct failures with two distinct fixes. Naming which
+                # one fired saves the reader from reading the log to find out.
+                echo '### Unlabeled files'
+                echo
+                echo 'A tracked file matches no `.sync-manifest` rule, so it'
+                echo 'is invisible to the drift comparison. Label each file'
+                echo 'listed below.'
+              else
+                echo '### Branch drift'
+                echo
+                echo 'A shared path differs between `mac` and `linux`.'
+              fi
+              echo
               echo '```'
               echo "$output"
               echo '```'

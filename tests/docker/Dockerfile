@@ -73,6 +73,12 @@ COPY .github /root/.github
 # README and resolves every file path the docs cite. Without this the suite
 # fails on its own first assertion rather than on anything it means to check.
 COPY README.md /root/README.md
+# depcheck-hook.test.sh asserts the hook is sourced from .zshrc, and
+# check-deps.test.sh reads the zshrc files to decide whether this branch
+# needs oh-my-zsh. Both silently lose those assertions without this.
+# The glob covers the per-branch companion (.zshrc-mac or .zshrc-linux)
+# without naming either, so this line works unchanged on both branches.
+COPY .zshrc* /root/
 
 # notify.test.sh drives aerospace and osascript, both macOS-only, so it can
 # never pass here. It is already excluded from .sync-manifest for the same

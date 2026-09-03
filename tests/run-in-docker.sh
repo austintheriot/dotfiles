@@ -10,7 +10,8 @@
 # with the container.
 #
 # The build context is `git archive` of the current branch, overlaid with the
-# working tree's tests/, .my-scripts/, .claude/, and README.md. That covers uncommitted
+# working tree's tests/, .my-scripts/, .claude/, README.md, and the zshrc
+# files. That covers uncommitted
 # edits -- the point of a local loop -- without copying the rest of $HOME into
 # a Docker image. The tree is COPYed, never bind-mounted read-write: a mount
 # would reintroduce the side effects this exists to contain.
@@ -69,7 +70,7 @@ for tree in tests .my-scripts .claude .github .config/tmux; do
     fi
 done
 
-for file in .sync-manifest README.md; do
+for file in .sync-manifest README.md .zshrc .zshrc-mac .zshrc-linux; do
     if [ -f "$HOME/$file" ]; then
         cp "$HOME/$file" "$workdir/$file"
     fi

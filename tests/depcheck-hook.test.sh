@@ -143,4 +143,18 @@ assert_contains 'defines the depcheck alias' 'check-deps.sh --fix' "$output"
 assert_succeeds 'parses as POSIX sh' sh -n "$HOOK"
 assert_succeeds 'parses as zsh' zsh -n "$HOOK"
 
+# --- the hook is actually wired into this branch's .zshrc -----------------
+#
+# The hook file being correct is not the same as it running. .zshrc is
+# per-branch (it is absent from .sync-manifest), so porting .my-scripts/
+# between branches carries the hook without carrying the line that sources
+# it -- which is exactly what happened when the deps work moved to linux.
+# Without this, every other assertion in this file passes on a machine where
+# the nag never fires.
+
+zshrc="$DOTFILES_ROOT/.zshrc"
+assert_succeeds 'this branch has a .zshrc' test -f "$zshrc"
+assert_succeeds 'the .zshrc sources depcheck-hook.sh' \
+    grep -qE '^[^#]*depcheck-hook\.sh' "$zshrc"
+
 finish

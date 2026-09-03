@@ -95,4 +95,66 @@ assert_contains 'a missing docker explains it is not on PATH' \
 assert_contains 'a missing docker names the direct alternative' \
     'run-all.sh' "$output"
 
+# --- the runner tests the ref being pushed, not the checked-out branch ---
+#
+# The image is built from `git archive <branch>`. The pre-push hook can push
+# a ref that is not the checked-out branch: pushing linux from a worktree
+# while $HOME sits on mac is the normal way this repo ships a linux change.
+# A runner that always archives the checked-out branch would build mac's code
+# and report a pass for a linux push, which is a false green -- strictly
+# worse than the flaky host run this replaces.
+
+assert_contains 'the runner accepts a ref argument' \
+    'DOTFILES_TEST_REF' "$(cat "$RUNNER")"
+
+# The override has to actually change which ref is archived. Grepping the
+# source cannot show that: `git archive "$branch"` never contains the string
+# `show-current` whatever $branch was assigned from, so a source-text
+# assertion passes even when the override is ignored entirely.
+#
+# Instead run the runner with $DOTFILES_TEST_REF set to a ref that does not
+# exist, on a PATH with no docker. The ref is resolved before the docker
+# guard, so an honoured override reports the bad ref while an ignored one
+# falls through to the docker complaint.
+output=$(PATH="$no_docker_bin" DOTFILES_TEST_REF=refs/heads/no-such-ref \
+    "$RUNNER" 2>&1)
+status=$?
+# Assert on the outcome, not the wording: a bad ref must stop the run before
+# it can reach docker. Matching only the message would still pass if the
+# guard were deleted and the failure deferred to `git archive`, which exits
+# non-zero too but after the daemon probe.
+assert_equals 'a ref that does not exist exits non-zero' '1' "$status"
+assert_equals 'a bad ref never reaches the docker probe' \
+    '0' "$(printf '%s' "$output" | grep -c 'docker is not on PATH')"
+
+# And a real ref must get past that check, so the guard is not simply
+# refusing everything. Only meaningful where the repository exists: this
+# file also runs inside the test image, which carries the tracked files but
+# not the .cfg repository they came from.
+if [ -d "$DOTFILES_ROOT/.cfg" ]; then
+    output=$(PATH="$no_docker_bin" DOTFILES_TEST_REF=HEAD "$RUNNER" 2>&1)
+    assert_equals 'a valid ref passes ref resolution' \
+        '0' "$(printf '%s' "$output" | grep -c 'not a ref in this repository')"
+fi
+
+# --- the pre-push hook runs the suite in the container -------------------
+#
+# The host suite spawns tmux sessions on the real server and writes fixture
+# repos under $HOME. That is what made tmux-update-window-names.test.sh flaky
+# enough to block a push whose code was fine.
+
+HOOK="$DOTFILES_ROOT/tests/pre-push"
+assert_succeeds 'the pre-push hook exists' test -f "$HOOK"
+hook_text=$(cat "$HOOK" 2>/dev/null)
+
+assert_contains 'the hook runs the suite in the container' \
+    'run-in-docker.sh' "$hook_text"
+assert_contains 'the hook passes the pushed ref to the runner' \
+    'DOTFILES_TEST_REF' "$hook_text"
+
+# A hook that silently falls back to the host suite when Docker is down
+# reintroduces the flake it exists to avoid, without saying so.
+assert_equals 'the hook does not invoke run-all.sh directly' \
+    '0' "$(printf '%s' "$hook_text" | grep -c 'tests/run-all\.sh')"
+
 finish

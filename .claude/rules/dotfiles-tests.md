@@ -19,10 +19,24 @@ of the paths above. It takes about 25 seconds, and announces each suite as
 `[n/total]` while it runs.
 
 A pre-push hook at `~/tests/pre-push` (symlinked from `~/.cfg/hooks/pre-push`)
-runs the same suite, gated to pushes whose commits touch tested code, and
-blocks the push on failure. Run the suite yourself first anyway. Discovering a
-failure from a blocked push costs a round trip, and the hook's output is
-quieter than the suite's.
+runs the suite too, gated to pushes whose commits touch tested code, and
+blocks the push on failure. It runs the suite **in Docker**
+(`~/tests/run-in-docker.sh`), not on this machine, so it needs a running
+Docker daemon. There is no host fallback on purpose: the host suite spawns
+tmux sessions on the real server and writes fixture repos under `$HOME`,
+which made `tmux-update-window-names.test.sh` flaky enough to block a push
+whose code was fine.
+
+The hook tests the ref being pushed, not the working tree. It sets
+`$DOTFILES_TEST_REF` so the container archives that ref, which matters
+because the pushed ref is not always the checked-out branch: pushing `linux`
+from a worktree while `$HOME` sits on `mac` is the normal way this repo ships
+a linux change. When that variable names a ref other than the checked-out
+branch, the working-tree overlay is skipped and the container tests the ref
+exactly as it will land on the remote.
+
+Run `~/tests/run-in-docker.sh` yourself first anyway. Discovering a failure
+from a blocked push costs a round trip.
 
 The same hook runs `~/tests/check-branch-drift.sh mac linux` when the push
 includes the `mac` or `linux` branch, and blocks the push if a path listed in

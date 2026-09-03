@@ -85,4 +85,42 @@ assert_equals 'no workflow name merely restates its filename' \
 
 assert_equals 'every job has a name' '' "$(value_of unnamed_jobs)"
 
+# --- the test suite runs in CI, on both platforms ------------------------
+#
+# Before this existed, no workflow ran tests/run-all.sh at all: the suite only
+# ever ran from the local pre-push hook, so a green push meant "Docker was
+# running on the author's laptop", not "CI verified this".
+#
+# Both platforms are required. Linux alone would skip notify.test.sh (it
+# drives .claude/hooks/notify.sh) and the Darwin-gated Alacritty app-bundle
+# check in check-deps.test.sh. macOS alone would skip the container suites,
+# since GitHub's macOS runners ship no Docker daemon.
+
+SUITE_WORKFLOW="$WORKFLOW_DIR/test-suite.yml"
+assert_succeeds 'a workflow runs the test suite' test -f "$SUITE_WORKFLOW"
+suite_text=$(cat "$SUITE_WORKFLOW" 2>/dev/null)
+
+assert_contains 'the suite workflow runs on push' 'push:' "$suite_text"
+assert_contains 'the suite workflow runs run-all.sh' 'run-all.sh' "$suite_text"
+
+# The runners are read out of the parsed matrix, not grepped from the file.
+# Grepping matches the human-readable `label:` strings too, so deleting the
+# macOS entry from the matrix left a whole-file grep green.
+runners=$("$python_bin" - "$SUITE_WORKFLOW" <<'RUNNEREOF'
+import sys, re
+text = open(sys.argv[1]).read()
+# Deliberately regex rather than yaml: pyyaml is not installed everywhere the
+# suite runs, and this file must not skip on the machine it is guarding.
+found = sorted(set(re.findall(r'(?m)^\s*runner:\s*(\S+)\s*$', text)))
+print(' '.join(found))
+RUNNEREOF
+)
+
+assert_contains 'the matrix includes a linux runner' 'ubuntu-latest' "$runners"
+assert_contains 'the matrix includes a macos runner' 'macos-latest' "$runners"
+
+# A matrix job that stops at the first failing platform hides whether the
+# other one is also broken, which is the whole point of running both.
+assert_contains 'the matrix does not fail fast' 'fail-fast: false' "$suite_text"
+
 finish

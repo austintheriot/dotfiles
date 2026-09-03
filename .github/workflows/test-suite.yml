@@ -1,0 +1,94 @@
+name: Test suite (linux + macOS)
+
+# Runs tests/run-all.sh on both platforms this repo is branched for.
+#
+# Before this existed no workflow ran the suite at all: it only ever ran from
+# the local pre-push hook, so a green push meant "Docker was running on the
+# author's laptop", not "CI verified this".
+#
+# Both platforms are required, because each covers assertions the other
+# cannot:
+#   - macOS reaches notify.test.sh, which drives .claude/hooks/notify.sh, and
+#     the Darwin-gated Alacritty app-bundle check in check-deps.test.sh.
+#   - Linux is where the container harness (container.test.sh,
+#     run-in-docker.sh) is exercised; GitHub's macOS runners ship no Docker
+#     daemon.
+#
+# The suite runs directly on the runner rather than in the container, which is
+# what the pre-push hook uses locally. That is safe here for a reason worth
+# stating: the tmux suites are flaky on a developer machine because they share
+# the live tmux server with its attached client, its windows, and the six
+# global after-* hooks from .config/tmux/tmux-common.conf that fire the
+# window-naming script asynchronously. A runner is a fresh VM that never loads
+# that config, so it has no client, no windows, and no hooks -- the same
+# pristine conditions under which the container passes. See the tmux isolation
+# entry under DEFERRED TODOS in TODO-AGENTS.md.
+
+on:
+  push:
+    branches: [mac, linux]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only: nothing here writes to the repository.
+permissions:
+  contents: read
+
+# A force-push supersedes the run already in flight. Nothing here mutates
+# shared state, so cancelling the older one is safe.
+concurrency:
+  group: test-suite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+
+    strategy:
+      # Each platform covers assertions the other skips, so a failure on one
+      # must not hide the state of the other.
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux / ubuntu-latest
+            runner: ubuntu-latest
+          - label: macOS / macos-latest
+            runner: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The suite resolves everything through $DOTFILES_ROOT, but tests/lib.sh
+      # defaults it to $HOME. The checkout is not $HOME on a runner, so it has
+      # to be passed explicitly for every step below.
+      - name: Install the suite's dependencies (apt)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            tmux zsh git python3 python3-yaml dash fzf ripgrep
+
+      # macOS runners ship git, python3, zsh, and dash already. tmux, fzf and
+      # ripgrep are the ones the suite needs and the image does not carry.
+      # pyyaml is imported by deps-harness.test.sh to parse the workflows.
+      - name: Install the suite's dependencies (brew)
+        if: runner.os == 'macOS'
+        run: |
+          brew install tmux fzf ripgrep
+          python3 -m pip install --break-system-packages pyyaml
+
+      # A UTF-8 locale is load-bearing rather than cosmetic. With no LANG set,
+      # tmux treats a tab as non-printable and substitutes "_" in
+      # display-message output. The window-naming script uses a tab as its
+      # field separator, so every field parse breaks and most of that suite's
+      # assertions fail with mangled names.
+      - name: Run the test suite
+        env:
+          DOTFILES_ROOT: ${{ github.workspace }}
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+        run: tests/run-all.sh

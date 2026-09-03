@@ -97,4 +97,29 @@ status=$?
 assert_equals 'a missing manifest exits non-zero' '1' "$status"
 assert_contains 'names the missing manifest' '.sync-manifest' "$output"
 
+# --- a ~ line is parsed, not compared -----------------------------------
+#
+# `~path` means "tracked on purpose, never compared". The comparison phase
+# must not treat the line as a literal path named "~something", which would
+# both count toward the total and always report as matching (git diff on a
+# nonexistent path is empty).
+
+repo=$(make_manifest_repo repo-tilde)
+git -C "$repo" checkout -q mac
+printf '# comment, ignored\n\nshared.txt\n~per-branch.txt\n' > "$repo/.sync-manifest"
+printf 'mac version\n' > "$repo/per-branch.txt"
+git -C "$repo" add .sync-manifest per-branch.txt
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add tilde rule"
+git -C "$repo" checkout -q linux
+printf '# comment, ignored\n\nshared.txt\n~per-branch.txt\n' > "$repo/.sync-manifest"
+printf 'linux version\n' > "$repo/per-branch.txt"
+git -C "$repo" add .sync-manifest per-branch.txt
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "diverge per-branch file on linux"
+
+output=$(run_check "$repo" mac linux)
+status=$?
+assert_equals 'a tilde path does not fail the check' '0' "$status"
+assert_contains 'a tilde path is not counted as shared' \
+    'match on all 1 shared path' "$output"
+
 finish

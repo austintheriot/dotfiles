@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- Make sure all githooks are actually running on this machine
+- [CLAIMED] Make sure all githooks are actually running on this machine
 - Get the full test suite running on the full platform matrix in GitHub actions
 - Update deps-check to run on all pushes as well
 - There do appear to be macos Docker images. See if we can leverage any of them (e.g. https://github.com/dockur/macos)

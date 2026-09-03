@@ -80,8 +80,15 @@ add a case to `install_cmd_for()` in `check-deps.sh`.
 Two install commands are aware of the package manager rather than the
 dependency alone:
 
-- `alacritty` installs as a cask on Homebrew and as a normal package
-  elsewhere.
+- `alacritty` installs as a normal package on `apt` and `pacman`, and is
+  manual-only on Homebrew. Homebrew disabled its cask on 2026-09-01 because
+  the app does not pass the macOS Gatekeeper check, and the release `.dmg` is
+  no help: the app is adhoc-signed with no Team ID, `spctl -a` rejects it,
+  and approving it is interactive by design. The Alacritty install guide
+  documents only a source build, so macOS has no automated path.
+- `aerospace` is macOS-only. It installs as a cask from a third-party tap,
+  which the install command taps and trusts first, and is manual-only on
+  every other package manager because no Linux build exists.
 - `zsh-autosuggestions` installs from a Homebrew formula on Homebrew. On any
   other package manager it clones into the oh-my-zsh custom-plugin
   directory, and only when that directory already exists. Without oh-my-zsh

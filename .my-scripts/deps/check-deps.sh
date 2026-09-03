@@ -89,9 +89,26 @@ install_cmd_for() {
             esac
             ;;
         alacritty)
+            # No brew case on purpose, and no .dmg fallback either.
+            #
+            # Homebrew disabled the alacritty cask on 2026-09-01 -- "does not
+            # pass the macOS Gatekeeper check" -- so `brew install --cask
+            # alacritty` now fails on every Mac.
+            #
+            # Downloading the release .dmg instead does not rescue it. The
+            # app Alacritty ships is adhoc-signed with no Team ID, and
+            # `spctl -a` rejects it, which is the very reason the cask was
+            # disabled. Installing it would leave an app macOS refuses to
+            # launch until someone approves it by hand, and that approval is
+            # interactive by design. INSTALL.md documents only a source
+            # build.
+            #
+            # So macOS has no automated path at all. Reporting it as
+            # manual-only with the docs URL keeps one upstream disablement
+            # from failing the whole bootstrap. Revisit if the cask is
+            # re-enabled or upstream starts notarizing.
             case "$manager" in
                 apt) printf 'sudo apt-get update -qq && sudo apt-get install -y alacritty' ;;
-                brew) printf 'brew install --cask alacritty' ;;
                 pacman) printf 'sudo pacman -Sy --noconfirm alacritty' ;;
             esac
             ;;

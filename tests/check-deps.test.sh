@@ -400,4 +400,30 @@ assert_contains 'aerospace is manual-only on a non-brew system' \
 assert_equals 'a macOS-only dependency does not fail --fix on Linux' \
     '0' "$status"
 
+# --- a cask disabled upstream is reported, not attempted -----------------
+#
+# Homebrew disabled the alacritty cask on 2026-09-01: "does not pass the
+# macOS Gatekeeper check". `brew install --cask alacritty` now fails on every
+# Mac, which is what failed the macOS deps-check job. Alacritty's own website
+# ships a .dmg and its INSTALL.md documents only a source build, so there is
+# no automated brew path to fall back to.
+#
+# Manual-only is the honest answer, and it is the same contract nvm and
+# aerospace-on-Linux already use: --fix reports it with the docs URL and
+# still exits 0, so one upstream disablement does not fail the whole
+# bootstrap.
+
+conf="$FIXTURES/deps-disabled-cask.conf"
+printf 'alacritty|command -v alacritty-not-installed|https://alacritty.org/\n' > "$conf"
+
+output=$(PATH="$brew_bin" DEPS_CONF="$conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+    "$SCRIPT" --fix --yes 2>&1)
+status=$?
+
+assert_contains 'alacritty is manual-only on brew' \
+    'no automated install for alacritty' "$output"
+assert_contains 'alacritty points at its own docs' 'alacritty.org' "$output"
+assert_equals 'a cask disabled upstream does not fail --fix' '0' "$status"
+
 finish

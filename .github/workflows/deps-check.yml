@@ -55,16 +55,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # The runner image ships an untrusted `aws/tap`, and Homebrew responds
-      # by degrading every cask install: `brew install --cask alacritty`
-      # printed "Would install 1 cask" and changed nothing, so the check
-      # after it failed. Scoped to this step rather than the workflow,
-      # because it is a property of this runner image and nothing else here
-      # installs a cask. Safe in CI specifically: the runner is a throwaway
-      # VM installing from taps this repo names itself.
       - name: Bootstrap and check dependencies (brew)
-        env:
-          HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
         run: .my-scripts/deps/check-deps.sh --fix --yes
 
   arch:

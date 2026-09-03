@@ -292,15 +292,6 @@ assert_contains 'the push filter covers the workflow itself' \
 # `contents: read` and nothing else. A bare `permissions:` block is what
 # demotes the default write-scoped token for a scheduled run on a public repo,
 # so both the scope list and the one value are asserted.
-# GitHub's macOS runner image ships an untrusted `aws/tap`, and Homebrew
-# responds by degrading every cask install: `brew install --cask alacritty`
-# printed "Would install 1 cask" and changed nothing, so the check that
-# follows it failed. Trusting taps is scoped to the macOS bootstrap step
-# rather than the whole workflow, because it is a property of this runner
-# image and nothing else here installs a cask.
-assert_contains 'the macOS bootstrap disables the tap-trust requirement' \
-    'HOMEBREW_NO_REQUIRE_TAP_TRUST' "$(wf macos_env)"
-
 assert_equals 'the workflow permissions are contents only' \
     'contents' "$(wf permission_scopes)"
 assert_equals 'the workflow grants contents: read' 'read' "$(wf contents_permission)"

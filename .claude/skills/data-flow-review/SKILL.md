@@ -21,7 +21,7 @@ The reference file `~/.claude/rules/data-flow-and-ownership.md` is your authorit
 
 A clean design has crisp answers that match the concept. Mismatches between conceptual scope and instantiation scope are the finding.
 
-**Diagrams over principles.** For each non-trivial finding, propose the fix as a reassignment or as a text-shaped data-flow diagram, not as a vague principle. The user's own PR reviews (e.g., Notability PR #52822) are the model -- specific, diagrammed, alternative proposed, room left for pushback.
+**Diagrams over principles.** For each non-trivial finding, propose the fix as a reassignment or as a text-shaped data-flow diagram, not as a vague principle. The user's own PR reviews are the model -- specific, diagrammed, alternative proposed, room left for pushback.
 
 ## Scope resolution
 
@@ -116,10 +116,10 @@ Owner creates child, holds reference, never releases it.
        --produces--> render commands
 
    Proposed:
-     User scroll → Redux → PageTaskManager (decider) → Renderer (consumer)
+     User scroll → store → page-task manager (decider) → renderer (consumer)
                                                     → PDF systems (consumer)
 
-   PageTaskManager lives at <InstanceManager (app-scoped) | Session (note-scoped)>.
+   The page-task manager lives at <app-instance (app-scoped) | session (document-scoped)>.
    Renderer becomes a consumer of priority output; ownership of viewport state
    moves up to Redux as the single source of truth.
    ```

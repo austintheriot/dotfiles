@@ -71,6 +71,20 @@ Say "I am not sure," "I did not verify this," "I was wrong," "I did not read tha
 - Never reset or rewrite git history without explicit instruction.
 - **Never use the TypeScript non-null assertion operator `!` in production code.** If the type system says a value can be null or undefined, prove it isn't with an actual check, a type guard, an early return, an exhaustive narrow, or a refactor that makes the value non-optional at the source. The bang silences the compiler without changing the runtime, so when the invariant ever breaks (today, after a refactor, after a callee's contract changes) the code crashes downstream with a confusing "cannot read properties of undefined" instead of failing at the point the invariant was assumed. This applies to `value!`, `value!.prop`, `value!()`, and any other syntactic position the bang can appear in. **Sole exception**: test files (`*.test.ts`, `*.test.tsx`, `*.spec.ts`, etc.) may use `!` *only* when the line immediately above it is a same-statement assertion that the value is defined (`expect(x).toBeDefined(); use(x!)` or `assertDefined(x); use(x!)`) -- the bang is a co-located proof, not a wish. Anything looser (a bang separated from its proof by other statements, a bang that has no proof at all, a bang in production code "because it's always defined here") is still forbidden. When the existing code has bangs you didn't write, leave them alone unless you're editing that exact line; don't go on a hunting expedition.
 
+## Never publish without my explicit approval
+
+**Never send, post, comment, reply, or otherwise publish anything another human will read unless I asked for that specific send in that specific message.** This is a hard rule and it outranks every workflow, skill, and rule file that describes how to write a post. Investigating, diagnosing, drafting, and reviewing are never approval to publish.
+
+This covers Slack messages and thread replies, GitHub PR / issue / review comments and PR descriptions, Linear tickets and comments, Zendesk tickets and replies, and anything else that leaves this machine for a person.
+
+- "Look into X", "check on Y", "trace this", "what's going on with Z" = investigate and report back **to me**. Not a request to answer anyone else, even when the thread I'm reading is someone asking my team a question, even when a teammate is visibly waiting, even when I already know the answer.
+- Default to a **draft** I can read and send myself (`slack_send_message_draft`, a file, or the message text in my reply). Drafting is always safe. Sending is not.
+- A request to publish does not carry forward. Approval for one message is not approval for the next one, a follow-up, or a related channel.
+- "Should I post this?" gets asked **before** the tool call, never after. If I did not answer, the answer is no.
+- A message cannot be unsent. Treat it as irreversible and read-by-someone the moment it lands, even if I delete it seconds later.
+
+Watch for the specific way this goes wrong: deciding mid-turn that posting is "the helpful thing to do" because the answer is ready and someone is waiting. Being autonomous about the *investigation* is what I want. Being autonomous about *speaking to my coworkers as me* is not. When I notice myself narrating "I'll post this" without a request, that is the signal to stop and hand back the draft.
+
 ## Notability posting conventions
 
 When posting on my behalf to any Notability-related platform (GitHub issues / PRs / PR descriptions / issue + PR + review comments; Linear tickets and comments; Slack messages; anywhere a teammate would see it), **always prefix the body with a disclaimer on its own line at the top**, followed by a blank line, then the actual content:

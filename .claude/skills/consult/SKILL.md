@@ -58,9 +58,26 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`ci-pipeline`** -- GitHub Actions / GitLab CI / Buildkite / Jenkins workflows, Dockerfiles, branch protection, OIDC, signing, SLSA.
 - **`devops-infrastructure`** -- Terraform / Pulumi / CloudFormation / Helm; state management, IAM, networking, secrets, K8s manifests, GitOps, FinOps, DR.
 - **`graphics-programming`** -- WebGL / WebGPU, 2D vector graphics, text shaping (HarfBuzz / SDF / MSDF), shaders, GPU best practices.
+- **`interaction-design`** -- Norman's gulfs and slips-vs-mistakes, Nielsen's heuristics, the Laws of UX with their misapplications corrected, state completeness (empty / loading / partial / error / unauthorized), undo versus confirm, response-time thresholds, validation timing, motion duration and easing, deceptive design and its current enforcement.
+- **`visual-hierarchy`** -- typography (measure, scale, leading, tabular figures), Gestalt grouping, spacing and grid, OKLCH and perceptually uniform colour, APCA versus WCAG 2.x, data-table craft, and the density argument for professional tools.
+- **`design-systems`** -- three-tier token architecture, DTCG format, token naming, component API design (variants over boolean piles, escape hatches, ref forwarding), theming, governance, component versioning, and design-to-code drift.
+- **`ai-interface-design`** -- calibrated trust, the HAX eighteen guidelines, PAIR's chapters, automation bias and anchoring, what to show instead of a confidence number, citation granularity, streaming and cancellation semantics, agent approval gates.
+- **`information-architecture`** -- organization schemes, labeling and information scent, navigation and wayfinding, search versus browse, faceted classification, URLs as architecture, card sorting and tree testing.
+- **`content-design`** -- error-message anatomy, empty-state kinds, button and confirmation labels, voice and tone against stakes, terminology governance, and the limit of plain language in specialist domains.
+- **`expert-user-efficiency`** -- the practiced daily user: Raskin's modelessness and quasimodes, Cooper's perpetual intermediates, the Keystroke-Level Model, keyboard-first design, spatial memory and density, bulk operations. **Deliberately opposed to `interaction-design` on professional tools.**
 - **`audio-programming`** -- real-time audio thread discipline, DSP fundamentals, JUCE / Web Audio / mobile audio, plugin formats, MIDI.
 - **`webassembly`** -- WASM spec / proposals, runtimes, JS↔WASM boundary, Component Model + WIT, WASI capability model, toolchain.
 - **`mobile-native`** -- iOS (Swift / SwiftUI / UIKit / Swift Concurrency / SwiftData), Android (Kotlin / Compose / Coroutines / Room), platform lifecycle, store policy.
+- **`sync-and-offline`** -- local-first / offline-first architecture, CRDTs vs operational transformation vs server-authoritative rebase, conflict resolution, tombstones, partial replication, schema migration across un-upgradeable clients, local storage substrate, sync observability.
+- **`platform-payments`** -- StoreKit, Play Billing, Stripe and merchant-of-record, cross-platform entitlement architecture, webhook idempotency and reconciliation, store payment policy, subscription metrics.
+- **`platform-release`** -- code signing and notarization, store submission and review, phased / staged rollout and the absence of rollback, versioning rules, desktop packaging and auto-update.
+- **`desktop-native`** -- Windows / macOS / Linux desktop runtime: windowing and DPI, lifecycle and single-instance, OS integration, sandbox and filesystem, the Wayland transition, desktop UX conventions.
+- **`app-privacy-compliance`** -- GDPR / US state patchwork / COPPA, consent ordering, data minimization, deletion propagation, privacy manifests and store declarations. Engineering guidance, not legal advice.
+- **`native-bridge`** -- Electron / Tauri / React Native / Flutter / KMP / Capacitor bridges, IPC contract design, the renderer trust boundary, WebView-in-native, serialization and version skew.
+- **`input-and-peripherals`** -- pointer / stylus / touch / keyboard / gamepad input fidelity, and camera / mic / Bluetooth / location / file / USB access with their permission models.
+- **`licensing-and-oss`** -- license compatibility, copyleft scope, attribution and NOTICE obligations, source-available licenses, SBOM and scanning, policy-as-code. Engineering guidance, not legal advice.
+- **`build-systems`** -- the build graph: incrementality and correctness, hermeticity, reproducibility, cache keys and poisoning, per-toolchain mechanics, monorepo build shape.
+- **`crash-and-release-health`** -- crash capture and symbolication, crash-free metrics and their vendor incomparability, staged-rollout gating, and the client telemetry problems servers do not have.
 - **`llm-app`** -- prompt engineering, tool use, RAG, evals, context management (caching / compaction), prompt-injection defense, agentic patterns.
 - **`browser-spec`** -- WhatWG specs, DOM event model, modern platform primitives (`<dialog>`, Popover, AbortController, `Intl.*`), Web Components.
 - **`web-analytics`** -- Mixpanel / Amplitude / Segment / PostHog; event taxonomy, identity correctness, funnels / retention, A/B test instrumentation, privacy.
@@ -125,6 +142,13 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "Is this design vulnerable to X / how do I protect against Y" | `security` |
 | "Why is this slow / how do I optimize" | `performance` |
 | "How do I make this accessible / WCAG / focus management" | `accessibility` |
+| "What should this screen do when it is empty / loading / failed" or "undo or confirm here" | `interaction-design` |
+| "Why does this screen feel flat / what type scale / what spacing / how do I do colour" | `visual-hierarchy` |
+| "How should I name and layer my tokens / design this component API / stop the system drifting" | `design-systems` |
+| "How do I show model confidence / cite sources / gate an agent action / avoid over-trust" | `ai-interface-design` |
+| "How should I organize and name these sections / why can nobody find this" | `information-architecture` |
+| "How should this error message / empty state / button read" | `content-design` |
+| "How do I make this fast for someone who does it 900 times a day" | `expert-user-efficiency` |
 | "Should this be REST / gRPC / GraphQL / how do I version" | `api-design` |
 | "How do I synchronize threads / avoid deadlock / use channels" (non-Rust) | `concurrency` |
 | "How do I handle Unicode / timezones / currencies / RTL / IDN" | `i18n` |
@@ -135,6 +159,16 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "How do I structure my AudioWorklet / DSP code / plugin" | `audio-programming` |
 | "Should I use Component Model / WASI Preview 2 / wasm-bindgen" | `webassembly` |
 | "How should I structure this SwiftUI / Compose / lifecycle" | `mobile-native` |
+| "How do I sync offline edits / resolve conflicts / pick a CRDT vs a sync engine" | `sync-and-offline` |
+| "How should I model subscriptions / validate receipts / handle entitlements across platforms" | `platform-payments` |
+| "How do I sign / notarize / ship this / set up auto-update / stage a rollout" | `platform-release` |
+| "How should this behave on the desktop / handle windows / DPI / tray / Wayland" | `desktop-native` |
+| "Do we need consent for this / how do I handle deletion requests / what goes in the privacy label" | `app-privacy-compliance` |
+| "How should I design this IPC / expose native code to JS / secure my Electron or Tauri app" | `native-bridge` |
+| "How do I handle stylus input / request this permission / access this device" | `input-and-peripherals` |
+| "Can I use this dependency / what does this license require / is this compatible" | `licensing-and-oss` |
+| "Why does this rebuild / how do I make the build cacheable / is this build hermetic" | `build-systems` |
+| "How do I set up crash reporting / symbolicate this / decide whether to halt a rollout" | `crash-and-release-health` |
 | "How should I prompt Claude / structure tool use / design my RAG" | `llm-app` |
 | "Is there a platform API for this / should I use `<dialog>` / `Intl.*`" | `browser-spec` |
 | "How should I name this event / structure my funnel / track this A/B test" | `web-analytics` |

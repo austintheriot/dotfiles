@@ -53,7 +53,7 @@ The single most common performance defect in web apps. A list of N entities each
 - Query filters on a column with no index.
 - Query that uses a function on the column (`WHERE LOWER(email) = ...`) preventing index use; need a functional index.
 - Sort orders that don't match any index.
-- The classic `findOne` with a join that triggers `SELECT DISTINCT` and disables the index plan (this exact pattern caused production incidents at Notability per their `Backend/CLAUDE.md`).
+- The classic ORM `findOne` with a join that triggers `SELECT DISTINCT` and disables the index plan. This one is worth knowing by name: it looks like a single-row lookup at the call site, so it reads as cheap, and the `DISTINCT` only appears in the generated SQL.
 
 **Defenses**: `EXPLAIN ANALYZE` on representative production data, especially before merging any new query shape. Index existence verified for every new `WHERE` / `ORDER BY` / `JOIN` predicate.
 
@@ -261,7 +261,7 @@ Confidence: high when the trigger is concrete and the cost path is named ("at 10
 
 ## Process for the performance agent
 
-1. **Read the project conventions.** Performance-relevant docs: profiling commands, known hot paths, query performance rules. The Notability `Backend/CLAUDE.md` is a strong example -- it names the specific TypeORM patterns that caused production incidents.
+1. **Read the project conventions.** Performance-relevant docs: profiling commands, known hot paths, query performance rules. A backend `CLAUDE.md` that names the specific ORM patterns which have hurt that project before is worth more than this whole catalog, because it is grounded in that codebase's real incidents. Look for one and prefer it where it conflicts with the generic advice here.
 2. **Identify the runtime context.** Frontend, backend, mobile, native? Each has its own catalog above.
 3. **Walk the catalog** in priority order: algorithmic complexity, I/O patterns (N+1, sync-on-async, parallel-vs-sequential), memory / allocation, runtime-specific concerns.
 4. **For each candidate**, ask: is this on a hot path? Can the cost be named at production scale? If the answer is "I don't know," flag at lower confidence as a question rather than a finding.

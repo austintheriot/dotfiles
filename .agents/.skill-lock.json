@@ -1,0 +1,51 @@
+{
+  "version": 3,
+  "skills": {
+    "show-me": {
+      "source": "humanlayer/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/humanlayer/skills.git",
+      "skillPath": "plugins/show-me/skills/show-me/SKILL.md",
+      "skillFolderHash": "0bdb821a21e793a4f6f82a7078c052154447e5cc",
+      "installedAt": "2026-08-17T21:23:54.713Z",
+      "updatedAt": "2026-08-17T21:23:54.713Z"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/skills.git",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "skillFolderHash": "76a98a285cb0434f3d39e1a873823556330e398b",
+      "installedAt": "2026-08-17T21:24:01.344Z",
+      "updatedAt": "2026-08-17T21:24:01.344Z"
+    },
+    "papercuts": {
+      "source": "every-app/open-seo",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/every-app/open-seo.git",
+      "skillPath": ".agents/skills/papercuts/SKILL.md",
+      "skillFolderHash": "bd209344ea5675bc3081f735f8400fd23beb2410",
+      "installedAt": "2026-08-17T21:45:44.939Z",
+      "updatedAt": "2026-08-17T21:45:44.939Z"
+    }
+  },
+  "dismissed": {
+    "findSkillsPrompt": true
+  },
+  "lastSelectedAgents": [
+    "amp",
+    "antigravity",
+    "antigravity-cli",
+    "cline",
+    "codex",
+    "cursor",
+    "deepagents",
+    "gemini-cli",
+    "github-copilot",
+    "kimi-code-cli",
+    "opencode",
+    "warp",
+    "zed",
+    "claude-code"
+  ]
+}

@@ -26,7 +26,7 @@ brew install gh
 
 - Install zsh-autosuggestions: https://github.com/zsh-users/zsh-autosuggestions/blob/master/INSTALL.md
 
-- Install neovim (editor): https://neovim.io/
+- Install `neovim` (editor): https://neovim.io/
 
 - (optional) Install NvChad: https://nvchad.com/docs/quickstart/install
 
@@ -42,9 +42,9 @@ To start (custom alias in ~/.zshrc)
 nvc .
 ```
 
-- Install fzf (command-line fuzzy finder, used by neovim): https://github.com/junegunn/fzf
+- Install `fzf` (command-line fuzzy finder, used by neovim): https://github.com/junegunn/fzf
 
-- Install ripgrep (faster grep alternative written in Rust, used by neovim): https://github.com/BurntSushi/ripgrep
+- Install `ripgrep` (faster grep alternative written in Rust, used by neovim): https://github.com/BurntSushi/ripgrep
 
 - Install zoxide for `z` in place of `cd`: https://github.com/ajeetdsouza/zoxide
 
@@ -105,6 +105,21 @@ Disable `Displays have separate spaces`
 ```sh
 defaults write com.apple.spaces spans-displays -bool true && killall SystemUIServer
 ```
+
+### Dependency checking
+
+The dependencies listed above, plus a few that exist on one branch only, are
+also tracked in a checkable manifest: `.my-scripts/deps/deps.conf` and
+`.my-scripts/deps/deps-local.conf`.
+
+- `~/.my-scripts/deps/check-deps.sh` checks them and reports what is missing.
+- `depcheck` is a shell alias that checks them and offers to install anything
+  missing.
+- A shell-startup hook prints one line at most once every 24 hours when
+  something has gone missing. It never installs and never blocks startup.
+
+See `.my-scripts/deps/README.md` for the manifest format, the constraint on
+check commands, and how to add a dependency.
 
 ### Claude Code notifications
 

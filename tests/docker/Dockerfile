@@ -69,6 +69,10 @@ COPY .sync-manifest /root/.sync-manifest
 # deps-harness.test.sh asserts on the workflow's triggers, permissions, and
 # job definitions by parsing this file.
 COPY .github /root/.github
+# deps-docs.test.sh reads the "Dependency checking" section of the home
+# README and resolves every file path the docs cite. Without this the suite
+# fails on its own first assertion rather than on anything it means to check.
+COPY README.md /root/README.md
 
 # notify.test.sh drives aerospace and osascript, both macOS-only, so it can
 # never pass here. It is already excluded from .sync-manifest for the same

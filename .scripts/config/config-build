@@ -1,32 +1,41 @@
 #!/bin/sh
 #
-# Builds crates/config-manifest, installs the binary, and writes the stamp
-# pre-push compares against. Run this after editing the crate; pre-push
-# never compiles.
+# Builds crates/config-manifest and installs the binary with the stamp
+# pre-push compares against embedded inside it. Run this after editing the
+# crate; pre-push never compiles.
+#
+# The stamp is embedded rather than written to a file beside the binary. Two
+# independent paths meant overriding one and defaulting the other freshened a
+# stamp the running binary never came from, and a foreign config-manifest
+# earlier on PATH passed the check too. A stamp inside the binary is the
+# binary's own claim about what it was built from.
 #
 # Usage: config-build
 #   DOTFILES_ROOT      repo root (default $HOME)
 #   CARGO_TARGET_DIR   default $HOME/.cache/config-manifest/target, so no
 #                      target/ lands inside the tracked tree
 #   CONFIG_BIN_DIR     default $HOME/.local/bin
-#   CONFIG_STAMP_DIR   default $HOME/.cache/config-manifest
 
 set -eu
 
 ROOT=${DOTFILES_ROOT:-$HOME}
 CRATE_DIR="$ROOT/crates/config-manifest"
 BIN_DIR=${CONFIG_BIN_DIR:-$HOME/.local/bin}
-STAMP_DIR=${CONFIG_STAMP_DIR:-$HOME/.cache/config-manifest}
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/config-manifest/target}"
 
-cargo build --release --locked --quiet --manifest-path "$CRATE_DIR/Cargo.toml"
+stamp=$("$ROOT/.scripts/config/config-stamp")
 
-mkdir -p "$BIN_DIR" "$STAMP_DIR"
+# option_env! reads this at compile time, so changing it rebuilds the binary.
+CONFIG_MANIFEST_STAMP="$stamp" \
+    cargo build --release --locked --quiet --manifest-path "$CRATE_DIR/Cargo.toml"
+
+mkdir -p "$BIN_DIR"
 cp "$CARGO_TARGET_DIR/release/config-manifest" "$BIN_DIR/config-manifest"
-"$ROOT/.scripts/config/config-stamp" > "$STAMP_DIR/stamp"
 
-# Paying any first-run cost here rather than in a hook.
-"$BIN_DIR/config-manifest" --version >/dev/null
+# Paying any first-run cost here rather than in a hook, and reporting the
+# stamp the installed binary actually carries rather than the one just asked
+# for, so a build that failed to pick the variable up is visible here.
+built=$("$BIN_DIR/config-manifest" --stamp)
 
 printf 'config-build: installed %s (stamp %s)\n' \
-    "$BIN_DIR/config-manifest" "$(cut -c1-12 "$STAMP_DIR/stamp")"
+    "$BIN_DIR/config-manifest" "$built"

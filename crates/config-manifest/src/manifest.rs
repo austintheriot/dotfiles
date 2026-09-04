@@ -58,6 +58,7 @@ pub struct Manifest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ManifestError {
     Path { line: usize, source: PathError },
+    Whitespace { line: usize },
 }
 
 impl fmt::Display for ManifestError {
@@ -66,6 +67,10 @@ impl fmt::Display for ManifestError {
             ManifestError::Path { line, source } => {
                 write!(formatter, ".sync-manifest line {line}: {source}")
             }
+            ManifestError::Whitespace { line } => write!(
+                formatter,
+                ".sync-manifest line {line}: leading or trailing whitespace is not allowed"
+            ),
         }
     }
 }
@@ -99,14 +104,37 @@ pub struct Partition {
     pub unmatched: Vec<RelPath>,
 }
 
+/// Splits on '\n' only, so a "\r" stays visible to the whitespace check.
+/// `str::lines` strips it, which would let a CRLF manifest parse as if the
+/// carriage returns were not there. Interior blank lines are preserved
+/// because line numbers in errors must match the file.
+fn split_lines(text: &str) -> impl Iterator<Item = &str> {
+    text.strip_suffix('\n').unwrap_or(text).split('\n')
+}
+
 pub fn parse(text: &str) -> Result<Manifest, ManifestError> {
     let mut rules = Vec::new();
-    for (index, raw_line) in text.lines().enumerate() {
+    // Splitting on '\n' rather than using `str::lines`, because `lines`
+    // strips a trailing "\r" and a CRLF manifest must be rejected, not
+    // silently accepted as if the carriage returns were not there.
+    for (index, raw_line) in split_lines(text).enumerate() {
         let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') {
+        let line_number = index + 1;
+        // An indented `#` is a comment here even though the shell reference
+        // required column 1 and parsed such a line as a rule named "#...",
+        // which silently shared or excluded a path nobody wrote.
+        if line.starts_with('#') {
             continue;
         }
-        let line_number = index + 1;
+        if line.is_empty() {
+            if raw_line.contains('\r') {
+                return Err(ManifestError::Whitespace { line: line_number });
+            }
+            continue;
+        }
+        if raw_line != line {
+            return Err(ManifestError::Whitespace { line: line_number });
+        }
         let (constructor, body): (fn(PathPattern) -> Rule, &str) = match line.as_bytes()[0] {
             b'!' => (Rule::Excluded, &line[1..]),
             b'~' => (Rule::PerBranch, &line[1..]),
@@ -219,6 +247,34 @@ DOTFILES.md
 ~.zshrc
 ~docs/superpowers/
 ";
+
+    #[test]
+    fn a_trailing_space_on_a_rule_is_an_error_naming_the_line() {
+        let err = parse(".sync-manifest\n~per.txt   \n").expect_err("must fail");
+        assert_eq!(err, ManifestError::Whitespace { line: 2 });
+        assert_eq!(
+            err.to_string(),
+            ".sync-manifest line 2: leading or trailing whitespace is not allowed"
+        );
+    }
+
+    #[test]
+    fn a_carriage_return_is_an_error() {
+        let err = parse(".sync-manifest\r\n").expect_err("must fail");
+        assert_eq!(err, ManifestError::Whitespace { line: 1 });
+    }
+
+    #[test]
+    fn an_indented_comment_is_skipped_not_treated_as_a_rule() {
+        let manifest = parse("  # indented\n.sync-manifest\n").expect("valid");
+        assert_eq!(manifest.rules().len(), 1);
+    }
+
+    #[test]
+    fn a_blank_line_of_spaces_is_skipped() {
+        let manifest = parse(".sync-manifest\n   \n").expect("valid");
+        assert_eq!(manifest.rules().len(), 1);
+    }
 
     #[test]
     fn parse_reads_three_rule_kinds_and_skips_comments_and_blanks() {

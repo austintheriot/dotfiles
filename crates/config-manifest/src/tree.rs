@@ -41,7 +41,7 @@ impl TreeListing {
 pub enum TreeError {
     Malformed(String),
     UnsupportedMode(String),
-    UnsupportedType(String),
+    UnsupportedType { kind: String, path: String },
     NotUtf8(Vec<u8>),
     Path(PathError),
     Id(IdError),
@@ -52,9 +52,10 @@ impl fmt::Display for TreeError {
         match self {
             TreeError::Malformed(entry) => write!(formatter, "malformed ls-tree entry: {entry}"),
             TreeError::UnsupportedMode(mode) => write!(formatter, "unsupported file mode: {mode}"),
-            TreeError::UnsupportedType(kind) => {
-                write!(formatter, "unsupported tree entry type: {kind}")
-            }
+            TreeError::UnsupportedType { kind, path } => write!(
+                formatter,
+                "unsupported tree entry type '{kind}' at '{path}'; submodules are not supported"
+            ),
             TreeError::NotUtf8(bytes) => write!(formatter, "ls-tree entry is not UTF-8: {bytes:?}"),
             TreeError::Path(source) => write!(formatter, "ls-tree path: {source}"),
             TreeError::Id(source) => write!(formatter, "ls-tree object id: {source}"),
@@ -82,7 +83,10 @@ pub fn parse_ls_tree(bytes: &[u8]) -> Result<TreeListing, TreeError> {
             return Err(TreeError::Malformed(entry.to_string()));
         };
         if kind != "blob" {
-            return Err(TreeError::UnsupportedType(kind.to_string()));
+            return Err(TreeError::UnsupportedType {
+                kind: kind.to_string(),
+                path: path_text.to_string(),
+            });
         }
         let mode = match mode_text {
             "100644" => FileMode::Regular,
@@ -137,13 +141,26 @@ mod tests {
 
     #[test]
     fn rejects_unknown_modes_non_blob_entries_and_malformed_lines() {
+        let gitlink =
+            parse_ls_tree(b"160000 commit 4b825dc642cb6eb9a060e54bf8d69288fbee4904\tsub\0")
+                .expect_err("a gitlink is rejected");
         assert_eq!(
-            parse_ls_tree(b"160000 commit 4b825dc642cb6eb9a060e54bf8d69288fbee4904\tsub\0"),
-            Err(TreeError::UnsupportedType("commit".to_string()))
+            gitlink,
+            TreeError::UnsupportedType {
+                kind: "commit".to_string(),
+                path: "sub".to_string()
+            }
+        );
+        assert_eq!(
+            gitlink.to_string(),
+            "unsupported tree entry type 'commit' at 'sub'; submodules are not supported"
         );
         assert_eq!(
             parse_ls_tree(b"040000 tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\tdir\0"),
-            Err(TreeError::UnsupportedType("tree".to_string()))
+            Err(TreeError::UnsupportedType {
+                kind: "tree".to_string(),
+                path: "dir".to_string()
+            })
         );
         assert_eq!(
             parse_ls_tree(b"100600 blob 4b825dc642cb6eb9a060e54bf8d69288fbee4904\tf\0"),

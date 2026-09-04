@@ -6,13 +6,24 @@ use anyhow::Context;
 use config_manifest::{check, git, manifest};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const USAGE: &str = "usage: config-manifest --version | check [ref-a] [ref-b]";
+const USAGE: &str = "usage: config-manifest --version | --stamp | check [ref-a] [ref-b]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("--version") => {
             println!("config-manifest {VERSION}");
+            ExitCode::SUCCESS
+        }
+        Some("--stamp") => {
+            // `option_env!` is read at compile time, so cargo rebuilds when
+            // CONFIG_MANIFEST_STAMP changes. The stamp travels inside the
+            // binary, so a stale or foreign config-manifest on PATH cannot
+            // report a stamp it was not built with.
+            println!(
+                "{}",
+                option_env!("CONFIG_MANIFEST_STAMP").unwrap_or("unstamped")
+            );
             ExitCode::SUCCESS
         }
         Some("check") => match run_check(&args[1..]) {

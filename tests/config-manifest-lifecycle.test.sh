@@ -5,8 +5,9 @@
 #
 # The stamp is the tree id of crates/config-manifest as it is in the WORKTREE,
 # computed through a temp index, so the same content stamps identically
-# whether or not it is committed. pre-push compares it to the pushed commit's
-# subtree id and refuses a stale binary without ever compiling.
+# whether or not it is committed. config-build embeds it in the binary via
+# CONFIG_MANIFEST_STAMP; pre-push asks the binary for it and compares it to
+# the pushed commit's subtree id, refusing a stale binary without compiling.
 #
 # The build half needs cargo. Inside the Docker suite there is no cargo (the
 # runtime image is Rust-free; the binary is copied in from a builder stage), so
@@ -66,16 +67,29 @@ assert_equals 'config-manifest reports its version' \
 
 if command -v cargo >/dev/null 2>&1; then
     bin_dir="$FIXTURES/bin"
-    stamp_dir="$FIXTURES/stamp"
-    output=$(CONFIG_BIN_DIR="$bin_dir" CONFIG_STAMP_DIR="$stamp_dir" "$BUILD" 2>&1)
+    output=$(CONFIG_BIN_DIR="$bin_dir" "$BUILD" 2>&1)
     status=$?
     assert_equals 'config-build exits 0' '0' "$status"
     assert_succeeds 'config-build installs the binary' test -x "$bin_dir/config-manifest"
     assert_equals 'the installed binary runs' \
         'config-manifest 0.1.0' "$("$bin_dir/config-manifest" --version)"
-    assert_equals 'config-build writes the worktree stamp' \
-        "$("$STAMP")" "$(cat "$stamp_dir/stamp")"
     assert_contains 'config-build reports where it installed' "$bin_dir/config-manifest" "$output"
+
+    # The stamp lives inside the binary, not in a file beside it, so a stale
+    # or foreign config-manifest on PATH cannot report a stamp it was not
+    # built with.
+    assert_equals 'the installed binary reports the worktree stamp' \
+        "$("$STAMP")" "$("$bin_dir/config-manifest" --stamp)"
+    assert_contains 'config-build reports the stamp it embedded' "$("$STAMP")" "$output"
+
+    # A build with no CONFIG_MANIFEST_STAMP must say so rather than print an
+    # empty line, which pre-push would compare against a real tree id. This
+    # is how Docker and CI build the binary.
+    unstamped_target="$FIXTURES/unstamped-target"
+    CARGO_TARGET_DIR="$unstamped_target" cargo build --release --locked --quiet \
+        --manifest-path "$DOTFILES_ROOT/crates/config-manifest/Cargo.toml"
+    assert_equals 'a binary built without the variable reports unstamped' \
+        'unstamped' "$("$unstamped_target/release/config-manifest" --stamp)"
 else
     printf 'SKIP  config-build assertions (cargo not found)\n'
 fi
@@ -89,6 +103,7 @@ callers=$(grep -rln 'check-branch-drift\.sh' \
     "$DOTFILES_ROOT/tests" "$DOTFILES_ROOT/.github" "$DOTFILES_ROOT/.scripts" \
     "$DOTFILES_ROOT/.claude/rules" 2>/dev/null \
     | grep -v -e '/check-branch-drift\.test\.sh$' -e '/config-manifest-lifecycle\.test\.sh$' || true)
-assert_equals 'no script, workflow, or rule still names check-branch-drift.sh' '' "$callers"
+assert_equals 'no script, workflow, or rule outside the two drift test files still names check-branch-drift.sh' \
+    '' "$callers"
 
 finish

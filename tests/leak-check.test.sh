@@ -256,12 +256,18 @@ git -C "$repo" checkout -q main
 
 PRE_PUSH="$DOTFILES_ROOT/tests/pre-push"
 
+# HOME is set alongside GIT_DIR/GIT_WORK_TREE because the hook resolves its
+# own scripts as "$HOME/tests/...". On CI, DOTFILES_ROOT is the checkout while
+# HOME is the runner home, so without this the hook looks for leak-check.sh in
+# the wrong tree and every assertion below fails. The pushed ref is `feature`,
+# so the config-manifest stamp block never runs.
 run_pre_push() {
     local local_sha=$1 remote_sha=$2
     (
         cd "$repo" || exit 99
         printf 'refs/heads/feature %s refs/heads/feature %s\n' "$local_sha" "$remote_sha" \
-            | GIT_DIR="$repo/.git" GIT_WORK_TREE="$repo" "$PRE_PUSH" origin "file://$repo" 2>&1 >/dev/null
+            | HOME="$DOTFILES_ROOT" GIT_DIR="$repo/.git" GIT_WORK_TREE="$repo" \
+                "$PRE_PUSH" origin "file://$repo" 2>&1 >/dev/null
         printf '\n__exit=%s\n' "$?"
     )
 }
@@ -273,7 +279,8 @@ run_pre_push_combined() {
     (
         cd "$repo" || exit 99
         printf 'refs/heads/feature %s refs/heads/feature %s\n' "$local_sha" "$remote_sha" \
-            | GIT_DIR="$repo/.git" GIT_WORK_TREE="$repo" "$PRE_PUSH" origin "file://$repo" 2>&1
+            | HOME="$DOTFILES_ROOT" GIT_DIR="$repo/.git" GIT_WORK_TREE="$repo" \
+                "$PRE_PUSH" origin "file://$repo" 2>&1
         printf '\n__exit=%s\n' "$?"
     )
 }

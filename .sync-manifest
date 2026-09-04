@@ -52,3 +52,5 @@ DOTFILES.md
 ~.config/tmux/tmux.conf
 ~README.md
 ~TODO-AGENTS.md
+# Planning docs describe code that must match; the docs themselves need not.
+~docs/superpowers/

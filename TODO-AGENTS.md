@@ -2,6 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- Add image badges to the README for both mac and linux branches showing their current CI status
 - Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it
   from `tests/run-all.sh` as its own suite. The code already carries
   `# shellcheck disable=SC2086` directives while shellcheck is not
@@ -44,7 +45,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   `se` runs 107 reloads serialised against each other. That, more than
   nvm, is the "minutes before Alacritty responds" pathology.
   A new server loads tmux.conf by itself; the line only pushes edits into
-  an already-running server. Do this together with `config:reload` in the config:* utilities item below
+  an already-running server. Do this together with `config:reload` in the config:\* utilities item below
   so that convenience is not lost. `.zshrc` is per-branch, so linux needs
   the same edit separately. Test: assert no top-level `tmux source` in
   .zshrc, plus a generous startup ceiling (under 2s) that cannot flake.
@@ -85,7 +86,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 - Shell startup is currently verrryy slow, and this compounds for large setup tasks like the `se` alias. When I last ran it, it took minutes before Alacritty was responsive again. Let's consider/debug/profile what may be slowing things down here. Let's also take a bigger picture step back to see if there are other options to get the same results as the `se` alias that would run more quickly
 - Renaming tmux windows seems to lag a bit on git branch change. Let's look to see if there are some "smarter" hooks we can hook into to update the window name on git branch change, new branch, checkout, etc.
 
-
 # QUESTIONS (leave until queried)
 
 - Are our git hooks currently configured to run the leak check on commit and then the test suite on push? If not, they should.
@@ -105,7 +105,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   Nothing is skipped: verified in run 33826524451 that all four formulae
   install normally from homebrew/core. The untrusted tap is never read.
   Upstream already fixed it. runner-images #14271 adds `brew trust
-  aws/tap` and merged 2026-08-11, but the change has not reached
+aws/tap` and merged 2026-08-11, but the change has not reached
   `macos-latest` yet, so the warning still appeared 2026-09-04.
   Re-check after the next macOS image rollout, and expect the warning to
   disappear on its own. The two repo-side workarounds were both rejected
@@ -147,7 +147,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   which is a pristine server with no client, no windows, and no hooks. Three
   different assertions rotate through the failure, which is why it reads as
   random: `switching active pane updates the name`, `empty name restores the
-  labelled name`, `owned window follows branch changes`.
+labelled name`, `owned window follows branch changes`.
   Proposed fix: point `TMUX_TMPDIR` at the per-run fixture directory and use a
   dedicated socket (`tmux -L dotfiles-test-$$`) in `lib.sh`, giving the host
   the isolation the container already has. Deferred because it touches
@@ -164,7 +164,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 - Fix the silent stale name when `tmux display-message` returns empty.
   Separate latent bug in `.scripts/tmux-update-window-names.sh`, found
   while investigating the flake above and NOT its cause. `tmux display-message
-  -p -F '#{pane_current_path}'` intermittently prints nothing while exiting 0
+-p -F '#{pane_current_path}'` intermittently prints nothing while exiting 0
   with an empty stderr, measured at 1 to 6 calls in 3000 depending on server
   load. `#{window_name}` alone measured 0/3000, so it is specific to reading
   the pane path. The script treats that empty read as "this window has no

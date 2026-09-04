@@ -162,14 +162,22 @@ impl Git {
     }
 
     pub fn dirty_paths(&self) -> anyhow::Result<Vec<RelPath>> {
-        let text = self.output_text(&["status", "--porcelain", "--untracked-files=no"])?;
+        let text = self.output_text(&["status", "--porcelain", "-z", "--untracked-files=no"])?;
+        let mut records = text.split('\0').filter(|record| !record.is_empty());
         let mut paths = Vec::new();
-        for line in text.lines() {
-            let Some(raw) = line.get(3..) else { continue };
-            let path_text = raw.rsplit(" -> ").next().unwrap_or(raw);
+        while let Some(record) = records.next() {
+            let status = record.get(0..2);
+            let Some(path_text) = record.get(3..) else {
+                continue;
+            };
             paths.push(
                 RelPath::parse(path_text).with_context(|| format!("status path {path_text}"))?,
             );
+            let is_rename_or_copy =
+                status.is_some_and(|code| code.contains('R') || code.contains('C'));
+            if is_rename_or_copy {
+                records.next();
+            }
         }
         Ok(paths)
     }
@@ -388,6 +396,39 @@ mod tests {
             .collect();
         dirty.sort();
         assert_eq!(dirty, vec!["shared.txt", "untracked.txt"]);
+    }
+
+    #[test]
+    fn dirty_paths_handles_paths_with_spaces() {
+        let dir = sync_fixture();
+        std::fs::write(dir.path().join("dir/has space.txt"), "original\n").expect("write");
+        run(dir.path(), &["add", "dir/has space.txt"]);
+        run(dir.path(), &["commit", "-q", "-m", "add spaced file"]);
+        std::fs::write(dir.path().join("dir/has space.txt"), "edited\n").expect("write");
+
+        let git = Git::discover(dir.path());
+        let dirty: Vec<String> = git
+            .dirty_paths()
+            .expect("git")
+            .iter()
+            .map(|path| path.as_str().to_string())
+            .collect();
+        assert_eq!(dirty, vec!["dir/has space.txt"]);
+    }
+
+    #[test]
+    fn dirty_paths_reports_the_new_name_of_a_staged_rename() {
+        let dir = sync_fixture();
+        run(dir.path(), &["mv", "shared.txt", "renamed.txt"]);
+
+        let git = Git::discover(dir.path());
+        let dirty: Vec<String> = git
+            .dirty_paths()
+            .expect("git")
+            .iter()
+            .map(|path| path.as_str().to_string())
+            .collect();
+        assert_eq!(dirty, vec!["renamed.txt"]);
     }
 
     #[test]

@@ -37,6 +37,41 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   every pane switch. Note `/usr/bin/python3` is not a fallback -- it is an
   xcrun stub that does not run without the Xcode command line tools.
 
+- Remove the per-shell tmux config reload at `.zshrc:174`
+  (`[[ -n "$TMUX" ]] && tmux source ~/.config/tmux/tmux.conf`). A
+  timestamped trace of the real startup puts it at 1.7s, the single
+  largest cost left after lazy nvm. The whole 1.7s is `tpm`:
+  `.config/tmux/tmux-common.conf:107` runs the plugin manager on every
+  config load, measured at 1.74s alone. Every pane opened inside tmux
+  therefore re-initialises tpm on the shared single-threaded server, so
+  `se` runs 107 reloads serialised against each other. That, more than
+  nvm, is the "minutes before Alacritty responds" pathology.
+  A new server loads tmux.conf by itself; the line only pushes edits into
+  an already-running server. Do this together with `config:reload` in the config:* utilities item below
+  so that convenience is not lost. `.zshrc` is per-branch, so linux needs
+  the same edit separately. Test: assert no top-level `tmux source` in
+  .zshrc, plus a generous startup ceiling (under 2s) that cannot flake.
+- Load pyenv lazily, the same shape as nvm. `eval "$(pyenv init - zsh)"`
+  at `.zshrc:225` costs 0.73s per shell: it spawns `bash --norc` just to
+  dedupe PATH, then a `pyenv rehash` subprocess (0.52s of the total).
+  Put `$PYENV_ROOT/shims` on PATH directly, export PYENV_SHELL=zsh, and
+  define `pyenv()` as a function that unfunctions itself, evals the real
+  init, and re-dispatches. Measured working in a scratch ZDOTDIR: python3,
+  pyenv and completions all resolve. Does NOT fix the 1.34s shim tax on
+  each `python3` call; that is the separate item above. Test: mirror the
+  nvm assertions in tests/zshrc-node-startup.test.sh (defined but not yet
+  loaded, python3 still resolves).
+- Collapse the git alias checks at `.zshrc:93-106`. Four
+  `git config --global --get` subprocesses run on every startup, about
+  65ms each, to idempotently install co/br/cm/st. Replace with one guard
+  (a single sentinel alias check, or a stamp file) so the common case
+  spawns nothing. Small (~0.25s) but the same per-shell-subprocess
+  pattern as the others.
+- Dropped after measurement, recorded so it is not retried: `compinit -C`.
+  An isolated `zsh -f` test showed compinit at 1.17s, but that was an
+  fpath artefact. In the real startup trace compinit is ~60ms and did not
+  clear a 40ms bar. `-C` would save nothing meaningful and removes the
+  compaudit security check.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
 - Add some utilities for running/syncing/merging things myself:
   - config:test to run the tests
@@ -44,8 +79,14 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   - config:sync to automatically propagate all shared-file changes from the current branch to the other branch(es). So if on `mac` all branch-identical files get merged over. More complex but more flexible would be to allow automatic two-way merging.
   - config:install to check for any missing dependencies & auto-update them if possible
   - config:install-hooks to install the git hooks
+  - config:reload to run the heavier resets on demand: `tmux source` the
+    tmux config, re-source .zshrc, and anything else that should happen
+    once and deliberately rather than on every shell startup. This is the
+    replacement for the per-shell `tmux source` in .zshrc:174 (see the
+    startup item below), chosen over a `prefix r` tmux keybinding.
 - If I ever ssh into a remote server env. Consider what it would take to get my whole setup working in that env from a bare git URL to this repo. Could I just clone it and run `config:setup` ? etc.
 - Shell startup is currently verrryy slow, and this compounds for large setup tasks like the `se` alias. When I last ran it, it took minutes before Alacritty was responsive again. Let's consider/debug/profile what may be slowing things down here. Let's also take a bigger picture step back to see if there are other options to get the same results as the `se` alias that would run more quickly
+- Renaming tmux windows seems to lag a bit on git branch change. Let's look to see if there are some "smarter" hooks we can hook into to update the window name on git branch change, new branch, checkout, etc.
 
 
 # QUESTIONS (leave until queried)

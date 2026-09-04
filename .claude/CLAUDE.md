@@ -108,11 +108,11 @@ See `~/README.md` for dev environment details. Notable local-only bits:
 - `~/.claude/notability.env` -- Notability staging dev credentials (`NOTABILITY_DEV_EMAIL`, `NOTABILITY_DEV_PASSWORD`).
 - Stop hook at `~/.claude/hooks/notify.sh` fires a macOS notification when a turn ends, suppressed if the active tmux pane in the frontmost Alacritty window is the one running Claude.
 
-### Dotfiles repo (`config` alias)
+### Dotfiles repo (`config` command)
 
-Dotfiles are tracked in a bare git repo at `~/.cfg/` with `~` as the worktree, accessed via a shell alias: `config = /usr/bin/git --git-dir=/Users/austin/.cfg/ --work-tree=/Users/austin`. Tracked paths are home-relative (e.g., `.claude/skills/expert-review/SKILL.md`). Things to know so you don't get tripped up:
+Dotfiles are tracked in a bare git repo at `~/.cfg/` with `~` as the worktree. Tracked paths are home-relative (e.g., `.claude/skills/expert-review/SKILL.md`). Things to know so you don't get tripped up:
 
-- **The alias is shell-only.** Bash tool invocations do not inherit shell aliases, so `config add ...` fails. Either run the full `/usr/bin/git --git-dir=... --work-tree=... <cmd>` form, or `cd /Users/austin` first and use home-relative paths.
+- **`config` is a real command** (`~/.local/bin/config`, installed by `config install-hooks`), so `config add ...` works in Bash tool invocations. It dispatches to `.scripts/config/config-<sub>` for `check`, `sync`, `test`, `install`, `install-hooks`, `build`, `stamp`, `reload`, and passes every other verb to git on the bare repo. Home-relative paths still apply.
 - **`status.showUntrackedFiles = no`** is set in `.cfg/config`. `config status` will report "nothing to commit" even when untracked files exist. Use `config status -uall` to see them, or `config ls-files --stage <path>` to verify a specific file's index state.
 - **`ls-files` output is cwd-relative.** Running it from `~/.claude` shows `skills/expert-review/SKILL.md`; running from `~` shows `.claude/skills/expert-review/SKILL.md`. Same file, different display. Don't mistake this for "the file isn't tracked at the path you expect."
 - **Branches per machine.** `mac`, `linux`, `work`, `home` -- not all changes are meant to merge across them. Stage and commit on whichever branch is currently checked out; don't switch branches without asking.

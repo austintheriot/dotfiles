@@ -291,7 +291,16 @@ mod tests {
     }
 
     fn arbitrary_path() -> impl Strategy<Value = String> {
-        prop::collection::vec("[a-z][a-z0-9]{0,4}", 1..3).prop_map(|segments| segments.join("/"))
+        (
+            prop_oneof![Just("a"), Just("b"), Just("c"), Just("d")],
+            prop::collection::vec("[a-z][a-z0-9]{0,4}", 1..3),
+        )
+            .prop_map(|(first, rest)| {
+                std::iter::once(first.to_string())
+                    .chain(rest)
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
     }
 
     fn arbitrary_blob() -> impl Strategy<Value = String> {
@@ -314,6 +323,38 @@ mod tests {
             }
             parse_ls_tree(&bytes).expect("generated listing is valid")
         })
+    }
+
+    #[test]
+    fn generator_reaches_the_shared_rules() {
+        use proptest::strategy::ValueTree;
+        use proptest::test_runner::TestRunner;
+
+        let mut runner = TestRunner::default();
+        let strategy = arbitrary_listing();
+        let draws = 200;
+        let reaching = (0..draws)
+            .filter(|_| {
+                let listing = strategy
+                    .new_tree(&mut runner)
+                    .expect("strategy produces a value")
+                    .current();
+                listing.paths().any(|path| {
+                    ["a", "b", "c"]
+                        .iter()
+                        .any(|prefix| rel_starts_with(path, prefix))
+                })
+            })
+            .count();
+        assert!(
+            reaching * 2 >= draws,
+            "only {reaching} of {draws} draws reached a/, b/, or c/"
+        );
+    }
+
+    fn rel_starts_with(path: &RelPath, prefix: &str) -> bool {
+        let text = path.as_str();
+        text == prefix || text.starts_with(&format!("{prefix}/"))
     }
 
     proptest! {

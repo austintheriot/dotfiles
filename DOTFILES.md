@@ -75,6 +75,10 @@ Checkout the actual content from the bare repository to your $HOME:
 config checkout
 ```
 
+On a machine that has this repo's tracked files checked out, run
+`~/.scripts/config/config install-hooks` instead of defining the alias; it
+links `config` into `~/.local/bin` and installs the git hooks.
+
 The step above might fail with a message like:
 
 ```sh

@@ -168,6 +168,15 @@ impl Git {
         self.output_text(&["fetch", "--quiet", remote]).map(|_| ())
     }
 
+    pub fn checked_out_branches(&self) -> anyhow::Result<Vec<String>> {
+        let text = self.run_checked(&["worktree", "list", "--porcelain"], None)?;
+        Ok(text
+            .lines()
+            .filter_map(|line| line.strip_prefix("branch refs/heads/"))
+            .map(str::to_string)
+            .collect())
+    }
+
     pub fn dirty_paths(&self) -> anyhow::Result<Vec<RelPath>> {
         let text = self.output_text(&["status", "--porcelain", "-z", "--untracked-files=no"])?;
         let mut records = text.split('\0').filter(|record| !record.is_empty());
@@ -528,6 +537,28 @@ mod tests {
                 .expect("git")
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn checked_out_branches_lists_the_main_and_every_linked_worktree() {
+        let dir = sync_fixture();
+        let git = Git::discover(dir.path());
+        assert_eq!(git.checked_out_branches().expect("git"), vec!["mac"]);
+
+        let worktree = tempfile::tempdir().expect("tempdir");
+        run(
+            dir.path(),
+            &[
+                "worktree",
+                "add",
+                "-q",
+                worktree.path().to_str().expect("path"),
+                "linux",
+            ],
+        );
+        let mut branches = git.checked_out_branches().expect("git");
+        branches.sort();
+        assert_eq!(branches, vec!["linux", "mac"]);
     }
 
     #[test]

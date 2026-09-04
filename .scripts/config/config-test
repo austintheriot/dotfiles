@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+
+usage='usage: config test [-q] [--docker] [--watch] [suite]'
+quiet=''
+docker=''
+watch=''
+suite=''
+
+for arg in "$@"; do
+    case $arg in
+        -q) quiet=-q ;;
+        --docker) docker=yes ;;
+        --watch) watch=yes ;;
+        -*) printf '%s\n' "$usage" >&2; exit 2 ;;
+        *) suite=$arg ;;
+    esac
+done
+
+run_suite() {
+    if [ -n "$docker" ]; then
+        "$HOME/tests/run-in-docker.sh" ${suite:+"$suite"}
+    elif [ -n "$suite" ]; then
+        "$HOME/tests/$suite.test.sh"
+    else
+        "$HOME/tests/run-all.sh" ${quiet:+"$quiet"}
+    fi
+}
+
+# A cksum over every tracked file's content, tracked only: the worktree is
+# the whole home directory, so `ls-files --others` walks all of it and takes
+# minutes. Polling is dependency-free on both machines; a real watcher would
+# be a platform split.
+fingerprint() {
+    git --git-dir="$HOME/.cfg" --work-tree="$HOME" ls-files -z --cached \
+        | (cd "$HOME" && xargs -0 cksum 2>/dev/null) | cksum
+}
+
+if [ -z "$watch" ]; then
+    exec_status=0
+    run_suite || exec_status=$?
+    exit "$exec_status"
+fi
+
+last=$(fingerprint)
+run_suite || true
+while :; do
+    sleep 1
+    current=$(fingerprint)
+    if [ "$current" != "$last" ]; then
+        last=$current
+        run_suite || true
+    fi
+done

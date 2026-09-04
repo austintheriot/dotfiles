@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp install-hooks'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks check sync install test'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"
@@ -129,5 +129,72 @@ output=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)
 status=$?
 assert_equals 'install-hooks refuses a group-writable dispatcher directory' '1' "$status"
 chmod g-w "$install_dir"
+
+# --- thin wrappers ----------------------------------------------------------
+
+shim_dir="$FIXTURES/shims"
+mkdir -p "$shim_dir"
+printf '#!/bin/sh\nprintf "manifest:%%s\\n" "$@"\n' > "$shim_dir/config-manifest"
+chmod 755 "$shim_dir/config-manifest"
+
+actual=$(PATH="$shim_dir:$PATH" "$CONFIG" check origin/mac origin/linux)
+assert_equals 'config check execs config-manifest check with its args' \
+    'manifest:check
+manifest:origin/mac
+manifest:origin/linux' "$actual"
+
+actual=$(PATH="$shim_dir:$PATH" "$CONFIG" sync --dry-run --to linux)
+assert_equals 'config sync execs config-manifest sync with its args' \
+    'manifest:sync
+manifest:--dry-run
+manifest:--to
+manifest:linux' "$actual"
+
+home=$(make_fixture_home wrappers)
+mkdir -p "$home/.scripts/deps" "$home/tests"
+printf '#!/bin/sh\nprintf "deps:%%s\\n" "$@"\n' > "$home/.scripts/deps/check-deps.sh"
+printf '#!/bin/sh\n[ "$#" -eq 0 ] && printf "all:(none)\\n" || printf "all:%%s\\n" "$@"\n' > "$home/tests/run-all.sh"
+printf '#!/bin/sh\n[ "$#" -eq 0 ] && printf "docker:(none)\\n" || printf "docker:%%s\\n" "$@"\n' > "$home/tests/run-in-docker.sh"
+chmod 755 "$home/.scripts/deps/check-deps.sh" "$home/tests/run-all.sh" "$home/tests/run-in-docker.sh"
+
+actual=$(HOME="$home" "$CONFIG" install --yes --dry-run)
+assert_equals 'config install wraps check-deps --fix and passes flags through' \
+    'deps:--fix
+deps:--yes
+deps:--dry-run' "$actual"
+
+actual=$(HOME="$home" "$CONFIG" test)
+assert_equals 'config test runs the host suite' 'all:(none)' "$actual"
+
+actual=$(HOME="$home" "$CONFIG" test -q)
+assert_equals 'config test -q passes -q through' 'all:-q' "$actual"
+
+actual=$(HOME="$home" "$CONFIG" test --docker)
+assert_equals 'config test --docker runs the whole suite in docker' 'docker:(none)' "$actual"
+
+actual=$(HOME="$home" "$CONFIG" test --docker check-deps)
+assert_equals 'config test --docker <suite> passes the suite name' 'docker:check-deps' "$actual"
+
+output=$(HOME="$home" "$CONFIG" test --bogus 2>&1)
+status=$?
+assert_equals 'config test rejects an unknown flag with exit 2' '2' "$status"
+assert_contains 'the rejection prints usage' 'usage: config test' "$output"
+
+watch_home=$(make_fixture_home watch)
+mkdir -p "$watch_home/tests"
+printf '#!/bin/sh\nprintf "run\\n" >> "%s/runs"\n' "$watch_home" > "$watch_home/tests/run-all.sh"
+chmod 755 "$watch_home/tests/run-all.sh"
+( HOME="$watch_home" "$CONFIG" test --watch >/dev/null 2>&1 & echo $! > "$watch_home/watch.pid" )
+sleep 2
+runs_before=$(grep -c '' "$watch_home/runs" 2>/dev/null || echo 0)
+printf 'changed\n' >> "$watch_home/tracked.txt"
+git --git-dir="$watch_home/.cfg" --work-tree="$watch_home" add tracked.txt
+sleep 3
+runs_after=$(grep -c '' "$watch_home/runs" 2>/dev/null || echo 0)
+kill "$(cat "$watch_home/watch.pid")" 2>/dev/null || true
+pkill -P "$(cat "$watch_home/watch.pid")" 2>/dev/null || true
+assert_equals 'watch runs the suite once at start' '1' "$runs_before"
+[ "$runs_after" -gt "$runs_before" ] && reran=yes || reran="no ($runs_before -> $runs_after)"
+assert_equals 'watch reruns the suite when a tracked file changes' 'yes' "$reran"
 
 finish

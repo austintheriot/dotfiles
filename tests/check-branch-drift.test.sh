@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Integration tests for tests/check-branch-drift.sh
+# Integration tests for the branch-drift check (shell script and config-manifest binary)
 #
 # The script compares two git refs against every path listed in
 # .sync-manifest and reports any that differ. Fixtures are real git
@@ -11,7 +11,11 @@
 
 . "$(dirname "$0")/lib.sh"
 
-SCRIPT="$DOTFILES_ROOT/tests/check-branch-drift.sh"
+# CHECK_CMD selects the implementation under test. The default is the shell
+# script; `CHECK_CMD='config-manifest check'` runs the same 25 assertions
+# against the Rust binary. Word-splitting the unquoted expansion is the
+# intent: the value is a command plus its subcommand.
+CHECK_CMD=${CHECK_CMD:-$DOTFILES_ROOT/tests/check-branch-drift.sh}
 
 # Builds a repo with a "linux" branch (default) and a "mac" branch, both
 # starting from the same manifest and the same shared file content.
@@ -28,7 +32,7 @@ make_manifest_repo() {
 
 run_check() {
     local repo=$1; shift
-    DOTFILES_ROOT="$repo" "$SCRIPT" "$@"
+    DOTFILES_ROOT="$repo" $CHECK_CMD "$@"
 }
 
 # --- matching manifest paths pass ---------------------------------------

@@ -20,6 +20,8 @@ impl fmt::Display for PathError {
     }
 }
 
+impl std::error::Error for PathError {}
+
 impl RelPath {
     pub fn parse(raw: &str) -> Result<Self, PathError> {
         if raw.is_empty() {
@@ -63,6 +65,8 @@ impl fmt::Display for IdError {
     }
 }
 
+impl std::error::Error for IdError {}
+
 fn parse_object_id(raw: &str) -> Result<String, IdError> {
     let len = raw.len();
     if len != 40 && len != 64 {
@@ -85,19 +89,27 @@ impl BlobId {
         parse_object_id(raw).map(BlobId)
     }
 
+    // Consumed by the sync subcommand (Plan B2).
+    #[allow(dead_code)]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
+// Consumed by the sync subcommand (Plan B2).
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CommitId(String);
 
 impl CommitId {
+    // Consumed by the sync subcommand (Plan B2).
+    #[allow(dead_code)]
     pub fn parse(raw: &str) -> Result<Self, IdError> {
         parse_object_id(raw).map(CommitId)
     }
 
+    // Consumed by the sync subcommand (Plan B2).
+    #[allow(dead_code)]
     pub fn as_str(&self) -> &str {
         &self.0
     }

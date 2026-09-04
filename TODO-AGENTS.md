@@ -2,7 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- Fix error appearing when I switch tmux panes: "'/Users/austin/.my-scripts/tmux-update-window-names.sh -w @17' returned 127"
 - Fix error in terminal when I type: "_zsh_autosuggest_highlight_apply:3: POSTDISPLAY: parameter not set"
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
 - Fix CI warning: "Compare shared paths

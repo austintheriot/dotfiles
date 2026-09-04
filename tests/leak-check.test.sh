@@ -136,4 +136,67 @@ out=$(run_leak_check)
 assert_equals 'staged: the script excludes its own path' '0' "$(exit_of "$out")"
 unstage_all
 
+# --- range mode ------------------------------------------------------------
+#
+# Builds history in the fixture. `base` is the last pushed commit; everything
+# after it is what a push would publish.
+
+commit_file() {
+    local path=$1 content=$2 message=$3
+    stage_file "$path" "$content"
+    git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "$message"
+    git -C "$repo" rev-parse HEAD
+}
+
+unstage_all
+base=$(commit_file README.md "$(clean_text)" 'base')
+
+clean_tip=$(commit_file more.txt "$(clean_text)" 'clean change')
+out=$(run_leak_check --range "$base..$clean_tip")
+assert_equals 'range: clean commits pass' '0' "$(exit_of "$out")"
+
+leaky_tip=$(commit_file notes.txt "$(plant_key)" 'oops')
+out=$(run_leak_check --range "$base..$leaky_tip")
+assert_equals 'range: a secret in a pushed commit is blocked' '1' "$(exit_of "$out")"
+assert_contains 'range: the block message names the push' 'PUSH BLOCKED' "$out"
+assert_contains 'range: the credential label is the same as staged mode' \
+    '[possible credential]' "$out"
+
+# The secret is added in one commit and removed in the next. The net diff is
+# empty, but both commits are pushed, so the secret is published.
+removed_tip=$(commit_file notes.txt "$(clean_text)" 'remove it')
+out=$(run_leak_check --range "$leaky_tip..$removed_tip")
+assert_equals 'range: removing a secret is itself clean' '0' "$(exit_of "$out")"
+out=$(run_leak_check --range "$clean_tip..$removed_tip")
+assert_equals 'range: a secret added then removed inside the range is still blocked' \
+    '1' "$(exit_of "$out")"
+
+# A range that only touches the script itself is not scanned.
+self_tip=$(commit_file tests/leak-check.sh "$(plant_key)" 'edit the guard')
+out=$(run_leak_check --range "$removed_tip..$self_tip")
+assert_equals 'range: the script excludes its own path' '0' "$(exit_of "$out")"
+
+# The allow list still applies to term rules only.
+term_tip=$(commit_file docs/allowed.md "$(plant_term)" 'allowed term')
+out=$(run_leak_check --range "$self_tip..$term_tip")
+assert_equals 'range: a project term in an allowed path passes' '0' "$(exit_of "$out")"
+key_tip=$(commit_file docs/allowed.md "$(plant_key)" 'credential in allowed path')
+out=$(run_leak_check --range "$term_tip..$key_tip")
+assert_equals 'range: a credential in an allowed path is still blocked' '1' "$(exit_of "$out")"
+
+# The escape hatch works in range mode and names it.
+out=$(SKIP_LEAK_CHECK=1 run_leak_check --range "$base..$leaky_tip")
+assert_equals 'range: SKIP_LEAK_CHECK skips the check' '0' "$(exit_of "$out")"
+assert_contains 'range: the skip names pre-push' 'pre-push' "$out"
+
+# Misuse is a distinct exit code.
+out=$(run_leak_check --range)
+assert_equals 'range: a missing range value is a usage error' '2' "$(exit_of "$out")"
+out=$(run_leak_check --bogus)
+assert_equals 'an unknown argument is a usage error' '2' "$(exit_of "$out")"
+
+# An empty range is clean.
+out=$(run_leak_check --range "$key_tip..$key_tip")
+assert_equals 'range: an empty range passes' '0' "$(exit_of "$out")"
+
 finish

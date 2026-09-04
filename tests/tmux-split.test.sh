@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Integration tests for .my-scripts/tmux-split.sh
+# Integration tests for .scripts/tmux-split.sh
 #
 # The script is sourced, not executed, and splits whatever pane $TMUX_PANE
 # points at. Each case sources it against a fresh single-pane window and counts
@@ -14,7 +14,7 @@
 
 . "$(dirname "$0")/lib.sh"
 
-SCRIPT="$DOTFILES_ROOT/.my-scripts/tmux-split.sh"
+SCRIPT="$DOTFILES_ROOT/.scripts/tmux-split.sh"
 SESSION=$(new_test_session main "$FIXTURES")
 
 pane_count() {

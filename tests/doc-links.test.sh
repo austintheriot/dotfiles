@@ -28,7 +28,7 @@ cd "$DOTFILES_ROOT" || exit 1
 # would silently pull in every future .claude/ agent file and reintroduce the
 # false positives this scope exists to avoid.
 docs=''
-for candidate in README.md DOTFILES.md .my-scripts/deps/README.md \
+for candidate in README.md DOTFILES.md .scripts/deps/README.md \
         .claude/rules/dotfiles-tests.md docs/research/*.md; do
     [ -f "$candidate" ] && docs="$docs$candidate
 "

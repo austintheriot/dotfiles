@@ -186,8 +186,8 @@ assert_succeeds 'TRIGGER_PATHS matches a workflow file edit' \
 
 # The new patterns must not have come at the cost of the ones already
 # guarding this hook.
-assert_succeeds 'TRIGGER_PATHS still matches a my-scripts shell edit' \
-    path_matches_trigger '.my-scripts/foo.sh'
+assert_succeeds 'TRIGGER_PATHS still matches a .scripts shell edit' \
+    path_matches_trigger '.scripts/foo.sh'
 assert_succeeds 'TRIGGER_PATHS still matches a claude scripts edit' \
     path_matches_trigger '.claude/scripts/foo.py'
 assert_succeeds 'TRIGGER_PATHS still matches a claude hooks edit' \

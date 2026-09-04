@@ -74,7 +74,7 @@ done
 
 python_dirs=''
 if command -v python3 >/dev/null 2>&1; then
-    python_dirs=$(find "$DOTFILES_ROOT/.claude" "$DOTFILES_ROOT/.my-scripts" \
+    python_dirs=$(find "$DOTFILES_ROOT/.claude" "$DOTFILES_ROOT/.scripts" \
                      -name 'test_*.py' -type f -not -path '*/plugins/*' 2>/dev/null \
                   | xargs -n1 dirname 2>/dev/null | sort -u)
 fi

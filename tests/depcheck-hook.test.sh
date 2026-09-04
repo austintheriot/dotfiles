@@ -16,21 +16,21 @@
 
 . "$(dirname "$0")/lib.sh"
 
-HOOK="$DOTFILES_ROOT/.my-scripts/deps/depcheck-hook.sh"
+HOOK="$DOTFILES_ROOT/.scripts/deps/depcheck-hook.sh"
 
 # A fresh isolated HOME with a stub check-deps.sh whose exit status is fixed
 # by the caller. Prints the HOME path.
 make_home() {
     local exit_status=$1 home
     home=$(mktemp -d "$FIXTURES/home-XXXXXX")
-    mkdir -p "$home/.my-scripts/deps" "$home/.cache"
-    cat > "$home/.my-scripts/deps/check-deps.sh" <<EOF
+    mkdir -p "$home/.scripts/deps" "$home/.cache"
+    cat > "$home/.scripts/deps/check-deps.sh" <<EOF
 #!/bin/sh
 printf 'invoked\n' >> "$home/invocations.log"
 exit $exit_status
 EOF
-    chmod +x "$home/.my-scripts/deps/check-deps.sh"
-    cp "$HOOK" "$home/.my-scripts/deps/depcheck-hook.sh"
+    chmod +x "$home/.scripts/deps/check-deps.sh"
+    cp "$HOOK" "$home/.scripts/deps/depcheck-hook.sh"
     : > "$home/invocations.log"
     printf '%s' "$home"
 }
@@ -38,7 +38,7 @@ EOF
 # Sources the hook in a non-interactive zsh under the given HOME. Stdout only.
 run_hook() {
     local home=$1
-    env HOME="$home" zsh -c ". '$home/.my-scripts/deps/depcheck-hook.sh'" 2>/dev/null
+    env HOME="$home" zsh -c ". '$home/.scripts/deps/depcheck-hook.sh'" 2>/dev/null
 }
 
 # Sources the hook and returns only what it wrote to stderr, which must always
@@ -48,7 +48,7 @@ run_hook() {
 # one of these fixtures is deliberately 200KB long.
 run_hook_stderr() {
     local home=$1
-    env HOME="$home" zsh -c ". '$home/.my-scripts/deps/depcheck-hook.sh'" 2>&1 >/dev/null \
+    env HOME="$home" zsh -c ". '$home/.scripts/deps/depcheck-hook.sh'" 2>&1 >/dev/null \
         | cut -c1-120
 }
 
@@ -94,12 +94,12 @@ assert_equals 'a passing check still ran' '1' "$(invocations "$home")"
 # --fix, so the hook passing any argument at all would be the defect.
 
 home=$(make_home 1)
-cat > "$home/.my-scripts/deps/check-deps.sh" <<EOF
+cat > "$home/.scripts/deps/check-deps.sh" <<EOF
 #!/bin/sh
 printf '%s\n' "\$*" >> "$home/args.log"
 exit 1
 EOF
-chmod +x "$home/.my-scripts/deps/check-deps.sh"
+chmod +x "$home/.scripts/deps/check-deps.sh"
 run_hook "$home" >/dev/null
 assert_equals 'the startup check passes no flags' '' "$(cat "$home/args.log")"
 
@@ -132,12 +132,12 @@ rm -f "$home/.cache"
 
 home=$(make_home 0)
 output=$(env HOME="$home" zsh -ic \
-    ". '$home/.my-scripts/deps/depcheck-hook.sh'; alias depcheck" 2>/dev/null)
+    ". '$home/.scripts/deps/depcheck-hook.sh'; alias depcheck" 2>/dev/null)
 assert_contains 'defines the depcheck alias' 'check-deps.sh --fix' "$output"
 
 # --- the hook is portable to a POSIX shell --------------------------------
 #
-# .my-scripts/ is shared between the mac and linux branches, so the hook must
+# .scripts/ is shared between the mac and linux branches, so the hook must
 # not depend on a zsh-only construct.
 
 assert_succeeds 'parses as POSIX sh' sh -n "$HOOK"
@@ -146,7 +146,7 @@ assert_succeeds 'parses as zsh' zsh -n "$HOOK"
 # --- the hook is actually wired into this branch's .zshrc -----------------
 #
 # The hook file being correct is not the same as it running. .zshrc is
-# per-branch (it is absent from .sync-manifest), so porting .my-scripts/
+# per-branch (it is absent from .sync-manifest), so porting .scripts/
 # between branches carries the hook without carrying the line that sources
 # it -- which is exactly what happened when the deps work moved to linux.
 # Without this, every other assertion in this file passes on a machine where

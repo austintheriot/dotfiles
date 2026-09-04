@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# Integration tests for .my-scripts/tmux-update-window-names.sh
+# Integration tests for .scripts/tmux-update-window-names.sh
 #
 # Usage: ~/tests/tmux-update-window-names.test.sh
 
 . "$(dirname "$0")/lib.sh"
 
-SCRIPT="$DOTFILES_ROOT/.my-scripts/tmux-update-window-names.sh"
+SCRIPT="$DOTFILES_ROOT/.scripts/tmux-update-window-names.sh"
 
 window_name() {
     tmux display-message -p -t "$1" '#{window_name}'

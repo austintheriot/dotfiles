@@ -1,7 +1,7 @@
 name: Dependency bootstrap
 
 # Runs the real bootstrap (`check-deps.sh --fix --yes`) against throwaway
-# runners, so a stale install command in .my-scripts/deps/check-deps.sh is
+# runners, so a stale install command in .scripts/deps/check-deps.sh is
 # caught on a schedule rather than the next time a machine gets set up.
 #
 # The push trigger is path-filtered, deliberately. Every job here installs
@@ -16,7 +16,7 @@ name: Dependency bootstrap
 on:
   push:
     paths:
-      - '.my-scripts/deps/**'
+      - '.scripts/deps/**'
       - '.github/workflows/deps-check.yml'
   schedule:
     - cron: '0 13 1,15 * *'
@@ -44,7 +44,7 @@ jobs:
           persist-credentials: false
 
       - name: Bootstrap and check dependencies (apt)
-        run: .my-scripts/deps/check-deps.sh --fix --yes
+        run: .scripts/deps/check-deps.sh --fix --yes
 
   macos:
     name: macOS / Homebrew
@@ -56,7 +56,7 @@ jobs:
           persist-credentials: false
 
       - name: Bootstrap and check dependencies (brew)
-        run: .my-scripts/deps/check-deps.sh --fix --yes
+        run: .scripts/deps/check-deps.sh --fix --yes
 
   arch:
     name: Arch Linux / pacman
@@ -69,12 +69,12 @@ jobs:
 
       # No --platform here: ubuntu-latest is amd64, which is the only
       # architecture upstream publishes an archlinux image for. The local
-      # harness (.my-scripts/deps/test-local.sh) passes --platform
+      # harness (.scripts/deps/test-local.sh) passes --platform
       # linux/amd64 because it also runs on Apple Silicon.
       - name: Build the Arch test image
         run: |
           docker build \
-            -f .my-scripts/deps/docker/Dockerfile.arch \
+            -f .scripts/deps/docker/Dockerfile.arch \
             -t depcheck-arch \
             .
 

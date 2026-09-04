@@ -43,7 +43,7 @@ class MaskTests(unittest.TestCase):
         self.assertNotIn("example.com", _mask("See https://example.com/a for more."))
 
     def test_paths_are_blanked(self):
-        self.assertNotIn("my-scripts", _mask("Edit ~/.my-scripts/tmux-split.sh today."))
+        self.assertNotIn("tmux-split", _mask("Edit ~/.scripts/tmux-split.sh today."))
 
     def test_snake_and_camel_identifiers_are_blanked(self):
         masked = _mask("Call update_window and then selectPane.")

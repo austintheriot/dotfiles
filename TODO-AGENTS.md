@@ -2,7 +2,9 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED: Rename .my-scripts to just .scripts if possible. Make sure to sweep the repo for stale references
+- CLAIMED: Rename .scripts to just .scripts if possible. Make sure to sweep the repo for stale references
+- Fix error appearing when I switch tmux panes: "'/Users/austin/.my-scripts/tmux-update-window-names.sh -w @17' returned 127"
+- Fix error in terminal when I type: "_zsh_autosuggest_highlight_apply:3: POSTDISPLAY: parameter not set"
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
 - Fix CI warning: "Compare shared paths
 Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/"
@@ -60,7 +62,7 @@ For more information, see:
 - Isolate the test suite onto its own tmux server. `tests/lib.sh` calls bare
   `tmux`, so every tmux suite runs on the live server -- currently 23 windows,
   an attached client, and 6 global `after-*` hooks that fire
-  `.my-scripts/tmux-update-window-names.sh` via `run-shell -b` (asynchronous).
+  `.scripts/tmux-update-window-names.sh` via `run-shell -b` (asynchronous).
   Those background invocations race the tests' own synchronous runs against
   the tests' own windows. `tmux-update-window-names.test.sh` fails about 25%
   of the time on the host (measured 5/20 runs) and 0/12 in the container,
@@ -82,7 +84,7 @@ For more information, see:
   windows in place.
 
 - Fix the silent stale name when `tmux display-message` returns empty.
-  Separate latent bug in `.my-scripts/tmux-update-window-names.sh`, found
+  Separate latent bug in `.scripts/tmux-update-window-names.sh`, found
   while investigating the flake above and NOT its cause. `tmux display-message
   -p -F '#{pane_current_path}'` intermittently prints nothing while exiting 0
   with an empty stderr, measured at 1 to 6 calls in 3000 depending on server

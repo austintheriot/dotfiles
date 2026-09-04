@@ -3,26 +3,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 # TODOS:
 
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
-- Fix CI warning: "macOS / macos-latest
-The following taps are not trusted:
-  aws/tap
-
-Homebrew is currently ignoring formulae, casks and commands from these taps because tap trust is required.
-
-Untap them with:
-  brew untap aws/tap
-Trust specific formulae, casks and commands with:
-  brew trust --formula <user>/<tap>/<formula>
-  brew trust --cask <user>/<tap>/<cask>
-  brew trust --command <user>/<tap>/<command>
-Whole-tap trust is broader and includes all current and future formulae,
-casks and commands from the listed taps. Trust whole taps with:
-  brew trust aws/tap
-To disable trust checks:
-  export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
-This is not recommended and will be removed in a later release.
-For more information, see:
-  https://docs.brew.sh/Tap-Trust"
 
 # QUESTIONS (leave until queried)
 
@@ -31,6 +11,27 @@ For more information, see:
 
 # DEFERRED TODOS
 
+- CI warning "aws/tap is not trusted" on macos-latest: investigated,
+  no repo-side fix wanted. Recorded so it is not re-researched.
+  Cosmetic, and not caused by anything in this repo. The runner image's
+  own `images/macos/scripts/build/install-aws-tools.sh` runs
+  `brew tap aws/tap`. Homebrew 6 warns about every untrusted tap on the
+  machine during any `brew install`, so our own step in
+  `.github/workflows/test-suite.yml` ("Install the suite's dependencies
+  (brew)") trips it while installing tmux, fzf, ripgrep and
+  zsh-autosuggestions.
+  Nothing is skipped: verified in run 33826524451 that all four formulae
+  install normally from homebrew/core. The untrusted tap is never read.
+  Upstream already fixed it. runner-images #14271 adds `brew trust
+  aws/tap` and merged 2026-08-11, but the change has not reached
+  `macos-latest` yet, so the warning still appeared 2026-09-04.
+  Re-check after the next macOS image rollout, and expect the warning to
+  disappear on its own. The two repo-side workarounds were both rejected
+  as worse than the warning: `brew untap aws/tap` in our workflow papers
+  over an upstream bug and becomes dead weight once the image ships the
+  fix, and `HOMEBREW_NO_REQUIRE_TAP_TRUST=1` disables the trust check for
+  every tap, which Homebrew's own message says is not recommended and
+  will be removed in a later release.
 - macOS Docker images (e.g. https://github.com/dockur/macos): investigated,
   not viable. Recorded so it is not re-researched.
   `dockur/macos` is not a macOS container; it is QEMU/KVM booting a macOS VM

@@ -104,25 +104,23 @@ fi
 if [ "$pushing_synced_branch" -eq 1 ]; then
     # The drift check runs the config-manifest binary. It is built by
     # ~/.scripts/config/config-build, never here: a hook that compiles gets
-    # bypassed. The stamp is the worktree tree id of the crate at build time;
-    # the pushed commit's subtree id must match it.
-    stamp_file="${CONFIG_STAMP_DIR:-$HOME/.cache/config-manifest}/stamp"
+    # bypassed. The stamp comes from the binary itself (`--stamp`), not from a
+    # file beside it, so a stale build or a foreign config-manifest earlier on
+    # PATH cannot pass this check: whatever binary the drift call will run is
+    # the same one that just reported its stamp.
     pushed_tree=$(git rev-parse --verify --quiet "$push_ref:crates/config-manifest" 2>/dev/null || true)
     if [ -n "$pushed_tree" ]; then
-        if [ ! -f "$stamp_file" ]; then
-            printf 'pre-push: config-manifest has not been built; run ~/.scripts/config/config-build\n' >&2
+        if ! command -v config-manifest >/dev/null 2>&1; then
+            printf 'pre-push: config-manifest is not on PATH; run ~/.scripts/config/config-build\n' >&2
             exit 1
         fi
-        if [ "$(cat "$stamp_file")" != "$pushed_tree" ]; then
-            printf 'pre-push: config-manifest is stale for %s; run ~/.scripts/config/config-build\n' "$push_ref" >&2
+        built=$(config-manifest --stamp)
+        if [ "$built" != "$pushed_tree" ]; then
+            printf 'pre-push: config-manifest is stale for %s (built %s); run ~/.scripts/config/config-build\n' \
+                "$push_ref" "$built" >&2
             exit 1
         fi
         printf 'pre-push: config-manifest stamp matches the pushed crate\n'
-    fi
-
-    if ! command -v config-manifest >/dev/null 2>&1; then
-        printf 'pre-push: config-manifest is not on PATH; run ~/.scripts/config/config-build\n' >&2
-        exit 1
     fi
 
     if ! config-manifest check mac linux; then

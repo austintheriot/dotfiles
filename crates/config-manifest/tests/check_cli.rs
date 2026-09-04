@@ -133,3 +133,16 @@ fn works_against_a_bare_repo_at_root_dot_cfg() {
         .success()
         .stdout("check-branch-drift: mac and linux match on all 1 shared path(s)\n");
 }
+
+#[test]
+fn stamp_prints_the_build_time_stamp_or_unstamped() {
+    // Nothing sets CONFIG_MANIFEST_STAMP for a plain `cargo test`, so a
+    // binary built by the test harness must report the fallback rather than
+    // an empty line, which pre-push would compare against a tree id.
+    Command::cargo_bin("config-manifest")
+        .expect("binary built")
+        .arg("--stamp")
+        .assert()
+        .success()
+        .stdout("unstamped\n");
+}

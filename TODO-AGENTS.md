@@ -84,7 +84,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 - Add some utilities for running/syncing/merging things myself:
   - config:test to run the tests
   - config:test:watch to run the tests in watch mode (re-run on tracked config file change)
-  - config:sync to automatically propagate all shared-file changes from the current branch to the other branch(es). So if on `mac` all branch-identical files get merged over. More complex but more flexible would be to allow automatic two-way merging.
+  - config:sync to automatically propagate all shared-file changes from the current branch to the other branch(es). So if on `mac` all branch-identical files get merged over. More complex but more flexible would be to allow automatic two-way merging. One-way sync exists as `config-manifest sync`; the `config sync` front door is Plan C; two-way stays future work.
   - config:install to check for any missing dependencies & auto-update them if possible
   - config:install-hooks to install the git hooks
   - config:reload to run the heavier resets on demand: `tmux source` the

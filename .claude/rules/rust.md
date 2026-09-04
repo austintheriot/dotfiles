@@ -75,6 +75,20 @@ Applies when editing or writing Rust. Assumes language fluency; targets review-w
 - **Every public item gets `# Examples`,** plus `# Errors` for `Result`-returning functions, `# Panics` for anything that can panic, `# Safety` for `unsafe fn`. Intra-doc links (`` [`MyType`] ``) over URLs -- they survive renames.
 - **`proptest` or `quickcheck` for invariants over algorithms** (round-trip serialization, sort stability, parser/printer equivalence). One property test beats a dozen examples.
 
+## Sans-IO core, injectable boundaries
+
+Every crate is architected so its core logic performs no IO and every external dependency is injectable. Reference: the Firezone sans-IO post; take the principle, not the event-loop machinery, unless the code genuinely is a state machine reacting to input over time.
+
+- **The core takes snapshots in and returns decisions out, as plain data.** External state (a directory listing, a tree of blob ids, a config file's text, the clock) arrives as a value parameter. The core returns a plan, a report, or a result as a value. A separate applier at the edge performs the IO. Time is an `Instant` parameter, never `Instant::now()` inside logic.
+- **Do not add a trait for an IO boundary just to mock it.** A trait earns its place only when the core must ask the outside world a question mid-decision. If the core can be given everything it needs up front, the port is a data type and needs no fake.
+- **Do not build a command recorder that asserts argv strings or call order.** That couples tests to the implementation shape (Hyrum) and proves nothing about the real system.
+- **Keep the plan at the domain level** (what to change), not at the level of the external tool's commands, so the core stays agnostic to the backend and survives replacing it.
+- **Keep the applier small (about 50 lines) and test it against the real external system in a throwaway fixture.** Sans-IO buys nothing for that code; a real integration test does.
+- **State the applier's atomicity contract.** Nothing observable changes until the final step, and that step is a compare-and-swap against the state the plan was computed from.
+- **Errors: domain enums in the core, `anyhow` only in `main` and the applier.** Planners over valid inputs are total and return no `Result`.
+- **Property tests the pure core admits:** plan-then-replan is empty (idempotence), check-after-apply is clean, the plan never touches excluded inputs, parser/printer round-trip.
+- **For decomposition questions, consult `oo-architecture`, `oo-patterns`, `data-flow`, and `fp-effects`.**
+
 ## Clippy lints worth respecting
 
 `needless_clone`, `redundant_clone`, `needless_collect`, `unnecessary_wraps`, `large_enum_variant`, `match_like_matches_macro`, `option_if_let_else`, `or_fun_call` (eager arg in `unwrap_or(expensive())`), `single_match` (use `if let`), `wildcard_imports`. Run `cargo clippy --all-targets -- -D warnings` in CI; allows are documented exceptions.

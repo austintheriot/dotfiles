@@ -10,6 +10,12 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   or sh and fully checkable; the 5 zsh files are not supported by
   shellcheck and must be excluded explicitly rather than silently.
   This is the whole of atuin's answer to the same problem.
+- `tests/leak-check.sh` does not scan paths containing a newline or binary
+  files, in either staged or range mode. Git quotes a newline path, so
+  `xargs -0` cannot address it; a binary diff has no `+` lines for the
+  content rules to see. Confirmed identical at commit 76608b6, so this
+  predates the range-mode work. The newline case is a deliberate-evasion
+  shape worth closing on a public-repo gate; record only, no fix yet.
 - Batch the tmux queries in `.scripts/tmux-update-window-names.sh`. It
   fires on 6 hooks including `after-select-pane`, costs 110-200ms, and
   spawns 13 subprocesses because it loops over windows calling

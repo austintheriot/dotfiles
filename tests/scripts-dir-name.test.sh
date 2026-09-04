@@ -161,6 +161,59 @@ own_path_refs=$(grep -oE '[^A-Za-z0-9_/.-]\.my-scripts/[A-Za-z0-9_/.-]+' \
     "$0" 2>/dev/null | sort -u)
 assert_equals 'this suite names no live .my-scripts path' '' "$own_path_refs"
 
+# --- the scripts exist in the commit, not only on disk -------------------
+#
+# Every assertion above reads the working tree, and that is exactly the hole
+# the rename fell through: the commit that renamed the directory recorded 15
+# deletions and zero additions, because the files were absent from disk when
+# `git add` ran. `git add` on a missing path stages nothing and exits 0, so
+# the staged rename collapsed into pure deletions and the commit passed every
+# on-disk check in this file. HEAD carried 237 tracked files instead of 252
+# and every tmux hook broke with "returned 127".
+#
+# So this asserts against HEAD rather than the filesystem. Skipped where
+# there is no repository: the test container carries a copy of the tree.
+
+if [ -d "$DOTFILES_ROOT/.cfg" ]; then
+    git_cmd() {
+        git --git-dir="$DOTFILES_ROOT/.cfg" --work-tree="$DOTFILES_ROOT" "$@"
+    }
+elif [ -d "$DOTFILES_ROOT/.git" ]; then
+    git_cmd() { git -C "$DOTFILES_ROOT" "$@"; }
+else
+    git_cmd() { return 1; }
+fi
+
+if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
+    committed=$(git_cmd ls-tree -r --name-only HEAD 2>/dev/null \
+        | grep "^$NEW_NAME/" | sort)
+    committed_count=$(printf '%s\n' "$committed" | grep -c . || true)
+
+    # An exact count rather than "more than zero": a partial add is the
+    # failure that actually happened, and it leaves some files staged.
+    assert_equals 'all 15 scripts are committed, not only on disk' \
+        '15' "$committed_count"
+
+    # The execute bits have to survive the commit too. A script committed
+    # 100644 fails at runtime on a fresh clone while working on the machine
+    # that has the bit set locally, which is the worst shape for this bug.
+    committed_exec=$(git_cmd ls-tree -r HEAD "$NEW_NAME" 2>/dev/null \
+        | awk '$1 == "100755" { print $4 }' | sort)
+    expected_exec=$(printf '%s\n' \
+        "$NEW_NAME/deps/check-deps.sh" \
+        "$NEW_NAME/deps/test-local.sh" \
+        "$NEW_NAME/tmux-update-window-names.sh" \
+        "$NEW_NAME/tmux-worktree-config.sh" | sort)
+    assert_equals 'the committed execute bits match the executed scripts' \
+        "$expected_exec" "$committed_exec"
+
+    assert_equals 'no .my-scripts path survives in the commit' '' \
+        "$(git_cmd ls-tree -r --name-only HEAD 2>/dev/null \
+            | grep "^$OLD_NAME/" || true)"
+else
+    printf 'skip: no repository here, so the commit cannot be inspected\n'
+fi
+
 # --- the three anchored regexes point at the new directory --------------
 #
 # These are the references a plain text sweep gets wrong, because each one

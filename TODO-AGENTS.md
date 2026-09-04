@@ -2,8 +2,30 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- Rename .my-scripts to just .scripts if possible. Make sure to sweep the repo for stale references
+- CLAIMED: Rename .my-scripts to just .scripts if possible. Make sure to sweep the repo for stale references
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
+- Fix CI warning: "Compare shared paths
+Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/"
+- Fix CI warning: "macOS / macos-latest
+The following taps are not trusted:
+  aws/tap
+
+Homebrew is currently ignoring formulae, casks and commands from these taps because tap trust is required.
+
+Untap them with:
+  brew untap aws/tap
+Trust specific formulae, casks and commands with:
+  brew trust --formula <user>/<tap>/<formula>
+  brew trust --cask <user>/<tap>/<cask>
+  brew trust --command <user>/<tap>/<command>
+Whole-tap trust is broader and includes all current and future formulae,
+casks and commands from the listed taps. Trust whole taps with:
+  brew trust aws/tap
+To disable trust checks:
+  export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
+This is not recommended and will be removed in a later release.
+For more information, see:
+  https://docs.brew.sh/Tap-Trust"
 
 # QUESTIONS (leave until queried)
 

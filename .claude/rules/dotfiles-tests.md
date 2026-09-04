@@ -126,8 +126,10 @@ failed.
 Both hooks live in the work tree so they travel with the repo. The symlinks do
 not, so create them once per machine:
 
-    ln -sf "$HOME/tests/pre-commit" "$HOME/.cfg/hooks/pre-commit"
-    ln -sf "$HOME/tests/pre-push" "$HOME/.cfg/hooks/pre-push"
+    ~/.scripts/config/config install-hooks
+
+This also links the dispatcher itself into `~/.local/bin`, so `config` works
+as a plain command once the tracked files are checked out.
 
 `tests/githooks-installed.test.sh` asserts both symlinks exist, are
 executable, and point at the tracked scripts, so a machine that skipped this

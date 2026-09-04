@@ -55,7 +55,8 @@ assert_succeeds 'the .my-scripts directory is gone' \
 
 EXECUTED_SCRIPTS='deps/check-deps.sh deps/test-local.sh
 tmux-update-window-names.sh tmux-worktree-config.sh
-config/config-stamp config/config-build config/config'
+config/config-stamp config/config-build config/config
+config/config-install-hooks'
 
 SOURCED_SCRIPTS='tmux-close.sh tmux-setup.sh tmux-split.sh tmux-start.sh
 zsh-git-widgets.sh deps/depcheck-hook.sh'
@@ -192,8 +193,8 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
 
     # An exact count rather than "more than zero": a partial add is the
     # failure that actually happened, and it leaves some files staged.
-    assert_equals 'all 18 scripts are committed, not only on disk' \
-        '18' "$committed_count"
+    assert_equals 'all 19 scripts are committed, not only on disk' \
+        '19' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine
@@ -203,6 +204,7 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
     expected_exec=$(printf '%s\n' \
         "$NEW_NAME/config/config" \
         "$NEW_NAME/config/config-build" \
+        "$NEW_NAME/config/config-install-hooks" \
         "$NEW_NAME/config/config-stamp" \
         "$NEW_NAME/deps/check-deps.sh" \
         "$NEW_NAME/deps/test-local.sh" \

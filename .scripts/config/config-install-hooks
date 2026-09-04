@@ -1,0 +1,42 @@
+#!/bin/sh
+# The dispatcher execs whatever sits beside it and ~/.local/bin is on PATH,
+# so those two directories are the trust boundary. Anyone who can write to
+# them can run code as this user; refuse to install into them unless they
+# are owned by this user and writable by nobody else.
+set -eu
+
+self=$(readlink -f "$0")
+here=$(dirname "$self")
+bin_dir="$HOME/.local/bin"
+hooks_dir="$HOME/.cfg/hooks"
+
+mkdir -p "$bin_dir"
+
+check_dir() {
+    dir=$1
+    if [ -n "$(find "$dir" -maxdepth 0 \( -perm -g+w -o -perm -o+w \))" ]; then
+        printf 'config install-hooks: refusing, %s is group- or world-writable\n' "$dir" >&2
+        exit 1
+    fi
+    if [ -z "$(find "$dir" -maxdepth 0 -user "$(id -un)")" ]; then
+        printf 'config install-hooks: refusing, %s is not owned by %s\n' "$dir" "$(id -un)" >&2
+        exit 1
+    fi
+}
+
+check_dir "$bin_dir"
+check_dir "$here"
+
+if [ ! -d "$hooks_dir" ]; then
+    printf 'config install-hooks: no hooks directory at %s (is %s/.cfg the bare repo?)\n' "$hooks_dir" "$HOME" >&2
+    exit 1
+fi
+
+link() {
+    ln -sfn "$1" "$2"
+    printf '%s -> %s\n' "$2" "$1"
+}
+
+link "$HOME/tests/pre-commit" "$hooks_dir/pre-commit"
+link "$HOME/tests/pre-push" "$hooks_dir/pre-push"
+link "$here/config" "$bin_dir/config"

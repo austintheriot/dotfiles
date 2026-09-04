@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"
@@ -86,5 +86,48 @@ ln -s "$sibling_dir/config" "$link_dir/config"
 actual=$(HOME="$home" "$link_dir/config" probe via-symlink)
 assert_equals 'the dispatcher resolves siblings through its own symlink' \
     'probe:via-symlink' "$actual"
+
+# --- install-hooks ----------------------------------------------------------
+
+home=$(make_fixture_home hooks)
+mkdir -p "$home/tests" "$home/.cfg/hooks"
+printf '#!/bin/sh\nexit 0\n' > "$home/tests/pre-commit"
+printf '#!/bin/sh\nexit 0\n' > "$home/tests/pre-push"
+chmod 755 "$home/tests/pre-commit" "$home/tests/pre-push"
+install_dir="$FIXTURES/install-bin"
+mkdir -p "$install_dir"
+# config-install-hooks resolves its own directory with `readlink -f`, which
+# canonicalizes symlinked ancestors (/var -> /private/var on macOS). $FIXTURES
+# sits under such a symlink, so the assertions below compare against the same
+# canonical form the script will actually report, not the pre-canonical path.
+install_dir=$(readlink -f "$install_dir")
+cp "$CONFIG" "$install_dir/config"
+cp "$CONFIG_DIR/config-install-hooks" "$install_dir/config-install-hooks"
+chmod 755 "$install_dir/config" "$install_dir/config-install-hooks"
+
+output=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)
+status=$?
+assert_equals 'install-hooks succeeds on a clean fixture' '0' "$status"
+assert_equals 'pre-commit is linked' "$home/tests/pre-commit" "$(readlink "$home/.cfg/hooks/pre-commit")"
+assert_equals 'pre-push is linked' "$home/tests/pre-push" "$(readlink "$home/.cfg/hooks/pre-push")"
+assert_equals 'the dispatcher is linked into ~/.local/bin' "$install_dir/config" "$(readlink "$home/.local/bin/config")"
+
+output_again=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)
+status=$?
+assert_equals 'a second install-hooks succeeds' '0' "$status"
+assert_equals 'a second install-hooks prints the same report' "$output" "$output_again"
+
+chmod o+w "$home/.local/bin"
+output=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)
+status=$?
+assert_equals 'install-hooks refuses a world-writable ~/.local/bin' '1' "$status"
+assert_contains 'the refusal names the directory' "$home/.local/bin" "$output"
+chmod o-w "$home/.local/bin"
+
+chmod g+w "$install_dir"
+output=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)
+status=$?
+assert_equals 'install-hooks refuses a group-writable dispatcher directory' '1' "$status"
+chmod g-w "$install_dir"
 
 finish

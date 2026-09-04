@@ -192,8 +192,8 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
 
     # An exact count rather than "more than zero": a partial add is the
     # failure that actually happened, and it leaves some files staged.
-    assert_equals 'all 15 scripts are committed, not only on disk' \
-        '15' "$committed_count"
+    assert_equals 'all 17 scripts are committed, not only on disk' \
+        '17' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine
@@ -201,6 +201,8 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
     committed_exec=$(git_cmd ls-tree -r HEAD "$NEW_NAME" 2>/dev/null \
         | awk '$1 == "100755" { print $4 }' | sort)
     expected_exec=$(printf '%s\n' \
+        "$NEW_NAME/config/config-build" \
+        "$NEW_NAME/config/config-stamp" \
         "$NEW_NAME/deps/check-deps.sh" \
         "$NEW_NAME/deps/test-local.sh" \
         "$NEW_NAME/tmux-update-window-names.sh" \

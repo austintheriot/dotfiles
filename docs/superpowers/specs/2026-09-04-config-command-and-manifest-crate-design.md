@@ -5,10 +5,11 @@ Design for a `config` wrapper command with subcommands, and for
 domain: `check` (branch drift) and `sync` (one-way branch sync). Replaces
 `tests/check-branch-drift.sh` and the hand-run branch sync.
 
-Status: design approved in conversation. Reviewed by two expert panels
-(structure: `oo-architecture`, `oo-patterns`, `data-flow`, `fp-effects`;
-edges: `ci-pipeline`, `api-design`, `security`, `fp-types`). Their accepted
-findings are folded in below. Two decisions remain open in section 11.
+Status: approved. Reviewed by two expert panels (structure:
+`oo-architecture`, `oo-patterns`, `data-flow`, `fp-effects`; edges:
+`ci-pipeline`, `api-design`, `security`, `fp-types`) in place of an owner
+read. Their accepted findings are folded in below; the two decisions they
+left open were settled on 2026-09-04 and are recorded in section 3.
 
 ## 1. Goals
 
@@ -52,6 +53,8 @@ findings are folded in below. Two decisions remain open in section 11.
 | Git boundary model | Snapshot data in, plan data out; no trait | First panel, unanimous |
 | Plan granularity | Domain edits (`Set`, `Remove`), not git ops | Core stays backend-agnostic; `apply_to` gives the same pure simulator |
 | Planner input | A pre-partitioned `SharedPaths`, not a raw manifest | The planner cannot name an excluded path; `check` and `plan` consume one partition |
+| Leak gate for plumbing commits | `leak-check.sh` gains a range mode; pre-push scans `<remote-sha>..<local-sha>` | `commit-tree` runs no hooks, so `sync` commits and `--no-verify` commits reached a public branch unscanned; verified that today only pre-commit scans, staged content only |
+| Compiler pin | None; `Cargo.lock` committed, CI builds `--locked` | The lockfile fixes the dependency tree, which is where host-vs-CI divergence comes from; a toolchain pin costs a rustup download per CI run |
 
 ## 4. Layout
 
@@ -304,10 +307,11 @@ not move.
 
 **Hooks do not run.** `commit-tree` and `update-ref` are plumbing and
 invoke no hook, so the pre-commit leak check never sees a `sync` commit.
-`sync` copies only blobs already committed on the source branch, which
-passed pre-commit when they were committed there, so `sync` introduces no
-content that was never scanned. That guarantee is weaker than a scan, and
-section 11 holds the decision on closing it at push time.
+The gate that covers it is at push time: pre-push runs `leak-check.sh`
+in range mode over every commit being pushed (section 8), which also
+covers `--no-verify` commits. `sync` additionally copies only blobs
+already committed on the source branch, but that is a property, not the
+guarantee.
 
 `$HOME` and the working tree are never read or written by `sync`. The temp
 index lives under the system temp dir.
@@ -409,7 +413,7 @@ user-writable cache and asserts nothing about who built the binary.
 | Environment | Binary source | Cost |
 |---|---|---|
 | Host | `config build` (section 7.7) | ~1s warm, ~6s cold |
-| pre-push | Compares the stamp to `git rev-parse <pushed-sha>:crates/config-manifest`. Equal: proceed. Missing: `config-manifest has not been built; run config build`, exit 1. Mismatch: `config-manifest is stale for <sha>; run config build`, exit 1. Never compiles. | ~20ms |
+| pre-push | First, `leak-check.sh --range <remote-sha>..<local-sha>` over the pushed commits; any hit blocks the push. Then compares the stamp to `git rev-parse <pushed-sha>:crates/config-manifest`. Equal: proceed. Missing: `config-manifest has not been built; run config build`, exit 1. Mismatch: `config-manifest is stale for <sha>; run config build`, exit 1. Never compiles. | leak scan: one diff pass; stamp: ~20ms |
 | Docker suite | Builder stage `FROM rust:1.94-slim-bookworm@sha256:cf9dd0ec73e75f827fe59123fff9dc65af1a1c8363c3c31ee8d7f8ad0b6a5fb2`; layer order: `COPY Cargo.toml Cargo.lock`, build with a stub `main.rs` to cache dependencies, then `COPY src`, then build. Runtime stage is the existing digest-pinned `debian:bookworm-slim`; `COPY --from=builder` the binary only. | 0.8s unchanged, 2.6s after a Rust edit, 100s once per machine |
 | CI | Rust is preinstalled on `ubuntu-latest` and `macos-latest`. `cargo build --release --locked && cargo test`, binary on PATH, then the suite | seconds |
 
@@ -491,6 +495,14 @@ script is deleted.
 
 Each step lands green on its own and is a candidate for one commit series.
 
+0. Leak gate first, before any plumbing commit path exists:
+   `tests/leak-check.sh` gains `--range <a>..<b>` (scan the diff of the
+   range with the same patterns and allow list as the staged mode), pre-push
+   calls it before the drift check, and `tests/leak-check.test.sh` covers
+   both modes in both directions: each pattern catches a planted fake
+   secret, and the allow list never suppresses a real one. Fixtures live
+   under the per-run temp dir; no real credentials. This is the queued
+   TODO, done first because step 3 depends on it.
 1. Scaffold: crate with `--version` **and the full dependency set already
    in `Cargo.toml` and `Cargo.lock`** (`anyhow`, `proptest`, `assert_cmd`,
    `tempfile`), so the lifecycle is proven against the real dependency
@@ -501,6 +513,8 @@ Each step lands green on its own and is a candidate for one commit series.
 2. `path`, `manifest`, `tree`, `check`, TDD. Equivalence harness. Switch
    pre-push and CI to the binary. Delete `check-branch-drift.sh`.
 3. `plan`, `git::commit_plan`, `sync`, TDD with the four integration tests.
+   Requires step 0 merged: `sync` must never exist without the push-time
+   leak gate.
 4. Dispatcher with name and permission checks, `install-hooks`, delete the
    two aliases, `test`, `install`.
 5. `reload`, and remove the per-shell `tmux source` from both `.zshrc`
@@ -509,21 +523,7 @@ Each step lands green on its own and is a candidate for one commit series.
 Steps 2 and 3 are where the sans-IO standard is exercised; step 1 is
 where the build lifecycle is proven before any logic exists.
 
-## 11. Open decisions and risks
-
-**Open decision: leak scan at push time.** `sync` commits bypass the
-pre-commit leak check (section 6.6), and so does any `--no-verify` commit.
-Today nothing scans a pushed range. Recommended: give `tests/leak-check.sh`
-a range mode and run it from pre-push over `<remote-sha>..<local-sha>`.
-That closes the gap for every commit path and lands the tests the leak
-check currently lacks. The alternative is to rely on the weaker guarantee
-stated in 6.6.
-
-**Open decision: `rust-toolchain.toml`.** Pins the compiler across host
-and CI, at the cost of rustup downloading the pinned version on every CI
-run instead of using the preinstalled one. Recommended: skip it;
-`Cargo.lock` with `--locked` gives most of the reproducibility, and the
-pin can be added when a version-specific bug appears.
+## 11. Risks
 
 - **`docs/superpowers/` is labelled per-branch** (`~docs/superpowers/`),
   following d62cc13: planning docs describe code that must match; the docs
@@ -536,6 +536,10 @@ pin can be added when a version-specific bug appears.
   and have no renewal mechanism. Revisit when either base publishes a
   security fix; a Dependabot config for Dockerfiles is the standard answer
   if it becomes a chore.
+- **Compiler version floats with the runner image** (no toolchain pin, by
+  decision). A compiler-version bug surfaces as a build error in CI, not as
+  a silent behaviour change, because `Cargo.lock` fixes the dependencies.
+  Add `rust-toolchain.toml` if that ever happens.
 - **`plan_sync`'s signature is contract-open.** Two-way sync will add a
   conflict rule as input; callers are `main` and the tests only, so that
   change is expected and not a breaking-change concern.

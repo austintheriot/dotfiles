@@ -122,6 +122,11 @@ assert_succeeds 'at least one search root is present' test -n "$present_roots"
 #
 #   - This suite names the old directory in its own prose and in $OLD_NAME,
 #     so without excluding itself the assertion could never pass.
+#   - TODO-AGENTS.md quotes history verbatim: the claim line names the
+#     directory being renamed, and an item can be a pasted error message
+#     ("/Users/austin/.my-scripts/... returned 127"). Rewriting a quote
+#     falsifies it. The file is per-branch (`~TODO-AGENTS.md`) and holds no
+#     live path this repo resolves, so a stale name there breaks nothing.
 #   - __pycache__ holds compiled bytecode that embeds the string from
 #     whatever the .py source said when it was last imported. It is
 #     regenerated from the source this suite already checks, and rewriting
@@ -134,6 +139,7 @@ stale_files=$(grep -rlF "$OLD_NAME" \
     $present_roots "$DOTFILES_ROOT/$NEW_NAME" 2>/dev/null \
     | sed "s|^$DOTFILES_ROOT/||" \
     | grep -v '^tests/scripts-dir-name\.test\.sh$' \
+    | grep -v '^TODO-AGENTS\.md$' \
     | grep -v '/__pycache__/' \
     | sort)
 assert_equals 'no tracked file still names .my-scripts' '' "$stale_files"
@@ -143,6 +149,7 @@ stale_stem=$(grep -rlF "$OLD_STEM" \
     $present_roots "$DOTFILES_ROOT/$NEW_NAME" 2>/dev/null \
     | sed "s|^$DOTFILES_ROOT/||" \
     | grep -v '^tests/scripts-dir-name\.test\.sh$' \
+    | grep -v '^TODO-AGENTS\.md$' \
     | grep -v '/__pycache__/' \
     | sort)
 assert_equals 'no tracked file still names the my-scripts stem' '' "$stale_stem"

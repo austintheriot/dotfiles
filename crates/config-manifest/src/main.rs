@@ -1,14 +1,9 @@
-mod check;
-mod git;
-mod manifest;
-mod path;
-mod tree;
-
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Context;
+use config_manifest::{check, git, manifest};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const USAGE: &str = "usage: config-manifest --version | check [ref-a] [ref-b]";

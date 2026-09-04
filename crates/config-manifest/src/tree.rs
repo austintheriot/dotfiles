@@ -11,8 +11,6 @@ pub enum FileMode {
 }
 
 impl FileMode {
-    // Consumed by the sync subcommand (Plan B2).
-    #[allow(dead_code)]
     pub fn as_git_mode(self) -> &'static str {
         match self {
             FileMode::Regular => "100644",
@@ -34,8 +32,6 @@ impl TreeListing {
         self.0.keys()
     }
 
-    // Consumed by the sync subcommand (Plan B2).
-    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }

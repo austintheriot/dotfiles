@@ -43,8 +43,6 @@ pub enum Rule {
 }
 
 impl Rule {
-    // Consumed by `print`, which itself is unused until a later plan.
-    #[allow(dead_code)]
     fn pattern(&self) -> &PathPattern {
         match self {
             Rule::Shared(pattern) | Rule::Excluded(pattern) | Rule::PerBranch(pattern) => pattern,
@@ -86,14 +84,10 @@ pub enum Classification {
 pub struct SharedPaths(BTreeSet<RelPath>);
 
 impl SharedPaths {
-    // Consumed by the sync subcommand (Plan B2).
-    #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = &RelPath> {
         self.0.iter()
     }
 
-    // Consumed by the sync subcommand (Plan B2).
-    #[allow(dead_code)]
     pub fn contains(&self, path: &RelPath) -> bool {
         self.0.contains(path)
     }
@@ -127,8 +121,6 @@ pub fn parse(text: &str) -> Result<Manifest, ManifestError> {
     Ok(Manifest { rules })
 }
 
-// Consumed by a future `manifest print` subcommand.
-#[allow(dead_code)]
 pub fn print(manifest: &Manifest) -> String {
     let mut out = String::new();
     for rule in &manifest.rules {
@@ -145,8 +137,6 @@ pub fn print(manifest: &Manifest) -> String {
 }
 
 impl Manifest {
-    // Consumed by a future `manifest print` subcommand.
-    #[allow(dead_code)]
     pub fn rules(&self) -> &[Rule] {
         &self.rules
     }

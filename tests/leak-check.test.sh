@@ -199,4 +199,36 @@ assert_equals 'an unknown argument is a usage error' '2' "$(exit_of "$out")"
 out=$(run_leak_check --range "$key_tip..$key_tip")
 assert_equals 'range: an empty range passes' '0' "$(exit_of "$out")"
 
+# --- pre-push wiring -------------------------------------------------------
+#
+# Drives tests/pre-push directly with git's stdin protocol, pointed at the
+# fixture through GIT_DIR / GIT_WORK_TREE. The pushed ref is a feature
+# branch and the changed paths match no TRIGGER_PATH, so neither the drift
+# check nor the Docker suite runs: the leak scan is the only gate exercised.
+
+PRE_PUSH="$DOTFILES_ROOT/tests/pre-push"
+
+run_pre_push() {
+    local local_sha=$1 remote_sha=$2
+    (
+        cd "$repo" || exit 99
+        printf 'refs/heads/feature %s refs/heads/feature %s\n' "$local_sha" "$remote_sha" \
+            | GIT_DIR="$repo/.git" GIT_WORK_TREE="$repo" "$PRE_PUSH" origin "file://$repo" 2>&1 >/dev/null
+        printf '\n__exit=%s\n' "$?"
+    )
+}
+
+out=$(run_pre_push "$clean_tip" "$base")
+assert_equals 'pre-push: a clean range is allowed through the leak gate' '0' "$(exit_of "$out")"
+
+out=$(run_pre_push "$leaky_tip" "$base")
+assert_equals 'pre-push: a range with a secret is blocked' '1' "$(exit_of "$out")"
+assert_contains 'pre-push: the leak check reports the block' 'PUSH BLOCKED' "$out"
+assert_contains 'pre-push: the hook names the failing gate' \
+    'pre-push: leak check failed' "$out"
+
+# A brand-new remote branch has the zero sha; the whole history is the range.
+out=$(run_pre_push "$leaky_tip" '0000000000000000000000000000000000000000')
+assert_equals 'pre-push: a new remote branch is scanned from the empty tree' '1' "$(exit_of "$out")"
+
 finish

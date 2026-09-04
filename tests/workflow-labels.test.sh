@@ -125,7 +125,7 @@ assert_contains 'the matrix does not fail fast' 'fail-fast: false' "$suite_text"
 
 # --- branch-drift.yml labels the combined failure case -------------------
 #
-# check-branch-drift.sh has two failure modes that can both fire in one run:
+# config-manifest check has two failure modes that can both fire in one run:
 # diverged shared paths (stdout, "diverged: <path>") and unlabeled files
 # (stderr, "... match no .sync-manifest rule"). Before this section existed,
 # the workflow's step summary checked for the unlabeled-files marker first

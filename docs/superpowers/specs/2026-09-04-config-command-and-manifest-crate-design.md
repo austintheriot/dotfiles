@@ -3,7 +3,7 @@
 Design for a `config` wrapper command with subcommands, and for
 `crates/config-manifest`, a Rust program that owns the `.sync-manifest`
 domain: `check` (branch drift) and `sync` (one-way branch sync). Replaces
-`tests/check-branch-drift.sh` and the hand-run branch sync.
+tests/check-branch-drift.sh and the hand-run branch sync.
 
 Status: approved. Reviewed by two expert panels (structure:
 `oo-architecture`, `oo-patterns`, `data-flow`, `fp-effects`; edges:
@@ -511,7 +511,7 @@ Each step lands green on its own and is a candidate for one commit series.
    with the stated layer order, `config build` and the content stamp.
    Suite green on host, Docker, CI.
 2. `path`, `manifest`, `tree`, `check`, TDD. Equivalence harness. Switch
-   pre-push and CI to the binary. Delete `check-branch-drift.sh`.
+   pre-push and CI to the binary. Delete check-branch-drift.sh.
 3. `plan`, `git::commit_plan`, `sync`, TDD with the four integration tests.
    Requires step 0 merged: `sync` must never exist without the push-time
    leak gate.
@@ -552,4 +552,4 @@ where the build lifecycle is proven before any logic exists.
   crate-wide standard.
 - Firezone, "sans-IO: The secret to effective Rust for network services":
   https://www.firezone.dev/blog/sans-io
-- `tests/check-branch-drift.sh`: the reference implementation of `check`.
+- The former `check-branch-drift` shell script, replaced by `config-manifest check`: the reference implementation of `check`.

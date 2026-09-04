@@ -120,12 +120,12 @@ if [ "$pushing_synced_branch" -eq 1 ]; then
         printf 'pre-push: config-manifest stamp matches the pushed crate\n'
     fi
 
-    if [ ! -x "$HOME/tests/check-branch-drift.sh" ]; then
-        printf 'pre-push: ~/tests/check-branch-drift.sh is missing or not executable\n' >&2
+    if ! command -v config-manifest >/dev/null 2>&1; then
+        printf 'pre-push: config-manifest is not on PATH; run ~/.scripts/config/config-build\n' >&2
         exit 1
     fi
 
-    if ! "$HOME/tests/check-branch-drift.sh" mac linux; then
+    if ! config-manifest check mac linux; then
         printf '\npre-push: mac and linux have diverged on a shared path, push blocked.\n' >&2
         printf 'Fix the drift, or run `git push --no-verify` only if you have a\n' >&2
         printf 'genuine reason to bypass the gate.\n' >&2

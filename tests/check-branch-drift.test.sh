@@ -11,11 +11,13 @@
 
 . "$(dirname "$0")/lib.sh"
 
-# CHECK_CMD selects the implementation under test. The default is the shell
-# script; `CHECK_CMD='config-manifest check'` runs the same 25 assertions
-# against the Rust binary. Word-splitting the unquoted expansion is the
-# intent: the value is a command plus its subcommand.
-CHECK_CMD=${CHECK_CMD:-$DOTFILES_ROOT/tests/check-branch-drift.sh}
+# CHECK_CMD selects the implementation under test. The shell script this
+# suite once proved equivalent to config-manifest check has been removed;
+# the default now runs the Rust binary. The variable stays so a future
+# implementation can be held to this same suite. Word-splitting the
+# unquoted expansion is the intent: the value is a command plus its
+# subcommand.
+CHECK_CMD=${CHECK_CMD:-config-manifest check}
 
 # Builds a repo with a "linux" branch (default) and a "mac" branch, both
 # starting from the same manifest and the same shared file content.

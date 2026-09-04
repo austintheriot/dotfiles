@@ -310,7 +310,7 @@ language. Python or Rust lets a function return a *plan* and confines
 impurity to the applier, which makes edge cases parametrizable without
 spawning subprocesses. Shell can factor functions but cannot return
 structured values. That is the same axis Raymond and `BashWeaknesses`
-identify, and it is why `check-branch-drift.sh` (24 `IFS` references)
+identify, and it is why check-branch-drift.sh (24 `IFS` references)
 remains the best port candidate while the tmux orchestration is not.
 
 Note also that `monkeypatch.setenv("PATH", fake_bin)` is the same trick
@@ -436,7 +436,7 @@ should happen regardless.
    `return` semantics they do not need. `return` to `exit` makes them
    plain executables, shrinks the eval boundary to 27 lines, and improves
    the export surface -- the one goal a rewrite genuinely serves.
-6. **If porting anything, port `tests/check-branch-drift.sh` first.** 184
+6. **If porting anything, port tests/check-branch-drift.sh first.** 184
    lines, **24 `IFS` references** -- the signature of missing data
    structures. Pure computation, no shell boundary, no tmux, no
    interactive shell. `.sync-manifest` parsing (rules, `!` excludes, `~`

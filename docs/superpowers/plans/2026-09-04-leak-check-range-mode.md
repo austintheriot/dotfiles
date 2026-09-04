@@ -605,7 +605,7 @@ EOF
 
 - [ ] **Step 1: Confirm the drift gate sees the divergence**
 
-Run: `cd /Users/austin && bash tests/check-branch-drift.sh mac linux`
+Run: cd /Users/austin && bash tests/check-branch-drift.sh mac linux
 Expected: `diverged: tests/` and a non-zero exit. That is correct; the next step resolves it.
 
 - [ ] **Step 2: Sync the three shared files to linux and push it**

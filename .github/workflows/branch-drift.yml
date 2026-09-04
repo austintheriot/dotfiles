@@ -32,7 +32,7 @@ jobs:
           #
           # 2>&1 because the script writes its failure summary to stderr, and
           # command substitution captures stdout only.
-          output=$(tests/check-branch-drift.sh 2>&1)
+          output=$(config-manifest check 2>&1)
           status=$?
           echo "$output"
           if [ -n "$GITHUB_STEP_SUMMARY" ]; then

@@ -38,7 +38,7 @@ exactly as it will land on the remote.
 Run `~/tests/run-in-docker.sh` yourself first anyway. Discovering a failure
 from a blocked push costs a round trip.
 
-The same hook runs `~/tests/check-branch-drift.sh mac linux` when the push
+The same hook runs `config-manifest check mac linux` when the push
 includes the `mac` or `linux` branch, and blocks the push if a path listed in
 `.sync-manifest` differs between the two. This is a local pre-flight: the
 `branch-drift` GitHub Action re-checks `origin/mac` against `origin/linux`
@@ -100,7 +100,7 @@ A bare repo cloned with `--bare` has no `remote.origin.fetch`, so
 frozen at whatever they were when the remote was added. Nothing warns about
 this.
 
-`check-branch-drift.sh` defaults to comparing `origin/mac` against
+`config-manifest check` defaults to comparing `origin/mac` against
 `origin/linux`, so on a machine missing the refspec it reads stale refs and
 reports drift that does not exist (or, worse, misses drift that does). Set it
 once per machine:

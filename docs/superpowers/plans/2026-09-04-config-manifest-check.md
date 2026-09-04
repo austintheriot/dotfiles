@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Create the `crates/config-manifest` Rust crate with a `check` subcommand that replaces `tests/check-branch-drift.sh` byte-for-byte in output, prove the build lifecycle (host stamp, Docker builder stage, CI) before any logic exists, and switch every consumer to the binary.
+**Goal:** Create the `crates/config-manifest` Rust crate with a `check` subcommand that replaces tests/check-branch-drift.sh byte-for-byte in output, prove the build lifecycle (host stamp, Docker builder stage, CI) before any logic exists, and switch every consumer to the binary.
 
 **Architecture:** Sans-IO core: `path` (proof-carrying newtypes), `manifest` (rules ADT, parse/print/classify/partition), `tree` (`TreeListing` from `git ls-tree -r -z`), `check` (pure comparison producing a `CheckReport`, plus a `render` that reproduces the shell script's exact stdout, stderr, and exit code). The only module that spawns git is `git.rs`, which knows both repo shapes (bare at `<root>/.cfg` with `<root>` as worktree, or a normal repo at `<root>`). `main.rs` gathers inputs at the edge and calls the core. The existing 25-assertion shell suite is the equivalence harness during the port.
 
@@ -17,7 +17,7 @@
 - All types derive `Debug, Clone, PartialEq, Eq`; ordered ones also `PartialOrd, Ord`. `RelPath`, `BlobId`, `CommitId` have private fields and a single fallible `parse` constructor each.
 - No `unwrap()` outside `#[cfg(test)]` and `tests/`. No single-letter identifiers except loop indices. No comments that restate code.
 - `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` pass at every commit.
-- The output contract is exact. `check` prints the same bytes to the same streams as `tests/check-branch-drift.sh`, including the `check-branch-drift:` prefix on summary lines, because `tests/pre-push`, `.github/workflows/branch-drift.yml`, and `tests/deps-harness.test.sh` grep that text. Exit codes: 0 clean, 1 any finding or missing manifest, 2 usage.
+- The output contract is exact. `check` prints the same bytes to the same streams as tests/check-branch-drift.sh, including the `check-branch-drift:` prefix on summary lines, because `tests/pre-push`, `.github/workflows/branch-drift.yml`, and `tests/deps-harness.test.sh` grep that text. Exit codes: 0 clean, 1 any finding or missing manifest, 2 usage.
 - Precedence when a path matches several rules, identical to the shell: `!` excluded wins; then a shared rule; then `~` per-branch. A `~` path under a shared directory is still compared, as the shell compares it today.
 - The stamp is the tree id of `crates/config-manifest` **as in the worktree** (temp index, `write-tree`, subtree), so the same content stamps identically whether or not it is committed yet. The stamp is a staleness check, not a trust boundary.
 - No compile step in any hook. `tests/pre-push` reads the stamp and refuses with `run ~/.scripts/config/config-build` when missing or stale.
@@ -1903,11 +1903,11 @@ EOF
 
 **Files:**
 - Modify: `tests/pre-push` (the drift block), `.github/workflows/branch-drift.yml:30`, `tests/deps-harness.test.sh:378,388`, `tests/check-branch-drift.test.sh` (default `CHECK_CMD`), `.claude/rules/dotfiles-tests.md:41,103`, `docs/research/shell-to-rust-prior-art.md`, `docs/superpowers/specs/2026-09-04-config-command-and-manifest-crate-design.md`, `docs/superpowers/plans/2026-09-04-leak-check-range-mode.md`
-- Delete: `tests/check-branch-drift.sh`
+- Delete: tests/check-branch-drift.sh
 
 **Interfaces:**
 - Consumes: `config-manifest check [ref-a] [ref-b]` from Task 4, on PATH via Task 1.
-- Produces: no caller of `tests/check-branch-drift.sh` remains; `doc-links.test.sh` stays green.
+- Produces: no caller of tests/check-branch-drift.sh remains; `doc-links.test.sh` stays green.
 
 - [ ] **Step 1: Write the failing assertion that no caller remains**
 
@@ -2029,7 +2029,7 @@ g push origin linux
 g checkout -q mac
 ```
 
-Expected: `g status -s -uno` lists the crate files, the two scripts, the modified tests and workflows, the rules file, the research doc, the manifest, and the deletion of `tests/check-branch-drift.sh`; `config-manifest check mac linux` prints `match on all 16 shared path(s)` (15 before plus `crates/`); the linux push runs the leak scan, the stamp check (the crate subtree is identical on both branches, so the stamp matches), the binary drift check, and the Docker suite.
+Expected: `g status -s -uno` lists the crate files, the two scripts, the modified tests and workflows, the rules file, the research doc, the manifest, and the deletion of tests/check-branch-drift.sh; `config-manifest check mac linux` prints `match on all 16 shared path(s)` (15 before plus `crates/`); the linux push runs the leak scan, the stamp check (the crate subtree is identical on both branches, so the stamp matches), the binary drift check, and the Docker suite.
 
 Note: after `g checkout -q linux`, the working tree is the linux branch; `~/.scripts/config/config-stamp` and the installed binary are unaffected because the crate content is identical on both branches after the sync.
 

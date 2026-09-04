@@ -80,4 +80,15 @@ else
     printf 'SKIP  config-build assertions (cargo not found)\n'
 fi
 
+# --- the shell drift check is gone and nothing calls it ---------------------
+
+assert_succeeds 'tests/check-branch-drift.sh is deleted' \
+    test ! -e "$DOTFILES_ROOT/tests/check-branch-drift.sh"
+
+callers=$(grep -rln 'check-branch-drift\.sh' \
+    "$DOTFILES_ROOT/tests" "$DOTFILES_ROOT/.github" "$DOTFILES_ROOT/.scripts" \
+    "$DOTFILES_ROOT/.claude/rules" 2>/dev/null \
+    | grep -v -e '/check-branch-drift\.test\.sh$' -e '/config-manifest-lifecycle\.test\.sh$' || true)
+assert_equals 'no script, workflow, or rule still names check-branch-drift.sh' '' "$callers"
+
 finish

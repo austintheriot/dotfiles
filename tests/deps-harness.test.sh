@@ -337,10 +337,10 @@ assert_contains 'the local harness tags images the way the arch job does' \
 #
 # deps-local.conf is the one file under .scripts/ that must NOT be
 # identical across branches: it holds each machine's platform-exclusive
-# entries (aerospace on mac). Without the exclusion, check-branch-drift
+# entries (aerospace on mac). Without the exclusion, config-manifest check
 # reports the whole of .scripts/ as diverged forever.
 #
-# check-branch-drift.sh collects every "!" line in a first pass and applies
+# config-manifest check collects every "!" line in a first pass and applies
 # the resulting :(exclude) pathspecs to every path it checks, so manifest line
 # order is genuinely irrelevant here -- the exclusion works above or below
 # `.scripts/`. Asserting an ordering the implementation does not have would
@@ -356,7 +356,7 @@ $manifest_lines
 assert_contains 'the manifest excludes deps-local.conf' \
     '!.scripts/deps/deps-local.conf' "$manifest_lines"
 
-# Driven through check-branch-drift.sh rather than asserted as text, because
+# Driven through config-manifest check rather than asserted as text, because
 # the exclusion is only worth anything if the script honors it. A fixture repo
 # with two branches that differ in exactly deps-local.conf must come back
 # clean; the same repo differing in a sibling file under .scripts/ must not.
@@ -375,7 +375,7 @@ printf '' > "$drift_repo/.scripts/deps/deps-local.conf"
 drift_git add -A
 drift_git commit -q -m linux
 
-output=$(DOTFILES_ROOT="$drift_repo" "$DOTFILES_ROOT/tests/check-branch-drift.sh" mac linux 2>&1)
+output=$(DOTFILES_ROOT="$drift_repo" config-manifest check mac linux 2>&1)
 status=$?
 assert_equals 'a deps-local.conf-only difference is not drift' '0' "$status"
 assert_contains 'the manifest exclusion is reported as clean' 'match on all' "$output"
@@ -385,7 +385,7 @@ printf 'drifted\n' > "$drift_repo/.scripts/deps/deps.conf"
 drift_git add -A
 drift_git commit -q -m drift
 
-output=$(DOTFILES_ROOT="$drift_repo" "$DOTFILES_ROOT/tests/check-branch-drift.sh" mac linux 2>&1)
+output=$(DOTFILES_ROOT="$drift_repo" config-manifest check mac linux 2>&1)
 status=$?
 assert_equals 'a sibling file under .scripts/ is still drift' '1' "$status"
 assert_contains 'the drifted path is named' 'diverged: .scripts/' "$output"

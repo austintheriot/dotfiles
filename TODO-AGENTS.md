@@ -2,6 +2,39 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- Write tests for `tests/leak-check.sh`. It gates every commit against
+  leaking a secret to a public repo, it is 128 lines of stacked
+  `grep -inE` regexes, and it has no dedicated test file -- only an
+  incidental allow-list assertion in another suite. A false negative
+  leaks a secret, so this is the highest-risk untested code in the repo.
+  Cover both directions: each pattern must catch a planted fake secret,
+  and the allow list must not suppress a real one. Use fixture files
+  under the per-run temp dir, never real credentials.
+  See docs/research/shell-to-rust-prior-art.md for why this ranked first.
+- Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it
+  from `tests/run-all.sh` as its own suite. The code already carries
+  `# shellcheck disable=SC2086` directives while shellcheck is not
+  installed and not a tracked dependency, so those directives are
+  currently decorative and nothing lints. 43 of 51 shell files are bash
+  or sh and fully checkable; the 5 zsh files are not supported by
+  shellcheck and must be excluded explicitly rather than silently.
+  This is the whole of atuin's answer to the same problem.
+- Batch the tmux queries in `.scripts/tmux-update-window-names.sh`. It
+  fires on 6 hooks including `after-select-pane`, costs 110-200ms, and
+  spawns 13 subprocesses because it loops over windows calling
+  `display-message -p -t` once each. One call replaces the loop:
+  `tmux list-panes -a -F '#{window_id} #{pane_id} #{pane_current_path} #{window_name}'`
+  measured at 20ms for the whole server. Pure shell change, no new
+  dependency. Do this before considering any port, so the port has an
+  honest baseline to beat.
+- Enable the macOS Developer Tools exemption for the terminal (System
+  Settings -> Privacy & Security -> Developer Tools). This machine has
+  `spctl --status` = assessments enabled and `DevToolsSecurity -status`
+  = disabled, so `syspolicyd` validates every newly built executable on
+  its first run. Measured at ~180ms here per fresh binary, reported
+  elsewhere at 314ms, and it can block on a network timeout when
+  offline. `spctl --global-disable` does not fix it; only the exemption
+  does. Needs a human at the GUI, so it cannot be done autonomously.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
 - Add some utilities for running/syncing/merging things myself:
   - config:test to run the tests

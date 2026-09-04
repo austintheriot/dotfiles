@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp install-hooks check sync install test'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks check sync install test reload'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"
@@ -191,10 +191,37 @@ printf 'changed\n' >> "$watch_home/tracked.txt"
 git --git-dir="$watch_home/.cfg" --work-tree="$watch_home" add tracked.txt
 sleep 3
 runs_after=$(grep -c '' "$watch_home/runs" 2>/dev/null || echo 0)
-kill "$(cat "$watch_home/watch.pid")" 2>/dev/null || true
-pkill -P "$(cat "$watch_home/watch.pid")" 2>/dev/null || true
+watch_pid=$(cat "$watch_home/watch.pid")
+kill "$watch_pid" 2>/dev/null || true
+pkill -P "$watch_pid" 2>/dev/null || true
 assert_equals 'watch runs the suite once at start' '1' "$runs_before"
 [ "$runs_after" -gt "$runs_before" ] && reran=yes || reran="no ($runs_before -> $runs_after)"
 assert_equals 'watch reruns the suite when a tracked file changes' 'yes' "$reran"
+
+for _attempt in 1 2 3 4 5 6 7 8 9 10; do
+    kill -0 "$watch_pid" 2>/dev/null || break
+    sleep 0.2
+done
+assert_equals 'the watch loop is gone after kill' '' \
+    "$(pgrep -f "config-test --watch" | grep -x "$watch_pid" || true)"
+
+# --- reload -----------------------------------------------------------------
+
+printf '#!/bin/sh\nprintf "tmux:%%s\\n" "$@"\n' > "$shim_dir/tmux"
+chmod 755 "$shim_dir/tmux"
+
+home=$(make_fixture_home reload)
+actual=$(env -u TMUX HOME="$home" PATH="$shim_dir:$PATH" "$CONFIG" reload 2>/dev/null)
+assert_equals 'reload outside tmux only prints the zsh line' 'source ~/.zshrc' "$actual"
+
+actual=$(TMUX=fake HOME="$home" PATH="$shim_dir:$PATH" "$CONFIG" reload 2>/dev/null)
+assert_equals 'reload inside tmux sources the tmux config first' \
+    "tmux:source
+tmux:$home/.config/tmux/tmux.conf
+reloaded tmux config
+source ~/.zshrc" "$actual"
+
+assert_equals 'the per-shell tmux source is gone from .zshrc' '' \
+    "$(grep -n 'tmux source' "$DOTFILES_ROOT/.zshrc" || true)"
 
 finish

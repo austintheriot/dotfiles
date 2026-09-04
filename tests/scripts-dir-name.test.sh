@@ -57,7 +57,7 @@ EXECUTED_SCRIPTS='deps/check-deps.sh deps/test-local.sh
 tmux-update-window-names.sh tmux-worktree-config.sh
 config/config-stamp config/config-build config/config
 config/config-install-hooks config/config-check config/config-sync
-config/config-install config/config-test'
+config/config-install config/config-test config/config-reload'
 
 SOURCED_SCRIPTS='tmux-close.sh tmux-setup.sh tmux-split.sh tmux-start.sh
 zsh-git-widgets.sh deps/depcheck-hook.sh'
@@ -194,8 +194,8 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
 
     # An exact count rather than "more than zero": a partial add is the
     # failure that actually happened, and it leaves some files staged.
-    assert_equals 'all 23 scripts are committed, not only on disk' \
-        '23' "$committed_count"
+    assert_equals 'all 24 scripts are committed, not only on disk' \
+        '24' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine
@@ -208,6 +208,7 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
         "$NEW_NAME/config/config-check" \
         "$NEW_NAME/config/config-install" \
         "$NEW_NAME/config/config-install-hooks" \
+        "$NEW_NAME/config/config-reload" \
         "$NEW_NAME/config/config-stamp" \
         "$NEW_NAME/config/config-sync" \
         "$NEW_NAME/config/config-test" \

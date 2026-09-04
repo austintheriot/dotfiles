@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+if [ -n "${TMUX:-}" ]; then
+    tmux source "$HOME/.config/tmux/tmux.conf"
+    printf 'reloaded tmux config\n'
+fi
+
+printf 'a child process cannot re-source the calling shell; run the line below\n' >&2
+printf 'source ~/.zshrc\n'

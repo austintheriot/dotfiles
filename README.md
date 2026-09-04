@@ -112,6 +112,9 @@ It should be about 0ms rather than ~180ms:
 cp target/release/mybin /tmp/gk-check && /usr/bin/time -p /tmp/gk-check
 ```
 
+`.zshrc` no longer runs `tmux source` per shell (1.7s per pane, all of it
+tpm); run `config reload` after editing the tmux config.
+
 ### Window manager setup
 
 - Install aerospace as a MacOS window manager: https://nikitabobko.github.io/AeroSpace/guide.html

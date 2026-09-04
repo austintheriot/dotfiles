@@ -17,6 +17,9 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   content rules to see. Confirmed identical at commit 76608b6, so this
   predates the range-mode work. The newline case is a deliberate-evasion
   shape worth closing on a public-repo gate; record only, no fix yet.
+- `tests/tmux-update-window-names.test.sh` fails intermittently (1 of 33
+  assertions) on a live tmux server and passes on rerun; find the timing
+  dependency and make the assertion deterministic.
 - Batch the tmux queries in `.scripts/tmux-update-window-names.sh`. It
   fires on 6 hooks including `after-select-pane`, costs 110-200ms, and
   spawns 13 subprocesses because it loops over windows calling
@@ -35,20 +38,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   every pane switch. Note `/usr/bin/python3` is not a fallback -- it is an
   xcrun stub that does not run without the Xcode command line tools.
 
-- Remove the per-shell tmux config reload at `.zshrc:174`
-  (`[[ -n "$TMUX" ]] && tmux source ~/.config/tmux/tmux.conf`). A
-  timestamped trace of the real startup puts it at 1.7s, the single
-  largest cost left after lazy nvm. The whole 1.7s is `tpm`:
-  `.config/tmux/tmux-common.conf:107` runs the plugin manager on every
-  config load, measured at 1.74s alone. Every pane opened inside tmux
-  therefore re-initialises tpm on the shared single-threaded server, so
-  `se` runs 107 reloads serialised against each other. That, more than
-  nvm, is the "minutes before Alacritty responds" pathology.
-  A new server loads tmux.conf by itself; the line only pushes edits into
-  an already-running server. Do this together with `config:reload` in the config:\* utilities item below
-  so that convenience is not lost. `.zshrc` is per-branch, so linux needs
-  the same edit separately. Test: assert no top-level `tmux source` in
-  .zshrc, plus a generous startup ceiling (under 2s) that cannot flake.
 - Load pyenv lazily, the same shape as nvm. `eval "$(pyenv init - zsh)"`
   at `.zshrc:225` costs 0.73s per shell: it spawns `bash --norc` just to
   dedupe PATH, then a `pyenv rehash` subprocess (0.52s of the total).
@@ -81,17 +70,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   pre-push hook already gates on local mac vs linux, so the CI job is a
   re-check, not the only gate.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
-- Add some utilities for running/syncing/merging things myself:
-  - config:test to run the tests
-  - config:test:watch to run the tests in watch mode (re-run on tracked config file change)
-  - config:sync to automatically propagate all shared-file changes from the current branch to the other branch(es). So if on `mac` all branch-identical files get merged over. More complex but more flexible would be to allow automatic two-way merging. One-way sync exists as `config-manifest sync`; the `config sync` front door is Plan C; two-way stays future work.
-  - config:install to check for any missing dependencies & auto-update them if possible
-  - config:install-hooks to install the git hooks
-  - config:reload to run the heavier resets on demand: `tmux source` the
-    tmux config, re-source .zshrc, and anything else that should happen
-    once and deliberately rather than on every shell startup. This is the
-    replacement for the per-shell `tmux source` in .zshrc:174 (see the
-    startup item below), chosen over a `prefix r` tmux keybinding.
 - If I ever ssh into a remote server env. Consider what it would take to get my whole setup working in that env from a bare git URL to this repo. Could I just clone it and run `config:setup` ? etc.
 - Shell startup is currently verrryy slow, and this compounds for large setup tasks like the `se` alias. When I last ran it, it took minutes before Alacritty was responsive again. Let's consider/debug/profile what may be slowing things down here. Let's also take a bigger picture step back to see if there are other options to get the same results as the `se` alias that would run more quickly
 - Renaming tmux windows seems to lag a bit on git branch change. Let's look to see if there are some "smarter" hooks we can hook into to update the window name on git branch change, new branch, checkout, etc.

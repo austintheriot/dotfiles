@@ -195,9 +195,57 @@ assert_equals 'range: a missing range value is a usage error' '2' "$(exit_of "$o
 out=$(run_leak_check --bogus)
 assert_equals 'an unknown argument is a usage error' '2' "$(exit_of "$out")"
 
+# An unresolvable range must not fail open. Without validation, git's failure
+# inside changed_paths would produce an empty scan_paths and a false-clean 0.
+out=$(run_leak_check --range "0123456789abcdef0123456789abcdef01234567..HEAD")
+assert_equals 'range: an unresolvable range is a usage error, not clean' \
+    '2' "$(exit_of "$out")"
+assert_contains 'range: the error names the unresolved range' \
+    'cannot resolve range' "$out"
+
 # An empty range is clean.
 out=$(run_leak_check --range "$key_tip..$key_tip")
 assert_equals 'range: an empty range passes' '0' "$(exit_of "$out")"
+
+# --- range mode: merge commits ----------------------------------------------
+#
+# `git log -p` shows no diff for a merge commit by default, so content that
+# exists only in the merge itself (an "evil merge": a conflict resolution, or
+# extra content stapled on during the merge) is invisible unless the scan
+# passes --diff-merges=first-parent. Side-branch commits are scanned either
+# way because they are walked as ordinary commits in the range.
+
+merge_base=$(commit_file base.txt "$(clean_text)" 'merge base')
+
+git -C "$repo" checkout -q -b left "$merge_base"
+commit_file left.txt "$(clean_text)" 'left branch change' >/dev/null
+
+git -C "$repo" checkout -q -b right "$merge_base"
+commit_file right.txt "$(clean_text)" 'right branch change' >/dev/null
+
+git -C "$repo" checkout -q left
+git -C "$repo" merge -q --no-commit --no-ff right >/dev/null 2>&1
+stage_file evil.txt "$(plant_key)"
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m 'evil merge'
+evil_merge=$(git -C "$repo" rev-parse HEAD)
+
+out=$(run_leak_check --range "$merge_base..$evil_merge")
+assert_equals 'range: a secret introduced only in a merge commit is blocked' \
+    '1' "$(exit_of "$out")"
+
+git -C "$repo" checkout -q left
+git -C "$repo" checkout -q -b left2 "$merge_base"
+commit_file left2.txt "$(clean_text)" 'left2 branch change' >/dev/null
+git -C "$repo" checkout -q -b right2 "$merge_base"
+commit_file right2.txt "$(clean_text)" 'right2 branch change' >/dev/null
+git -C "$repo" checkout -q left2
+git -C "$repo" merge -q --no-edit right2 >/dev/null 2>&1
+clean_merge=$(git -C "$repo" rev-parse HEAD)
+
+out=$(run_leak_check --range "$merge_base..$clean_merge")
+assert_equals 'range: an ordinary clean merge passes' '0' "$(exit_of "$out")"
+
+git -C "$repo" checkout -q main
 
 # --- pre-push wiring -------------------------------------------------------
 #
@@ -218,6 +266,18 @@ run_pre_push() {
     )
 }
 
+# Like run_pre_push, but captures stdout+stderr combined, for assertions on
+# the hook's success-path announcements (which print to stdout).
+run_pre_push_combined() {
+    local local_sha=$1 remote_sha=$2
+    (
+        cd "$repo" || exit 99
+        printf 'refs/heads/feature %s refs/heads/feature %s\n' "$local_sha" "$remote_sha" \
+            | GIT_DIR="$repo/.git" GIT_WORK_TREE="$repo" "$PRE_PUSH" origin "file://$repo" 2>&1
+        printf '\n__exit=%s\n' "$?"
+    )
+}
+
 out=$(run_pre_push "$clean_tip" "$base")
 assert_equals 'pre-push: a clean range is allowed through the leak gate' '0' "$(exit_of "$out")"
 
@@ -230,5 +290,26 @@ assert_contains 'pre-push: the hook names the failing gate' \
 # A brand-new remote branch has the zero sha; the whole history is the range.
 out=$(run_pre_push "$leaky_tip" '0000000000000000000000000000000000000000')
 assert_equals 'pre-push: a new remote branch is scanned from the empty tree' '1' "$(exit_of "$out")"
+
+# The remote sha is a well-formed but unknown object (not the zero sha, the
+# "new branch" sentinel). leak-check.sh cannot resolve the range and exits 2;
+# pre-push must report that distinctly from an actual leak, not collapse it
+# into "leak check failed".
+out=$(run_pre_push "$leaky_tip" 'abcdef1234567890abcdef1234567890abcdef12')
+assert_equals 'pre-push: an unresolvable range still blocks the push' '1' "$(exit_of "$out")"
+assert_contains 'pre-push: an unresolvable range is reported as could-not-scan, not a leak' \
+    'could not scan' "$out"
+
+# A delete-only push has the zero LOCAL sha for every ref, so the loop that
+# builds "ranges" never runs. The hook must still say so, per its own
+# convention that a skipped gate announces itself.
+out=$(run_pre_push_combined '0000000000000000000000000000000000000000' "$base")
+assert_equals 'pre-push: a delete-only push passes' '0' "$(exit_of "$out")"
+assert_contains 'pre-push: a delete-only push announces no range to scan' \
+    'no pushed range to scan' "$out"
+
+out=$(run_pre_push_combined "$clean_tip" "$base")
+assert_contains 'pre-push: a clean push announces the scanned range count' \
+    'leak scan passed for 1 range(s)' "$out"
 
 finish

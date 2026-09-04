@@ -1,4 +1,10 @@
+// Modules land ahead of their first caller (Task 4 wires them).
+#![allow(dead_code)]
+
 use std::process::ExitCode;
+
+mod manifest;
+mod path;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 

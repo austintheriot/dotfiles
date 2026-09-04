@@ -183,12 +183,19 @@ pub struct SharedPaths(BTreeSet<RelPath>);   // constructible only by Manifest::
 
 Matching semantics, identical to today's shell:
 
-- A rule with `is_dir` matches the exact path and everything beneath it.
+- A rule with `is_dir` matches every path strictly beneath it, and never
+  the bare path that shares its name (a file named `dir` is not covered by
+  the rule `dir/`; the shell reference behaved the same, and a64c347
+  restored it).
 - A rule without `is_dir` matches the exact path only. `DOTFILES.md` does
   not cover `DOTFILES.md.bak`.
 - `Excluded` wins over `Shared` for any path it matches, regardless of line
   order.
 - Comments (`#`) and blank lines are skipped.
+
+`PathPattern` and `Partition` expose their fields as `pub` because `RelPath`
+carries the invariant, so there is nothing left for a private field plus an
+accessor to protect.
 
 `partition` runs `classify` once over the union of both trees' paths and
 returns the shared set and the unmatched list. `check` and `plan` both

@@ -605,7 +605,7 @@ EOF
 
 - [ ] **Step 1: Confirm the drift gate sees the divergence**
 
-Run: cd /Users/austin && bash tests/check-branch-drift.sh mac linux
+Run: cd /Users/austin && config-manifest check mac linux
 Expected: `diverged: tests/` and a non-zero exit. That is correct; the next step resolves it.
 
 - [ ] **Step 2: Sync the three shared files to linux and push it**
@@ -621,7 +621,7 @@ Sync the leak check range mode and pre-push scan from mac
 
 All three files live under the shared tests/ path.
 EOF
-bash tests/check-branch-drift.sh mac linux
+config-manifest check mac linux
 g push origin linux
 g checkout -q mac
 ```

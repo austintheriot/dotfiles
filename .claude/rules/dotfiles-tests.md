@@ -44,6 +44,12 @@ includes the `mac` or `linux` branch, and blocks the push if a path listed in
 `branch-drift` GitHub Action re-checks `origin/mac` against `origin/linux`
 after the push and is the authoritative gate.
 
+`config-manifest sync` does this without switching branches: it commits the
+current branch's shared paths directly onto the other branch through git
+plumbing, refuses if that branch is not at its origin, and prints the two
+push commands. `--dry-run` shows the plan. The by-hand procedure above
+remains the fallback if the binary is not built.
+
 A separate pre-commit hook at `~/tests/pre-commit` (symlinked from
 `~/.cfg/hooks/pre-commit`) runs a leak guard (`~/tests/leak-check.sh`) on every
 commit, regardless of which paths are staged. This repo is public, so the

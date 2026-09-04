@@ -35,6 +35,14 @@ impl TreeListing {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    pub fn insert(&mut self, path: RelPath, mode: FileMode, blob: BlobId) {
+        self.0.insert(path, (mode, blob));
+    }
+
+    pub fn remove(&mut self, path: &RelPath) {
+        self.0.remove(path);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -170,6 +178,18 @@ mod tests {
             parse_ls_tree(b"garbage\0"),
             Err(TreeError::Malformed("garbage".to_string()))
         );
+    }
+
+    #[test]
+    fn insert_and_remove_edit_the_listing() {
+        let mut listing = parse_ls_tree(RECORDED).expect("valid");
+        let path = rel("new/file.txt");
+        let blob = BlobId::parse("4b825dc642cb6eb9a060e54bf8d69288fbee4904").expect("valid");
+        listing.insert(path.clone(), FileMode::Regular, blob.clone());
+        assert_eq!(listing.get(&path), Some(&(FileMode::Regular, blob)));
+        listing.remove(&path);
+        assert_eq!(listing.get(&path), None);
+        assert_eq!(listing.paths().count(), 4);
     }
 
     #[test]

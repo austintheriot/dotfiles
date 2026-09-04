@@ -120,6 +120,13 @@ impl Git {
         ))
     }
 
+    pub fn output_short(&self, rev: &str) -> anyhow::Result<String> {
+        Ok(self
+            .run_checked(&["rev-parse", "--short", rev], None)?
+            .trim()
+            .to_string())
+    }
+
     pub fn ls_tree(&self, rev: &str) -> anyhow::Result<TreeListing> {
         let output = self.output(&["ls-tree", "-r", "-z", rev])?;
         if !output.status.success() {
@@ -378,6 +385,18 @@ mod tests {
         assert!(git.rev_parse("no-such-ref").is_err());
         run(dir.path(), &["checkout", "-q", "--detach"]);
         assert_eq!(git.current_branch().expect("git"), None);
+    }
+
+    #[test]
+    fn output_short_returns_a_short_hex_commit_id() {
+        let dir = sync_fixture();
+        let git = Git::discover(dir.path());
+        let short = git.output_short("mac").expect("git");
+        assert!(short.len() >= 7, "{short}");
+        assert!(
+            short.chars().all(|character| character.is_ascii_hexdigit()),
+            "{short}"
+        );
     }
 
     #[test]

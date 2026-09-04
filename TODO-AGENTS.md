@@ -3,6 +3,15 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 # TODOS:
 
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
+- Add some utilities for running/syncing/merging things myself:
+  - config:test to run the tests
+  - config:test:watch to run the tests in watch mode (re-run on tracked config file change)
+  - config:sync to automatically propagate all shared-file changes from the current branch to the other branch(es). So if on `mac` all branch-identical files get merged over. More complex but more flexible would be to allow automatic two-way merging.
+  - config:install to check for any missing dependencies & auto-update them if possible
+  - config:install-hooks to install the git hooks
+- If I ever ssh into a remote server env. Consider what it would take to get my whole setup working in that env from a bare git URL to this repo. Could I just clone it and run `config:setup` ? etc.
+- Shell startup is currently verrryy slow, and this compounds for large setup tasks like the `se` alias. When I last ran it, it took minutes before Alacritty was responsive again. Let's consider/debug/profile what may be slowing things down here. Let's also take a bigger picture step back to see if there are other options to get the same results as the `se` alias that would run more quickly
+
 
 # QUESTIONS (leave until queried)
 

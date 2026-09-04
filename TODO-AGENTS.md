@@ -3,12 +3,12 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 # TODOS:
 
 - Rename .my-scripts to just .scripts if possible. Make sure to sweep the repo for stale references
+- Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
 
-# QUESTIONS (leave until queried) 
+# QUESTIONS (leave until queried)
 
 - Are our git hooks currently configured to run the leak check on commit and then the test suite on push? If not, they should.
 - Are we using the Docker container for the pre-push test suite? Should we be?
-- Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed
 
 # DEFERRED TODOS
 

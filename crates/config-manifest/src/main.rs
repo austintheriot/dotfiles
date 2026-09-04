@@ -3,8 +3,10 @@
 
 use std::process::ExitCode;
 
+mod git;
 mod manifest;
 mod path;
+mod tree;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 

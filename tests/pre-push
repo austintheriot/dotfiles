@@ -6,9 +6,12 @@
 # symlink at ~/.cfg/hooks/pre-push; core.hooksPath is not set. See the
 # install note in ~/.claude/rules/dotfiles-tests.md.
 #
-# The leak guard stays at pre-commit (tests/pre-commit): a leak should never
-# even land in a local commit. The branch-drift check and the full suite run
-# here instead, so their cost is paid once per push, not once per commit.
+# The leak guard runs twice: at pre-commit on staged content, and here in
+# range mode over every commit being pushed. The push-time scan exists
+# because `git commit-tree` (used by `config sync`) and `--no-verify` never
+# invoke pre-commit, so a commit can exist locally that no scan has seen.
+# The branch-drift check and the full suite run here only, so their cost is
+# paid once per push, not once per commit.
 #
 # The suite runs in Docker (tests/run-in-docker.sh), against the ref being
 # pushed rather than the working tree. Requires a running Docker daemon.
@@ -26,6 +29,7 @@ TRIGGER_PATHS='^\.scripts/.*\.sh$|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.
 pushing_synced_branch=0
 changed_paths=''
 push_ref=''
+ranges=''
 
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$local_sha" = "$zero" ] && continue
@@ -47,6 +51,29 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     fi
     changed_paths="$changed_paths
 $range_paths"
+
+    if [ "$remote_sha" = "$zero" ]; then
+        ranges="$ranges $empty_tree..$local_sha"
+    else
+        ranges="$ranges $remote_sha..$local_sha"
+    fi
+done
+
+# --- leak scan ----------------------------------------------------------
+#
+# Runs before anything else: a leak must never reach the public remote,
+# and this is the last gate before it does. One scan per pushed ref.
+
+if [ ! -x "$HOME/tests/leak-check.sh" ]; then
+    printf 'pre-push: ~/tests/leak-check.sh is missing or not executable\n' >&2
+    exit 1
+fi
+
+for range in $ranges; do
+    if ! "$HOME/tests/leak-check.sh" --range "$range"; then
+        printf '\npre-push: leak check failed for %s, push blocked.\n' "$range" >&2
+        exit 1
+    fi
 done
 
 # --- branch-drift check -------------------------------------------------

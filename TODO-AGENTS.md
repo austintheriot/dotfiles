@@ -70,6 +70,16 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   fpath artefact. In the real startup trace compinit is ~60ms and did not
   clear a 40ms bar. `-C` would save nothing meaningful and removes the
   compaudit security check.
+- The branch-drift GitHub workflow races the two-branch push. `config sync`
+  style pushes land `linux` then `mac` seconds apart; the workflow run for
+  the first push compares the new branch against the other branch's stale
+  `origin/` ref and fails, while the second push's run passes. Seen three
+  times on 2026-09-04, each time cleared by a rerun. Options: run the drift
+  job only on one branch's push (the second one), make the job wait briefly
+  and re-fetch, or have it compare the pushed sha against the other branch's
+  tip and skip when the other branch is ahead of what it last saw. The
+  pre-push hook already gates on local mac vs linux, so the CI job is a
+  re-check, not the only gate.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
 - Add some utilities for running/syncing/merging things myself:
   - config:test to run the tests

@@ -2,19 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- Give `tests/leak-check.sh` a `--range <a>..<b>` mode, run it from
-  `tests/pre-push` over the pushed commits, and write its tests. Today it
-  runs only in pre-commit and scans staged content only, so `commit-tree`
-  commits (the coming `config sync`) and `--no-verify` commits reach the
-  public repo unscanned. It is 128 lines of stacked `grep -inE` regexes
-  with no dedicated test file -- only an incidental allow-list assertion
-  in another suite. A false negative leaks a secret, so this is the
-  highest-risk untested code in the repo. Cover both modes in both
-  directions: each pattern must catch a planted fake secret, and the allow
-  list must not suppress a real one. Fixture files under the per-run temp
-  dir, never real credentials. This is step 0 of
-  docs/superpowers/specs/2026-09-04-config-command-and-manifest-crate-design.md
-  and must land before `config sync` exists.
 - Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it
   from `tests/run-all.sh` as its own suite. The code already carries
   `# shellcheck disable=SC2086` directives while shellcheck is not

@@ -4,6 +4,10 @@ on:
   push:
     branches: [mac, linux]
 
+# Read-only: nothing here writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   check:
     name: Compare shared paths

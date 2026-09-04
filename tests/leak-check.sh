@@ -62,13 +62,43 @@ if [ -n "$SKIP_LEAK_CHECK" ]; then
   exit 0
 fi
 
+if [ "$mode" = push ]; then
+  if ! git rev-list --count "$range" >/dev/null 2>&1; then
+    echo "leak-check: cannot resolve range $range" >&2
+    exit 2
+  fi
+fi
+
 PATTERN_FILE="${LEAK_PATTERN_FILE:-$HOME/.claude/local/leak-patterns.conf}"
 ALLOW_FILE="${LEAK_ALLOW_FILE:-$HOME/.claude/local/leak-allow.conf}"
+
+# Shared range-mode `git log` flags, so changed_paths and added_lines cannot
+# drift apart on the filters they scan under.
+#
+# --diff-merges=first-parent shows each merge commit's own diff against its
+# first parent, so content introduced only by the merge (a conflict
+# resolution, an "evil merge") is scanned. This is a diff-format flag, not a
+# traversal flag: unlike --first-parent, it does not skip side-branch commits,
+# which the range still walks and scans on their own.
+#
+# Renamed content is re-scanned at its new path on purpose (no -M): a project
+# term arriving at a new path is a fresh disclosure at that path, so the cost
+# of a false block on a pure rename is preferred over a missed leak.
+RANGE_LOG_FLAGS=(--diff-filter=ACMR --diff-merges=first-parent)
+
+TMP_OUT=$(mktemp) || exit 2
+TMP_ERR=$(mktemp) || exit 2
+trap 'rm -f "$TMP_OUT" "$TMP_ERR"' EXIT
 
 # The paths the scan covers, one per line, for the current mode.
 changed_paths() {
   if [ "$mode" = push ]; then
-    git log --format= --name-only --diff-filter=ACMR "$range" | grep -v '^$' | sort -u
+    if ! git log --format= --name-only "${RANGE_LOG_FLAGS[@]}" "$range" > "$TMP_OUT" 2>"$TMP_ERR"; then
+      echo "leak-check: git log failed scanning changed paths for $range" >&2
+      cat "$TMP_ERR" >&2
+      exit 2
+    fi
+    grep -v '^$' "$TMP_OUT" | sort -u
   else
     git diff --cached --name-only --diff-filter=ACMR
   fi
@@ -77,15 +107,25 @@ changed_paths() {
 # The added lines across the given paths (read from stdin, one per line),
 # for the current mode. Only '+' lines, never the '+++' file header.
 added_lines() {
-  tr '\n' '\0' | if [ "$mode" = push ]; then
-    xargs -0 git log --format= --no-color -U0 --diff-filter=ACMR -p "$range" -- 2>/dev/null
+  if [ "$mode" = push ]; then
+    tr '\n' '\0' | xargs -0 git log --format= --no-color -U0 "${RANGE_LOG_FLAGS[@]}" -p "$range" -- \
+      > "$TMP_OUT" 2>"$TMP_ERR"
+    if [ "$?" -ne 0 ]; then
+      echo "leak-check: git log failed scanning added lines for $range" >&2
+      cat "$TMP_ERR" >&2
+      exit 2
+    fi
+    grep '^+' "$TMP_OUT" | grep -v '^+++'
   else
-    xargs -0 git diff --cached --no-color -U0 -- 2>/dev/null
-  fi | grep '^+' | grep -v '^+++'
+    tr '\n' '\0' | xargs -0 git diff --cached --no-color -U0 -- 2>/dev/null | grep '^+' | grep -v '^+++'
+  fi
 }
 
 # This script's own source contains the generic patterns it searches for, so
 # scanning it would always self-trip. Exclude it; it is reviewed by hand.
+# This is the only path excluded from the scan in either mode; a change to
+# this file is therefore unguarded and depends on human review, so do not add
+# another file to this exclusion without the same tradeoff in mind.
 scan_paths=$(changed_paths | grep -v '^tests/leak-check\.sh$')
 [ -z "$scan_paths" ] && exit 0
 

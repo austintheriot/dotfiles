@@ -27,6 +27,16 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   measured at 20ms for the whole server. Pure shell change, no new
   dependency. Do this before considering any port, so the port has an
   honest baseline to beat.
+- The `python3` on PATH is a pyenv shim, which is itself a bash script that
+  execs `pyenv exec`. Measured here at 1.34s per call against 0.05s for
+  the real interpreter at `$(pyenv which python3)` -- a 25x tax. The test
+  suite pays it: `tests/run-all.sh` runs `python3 -m unittest`, and
+  `tests/deps-harness.test.sh` spawns a python3 process per assertion.
+  Resolve the interpreter once and reuse it, rather than calling the shim
+  in a loop. Never put the shim in a tmux hook: at 1.3s it would stall
+  every pane switch. Note `/usr/bin/python3` is not a fallback -- it is an
+  xcrun stub that does not run without the Xcode command line tools.
+
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
 - Add some utilities for running/syncing/merging things myself:
   - config:test to run the tests

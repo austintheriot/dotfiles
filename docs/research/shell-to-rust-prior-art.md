@@ -273,6 +273,51 @@ get bypassed, and a bypassed hook is "worse than useless" (Thoughtworks).
 If it must compile in the container, mount the cargo registry and
 `target/`.
 
+## Addendum: the pyenv shim, and two corrections
+
+A fourth research pass added findings worth keeping.
+
+**The slowest thing measured in this whole pass is a shell script
+wrapping a binary.** `python3` on PATH resolves to
+`~/.pyenv/shims/python3`, itself a bash script that execs `pyenv exec`.
+Measured here: **1.34s via the shim against 0.05s** for
+`$(pyenv which python3)`, a 25x tax. The test suite pays it --
+`run-all.sh` runs `python3 -m unittest`, and `deps-harness.test.sh`
+spawns a python3 process per assertion. A tmux hook using it would stall
+every pane switch by over a second.
+
+Two things follow. Python is disqualified for anything on the hook path
+(a Python hook measured ~74ms against ~1ms of real cost for a bash one,
+and 3.11 is the startup floor while 3.14 regressed). And
+`/usr/bin/python3` is not a fallback: it is an `xcrun` stub that does not
+run at all without the Xcode command line tools.
+
+**Correction: ShellCheck will never support zsh.** Confirmed at source
+level -- its shell type is `Ksh | Sh | Bash | Dash | BusyboxSh`. That
+makes the 5 zsh files permanently out of reach, so they must be excluded
+explicitly rather than assumed covered. `shfmt` *does* support zsh (since
+v3.13.0), and `shellspec` genuinely runs zsh with real `Mock` command
+interception -- the one tool that reaches the zsh surface.
+
+**Correction: git's C ports argue for shell here, not against it.** Git
+maintains 306k lines of shell tests with 19,688 assertions. Its moves to
+C were driven by Windows process-spawn cost and path-translation bugs,
+never by legibility, and they still shipped regressions that took up to
+18 months to surface. All three of its stated reasons are absent here.
+
+**The honest version of the testability goal** is data structures, not
+language. Python or Rust lets a function return a *plan* and confines
+impurity to the applier, which makes edge cases parametrizable without
+spawning subprocesses. Shell can factor functions but cannot return
+structured values. That is the same axis Raymond and `BashWeaknesses`
+identify, and it is why `check-branch-drift.sh` (24 `IFS` references)
+remains the best port candidate while the tmux orchestration is not.
+
+Note also that `monkeypatch.setenv("PATH", fake_bin)` is the same trick
+bats uses, and with `printf '%q'` a shell harness produces failure diffs
+nearly as good as pytest's assertion rewriting. The gap is narrower than
+it looks.
+
 ## Decision frameworks
 
 Google's shell style guide, both halves:

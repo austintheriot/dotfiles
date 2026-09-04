@@ -86,6 +86,32 @@ Or see local copy here, if that link no longer works: [DOTFILES](./DOTFILES.md).
 
 - Install via rustup (do NOT use brew for this on mac!): https://www.rust-lang.org/tools/install
 
+### macOS build performance
+
+- Add every terminal you launch builds from (Alacritty, Terminal, iTerm) to
+  System Settings -> Privacy & Security -> Developer Tools.
+
+Without it, `syspolicyd` validates each newly built executable the first time
+it runs, and that validation can reach out to Apple over the network. Measured
+here at ~180ms per fresh binary, and it repeats after every rebuild, so a
+compile-and-run loop pays it every iteration. Offline, it can block until the
+request times out.
+
+Two things that look like the fix and are not:
+
+- `spctl --global-disable` does not remove it.
+- `DevToolsSecurity -status` reports "Developer mode is currently disabled"
+  even once this is set correctly. That flag tracks the separate `developer`
+  group used for debugger attachment, not this exemption, so do not use it to
+  check whether this worked.
+
+To verify, build a small binary, copy it to a new path, and time the first run.
+It should be about 0ms rather than ~180ms:
+
+```sh
+cp target/release/mybin /tmp/gk-check && /usr/bin/time -p /tmp/gk-check
+```
+
 ### Window manager setup
 
 - Install aerospace as a MacOS window manager: https://nikitabobko.github.io/AeroSpace/guide.html

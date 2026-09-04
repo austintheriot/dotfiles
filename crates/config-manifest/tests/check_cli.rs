@@ -88,6 +88,15 @@ fn an_unmatched_file_reports_the_branch_it_is_on() {
 }
 
 #[test]
+fn a_nonexistent_ref_b_fails_loudly_and_never_claims_divergence() {
+    let dir = manifest_repo();
+    let assert = check(dir.path(), &["mac", "no-such-ref"]).code(1);
+    let stderr = String::from_utf8(assert.get_output().stderr.clone()).expect("utf8");
+    assert!(stderr.contains("failed"));
+    assert!(!stderr.contains("diverged:"));
+}
+
+#[test]
 fn too_many_arguments_is_a_usage_error() {
     let dir = manifest_repo();
     check(dir.path(), &["a", "b", "c"]).code(2);

@@ -156,6 +156,27 @@ assert_contains 'offers the per-branch label' 'per-branch: tracked, never compar
 
 assert_contains 'annotates the branch the file is on' '(on mac)' "$output"
 
+# --- the unmatched block's exact bytes, not just a substring -------------
+#
+# assert_contains above proves the right words appear somewhere in the
+# output; it cannot catch a whitespace or stream-routing regression (a
+# missing blank line, output on the wrong stream, a shifted padding width).
+# This assertion pins the unmatched block byte for byte, built with the same
+# printf format the implementation uses, so the padding comes from %-44s
+# itself rather than a hand-counted literal.
+
+stderr_only=$(run_check "$repo" mac linux 2>&1 >/dev/null)
+expected_stderr=$(
+    printf '\ncheck-branch-drift: 1 tracked file(s) match no .sync-manifest rule\n\n'
+    printf '  %-44s (on %s)\n' 'brand-new.txt' 'mac'
+    printf '\nEvery tracked file must match a rule, so a file added on one branch\n'
+    printf 'cannot escape this check. Add one of these to .sync-manifest:\n\n'
+    printf '  %-44s shared: must be identical on both branches\n' 'path/to/file'
+    printf '  %-44s per-branch: tracked, never compared\n' '~path/to/file'
+    printf '  %-44s excluded from an enclosing shared path\n\n' '!path/to/file'
+)
+assert_equals 'the unmatched block matches byte for byte' "$expected_stderr" "$stderr_only"
+
 # --- a file unlabeled on the SECOND ref is caught too --------------------
 #
 # The file lists must be unioned across both refs. Scanning ref-a alone
@@ -224,5 +245,26 @@ output=$(run_check "$repo" mac linux 2>&1)
 status=$?
 assert_equals 'a lookalike path is not absorbed by prefix' '1' "$status"
 assert_contains 'names the lookalike path' 'file.txt.bak' "$output"
+
+# --- a bare path sharing a directory rule's name is not absorbed by it ----
+#
+# `PathPattern::parse("dir/")` strips the trailing slash before storing the
+# path, so an unconditional exact-equality check would match the bare file
+# "dir" too. The reference behavior compares against the unstripped rule
+# "dir/", which never matches a path that isn't strictly beneath it.
+
+repo=$(make_manifest_repo repo-dir-bare-name)
+printf '# comment, ignored\n\n.sync-manifest\nshared.txt\ndir/\n' > "$repo/.sync-manifest"
+git -C "$repo" add .sync-manifest
+printf 'x\n' > "$repo/dir"
+git -C "$repo" add dir
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m "add dir rule and a bare file named dir"
+git -C "$repo" branch -f mac linux
+
+output=$(run_check "$repo" mac linux 2>&1)
+status=$?
+assert_equals 'a bare path sharing a directory rule name exits non-zero' '1' "$status"
+assert_contains 'names the bare path' 'dir' "$output"
+assert_contains 'reports it as unmatched' 'match no .sync-manifest rule' "$output"
 
 finish

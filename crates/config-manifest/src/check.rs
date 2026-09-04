@@ -336,6 +336,22 @@ cannot escape this check. Add one of these to .sync-manifest:\n\n\
     }
 
     #[test]
+    fn a_file_sharing_a_directory_rules_name_is_unmatched() {
+        let manifest = manifest_of(".sync-manifest\ndir/\n");
+        let listing_a = listing(&[("100644", ID_M, ".sync-manifest"), ("100644", ID_A, "dir")]);
+        let report = check(&manifest, &listing_a, &listing_a);
+        assert_eq!(
+            report.findings,
+            vec![Finding::Unmatched {
+                path: RelPath::parse("dir").expect("valid"),
+                present_on: PresentOn::Both
+            }]
+        );
+        let rendered = render(&report, "mac", "linux");
+        assert_eq!(rendered.exit_code, 1);
+    }
+
+    #[test]
     fn a_lookalike_path_is_not_absorbed_by_an_exact_rule() {
         let manifest = manifest_of(".sync-manifest\nfile.txt\n");
         let listing_a = listing(&[

@@ -17,11 +17,10 @@ impl PathPattern {
     }
 
     pub fn matches(&self, candidate: &RelPath) -> bool {
-        if candidate == &self.path {
-            return true;
+        if !self.is_dir {
+            return candidate == &self.path;
         }
-        self.is_dir
-            && candidate.as_str().starts_with(self.path.as_str())
+        candidate.as_str().starts_with(self.path.as_str())
             && candidate.as_str()[self.path.as_str().len()..].starts_with('/')
     }
 }
@@ -270,7 +269,13 @@ DOTFILES.md
             manifest.classify(&rel("tests/lib.sh")),
             Classification::Shared
         );
-        assert_eq!(manifest.classify(&rel("tests")), Classification::Shared);
+        // A trailing-slash rule matches only paths strictly beneath it. The
+        // shell reference (`is_covered`) compares against the unstripped
+        // rule "tests/" and never matches the bare path "tests"; a bare file
+        // that happens to share the directory's name must still trip the
+        // exhaustiveness check, not be silently absorbed by the rule meant
+        // for what's inside it.
+        assert_eq!(manifest.classify(&rel("tests")), Classification::Unmatched);
         assert_eq!(
             manifest.classify(&rel("DOTFILES.md")),
             Classification::Shared
@@ -283,6 +288,15 @@ DOTFILES.md
             manifest.classify(&rel("testsuite/x")),
             Classification::Unmatched
         );
+    }
+
+    #[test]
+    fn a_directory_rule_does_not_match_the_bare_path_sharing_its_name() {
+        let manifest = parse("dir/\n~pb/\n!ex/\n").expect("valid");
+        assert_eq!(manifest.classify(&rel("dir")), Classification::Unmatched);
+        assert_eq!(manifest.classify(&rel("pb")), Classification::Unmatched);
+        assert_eq!(manifest.classify(&rel("ex")), Classification::Unmatched);
+        assert_eq!(manifest.classify(&rel("dir/x")), Classification::Shared);
     }
 
     #[test]

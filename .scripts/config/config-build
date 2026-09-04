@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# Builds crates/config-manifest, installs the binary, and writes the stamp
+# pre-push compares against. Run this after editing the crate; pre-push
+# never compiles.
+#
+# Usage: config-build
+#   DOTFILES_ROOT      repo root (default $HOME)
+#   CARGO_TARGET_DIR   default $HOME/.cache/config-manifest/target, so no
+#                      target/ lands inside the tracked tree
+#   CONFIG_BIN_DIR     default $HOME/.local/bin
+#   CONFIG_STAMP_DIR   default $HOME/.cache/config-manifest
+
+set -eu
+
+ROOT=${DOTFILES_ROOT:-$HOME}
+CRATE_DIR="$ROOT/crates/config-manifest"
+BIN_DIR=${CONFIG_BIN_DIR:-$HOME/.local/bin}
+STAMP_DIR=${CONFIG_STAMP_DIR:-$HOME/.cache/config-manifest}
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/config-manifest/target}"
+
+cargo build --release --locked --quiet --manifest-path "$CRATE_DIR/Cargo.toml"
+
+mkdir -p "$BIN_DIR" "$STAMP_DIR"
+cp "$CARGO_TARGET_DIR/release/config-manifest" "$BIN_DIR/config-manifest"
+"$ROOT/.scripts/config/config-stamp" > "$STAMP_DIR/stamp"
+
+# Paying any first-run cost here rather than in a hook.
+"$BIN_DIR/config-manifest" --version >/dev/null
+
+printf 'config-build: installed %s (stamp %s)\n' \
+    "$BIN_DIR/config-manifest" "$(cut -c1-12 "$STAMP_DIR/stamp")"

@@ -27,6 +27,7 @@
 .claude/CLAUDE.md
 tests/
 .scripts/
+crates/
 docs/research/
 .config/tmux/tmux-common.conf
 .config/nvim/

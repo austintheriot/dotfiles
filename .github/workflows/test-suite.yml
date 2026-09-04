@@ -78,6 +78,14 @@ jobs:
           brew install tmux fzf ripgrep zsh-autosuggestions
           python3 -m pip install --break-system-packages pyyaml
 
+      # Rust is preinstalled on both runners. The suite's shell tests call
+      # config-manifest by name, so the release binary goes on PATH. cargo test
+      # itself runs inside run-all.sh.
+      - name: Build config-manifest
+        run: |
+          cargo build --release --locked --manifest-path crates/config-manifest/Cargo.toml
+          echo "$GITHUB_WORKSPACE/crates/config-manifest/target/release" >> "$GITHUB_PATH"
+
       # A UTF-8 locale is load-bearing rather than cosmetic. With no LANG set,
       # tmux treats a tab as non-printable and substitutes "_" in
       # display-message output. The window-naming script uses a tab as its

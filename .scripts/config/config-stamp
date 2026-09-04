@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# Prints the tree id of crates/config-manifest as it is in the worktree.
+#
+# A HEAD-based stamp false-refuses the `commit -a` workflow: build while
+# dirty, commit that same content, push, refused although the binary matches.
+# Reading the worktree through a temp index makes the same content stamp
+# identically whether or not it is committed yet, and `git add` honours
+# .gitignore, so an ignored target/ never moves the stamp.
+#
+# Usage: config-stamp        (respects DOTFILES_ROOT, default $HOME)
+
+set -eu
+
+ROOT=${DOTFILES_ROOT:-$HOME}
+CRATE=crates/config-manifest
+
+if [ -d "$ROOT/.cfg" ]; then
+    git_cmd() { git --git-dir="$ROOT/.cfg" --work-tree="$ROOT" "$@"; }
+else
+    git_cmd() { git -C "$ROOT" "$@"; }
+fi
+
+index=$(mktemp "${TMPDIR:-/tmp}/config-stamp-XXXXXX")
+rm -f "$index"
+trap 'rm -f "$index"' EXIT INT TERM HUP
+export GIT_INDEX_FILE="$index"
+
+git_cmd read-tree --empty
+(cd "$ROOT" && git_cmd add -- "$CRATE")
+root_tree=$(git_cmd write-tree)
+git_cmd rev-parse "$root_tree:$CRATE"

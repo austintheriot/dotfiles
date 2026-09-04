@@ -11,6 +11,20 @@
 # image tests the dotfiles suite, not the dependency manifest, so it wants a
 # small base with the tooling available in one apt index. Digest-pinned so a
 # base-image republish cannot change a passing suite underneath us.
+# Builder stage: compiles crates/config-manifest so the runtime image below
+# carries only the binary and stays Rust-free. Digest-pinned like the runtime
+# base. The dependency layer is built first from a stub main.rs so a source
+# edit does not recompile dependencies; a single COPY of the whole crate would
+# silently defeat that cache and the measured 0.8s/2.6s rebuilds rest on it.
+FROM rust:1.94-slim-bookworm@sha256:cf9dd0ec73e75f827fe59123fff9dc65af1a1c8363c3c31ee8d7f8ad0b6a5fb2 AS builder
+WORKDIR /build
+COPY crates/config-manifest/Cargo.toml crates/config-manifest/Cargo.lock ./
+RUN mkdir src && echo 'fn main() {}' > src/main.rs \
+    && cargo build --release --locked --quiet \
+    && rm -rf src target/release/config-manifest target/release/deps/config_manifest*
+COPY crates/config-manifest/src ./src
+RUN cargo build --release --locked --quiet
+
 FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
 
 # The tools the suite shells out to. tmux and zsh are the load-bearing ones:
@@ -37,6 +51,9 @@ RUN apt-get update \
         ripgrep \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# The suite's shell tests call config-manifest by name, as pre-push and CI do.
+COPY --from=builder /build/target/release/config-manifest /usr/local/bin/config-manifest
 
 # A UTF-8 locale is load-bearing, not cosmetic. With no LANG set, tmux treats
 # a tab as non-printable and substitutes "_" in display-message output.

@@ -93,7 +93,7 @@ git_cmd archive "$branch" | tar -x -C "$workdir"
 # land on the remote, so that is the correct behavior there.
 current_branch=$(git_cmd branch --show-current 2>/dev/null || true)
 if [ "$branch" = "$current_branch" ]; then
-    for tree in tests .scripts .claude .github .config/tmux; do
+    for tree in tests .scripts .claude .github .config/tmux crates; do
         if [ -d "$HOME/$tree" ]; then
             rm -rf "$workdir/$tree"
             mkdir -p "$(dirname "$workdir/$tree")"

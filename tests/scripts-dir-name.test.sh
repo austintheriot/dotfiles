@@ -54,7 +54,8 @@ assert_succeeds 'the .my-scripts directory is gone' \
 # executing tmux-split.sh in a subshell changes that subshell and exits.
 
 EXECUTED_SCRIPTS='deps/check-deps.sh deps/test-local.sh
-tmux-update-window-names.sh tmux-worktree-config.sh'
+tmux-update-window-names.sh tmux-worktree-config.sh
+config/config-stamp config/config-build'
 
 SOURCED_SCRIPTS='tmux-close.sh tmux-setup.sh tmux-split.sh tmux-start.sh
 zsh-git-widgets.sh deps/depcheck-hook.sh'

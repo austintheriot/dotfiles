@@ -18,6 +18,11 @@ jobs:
           git fetch origin mac:refs/remotes/origin/mac
           git fetch origin linux:refs/remotes/origin/linux
 
+      - name: Build config-manifest
+        run: |
+          cargo build --release --locked --manifest-path crates/config-manifest/Cargo.toml
+          echo "$GITHUB_WORKSPACE/crates/config-manifest/target/release" >> "$GITHUB_PATH"
+
       - name: Check for drift
         env:
           DOTFILES_ROOT: ${{ github.workspace }}

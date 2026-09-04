@@ -1,0 +1,12 @@
+[package]
+name = "config-manifest"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+proptest = "1.11.0"
+tempfile = "3.27.0"

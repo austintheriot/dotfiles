@@ -23,6 +23,13 @@ TESTS_DIR=$(cd "$(dirname "$0")" && pwd)
 DOTFILES_ROOT=${DOTFILES_ROOT:-$HOME}
 export DOTFILES_ROOT
 
+# The suite calls config-manifest by name. config-build installs it to
+# ~/.local/bin, which not every invoking shell has on PATH.
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
 quiet=0
 [ "${1:-}" = '-q' ] && quiet=1
 
@@ -84,7 +91,13 @@ if [ -n "$python_dirs" ]; then
     python_count=$(printf '%s\n' "$python_dirs" | wc -l | tr -d ' ')
 fi
 
-total_suites=$((integration_count + python_count))
+cargo_manifest="$DOTFILES_ROOT/crates/config-manifest/Cargo.toml"
+cargo_count=0
+if command -v cargo >/dev/null 2>&1 && [ -f "$cargo_manifest" ]; then
+    cargo_count=1
+fi
+
+total_suites=$((integration_count + python_count + cargo_count))
 
 # --- integration suites ------------------------------------------------
 
@@ -103,6 +116,19 @@ if command -v python3 >/dev/null 2>&1; then
     done <<< "$python_dirs"
 else
     printf 'SKIP  python unit tests (python3 not found)\n'
+fi
+
+# --- Rust unit and integration tests --------------------------------------
+#
+# Skipped, and said so, where cargo is absent: the Docker runtime image is
+# Rust-free by design and gets the binary from a builder stage instead.
+
+if [ "$cargo_count" -eq 1 ]; then
+    export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/config-manifest/target}"
+    run_suite "cargo test in crates/config-manifest" \
+        cargo test --locked --quiet --manifest-path "$cargo_manifest"
+else
+    printf 'SKIP  cargo test (cargo not found)\n'
 fi
 
 # --- summary -----------------------------------------------------------

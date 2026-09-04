@@ -24,7 +24,7 @@ set -u
 zero='0000000000000000000000000000000000000000'
 empty_tree='4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
-TRIGGER_PATHS='^\.scripts/.*\.sh$|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/|^\.sync-manifest$|^\.github/workflows/'
+TRIGGER_PATHS='^\.scripts/.*\.sh$|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/|^\.sync-manifest$|^\.github/workflows/|^crates/'
 
 pushing_synced_branch=0
 changed_paths=''
@@ -102,6 +102,24 @@ fi
 # a stale local ref here is a fast pre-flight, not the only gate.
 
 if [ "$pushing_synced_branch" -eq 1 ]; then
+    # The drift check runs the config-manifest binary. It is built by
+    # ~/.scripts/config/config-build, never here: a hook that compiles gets
+    # bypassed. The stamp is the worktree tree id of the crate at build time;
+    # the pushed commit's subtree id must match it.
+    stamp_file="${CONFIG_STAMP_DIR:-$HOME/.cache/config-manifest}/stamp"
+    pushed_tree=$(git rev-parse --verify --quiet "$push_ref:crates/config-manifest" 2>/dev/null || true)
+    if [ -n "$pushed_tree" ]; then
+        if [ ! -f "$stamp_file" ]; then
+            printf 'pre-push: config-manifest has not been built; run ~/.scripts/config/config-build\n' >&2
+            exit 1
+        fi
+        if [ "$(cat "$stamp_file")" != "$pushed_tree" ]; then
+            printf 'pre-push: config-manifest is stale for %s; run ~/.scripts/config/config-build\n' "$push_ref" >&2
+            exit 1
+        fi
+        printf 'pre-push: config-manifest stamp matches the pushed crate\n'
+    fi
+
     if [ ! -x "$HOME/tests/check-branch-drift.sh" ]; then
         printf 'pre-push: ~/tests/check-branch-drift.sh is missing or not executable\n' >&2
         exit 1

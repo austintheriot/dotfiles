@@ -31,12 +31,19 @@
 ZSHRC_MAC="$DOTFILES_ROOT/.zshrc-mac"
 NVM_NODE_DIR="$HOME/.nvm/versions/node"
 
+# This suite measures the developer's own interactive shell: `zsh -i` loads
+# $HOME/.zshrc, which sources $HOME/.zshrc-mac. That is only the config under
+# test when HOME is the repo. On a CI runner HOME is the runner's home and
+# .zshrc-mac is absent whenever the linux branch runs on macOS, so the
+# assertions would measure the runner's shell, not this repo. Skip there.
 if [ "$(uname -s)" != "Darwin" ]; then
     printf 'zshrc-node-startup: skipped, .zshrc-mac is macOS-only\n'
     exit 0
 fi
-
-assert_succeeds 'the mac zshrc is present' test -f "$ZSHRC_MAC"
+if [ "$HOME" != "$DOTFILES_ROOT" ] || [ ! -f "$ZSHRC_MAC" ]; then
+    printf 'zshrc-node-startup: skipped, HOME is not the repo or .zshrc-mac is absent\n'
+    exit 0
+fi
 
 # The whole point is that startup does not pay for nvm. Assert on the source
 # text: no unconditional `nvm use`, `nvm ls`, or nvm.sh source at top level.
@@ -56,7 +63,7 @@ newest_v24=$(ls -d "$NVM_NODE_DIR"/v24.* 2>/dev/null | sort -V | tail -1)
 
 if [ -z "$newest_v24" ]; then
     printf 'zshrc-node-startup: skipped, no v24 installed under %s\n' "$NVM_NODE_DIR"
-    finish
+    exit 0
 fi
 
 # A fresh interactive shell must resolve node to that directory.

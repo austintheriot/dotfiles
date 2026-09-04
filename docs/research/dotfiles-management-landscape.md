@@ -57,7 +57,7 @@ anything — mature, actively maintained, and it directly beats the
 common/platform file split used here. But the actual platform-varying
 surface in this repo is small: three files (`tmux.conf`, `.zshrc`,
 `alacritty.toml`), with everything else either fully portable already
-(`.claude`, `tests`, `.my-scripts`) or fully platform-exclusive
+(`.claude`, `tests`, `.scripts`) or fully platform-exclusive
 (Aerospace, iTerm, `notify.sh`). The manifest + GitHub Action + tmux.conf
 split gets most of chezmoi's practical benefit for the two or three
 files that actually need it, with zero migration cost and zero new tool

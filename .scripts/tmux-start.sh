@@ -31,7 +31,7 @@ if [ "$(tmux ls | rg $SESSION_NAME)" = "" ]; then
   # caller's positional parameters, so tmux-split.sh reads $1 as its layout
   # name and $1 here is still the session name. A session name that is not a
   # layout name prints usage and skips the splits.
-  source ~/.my-scripts/tmux-split.sh
+  source ~/.scripts/tmux-split.sh
 fi 
 
 # attach the session

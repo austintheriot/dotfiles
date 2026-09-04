@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Integration tests for .my-scripts/tmux-close.sh
+# Integration tests for .scripts/tmux-close.sh
 #
 # The script is sourced from zsh in real use (`alias c`), so it is sourced from
 # zsh here rather than executed.
@@ -13,7 +13,7 @@
 
 . "$(dirname "$0")/lib.sh"
 
-SCRIPT="$DOTFILES_ROOT/.my-scripts/tmux-close.sh"
+SCRIPT="$DOTFILES_ROOT/.scripts/tmux-close.sh"
 SESSION=$(new_test_session main "$FIXTURES")
 
 pane_count() {

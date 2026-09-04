@@ -31,12 +31,12 @@ RUN apt-get update \
 # Only the dependency-checking tree, not the whole dotfiles repo. The repo
 # root carries .claude/ and other machine-local content with no business in
 # a build context.
-COPY .my-scripts/deps /dotfiles/.my-scripts/deps
+COPY .scripts/deps /dotfiles/.scripts/deps
 WORKDIR /dotfiles
 
 ENV HOME=/root
 # deps-local.conf is per-branch and platform-exclusive by design (see the
-# `!.my-scripts/deps/deps-local.conf` line in .sync-manifest). On the mac
+# `!.scripts/deps/deps-local.conf` line in .sync-manifest). On the mac
 # branch it lists aerospace, a macOS window manager with no Linux package,
 # so leaving it active here would make every Linux run fail on a dependency
 # that is correctly absent. Point DEPS_LOCAL_CONF at a path that does not
@@ -46,5 +46,5 @@ ENV HOME=/root
 # dependency is by definition not verifiable on Linux.
 ENV DEPS_LOCAL_CONF=/nonexistent/deps-local.conf
 ENV DEBIAN_FRONTEND=noninteractive
-ENTRYPOINT ["/dotfiles/.my-scripts/deps/check-deps.sh"]
+ENTRYPOINT ["/dotfiles/.scripts/deps/check-deps.sh"]
 CMD ["--fix", "--yes"]

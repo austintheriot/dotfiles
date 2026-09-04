@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Integration tests for .my-scripts/zsh-git-widgets.sh
+# Integration tests for .scripts/zsh-git-widgets.sh
 #
 # The file registers a ZLE widget and key bindings at shell-init time. Driving
 # the widget itself needs an interactive zsh and an fzf prompt, which a test
@@ -13,7 +13,7 @@
 
 . "$(dirname "$0")/lib.sh"
 
-SCRIPT="$DOTFILES_ROOT/.my-scripts/zsh-git-widgets.sh"
+SCRIPT="$DOTFILES_ROOT/.scripts/zsh-git-widgets.sh"
 
 # ZLE is only available in an interactive zsh, and starting one costs about
 # four seconds here because .zshrc loads pyenv, zoxide, and fzf. So the whole

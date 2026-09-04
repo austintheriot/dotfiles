@@ -3,11 +3,11 @@
 #
 # The suite mutates $HOME by design: it writes fixture git repos, spawns tmux
 # sessions on the default tmux server, and -- before the install-path fix in
-# .my-scripts/deps/check-deps.sh -- once created a real
+# .scripts/deps/check-deps.sh -- once created a real
 # ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions on a machine that does not
 # use oh-my-zsh. Every one of those lands in the container instead.
 #
-# Debian rather than the Ubuntu image used by .my-scripts/deps/docker: this
+# Debian rather than the Ubuntu image used by .scripts/deps/docker: this
 # image tests the dotfiles suite, not the dependency manifest, so it wants a
 # small base with the tooling available in one apt index. Digest-pinned so a
 # base-image republish cannot change a passing suite underneath us.
@@ -40,7 +40,7 @@ RUN apt-get update \
 
 # A UTF-8 locale is load-bearing, not cosmetic. With no LANG set, tmux treats
 # a tab as non-printable and substitutes "_" in display-message output.
-# .my-scripts/tmux-update-window-names.sh uses a tab as its field separator
+# .scripts/tmux-update-window-names.sh uses a tab as its field separator
 # and splits the result with parameter expansion, so every field parse breaks
 # and 31 of that suite's 33 assertions fail with names like
 # "stale_stale___0_/path - repo". Verified by byte-comparing tmux output with
@@ -58,10 +58,10 @@ WORKDIR /root
 # The tree is COPYed rather than bind-mounted. A read-write mount of the real
 # $HOME would reintroduce exactly the side effects this image exists to
 # contain. run-in-docker.sh builds the context from `git archive` plus the
-# working tree's tests/ and .my-scripts/, so uncommitted edits are covered
+# working tree's tests/ and .scripts/, so uncommitted edits are covered
 # without exposing the rest of $HOME.
 COPY tests /root/tests
-COPY .my-scripts /root/.my-scripts
+COPY .scripts /root/.scripts
 COPY .claude /root/.claude
 # tmux-conf-split.test.sh loads the real config on a throwaway tmux server.
 COPY .config/tmux /root/.config/tmux

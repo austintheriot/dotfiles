@@ -1,6 +1,6 @@
 ---
 paths:
-  - ".my-scripts/**/*.sh"
+  - ".scripts/**/*.sh"
   - ".claude/scripts/**/*.py"
   - ".claude/hooks/**/*.sh"
   - "tests/**"
@@ -9,7 +9,7 @@ paths:
 # Dotfiles tests
 
 These apply when editing tooling tracked in the dotfiles repo: shell scripts in
-`.my-scripts/`, Python in `.claude/scripts/`, hooks in `.claude/hooks/`, and the
+`.scripts/`, Python in `.claude/scripts/`, hooks in `.claude/hooks/`, and the
 tests themselves.
 
 ## Run the suite before you push

@@ -5,12 +5,12 @@
 #
 # The suite mutates $HOME by design: fixture git repos, tmux sessions on the
 # default tmux server, and (before the install-path fix in
-# .my-scripts/deps/check-deps.sh) a real ~/.oh-my-zsh created on a machine
+# .scripts/deps/check-deps.sh) a real ~/.oh-my-zsh created on a machine
 # that does not use oh-my-zsh. Inside the container all of that is discarded
 # with the container.
 #
 # The build context is `git archive` of the current branch, overlaid with the
-# working tree's tests/, .my-scripts/, .claude/, README.md, and the zshrc
+# working tree's tests/, .scripts/, .claude/, README.md, and the zshrc
 # files. That covers uncommitted
 # edits -- the point of a local loop -- without copying the rest of $HOME into
 # a Docker image. The tree is COPYed, never bind-mounted read-write: a mount
@@ -93,7 +93,7 @@ git_cmd archive "$branch" | tar -x -C "$workdir"
 # land on the remote, so that is the correct behavior there.
 current_branch=$(git_cmd branch --show-current 2>/dev/null || true)
 if [ "$branch" = "$current_branch" ]; then
-    for tree in tests .my-scripts .claude .github .config/tmux; do
+    for tree in tests .scripts .claude .github .config/tmux; do
         if [ -d "$HOME/$tree" ]; then
             rm -rf "$workdir/$tree"
             mkdir -p "$(dirname "$workdir/$tree")"

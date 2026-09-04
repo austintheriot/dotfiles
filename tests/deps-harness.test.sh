@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Tests for the Docker harness (.my-scripts/deps/test-local.sh, the two
+# Tests for the Docker harness (.scripts/deps/test-local.sh, the two
 # Dockerfiles) and the CI workflow (.github/workflows/deps-check.yml) that
 # together run check-deps.sh --fix --yes against throwaway Linux and macOS
 # environments.
@@ -37,9 +37,9 @@
 
 . "$(dirname "$0")/lib.sh"
 
-HARNESS="$DOTFILES_ROOT/.my-scripts/deps/test-local.sh"
-DOCKERFILE_UBUNTU="$DOTFILES_ROOT/.my-scripts/deps/docker/Dockerfile.ubuntu"
-DOCKERFILE_ARCH="$DOTFILES_ROOT/.my-scripts/deps/docker/Dockerfile.arch"
+HARNESS="$DOTFILES_ROOT/.scripts/deps/test-local.sh"
+DOCKERFILE_UBUNTU="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.ubuntu"
+DOCKERFILE_ARCH="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.arch"
 WORKFLOW="$DOTFILES_ROOT/.github/workflows/deps-check.yml"
 MANIFEST="$DOTFILES_ROOT/.sync-manifest"
 
@@ -82,8 +82,8 @@ fi
 # `branch --show-current` and `git archive` see.
 
 fake_home="$FIXTURES/home"
-mkdir -p "$fake_home/.my-scripts/deps"
-cp "$DOTFILES_ROOT/.my-scripts/deps/check-deps.sh" "$fake_home/.my-scripts/deps/"
+mkdir -p "$fake_home/.scripts/deps"
+cp "$DOTFILES_ROOT/.scripts/deps/check-deps.sh" "$fake_home/.scripts/deps/"
 git init -q --bare "$fake_home/.cfg"
 
 home_git() { git --git-dir="$fake_home/.cfg" --work-tree="$fake_home" "$@"; }
@@ -162,7 +162,7 @@ for dockerfile in "$DOCKERFILE_UBUNTU" "$DOCKERFILE_ARCH"; do
     # Every image copies in the deps tree and runs from /dotfiles, so the
     # ENTRYPOINT path has to be the copied one, not a $HOME-relative guess.
     assert_contains "$image copies the deps tree into the image" \
-        'COPY .my-scripts/deps' "$contents"
+        'COPY .scripts/deps' "$contents"
 done
 
 # --- the two base images are pinned in deliberately opposite ways --------
@@ -285,7 +285,7 @@ assert_equals 'the workflow triggers on push, schedule and workflow_dispatch' \
 # not touch them cannot break the bootstrap.
 assert_equals 'the push trigger is path-filtered' 'yes' "$(wf push_is_filtered)"
 assert_contains 'the push filter covers the deps directory' \
-    '.my-scripts/deps/' "$(wf push_paths)"
+    '.scripts/deps/' "$(wf push_paths)"
 assert_contains 'the push filter covers the workflow itself' \
     'deps-check.yml' "$(wf push_paths)"
 
@@ -315,15 +315,15 @@ assert_equals 'every checkout drops its credentials' '' \
 # meaning anything about CI.
 
 assert_contains 'the ubuntu job runs check-deps.sh --fix --yes' \
-    '.my-scripts/deps/check-deps.sh --fix --yes' "$(wf ubuntu_run)"
+    '.scripts/deps/check-deps.sh --fix --yes' "$(wf ubuntu_run)"
 
 assert_contains 'the macos job runs check-deps.sh --fix --yes' \
-    '.my-scripts/deps/check-deps.sh --fix --yes' "$(wf macos_run)"
+    '.scripts/deps/check-deps.sh --fix --yes' "$(wf macos_run)"
 
 assert_equals 'the macos job runs on a macOS runner' 'macos-latest' "$(wf macos_runner)"
 
 assert_contains 'the arch job builds the arch Dockerfile' \
-    '.my-scripts/deps/docker/Dockerfile.arch' "$(wf arch_run)"
+    '.scripts/deps/docker/Dockerfile.arch' "$(wf arch_run)"
 assert_contains 'the arch job runs the image it built' \
     'docker run --rm depcheck-arch' "$(wf arch_run)"
 
@@ -335,43 +335,43 @@ assert_contains 'the local harness tags images the way the arch job does' \
 
 # --- .sync-manifest excludes deps-local.conf ----------------------------
 #
-# deps-local.conf is the one file under .my-scripts/ that must NOT be
+# deps-local.conf is the one file under .scripts/ that must NOT be
 # identical across branches: it holds each machine's platform-exclusive
 # entries (aerospace on mac). Without the exclusion, check-branch-drift
-# reports the whole of .my-scripts/ as diverged forever.
+# reports the whole of .scripts/ as diverged forever.
 #
 # check-branch-drift.sh collects every "!" line in a first pass and applies
 # the resulting :(exclude) pathspecs to every path it checks, so manifest line
 # order is genuinely irrelevant here -- the exclusion works above or below
-# `.my-scripts/`. Asserting an ordering the implementation does not have would
+# `.scripts/`. Asserting an ordering the implementation does not have would
 # be asserting a fiction, so what is asserted is that both lines are present
 # and that the exclusion actually takes effect through the real script.
 
 manifest_lines=$(cat "$MANIFEST")
-assert_contains 'the manifest shares .my-scripts/' '
-.my-scripts/
+assert_contains 'the manifest shares .scripts/' '
+.scripts/
 ' "
 $manifest_lines
 "
 assert_contains 'the manifest excludes deps-local.conf' \
-    '!.my-scripts/deps/deps-local.conf' "$manifest_lines"
+    '!.scripts/deps/deps-local.conf' "$manifest_lines"
 
 # Driven through check-branch-drift.sh rather than asserted as text, because
 # the exclusion is only worth anything if the script honors it. A fixture repo
 # with two branches that differ in exactly deps-local.conf must come back
-# clean; the same repo differing in a sibling file under .my-scripts/ must not.
+# clean; the same repo differing in a sibling file under .scripts/ must not.
 drift_repo=$(make_repo drift-manifest mac)
-mkdir -p "$drift_repo/.my-scripts/deps"
+mkdir -p "$drift_repo/.scripts/deps"
 cp "$MANIFEST" "$drift_repo/.sync-manifest"
 printf 'aerospace|command -v aerospace|https://example.invalid\n' \
-    > "$drift_repo/.my-scripts/deps/deps-local.conf"
-printf 'shared\n' > "$drift_repo/.my-scripts/deps/deps.conf"
+    > "$drift_repo/.scripts/deps/deps-local.conf"
+printf 'shared\n' > "$drift_repo/.scripts/deps/deps.conf"
 drift_git() { git -C "$drift_repo" -c user.email=t@t -c user.name=t "$@"; }
 drift_git add -A
 drift_git commit -q -m mac
 
 drift_git checkout -q -b linux
-printf '' > "$drift_repo/.my-scripts/deps/deps-local.conf"
+printf '' > "$drift_repo/.scripts/deps/deps-local.conf"
 drift_git add -A
 drift_git commit -q -m linux
 
@@ -381,13 +381,13 @@ assert_equals 'a deps-local.conf-only difference is not drift' '0' "$status"
 assert_contains 'the manifest exclusion is reported as clean' 'match on all' "$output"
 
 drift_git checkout -q linux
-printf 'drifted\n' > "$drift_repo/.my-scripts/deps/deps.conf"
+printf 'drifted\n' > "$drift_repo/.scripts/deps/deps.conf"
 drift_git add -A
 drift_git commit -q -m drift
 
 output=$(DOTFILES_ROOT="$drift_repo" "$DOTFILES_ROOT/tests/check-branch-drift.sh" mac linux 2>&1)
 status=$?
-assert_equals 'a sibling file under .my-scripts/ is still drift' '1' "$status"
-assert_contains 'the drifted path is named' 'diverged: .my-scripts/' "$output"
+assert_equals 'a sibling file under .scripts/ is still drift' '1' "$status"
+assert_contains 'the drifted path is named' 'diverged: .scripts/' "$output"
 
 finish

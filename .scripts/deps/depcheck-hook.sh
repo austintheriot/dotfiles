@@ -1,9 +1,9 @@
 # Sourced from .zshrc. Nags at most once every 24h if a CLI dependency from
-# .my-scripts/deps/deps.conf is missing. Never blocks startup, never
-# prompts -- see .my-scripts/deps/README.md for the manual `depcheck`
+# .scripts/deps/deps.conf is missing. Never blocks startup, never
+# prompts -- see .scripts/deps/README.md for the manual `depcheck`
 # command this also defines.
 
-alias depcheck='~/.my-scripts/deps/check-deps.sh --fix'
+alias depcheck='~/.scripts/deps/check-deps.sh --fix'
 
 _depcheck_cache="$HOME/.cache/depcheck-last-run"
 _depcheck_last=0
@@ -24,7 +24,7 @@ if [ $(($(date +%s) - _depcheck_last)) -ge 86400 ]; then
     # startup; it only costs the throttle, which re-checks next shell.
     mkdir -p "$HOME/.cache" 2>/dev/null
     (date +%s > "$_depcheck_cache") 2>/dev/null
-    if ! ~/.my-scripts/deps/check-deps.sh >/dev/null 2>&1; then
+    if ! ~/.scripts/deps/check-deps.sh >/dev/null 2>&1; then
         echo "depcheck: missing dependencies detected -- run \`depcheck\` for details"
     fi
 fi

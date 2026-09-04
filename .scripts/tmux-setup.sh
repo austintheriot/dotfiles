@@ -14,7 +14,7 @@ fi
 SESSION_NAME="${1:-code}"
 
 # Shared layout constants (WORKTREE_COUNT)
-. ~/.my-scripts/tmux-worktree-config.sh
+. ~/.scripts/tmux-worktree-config.sh
 
 # Check if session already exists
 if tmux has-session -t $SESSION_NAME 2>/dev/null; then
@@ -73,7 +73,7 @@ create_named_window ~/Documents/code/gingerlabs-claude-plugins "Plugins"
 create_named_window ~/Documents/code/notability-dev-tool "DevTool"
 
 # Update window names with git branches
-~/.my-scripts/tmux-update-window-names.sh -s $SESSION_NAME
+~/.scripts/tmux-update-window-names.sh -s $SESSION_NAME
 
 # Select the first window
 tmux select-window -t $SESSION_NAME:1

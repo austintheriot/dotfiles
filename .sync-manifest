@@ -26,7 +26,7 @@
 .claude/data/
 .claude/CLAUDE.md
 tests/
-.my-scripts/
+.scripts/
 docs/research/
 .config/tmux/tmux-common.conf
 .config/nvim/
@@ -38,7 +38,7 @@ DOTFILES.md
 # macOS-only: drives aerospace and osascript, so it cannot pass on linux.
 !tests/notify.test.sh
 # Per-branch by design: each machine's own extra dependencies.
-!.my-scripts/deps/deps-local.conf
+!.scripts/deps/deps-local.conf
 
 # --- per-branch by design -----------------------------------------------
 
@@ -52,4 +52,3 @@ DOTFILES.md
 ~.config/tmux/tmux.conf
 ~README.md
 ~TODO-AGENTS.md
-~docs/superpowers/

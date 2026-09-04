@@ -57,14 +57,14 @@ export PATH="$HOME/.bun/bin:$PATH"
 # Examples:
 #   s              # Start/attach default session named 'zsh'
 #   s myproject    # Start/attach session named 'myproject' with splits
-alias s='source ~/.my-scripts/tmux-start.sh'
+alias s='source ~/.scripts/tmux-start.sh'
 
 # [se]tup - Setup multi-window tmux session for code projects
 # Creates windows for multiple work directories (Notability projects, staging, reviews)
 # Examples:
 #   se             # Create/attach 'code' session with predefined windows
 #   se mywork      # Create/attach 'mywork' session with predefined windows
-alias se='source ~/.my-scripts/tmux-setup.sh'
+alias se='source ~/.scripts/tmux-setup.sh'
 
 # [sp]lit - Create tmux pane layouts
 # Examples:
@@ -73,16 +73,16 @@ alias se='source ~/.my-scripts/tmux-setup.sh'
 #   sp -           # Main area above with 2 panes below
 #   sp terms 3     # Create 3 vertical terminals
 #   sp - 2 3       # Main above with 2 vertical splits and 3 horizontal splits below
-alias sp='source ~/.my-scripts/tmux-split.sh'
+alias sp='source ~/.scripts/tmux-split.sh'
 
 # [c]lose - Close all tmux panes except the current one
 # Example:
 #   c              # Closes all other panes in current window
-alias c='source ~/.my-scripts/tmux-close.sh'
+alias c='source ~/.scripts/tmux-close.sh'
 
 # [r]ename - Rename tmux window names to match the branches
 # that are active in the directory each window is responsible for
-alias re='source ~/.my-scripts/tmux-update-window-names.sh'
+alias re='source ~/.scripts/tmux-update-window-names.sh'
 
 # cleans out local yarn dependencies & re-installs
 alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn build"
@@ -202,7 +202,7 @@ setopt prompt_subst
 autoload -Uz vcs_info # enable vcs_info
 precmd () {
     vcs_info # always load before displaying the prompt
-    ~/.my-scripts/tmux-update-window-names.sh >/dev/null 2>&1 # update tmux window names
+    ~/.scripts/tmux-update-window-names.sh >/dev/null 2>&1 # update tmux window names
 }
 zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
 PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} ${VI_MODE_COLOR}λ%f '
@@ -230,7 +230,7 @@ fi
 unset fzf_zsh_init
 
 # Ctrl+G  : Fuzzy-pick a git branch and paste it onto the command line
-source ~/.my-scripts/zsh-git-widgets.sh
+source ~/.scripts/zsh-git-widgets.sh
 
 # SETUP PYENV ##############################################################################################
 export PYENV_ROOT="$HOME/.pyenv"
@@ -295,4 +295,4 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 # DEPENDENCY CHECK #########################################################################################
-[ -f ~/.my-scripts/deps/depcheck-hook.sh ] && source ~/.my-scripts/deps/depcheck-hook.sh
+[ -f ~/.scripts/deps/depcheck-hook.sh ] && source ~/.scripts/deps/depcheck-hook.sh

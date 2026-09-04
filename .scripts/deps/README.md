@@ -7,12 +7,12 @@ is the prose version. The manifest in this directory is the executable one.
 ## Files
 
 - `deps.conf` -- shared dependencies, tracked identically on the `mac` and
-  `linux` branches. `.sync-manifest` covers `.my-scripts/` as a whole
+  `linux` branches. `.sync-manifest` covers `.scripts/` as a whole
   directory, so this file is checked for drift between the two branches.
   One line per dependency: `name|check_command|docs_url`.
 - `deps-local.conf` -- dependencies that exist on one branch only. Same
   format. `.sync-manifest` excludes this file with the line
-  `!.my-scripts/deps/deps-local.conf`, so each branch carries its own copy
+  `!.scripts/deps/deps-local.conf`, so each branch carries its own copy
   and the drift check does not flag the difference. On the `mac` branch this
   file holds `aerospace`. It also holds `oh-my-zsh` on a branch whose machine
   uses oh-my-zsh. This machine does not, so `oh-my-zsh` is absent here.
@@ -113,18 +113,18 @@ is what hides the problem on a machine already in use.
 ## Running it
 
 ```sh
-~/.my-scripts/deps/check-deps.sh                  # check only
-~/.my-scripts/deps/check-deps.sh --fix            # check, then prompt per install
-~/.my-scripts/deps/check-deps.sh --fix --yes      # check, then install without prompting
-~/.my-scripts/deps/check-deps.sh --fix --dry-run  # print what --fix would run
+~/.scripts/deps/check-deps.sh                  # check only
+~/.scripts/deps/check-deps.sh --fix            # check, then prompt per install
+~/.scripts/deps/check-deps.sh --fix --yes      # check, then install without prompting
+~/.scripts/deps/check-deps.sh --fix --dry-run  # print what --fix would run
 depcheck                                          # alias for --fix
-~/.my-scripts/deps/test-local.sh                  # bootstrap fresh containers
+~/.scripts/deps/test-local.sh                  # bootstrap fresh containers
 ```
 
 `depcheck` is defined in `depcheck-hook.sh` as:
 
 ```sh
-alias depcheck='~/.my-scripts/deps/check-deps.sh --fix'
+alias depcheck='~/.scripts/deps/check-deps.sh --fix'
 ```
 
 An unknown argument exits 2.

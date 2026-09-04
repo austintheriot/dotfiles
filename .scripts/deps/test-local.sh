@@ -16,7 +16,7 @@
 # does not fail the run. This script exits non-zero if either container
 # does.
 #
-# Usage: ~/.my-scripts/deps/test-local.sh
+# Usage: ~/.scripts/deps/test-local.sh
 
 set -eu
 
@@ -52,9 +52,9 @@ trap 'rm -rf "$workdir"' EXIT INT TERM HUP
 # last commit instead of the edit under test, which defeats the point of a
 # local iteration loop.
 git_cmd archive "$branch" | tar -x -C "$workdir"
-rm -rf "$workdir/.my-scripts/deps"
-mkdir -p "$workdir/.my-scripts"
-cp -R "$HOME/.my-scripts/deps" "$workdir/.my-scripts/deps"
+rm -rf "$workdir/.scripts/deps"
+mkdir -p "$workdir/.scripts"
+cp -R "$HOME/.scripts/deps" "$workdir/.scripts/deps"
 
 status=0
 
@@ -74,7 +74,7 @@ for image in ubuntu arch; do
     # exactly the output needed to diagnose it.
     # shellcheck disable=SC2086
     if ! docker build $platform_args \
-        -f "$workdir/.my-scripts/deps/docker/Dockerfile.$image" \
+        -f "$workdir/.scripts/deps/docker/Dockerfile.$image" \
         -t "depcheck-$image" \
         "$workdir"
     then

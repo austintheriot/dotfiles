@@ -69,16 +69,16 @@ Or see local copy here, if that link no longer works: [DOTFILES](./DOTFILES.md).
 ### Dependency checking
 
 The dependencies listed above, plus a few that exist on one branch only, are
-also tracked in a checkable manifest: `.my-scripts/deps/deps.conf` and
-`.my-scripts/deps/deps-local.conf`.
+also tracked in a checkable manifest: `.scripts/deps/deps.conf` and
+`.scripts/deps/deps-local.conf`.
 
-- `~/.my-scripts/deps/check-deps.sh` checks them and reports what is missing.
+- `~/.scripts/deps/check-deps.sh` checks them and reports what is missing.
 - `depcheck` is a shell alias that checks them and offers to install anything
   missing.
 - A shell-startup hook prints one line at most once every 24 hours when
   something has gone missing. It never installs and never blocks startup.
 
-See `.my-scripts/deps/README.md` for the manifest format, the constraint on
+See `.scripts/deps/README.md` for the manifest format, the constraint on
 check commands, and how to add a dependency.
 
 ### Claude Code notifications

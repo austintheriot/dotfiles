@@ -12,7 +12,7 @@
 
 . "$(dirname "$0")/lib.sh"
 
-SCRIPT="$DOTFILES_ROOT/.my-scripts/deps/check-deps.sh"
+SCRIPT="$DOTFILES_ROOT/.scripts/deps/check-deps.sh"
 BIN="$FIXTURES/bin"
 mkdir -p "$BIN"
 
@@ -233,7 +233,7 @@ assert_contains 'clones into an existing oh-my-zsh' \
 # dependency. These read the checks out of the real file rather than
 # restating them, so the test fails if the shipped file regresses.
 
-DEPS_CONF_REAL="$DOTFILES_ROOT/.my-scripts/deps/deps.conf"
+DEPS_CONF_REAL="$DOTFILES_ROOT/.scripts/deps/deps.conf"
 
 check_for() {
     grep "^$1|" "$DEPS_CONF_REAL" | cut -d'|' -f2
@@ -310,7 +310,7 @@ assert_equals 'every docs url survives parsing' '' "$malformed_docs"
 #
 # Both manifests count, because which file owns oh-my-zsh is per-branch.
 
-DEPS_LOCAL_REAL="$DOTFILES_ROOT/.my-scripts/deps/deps-local.conf"
+DEPS_LOCAL_REAL="$DOTFILES_ROOT/.scripts/deps/deps-local.conf"
 all_tracked=$(cat "$DEPS_CONF_REAL" "$DEPS_LOCAL_REAL" 2>/dev/null \
     | sed -e 's/#.*//' | cut -d'|' -f1 | grep -E '^[a-z]' | sort -u)
 

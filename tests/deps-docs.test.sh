@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Tests for the dependency-checking documentation: .my-scripts/deps/README.md
+# Tests for the dependency-checking documentation: .scripts/deps/README.md
 # and the "Dependency checking" section of ~/README.md.
 #
 # Scope is deliberately narrow. These assert only the facts that rot
@@ -17,7 +17,7 @@
 
 . "$(dirname "$0")/lib.sh"
 
-DEPS_DIR="$DOTFILES_ROOT/.my-scripts/deps"
+DEPS_DIR="$DOTFILES_ROOT/.scripts/deps"
 DEPS_README="$DEPS_DIR/README.md"
 HOME_README="$DOTFILES_ROOT/README.md"
 CHECK_SCRIPT="$DEPS_DIR/check-deps.sh"
@@ -165,9 +165,9 @@ assert_equals 'oh-my-zsh is absent from deps.conf, as documented' \
 # --- the documented deps-local.conf exclusion matches .sync-manifest ----
 
 assert_contains 'the deps README documents the manifest exclusion' \
-    '!.my-scripts/deps/deps-local.conf' "$deps_readme"
+    '!.scripts/deps/deps-local.conf' "$deps_readme"
 assert_succeeds 'the manifest really excludes deps-local.conf' \
-    grep -qxF '!.my-scripts/deps/deps-local.conf' "$MANIFEST"
+    grep -qxF '!.scripts/deps/deps-local.conf' "$MANIFEST"
 
 # --- the documented pipe constraint matches read_entries ----------------
 #

@@ -82,7 +82,7 @@ alias c='source ~/.scripts/tmux-close.sh'
 
 # [r]ename - Rename tmux window names to match the branches
 # that are active in the directory each window is responsible for
-alias re='source ~/.scripts/tmux-update-window-names.sh'
+alias re='~/.scripts/tmux-update-window-names.sh'
 
 # cleans out local yarn dependencies & re-installs
 alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn build"

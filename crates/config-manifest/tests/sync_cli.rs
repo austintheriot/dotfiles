@@ -188,6 +188,88 @@ fn a_target_not_at_its_origin_is_refused() {
 }
 
 #[test]
+fn a_target_checked_out_in_a_worktree_is_refused() {
+    let dir = fixture();
+    let worktree = tempfile::tempdir().expect("tempdir");
+    git(
+        dir.path(),
+        &[
+            "worktree",
+            "add",
+            "-q",
+            worktree.path().to_str().expect("path"),
+            "linux",
+        ],
+    );
+    let before = git_out(dir.path(), &["rev-parse", "linux"]);
+
+    let assert = sync(dir.path(), &[]).code(1);
+    let stderr = String::from_utf8(assert.get_output().stderr.clone()).expect("utf8");
+    assert!(stderr.contains("worktree"), "{stderr}");
+    assert!(stderr.contains("linux"), "{stderr}");
+    assert_eq!(git_out(dir.path(), &["rev-parse", "linux"]), before);
+    assert_eq!(git_out(worktree.path(), &["status", "--porcelain"]), "");
+}
+
+#[test]
+fn an_unmatched_path_after_sync_exits_one_not_three() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    git(dir.path(), &["init", "-q", "-b", "linux"]);
+    std::fs::write(
+        dir.path().join(".sync-manifest"),
+        ".sync-manifest\nshared.txt\ndir/\n~local.txt\n",
+    )
+    .expect("write");
+    std::fs::write(dir.path().join("shared.txt"), "same\n").expect("write");
+    std::fs::create_dir_all(dir.path().join("dir")).expect("mkdir");
+    std::fs::write(dir.path().join("dir/gone.txt"), "only on linux\n").expect("write");
+    std::fs::write(dir.path().join("local.txt"), "linux local\n").expect("write");
+    std::fs::write(dir.path().join("stray.txt"), "not in the manifest\n").expect("write");
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-q", "-m", "base"]);
+    git(dir.path(), &["checkout", "-q", "-b", "mac"]);
+    std::fs::write(dir.path().join("shared.txt"), "changed on mac\n").expect("write");
+    std::fs::write(dir.path().join("dir/new.txt"), "new on mac\n").expect("write");
+    std::fs::remove_file(dir.path().join("dir/gone.txt")).expect("rm");
+    std::fs::write(dir.path().join("local.txt"), "mac local\n").expect("write");
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "-q", "-m", "mac changes"]);
+
+    let before = git_out(dir.path(), &["rev-parse", "linux"]);
+    let assert = sync(dir.path(), &[]).code(1);
+    let stderr = String::from_utf8(assert.get_output().stderr.clone()).expect("utf8");
+    assert!(stderr.contains("unmatched"), "{stderr}");
+    assert!(!stderr.contains("BUG"), "{stderr}");
+    assert_eq!(
+        git_out(dir.path(), &["rev-parse", "linux^"]),
+        before,
+        "the sync landed as one new commit"
+    );
+}
+
+#[test]
+fn a_detached_head_is_refused() {
+    let dir = fixture();
+    git(dir.path(), &["checkout", "-q", "--detach"]);
+    let assert = sync(dir.path(), &[]).code(1);
+    let stderr = String::from_utf8(assert.get_output().stderr.clone()).expect("utf8");
+    assert!(stderr.contains("detached"), "{stderr}");
+}
+
+#[test]
+fn a_missing_manifest_on_the_source_is_refused() {
+    let dir = fixture();
+    git(dir.path(), &["rm", "-q", ".sync-manifest"]);
+    git(dir.path(), &["commit", "-q", "-m", "drop manifest"]);
+    let before = git_out(dir.path(), &["rev-parse", "linux"]);
+
+    let assert = sync(dir.path(), &[]).code(1);
+    let stderr = String::from_utf8(assert.get_output().stderr.clone()).expect("utf8");
+    assert!(stderr.contains(".sync-manifest"), "{stderr}");
+    assert_eq!(git_out(dir.path(), &["rev-parse", "linux"]), before);
+}
+
+#[test]
 fn a_dirty_shared_path_warns_but_syncs_committed_content() {
     let dir = fixture();
     std::fs::write(dir.path().join("shared.txt"), "uncommitted edit\n").expect("write");

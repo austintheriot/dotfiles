@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 8c7beaf94c5eedd5b1429c693678fd3a9db4ab27c843392798a65471c2b7b762 # shrinks to source = TreeListing({}), target_listing = TreeListing({RelPath("a/a"): (Regular, BlobId("a0aaa0a00a00a000aa00000aa0aa0a0aaa0a0a00"))})
+cc 156f7ea1cea4eace5e36c8bfd01d2cb197bc2e509285db6a70e8587f4ae33ac5 # shrinks to source = TreeListing({}), target_listing = TreeListing({RelPath("a/a"): (Regular, BlobId("00a0a00aa0a0a0a00aa0aa0a0a00aa00aaa000a0"))})
+cc b6f17605389640ba24f101aa6664ce68df3b11cc762944dcb692e53747e4d43b # shrinks to source = TreeListing({RelPath("ke"): (Executable, BlobId("ea694e32fff38fe5e561cd9ebef93dc87b746bf0")), RelPath("r"): (Regular, BlobId("1e4e3ba7507d412efac0735e9cda6ddbe6d55327")), RelPath("u"): (Executable, BlobId("ca502faaaf50c79c17effc3d8ef26a8de89e15a9"))}), target_listing = TreeListing({RelPath("cv1t/lrc05"): (Executable, BlobId("354dba8a2419bdaafafa3a3b8e8b9735e4e8b7c0")), RelPath("k"): (Regular, BlobId("df8e1d35a7334ae00cdbd95da9a561cc4ce53238")), RelPath("of/g4"): (Regular, BlobId("a75f2e7f9fd30a277e7fdcceeff2e26da3013392")), RelPath("r9f"): (Regular, BlobId("b2b5d62a02197cd78ed0e505d9240cbef8f5b0e6"))})

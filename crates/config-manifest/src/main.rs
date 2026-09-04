@@ -140,6 +140,13 @@ fn run_sync(args: &[String]) -> anyhow::Result<u8> {
             .unwrap_or_default(),
     };
 
+    if repo.checked_out_branches()?.contains(&target) {
+        eprintln!(
+            "config-manifest sync: refusing, {target} is checked out in a worktree; sync commits onto it directly and would leave that worktree dirty"
+        );
+        return Ok(1);
+    }
+
     if repo.has_remote("origin")? {
         repo.fetch("origin")?;
         let local = repo.rev_parse(&target)?;
@@ -212,11 +219,23 @@ fn run_sync(args: &[String]) -> anyhow::Result<u8> {
     let synced_listing = repo.ls_tree(&target)?;
     let report = check::check(&manifest, &source_listing, &synced_listing);
     let rendered = check::render(&report, &source, &target);
-    if rendered.exit_code != 0 {
+    let diverged = report
+        .findings
+        .iter()
+        .any(|finding| matches!(finding, check::Finding::Diverged { .. }));
+    if diverged {
         eprintln!("config-manifest sync: BUG: the branches still differ after syncing");
         std::io::stderr().write_all(rendered.stdout.as_bytes())?;
         std::io::stderr().write_all(rendered.stderr.as_bytes())?;
         return Ok(3);
+    }
+    if rendered.exit_code != 0 {
+        std::io::stdout().write_all(rendered.stdout.as_bytes())?;
+        std::io::stderr().write_all(rendered.stderr.as_bytes())?;
+        eprintln!(
+            "config-manifest sync: committed to {target}, but the manifest does not cover every tracked path; add rules for the unmatched paths above"
+        );
+        return Ok(1);
     }
 
     println!("next: config push origin {source} && config push origin {target}");

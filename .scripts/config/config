@@ -1,0 +1,17 @@
+#!/bin/sh
+# Front door for the dotfiles repo. `config <sub>` runs the sibling
+# config-<sub> when one exists, so new tooling lands beside this file, and
+# passes everything else to git on the bare repo, so every git verb keeps
+# working exactly as the old alias did.
+set -eu
+
+self=$(readlink -f "$0")
+here=$(dirname "$self")
+
+if [ "$#" -gt 0 ] && [ -x "$here/config-$1" ]; then
+    sub=$1
+    shift
+    exec "$here/config-$sub" "$@"
+fi
+
+exec git --git-dir="$HOME/.cfg" --work-tree="$HOME" "$@"

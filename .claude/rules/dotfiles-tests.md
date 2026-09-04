@@ -47,8 +47,10 @@ after the push and is the authoritative gate.
 `config-manifest sync` does this without switching branches: it commits the
 current branch's shared paths directly onto the other branch through git
 plumbing, refuses if that branch is not at its origin, and prints the two
-push commands. `--dry-run` shows the plan. The by-hand procedure above
-remains the fallback if the binary is not built.
+push commands. `--dry-run` shows the plan. If the binary is not built, the fallback is by
+hand: check out the target branch, run `git checkout <source> -- <shared
+paths>` (and `git rm` anything the source deleted), commit, then build and
+run `config-manifest check`.
 
 A separate pre-commit hook at `~/tests/pre-commit` (symlinked from
 `~/.cfg/hooks/pre-commit`) runs a leak guard (`~/tests/leak-check.sh`) on every

@@ -27,14 +27,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   measured at 20ms for the whole server. Pure shell change, no new
   dependency. Do this before considering any port, so the port has an
   honest baseline to beat.
-- Enable the macOS Developer Tools exemption for the terminal (System
-  Settings -> Privacy & Security -> Developer Tools). This machine has
-  `spctl --status` = assessments enabled and `DevToolsSecurity -status`
-  = disabled, so `syspolicyd` validates every newly built executable on
-  its first run. Measured at ~180ms here per fresh binary, reported
-  elsewhere at 314ms, and it can block on a network timeout when
-  offline. `spctl --global-disable` does not fix it; only the exemption
-  does. Needs a human at the GUI, so it cannot be done autonomously.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
 - Add some utilities for running/syncing/merging things myself:
   - config:test to run the tests

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Runs the branch-drift check and the dotfiles test suite before a push.
+# Runs the leak scan, the branch-drift check, and the dotfiles test suite before a push.
 #
 # Installed for the bare dotfiles repo at ~/.cfg. Git finds it through the
 # symlink at ~/.cfg/hooks/pre-push; core.hooksPath is not set. See the
@@ -69,12 +69,25 @@ if [ ! -x "$HOME/tests/leak-check.sh" ]; then
     exit 1
 fi
 
+range_count=0
 for range in $ranges; do
-    if ! "$HOME/tests/leak-check.sh" --range "$range"; then
+    range_count=$((range_count + 1))
+    "$HOME/tests/leak-check.sh" --range "$range"
+    leak_status=$?
+    if [ "$leak_status" -eq 2 ]; then
+        printf '\npre-push: leak check could not scan %s, push blocked.\n' "$range" >&2
+        exit 1
+    elif [ "$leak_status" -ne 0 ]; then
         printf '\npre-push: leak check failed for %s, push blocked.\n' "$range" >&2
         exit 1
     fi
 done
+
+if [ "$range_count" -eq 0 ]; then
+    printf 'pre-push: no pushed range to scan (deletions only)\n'
+else
+    printf 'pre-push: leak scan passed for %d range(s)\n' "$range_count"
+fi
 
 # --- branch-drift check -------------------------------------------------
 #

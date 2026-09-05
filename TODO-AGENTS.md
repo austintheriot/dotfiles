@@ -18,15 +18,33 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   clear a 40ms bar. `-C` would save nothing meaningful and removes the
   compaudit security check.
 - The branch-drift GitHub workflow races the two-branch push. `config sync`
-  style pushes land `linux` then `mac` seconds apart; the workflow run for
-  the first push compares the new branch against the other branch's stale
-  `origin/` ref and fails, while the second push's run passes. Seen three
-  times on 2026-09-04, each time cleared by a rerun. Options: run the drift
-  job only on one branch's push (the second one), make the job wait briefly
-  and re-fetch, or have it compare the pushed sha against the other branch's
-  tip and skip when the other branch is ahead of what it last saw. The
-  pre-push hook already gates on local mac vs linux, so the CI job is a
-  re-check, not the only gate.
+  style pushes land the two branches seconds apart; the workflow run for the
+  first push compares the new branch against the other branch's stale
+  `origin/` ref and fails, while the second push's run passes.
+  Mechanism confirmed 2026-09-05 by reading the workflow: it DOES fetch both
+  branches (`git fetch origin mac:refs/remotes/origin/mac` and the linux
+  equivalent), but it fetches at workflow start, which is before the second
+  push has landed. The fetch is not missing, it is simply too early, and
+  nothing re-checks afterwards. So "make the job re-fetch" is only a fix if
+  the re-fetch happens after a wait or a retry, not at step one.
+  Evidence as of 2026-09-05: five sightings, and every push in that session
+  needed a manual rerun of the mac job. Three controlled retests -- rerunning
+  the failed job with zero code changes -- passed each time, which isolates
+  timing as the only variable. Gaps measured between the two runs' start
+  times: 23s, 16s, 14s, 15s.
+  This is now a standing tax on every push rather than an occasional flake,
+  and it leaves the mac branch red by default until someone reruns it.
+  Options, in the order the evidence now favors them:
+  (1) gate the job so it only runs once per pair -- on the second branch's
+  push, or on a workflow_run that follows both;
+  (2) compare the pushed sha against the other branch's tip and skip when the
+  other branch is behind what this run already knows about, which is the
+  "skip rather than fail" shape;
+  (3) re-fetch and retry after a short wait, which fixes the symptom but adds
+  wall-clock to every run and still fails if the second push is slow.
+  The pre-push hook already gates on local mac vs linux, so the CI job is a
+  re-check rather than the only gate -- which is what makes a deliberate skip
+  safe here.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
 - Shell startup is currently verrryy slow, and this compounds for large setup tasks like the `se` alias. When I last ran it, it took minutes before Alacritty was responsive again. Let's consider/debug/profile what may be slowing things down here. Let's also take a bigger picture step back to see if there are other options to get the same results as the `se` alias that would run more quickly
 - Renaming tmux windows seems to lag a bit on git branch change. Let's look to see if there are some "smarter" hooks we can hook into to update the window name on git branch change, new branch, checkout, etc.

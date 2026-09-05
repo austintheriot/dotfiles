@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared harness for the dotfiles integration tests.
 #
 # A test file sources this, calls `assert_equals` (and friends), and exits with

@@ -63,6 +63,7 @@ unstage_all() {
 run_leak_check() {
     (
         cd "$repo" || exit 99
+        # shellcheck disable=SC2069  # stderr-only capture: order is deliberate
         "$LEAK_CHECK" "$@" 2>&1 >/dev/null
         printf '\n__exit=%s\n' "$?"
     )
@@ -265,6 +266,7 @@ run_pre_push() {
     local local_sha=$1 remote_sha=$2
     (
         cd "$repo" || exit 99
+        # shellcheck disable=SC2069  # stderr-only capture: order is deliberate
         printf 'refs/heads/feature %s refs/heads/feature %s\n' "$local_sha" "$remote_sha" \
             | HOME="$DOTFILES_ROOT" GIT_DIR="$repo/.git" GIT_WORK_TREE="$repo" \
                 "$PRE_PUSH" origin "file://$repo" 2>&1 >/dev/null

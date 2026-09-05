@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Sourced from .zshrc. Nags at most once every 24h if a CLI dependency from
 # .scripts/deps/deps.conf is missing. Never blocks startup, never
 # prompts -- see .scripts/deps/README.md for the manual `depcheck`

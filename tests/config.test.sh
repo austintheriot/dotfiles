@@ -46,7 +46,9 @@ assert_contains 'git usage is what prints' 'usage: git' "$output"
 
 # --- name rules -------------------------------------------------------------
 
+# shellcheck disable=SC2012  # config-<sub> names cannot contain spaces
 actual=$(cd "$CONFIG_DIR" && ls config-* 2>/dev/null | sed 's/^config-//' | sort | tr '\n' ' ' | sed 's/ $//')
+# shellcheck disable=SC2086  # deliberate split of the space-separated list
 expected=$(printf '%s\n' $EXPECTED_SUBCOMMANDS | sort | tr '\n' ' ' | sed 's/ $//')
 assert_equals 'the config-<sub> set equals the allowlist' "$expected" "$actual"
 

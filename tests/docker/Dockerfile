@@ -49,6 +49,7 @@ RUN apt-get update \
         dash \
         fzf \
         ripgrep \
+        shellcheck \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

@@ -25,6 +25,7 @@ assert_succeeds 'the home README exists' test -f "$HOME_README"
 section=$(awk '/^### Repo utilities$/{found=1; next} found && /^### /{exit} found' "$HOME_README")
 assert_succeeds 'the README has a "Repo utilities" section' test -n "$section"
 
+# shellcheck disable=SC2012  # config-<sub> names cannot contain spaces
 subcommands=$(cd "$CONFIG_DIR" && ls config-* 2>/dev/null | sed 's/^config-//' | sort)
 
 undocumented=''

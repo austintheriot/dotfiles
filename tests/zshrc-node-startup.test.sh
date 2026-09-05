@@ -59,6 +59,7 @@ assert_equals 'startup does not run `nvm ls`' \
 # The newest installed v24, chosen the way the shell code must choose it.
 # A plain lexical sort picks v24.9 over v24.15, so the version-aware sort is
 # part of the contract, not a detail.
+# shellcheck disable=SC2012  # nvm version directories are vN.N.N
 newest_v24=$(ls -d "$NVM_NODE_DIR"/v24.* 2>/dev/null | sort -V | tail -1)
 
 if [ -z "$newest_v24" ]; then
@@ -106,6 +107,7 @@ assert_equals 'nvm is defined but not yet loaded' \
 
 # The override path. Pick any installed non-v24 version to switch to; skip if
 # the machine only has v24, since then there is nothing to switch to.
+# shellcheck disable=SC2010  # nvm version directories are vN.N.N
 other=$(ls -d "$NVM_NODE_DIR"/v* 2>/dev/null | grep -v '/v24\.' | sort -V | tail -1)
 
 if [ -n "$other" ]; then

@@ -69,6 +69,7 @@ while IFS= read -r badge; do
     branch=${badge##*branch=}
     branch=${branch%%&*}
 
+    # shellcheck disable=SC2086  # deliberate split of the space-separated list
     printf '%s\n' $BRANCHES | grep -qx "$branch" \
         || bad_branch="$bad_branch $branch"
 

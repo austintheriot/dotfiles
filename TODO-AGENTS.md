@@ -33,16 +33,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   every pane switch. Note `/usr/bin/python3` is not a fallback -- it is an
   xcrun stub that does not run without the Xcode command line tools.
 
-- [CLAIMED] Load pyenv lazily, the same shape as nvm. `eval "$(pyenv init - zsh)"`
-  at `.zshrc:225` costs 0.73s per shell: it spawns `bash --norc` just to
-  dedupe PATH, then a `pyenv rehash` subprocess (0.52s of the total).
-  Put `$PYENV_ROOT/shims` on PATH directly, export PYENV_SHELL=zsh, and
-  define `pyenv()` as a function that unfunctions itself, evals the real
-  init, and re-dispatches. Measured working in a scratch ZDOTDIR: python3,
-  pyenv and completions all resolve. Does NOT fix the 1.34s shim tax on
-  each `python3` call; that is the separate item above. Test: mirror the
-  nvm assertions in tests/zshrc-node-startup.test.sh (defined but not yet
-  loaded, python3 still resolves).
 - Dropped after measurement, recorded so it is not retried: `compinit -C`.
   An isolated `zsh -f` test showed compinit at 1.17s, but that was an
   fpath artefact. In the real startup trace compinit is ~60ms and did not

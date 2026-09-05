@@ -122,6 +122,49 @@ in_only_set() {
     return 1
 }
 
+# Privilege escalation, decided once rather than assumed by every command.
+#
+# A bare root container reported 11 failures in one run, every one of them
+# "sh: 1: sudo: not found", because each install command carried a hardcoded
+# `sudo`. Minimal images do not ship sudo, and a process already running as
+# root has nothing to escalate to. The same commands run directly succeed.
+#
+# Four environments, three answers:
+#   root, no sudo      -> run directly (the container that reported this)
+#   root, sudo present -> run directly anyway; escalating from root is
+#                         pointless, and on an image with a misconfigured
+#                         sudo it is one more way to fail
+#   non-root, sudo     -> escalate (the normal laptop and CI runner)
+#   non-root, no sudo  -> no way to install, so a command needing privilege is
+#                         reported manual-only rather than emitted as a
+#                         command that cannot work
+#
+# $SUDO carries its own trailing space and the commands spell `${SUDO}apt-get`,
+# so the expansion happens in the `sh -c` that runs the command and both
+# states produce valid text. The space lives in the variable because
+# `${SUDO} apt-get` would leave a leading space when empty, and `${SUDO}apt-get`
+# without it produced `sudoapt-get` -- measured, not guessed.
+#
+# DEPS_FORCE_ROOT overrides the detection so both sides are testable without
+# running the suite as root.
+case "${DEPS_FORCE_ROOT:-}" in
+    1) is_root=1 ;;
+    0) is_root=0 ;;
+    *) if [ "$(id -u 2>/dev/null || printf 1)" -eq 0 ]; then is_root=1; else is_root=0; fi ;;
+esac
+
+if [ "$is_root" -eq 1 ]; then
+    SUDO=''
+    can_escalate=1
+elif command -v sudo >/dev/null 2>&1; then
+    SUDO='sudo '
+    can_escalate=1
+else
+    SUDO=''
+    can_escalate=0
+fi
+export SUDO
+
 detect_pm() {
     if command -v pacman >/dev/null 2>&1; then
         printf 'pacman'
@@ -142,6 +185,7 @@ detect_pm() {
 install_cmd_for() {
     name=$1
     manager=$2
+
     case "$name" in
         gh)
             # The apt path writes the keyring through `sudo tee` rather than
@@ -166,10 +210,10 @@ install_cmd_for() {
             # the write.
             case "$manager" in
                 apt)
-                    printf '%s' 'sudo apt-get update -qq && sudo apt-get install -y wget && sudo mkdir -p -m 755 /etc/apt/keyrings && wget -nv -O- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt-get update -qq && sudo apt-get install -y gh'
+                    printf '%s' '${SUDO}apt-get update -qq && ${SUDO}apt-get install -y wget && ${SUDO}mkdir -p -m 755 /etc/apt/keyrings && wget -nv -O- https://cli.github.com/packages/githubcli-archive-keyring.gpg | ${SUDO}tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && ${SUDO}chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | ${SUDO}tee /etc/apt/sources.list.d/github-cli.list > /dev/null && ${SUDO}apt-get update -qq && ${SUDO}apt-get install -y gh'
                     ;;
                 brew) printf 'brew install gh' ;;
-                pacman) printf 'sudo pacman -Sy --noconfirm github-cli' ;;
+                pacman) printf '${SUDO}pacman -Sy --noconfirm github-cli' ;;
             esac
             ;;
         alacritty)
@@ -192,8 +236,8 @@ install_cmd_for() {
             # from failing the whole bootstrap. Revisit if the cask is
             # re-enabled or upstream starts notarizing.
             case "$manager" in
-                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y alacritty' ;;
-                pacman) printf 'sudo pacman -Sy --noconfirm alacritty' ;;
+                apt) printf '${SUDO}apt-get update -qq && ${SUDO}apt-get install -y alacritty' ;;
+                pacman) printf '${SUDO}pacman -Sy --noconfirm alacritty' ;;
             esac
             ;;
         aerospace)
@@ -230,7 +274,7 @@ install_cmd_for() {
             # simply not needed. The installer stays for a manager that has
             # no package for it.
             case "$manager" in
-                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y zoxide' ;;
+                apt) printf '${SUDO}apt-get update -qq && ${SUDO}apt-get install -y zoxide' ;;
                 brew) printf 'brew install zoxide' ;;
                 # Arch ships zoxide in `extra`, so pacman had no business
                 # falling through to the installer. It did, and the arch leg
@@ -238,7 +282,7 @@ install_cmd_for() {
                 # API rate limit" on a run that had nothing to do with
                 # zoxide -- the same failure the apt and brew cases above
                 # were added to prevent.
-                pacman) printf 'sudo pacman -Sy --noconfirm zoxide' ;;
+                pacman) printf '${SUDO}pacman -Sy --noconfirm zoxide' ;;
                 *) printf 'curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh' ;;
             esac
             ;;
@@ -292,8 +336,8 @@ install_cmd_for() {
             # throwaway container are exactly where overriding PEP 668 costs
             # nothing, and it is what test-suite.yml already did by hand.
             case "$manager" in
-                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y python3-yaml' ;;
-                pacman) printf 'sudo pacman -Sy --noconfirm python-yaml' ;;
+                apt) printf '${SUDO}apt-get update -qq && ${SUDO}apt-get install -y python3-yaml' ;;
+                pacman) printf '${SUDO}pacman -Sy --noconfirm python-yaml' ;;
                 *) printf 'python3 -m pip install --break-system-packages pyyaml' ;;
             esac
             ;;
@@ -304,24 +348,24 @@ install_cmd_for() {
             # answer rather than installing something else and calling it
             # dash.
             case "$manager" in
-                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y dash' ;;
-                pacman) printf 'sudo pacman -Sy --noconfirm dash' ;;
+                apt) printf '${SUDO}apt-get update -qq && ${SUDO}apt-get install -y dash' ;;
+                pacman) printf '${SUDO}pacman -Sy --noconfirm dash' ;;
             esac
             ;;
         python3)
             # apt and pacman spell the package differently from the binary,
             # and macOS runners ship python3 already.
             case "$manager" in
-                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y python3' ;;
-                pacman) printf 'sudo pacman -Sy --noconfirm python' ;;
+                apt) printf '${SUDO}apt-get update -qq && ${SUDO}apt-get install -y python3' ;;
+                pacman) printf '${SUDO}pacman -Sy --noconfirm python' ;;
                 brew) printf 'brew install python' ;;
             esac
             ;;
         *)
             case "$manager" in
-                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y %s' "$name" ;;
+                apt) printf '${SUDO}apt-get update -qq && ${SUDO}apt-get install -y %s' "$name" ;;
                 brew) printf 'brew install %s' "$name" ;;
-                pacman) printf 'sudo pacman -Sy --noconfirm %s' "$name" ;;
+                pacman) printf '${SUDO}pacman -Sy --noconfirm %s' "$name" ;;
             esac
             ;;
     esac
@@ -418,6 +462,39 @@ for entry in $entries; do
 
     if [ "$fix" -eq 1 ]; then
         cmd=$(install_cmd_for "$name" "$pm")
+
+        # A command that needs root cannot run on a machine with no way to
+        # become root. Emitting it anyway is what produced "sh: 1: sudo: not
+        # found" eleven times in a single run.
+        #
+        # Keyed on the command containing ${SUDO} rather than on a list of
+        # dependency names, because a list drifts: brew never needs root, a
+        # git clone into $HOME never needs root, and a new entry would have to
+        # remember to join the list. The command itself already says whether
+        # it needs privilege.
+        if [ "$can_escalate" -eq 0 ] && [ "${cmd#*\$\{SUDO\}}" != "$cmd" ]; then
+            printf '  %s needs root, and this machine has neither root nor sudo -- see %s\n' \
+                "$name" "$docs"
+            IFS='
+'
+            continue
+        fi
+
+        # ${SUDO} is substituted here rather than eval'd. An eval over
+        # command text is both fragile and an injection shape, and nothing
+        # here needs it: the only placeholder is ${SUDO}, so a plain
+        # substitution is exact.
+        #
+        # Done for display as well as for running, so --dry-run prints a
+        # command the reader can copy instead of a variable they have to
+        # resolve themselves.
+        while :; do
+            case "$cmd" in
+                *'${SUDO}'*) cmd="${cmd%%'${SUDO}'*}$SUDO${cmd#*'${SUDO}'}" ;;
+                *) break ;;
+            esac
+        done
+
         if [ -z "$cmd" ]; then
             printf '  no automated install for %s on this system -- see %s\n' "$name" "$docs"
         elif [ "$dry_run" -eq 1 ]; then

@@ -111,8 +111,22 @@ output=$(run_check "$conf" --fix --dry-run)
 status=$?
 apt_log=$(cat "$FIXTURES/apt.log")
 assert_equals 'dry-run never invokes apt-get' '' "$apt_log"
+# The `sudo` prefix is now environment-dependent, so the expectation is
+# computed rather than hardcoded. This assertion used to spell
+# "would run: sudo apt-get ..." and it failed inside the test container --
+# which runs as root with no sudo, the same shape a user reported from a bare
+# `docker run debian`. The old text encoded "sudo is always present", which is
+# exactly the assumption that produced eleven "sudo: not found" failures.
+if [ "$(id -u)" -eq 0 ]; then
+    expected_priv=''
+elif command -v sudo >/dev/null 2>&1; then
+    expected_priv='sudo '
+else
+    expected_priv=''
+fi
 assert_contains 'prints what it would run' \
-    'would run: sudo apt-get update -qq && sudo apt-get install -y some-tool' "$output"
+    "would run: ${expected_priv}apt-get update -qq && ${expected_priv}apt-get install -y some-tool" \
+    "$output"
 assert_equals 'dry-run always exits 0' '0' "$status"
 
 # --- a manual-only dependency is reported but never fails --fix ----------
@@ -690,6 +704,81 @@ for manager in apt brew pacman; do
     assert_succeeds "zoxide installs from the $manager package manager" \
         grep -qE "apt-get install|brew install|pacman -S" <<<"$output"
 done
+
+
+# --- privilege escalation is decided, not assumed ---------------------------
+#
+# Reported from a bare root container: all 14 install commands hardcoded
+# `sudo`, so every one of them failed with "sh: 1: sudo: not found" -- 11
+# failures in one run -- while the same commands run directly would have
+# worked. Minimal images do not ship sudo, and a process already running as
+# root does not need it.
+#
+# sudo is privilege escalation, not part of the command, so it belongs in the
+# command only when the caller is not root AND sudo is available.
+#
+# DEPS_FORCE_ROOT overrides the id -u check so both sides are testable without
+# running the suite as root.
+esc_conf="$FIXTURES/escalation.conf"
+printf 'tmux|false|https://github.com/tmux/tmux\n' > "$esc_conf"
+
+esc_bin="$FIXTURES/escalation-bin"
+mkdir -p "$esc_bin"
+printf '#!/bin/sh\nexit 0\n' > "$esc_bin/apt-get"
+chmod +x "$esc_bin/apt-get"
+for passthrough in sh dirname cd pwd command printf uname id grep sed awk cat true false; do
+    real=$(command -v "$passthrough" 2>/dev/null) || continue
+    ln -sf "$real" "$esc_bin/$passthrough"
+done
+
+run_escalation() {
+    PATH="$esc_bin" DEPS_CONF="$esc_conf" \
+        DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+        "$SCRIPT" --fix --yes --dry-run --only tmux 2>&1
+}
+
+# Root, no sudo on PATH: the container's exact shape.
+output=$(DEPS_FORCE_ROOT=1 run_escalation)
+assert_equals 'root gets no sudo in the command' '' \
+    "$(printf '%s\n' "$output" | grep 'sudo' || true)"
+assert_contains 'root still runs the package manager' 'apt-get install' "$output"
+
+# Root WITH sudo present still does not need it. Escalating when already root
+# is pointless and, on an image where sudo is misconfigured, is a new way to
+# fail.
+cp "$BIN/sudo" "$esc_bin/sudo"
+output=$(DEPS_FORCE_ROOT=1 run_escalation)
+assert_equals 'root ignores an available sudo' '' \
+    "$(printf '%s\n' "$output" | grep 'sudo' || true)"
+
+# Non-root with sudo: the normal laptop and the normal CI runner. This must
+# not change, or every ordinary machine breaks.
+output=$(DEPS_FORCE_ROOT=0 run_escalation)
+assert_contains 'a non-root user with sudo still gets sudo' 'sudo apt-get' "$output"
+
+# Non-root with NO sudo: there is no way to install, so say so rather than
+# emit a command that cannot work. Reported like any other manual-only
+# dependency, which --fix already excludes from its exit code.
+rm -f "$esc_bin/sudo"
+output=$(DEPS_FORCE_ROOT=0 run_escalation)
+assert_equals 'a non-root user with no sudo gets no broken command' '' \
+    "$(printf '%s\n' "$output" | grep 'would run' || true)"
+assert_succeeds 'the missing escalation is explained' \
+    grep -qiE 'root|sudo|privilege' <<<"$output"
+
+# The word sudo must not survive as a literal in an emitted command, since a
+# single missed call site reintroduces the container failure for one
+# dependency and nothing else would catch it. Two regex attempts at this
+# substitution each left some behind -- the first caught only the leading
+# `sudo` of a chain, so `&& sudo apt-get install` survived -- which is why the
+# invariant is asserted rather than trusted.
+#
+# Scoped to lines that emit an install command. An earlier version matched any
+# line containing both printf and "sudo ", which flagged the diagnostic that
+# explains a MISSING sudo -- a message that has to say the word.
+literal_sudo=$(grep -nE "printf '[^']*sudo [a-z]" "$SCRIPT" \
+    | grep -v 'needs root' || true)
+assert_equals 'no emitted command hardcodes the word sudo' '' "$literal_sudo"
 
 
 finish

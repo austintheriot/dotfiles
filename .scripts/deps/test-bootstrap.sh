@@ -104,6 +104,10 @@ git clone -q --bare "$staging" "$seed/repo.git"
 # behave differently depending on which machine ran the harness.
 git --git-dir="$seed/repo.git" symbolic-ref HEAD "refs/heads/$branch"
 cp "$HOME/.scripts/deps/docker/bootstrap-entrypoint.sh" "$seed/bootstrap-entrypoint.sh"
+cp "$HOME/.scripts/deps/docker/bootstrap-bare-entrypoint.sh" "$seed/bootstrap-bare-entrypoint.sh"
+# The bare image has no git when setup.sh first runs, so it reads the script
+# from the seed directory rather than out of the repository.
+cp "$staging/setup.sh" "$seed/setup.sh"
 
 printf '=== building %s ===\n' "$IMAGE"
 
@@ -125,15 +129,43 @@ then
     fi
 fi
 
-printf '\n=== running the bootstrap ===\n'
+printf '\n=== running the bootstrap (non-root, sudo present) ===\n'
 
 if [ "$#" -eq 0 ]; then
     set -- --yes
 fi
 
+status=0
+
 if ! docker run --rm -v "$seed:/seed:ro" "$IMAGE" "$@"; then
     printf '\n=== bootstrap: the container reported a failure ===\n' >&2
+    status=1
+fi
+
+# The bare leg: root, no sudo, no git. A user found two bugs in seconds on a
+# plain `docker run debian` that the image above cannot expose, because it
+# installs sudo and git and runs as a normal user.
+printf '\n=== building %s-bare ===\n' "$IMAGE"
+
+if ! docker build \
+    -f "$HOME/.scripts/deps/docker/Dockerfile.bootstrap-bare" \
+    -t "$IMAGE-bare" \
+    "$workdir/empty-context"
+then
+    printf '\n=== bare bootstrap: BUILD FAILED ===\n' >&2
     exit 1
 fi
 
-printf '\ntest-bootstrap: the full bootstrap completed and verified cleanly.\n'
+printf '\n=== running the bootstrap (root, no sudo, no git) ===\n'
+
+if ! docker run --rm -v "$seed:/seed:ro" "$IMAGE-bare"; then
+    printf '\n=== bare bootstrap: the container reported a failure ===\n' >&2
+    status=1
+fi
+
+if [ "$status" -ne 0 ]; then
+    printf '\ntest-bootstrap: at least one container failed. See the sections above.\n' >&2
+    exit 1
+fi
+
+printf '\ntest-bootstrap: both bootstrap legs completed and verified cleanly.\n'

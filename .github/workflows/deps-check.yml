@@ -151,3 +151,68 @@ jobs:
       # refusing to re-clone over an existing ~/.cfg.
       - name: Run and verify the bootstrap
         run: docker run --rm -v /tmp/seed:/seed:ro dotfiles-bootstrap --yes
+
+  bootstrap-bare:
+    name: Full bootstrap / bare root image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The same bootstrap against a genuinely bare image: root, no sudo, no
+      # git. The job above installs sudo and git and runs as a normal user,
+      # which is a real shape but a comfortable one -- it hid two bugs a user
+      # found in seconds on a plain `docker run debian`:
+      #
+      #   - every install command carried a hardcoded `sudo`, so on an image
+      #     without sudo all eleven privileged installs failed with
+      #     "sh: 1: sudo: not found";
+      #   - setup.sh said only "install git, then run this again", which is
+      #     the least useful sentence available to someone who just pasted a
+      #     one-liner.
+      #
+      # Neither is reachable from an image that preinstalls sudo and git and
+      # never runs as root, so this leg varies exactly those axes.
+      - name: Build the bare bootstrap image
+        run: |
+          mkdir -p /tmp/empty-context
+          docker build \
+            -f .scripts/deps/docker/Dockerfile.bootstrap-bare \
+            -t dotfiles-bootstrap-bare \
+            /tmp/empty-context
+
+      - name: Build the seed repository
+        run: |
+          ref="${GITHUB_REF_NAME:-mac}"
+          mkdir -p /tmp/seed-bare
+          git config --global user.email ci@example.com
+          git config --global user.name CI
+          git init -q -b "$ref" /tmp/staging-bare
+          tar -c --exclude=.git . | tar -x -C /tmp/staging-bare
+          git -C /tmp/staging-bare add -A
+          git -C /tmp/staging-bare commit -q -m "bare bootstrap test tree"
+
+          # Both platform branches, for the reason the job above documents:
+          # the container is Linux and setup.sh detects `linux`, so a seed
+          # built only on the pushed ref fails whenever this runs from mac.
+          for platform_branch in mac linux; do
+            if [ "$platform_branch" != "$ref" ]; then
+              git -C /tmp/staging-bare branch -q "$platform_branch"
+            fi
+          done
+
+          git clone -q --bare /tmp/staging-bare /tmp/seed-bare/repo.git
+          git --git-dir=/tmp/seed-bare/repo.git symbolic-ref HEAD "refs/heads/$ref"
+          cp .scripts/deps/docker/bootstrap-bare-entrypoint.sh /tmp/seed-bare/
+          # The bare image has no git when setup.sh first runs, so the script
+          # is read from the seed directory rather than out of the clone.
+          cp setup.sh /tmp/seed-bare/setup.sh
+
+      # Two phases inside the container: refuse without git while naming the
+      # command that installs it, then install git and prove a PRIVILEGED
+      # install actually succeeded. That last assertion is the one that would
+      # have caught the hardcoded sudo.
+      - name: Run and verify the bare bootstrap
+        run: docker run --rm -v /tmp/seed-bare:/seed:ro dotfiles-bootstrap-bare

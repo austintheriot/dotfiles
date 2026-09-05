@@ -167,4 +167,94 @@ documented_url=$(grep -o 'https://raw.githubusercontent.com/[^ ]*setup.sh' "$SET
 assert_succeeds 'the usage block documents a raw URL' test -n "$documented_url"
 assert_contains 'the documented URL ends at setup.sh' 'setup.sh' "$documented_url"
 
+# --- the bare-root leg ------------------------------------------------------
+#
+# A user ran the documented one-liner in a plain `docker run debian` and found
+# two bugs in seconds that the image above cannot expose, because it installs
+# sudo and git and runs as an ordinary user:
+#
+#   - every install command carried a hardcoded `sudo`, so all eleven
+#     privileged installs failed with "sh: 1: sudo: not found";
+#   - setup.sh said only "install git, then run this again".
+#
+# This leg varies exactly those axes and nothing else, so the coverage cannot
+# quietly drift back to the comfortable shape.
+BARE_DOCKERFILE="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.bootstrap-bare"
+BARE_ENTRYPOINT="$DOTFILES_ROOT/.scripts/deps/docker/bootstrap-bare-entrypoint.sh"
+
+assert_succeeds 'the bare Dockerfile exists' test -f "$BARE_DOCKERFILE"
+assert_succeeds 'the bare entrypoint is executable' test -x "$BARE_ENTRYPOINT"
+
+bare_text=$(cat "$BARE_DOCKERFILE")
+
+# The three axes. Each one is the difference between this image and the other,
+# and each is why one of the reported bugs was reachable here.
+assert_equals 'the bare image installs no sudo' '' \
+    "$(grep -E '^RUN apt-get install|--no-install-recommends' "$BARE_DOCKERFILE" | grep -w 'sudo' || true)"
+assert_equals 'the bare image installs no git' '' \
+    "$(grep -E '^RUN apt-get install|--no-install-recommends' "$BARE_DOCKERFILE" | grep -w 'git' || true)"
+assert_succeeds 'the bare image runs as root' \
+    grep -qE '^USER +root' "$BARE_DOCKERFILE"
+assert_equals 'the bare image creates no unprivileged user' '' \
+    "$(printf '%s\n' "$bare_text" | grep 'useradd' || true)"
+
+# curl IS expected, and that is deliberate rather than an oversight: the
+# documented entry point is `curl ... | sh`, so an image without curl cannot
+# reach setup.sh at all, and two dependencies install through `curl | sh`.
+# Measured: omitting it produced two false failures.
+assert_succeeds 'the bare image installs curl, which the one-liner requires' \
+    grep -q 'curl' "$BARE_DOCKERFILE"
+
+# Digest-pinned like the others, so a republished tag cannot change a passing
+# test underneath us.
+assert_succeeds 'the bare base image is pinned by digest' \
+    grep -qE '^FROM .*@sha256:[0-9a-f]{64}' "$BARE_DOCKERFILE"
+
+# Copies nothing: the repo arrives by a real clone from the mounted seed.
+assert_equals 'the bare Dockerfile copies nothing in' '' \
+    "$(grep -E '^\s*COPY ' "$BARE_DOCKERFILE" || true)"
+
+entry_text=$(cat "$BARE_ENTRYPOINT")
+
+# Phase 1 exists to assert the git message, which was the second reported bug.
+assert_contains 'the entrypoint runs setup.sh before git is installed' \
+    'phase 1' "$entry_text"
+assert_contains 'it asserts the git suggestion names a command' \
+    'apt-get install -y git' "$entry_text"
+assert_contains 'it asserts the suggestion carries no sudo' \
+    'does not assume sudo' "$entry_text"
+
+# Phase 2's load-bearing assertion: a PRIVILEGED install succeeded. Without
+# this the leg could pass on an image where nothing needing root was ever
+# attempted, which is precisely the hole the reported bug lived in.
+assert_contains 'it proves a privileged install succeeded' \
+    'privileged install actually succeeded' "$entry_text"
+assert_contains 'it checks nothing reported a missing sudo' \
+    'sudo: not found' "$entry_text"
+
+# The local harness must drive both legs, or the bare one only ever runs in CI
+# and nobody sees it fail before pushing.
+harness_text=$(cat "$HARNESS")
+assert_contains 'the local harness builds the bare image' \
+    'Dockerfile.bootstrap-bare' "$harness_text"
+# The harness names the bare image by interpolating "$IMAGE-bare" rather than
+# spelling it out, so the assertion is on the docker run reaching it, not on a
+# literal string that never appears in the source.
+assert_succeeds 'the local harness runs the bare image' \
+    grep -qE 'docker run .*\$IMAGE-bare' "$HARNESS"
+
+# And CI must declare it as its own job.
+if [ -n "$PYTHON_BIN" ]; then
+    ci_jobs=$("$PYTHON_BIN" -c "
+import yaml
+spec = yaml.safe_load(open('$WORKFLOW'))
+print(' '.join(sorted(spec.get('jobs', {}))))
+" 2>/dev/null)
+    assert_contains 'the workflow declares the bare bootstrap job' \
+        'bootstrap-bare' "$ci_jobs"
+else
+    skip 'the workflow declares the bare bootstrap job' 'no python3'
+fi
+
+
 finish

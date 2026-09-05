@@ -194,4 +194,40 @@ actual=$(git --git-dir="$home/.cfg" config --get status.showUntrackedFiles)
 assert_equals 'the git setting was still written' 'no' "$actual"
 
 
+# --- a failing install step is not a success --------------------------------
+#
+# Reported from a bare root container: eleven dependencies failed to install
+# and `config init` still walked to the end and reported done. The install
+# step's exit code was simply not read.
+#
+# The build step is deliberately tolerant -- a machine with no cargo is a real
+# state -- but the install step is not: a bootstrap that installed nothing has
+# not bootstrapped anything.
+home=$(make_init_home installfail)
+cat > "$home/.scripts/config/config-install" <<'STUB'
+#!/bin/sh
+# help: stub
+# usage: config install
+printf 'install %s\n' "$*" >> "$HOME/.calls"
+printf 'check-deps: 11 automated install(s) did not satisfy their check\n' >&2
+exit 1
+STUB
+chmod +x "$home/.scripts/config/config-install"
+
+output=$(cd "$home" && HOME="$home" "$home/.scripts/config/config" init --yes 2>&1)
+status=$?
+assert_equals 'a failing install step exits non-zero' '1' "$status"
+assert_succeeds 'the failure names the install step' \
+    grep -qi 'install' <<<"$output"
+
+# What already succeeded must still be reported, so the reader knows the
+# machine is partly set up rather than untouched.
+assert_succeeds 'the output says what did succeed' \
+    grep -qiE 'hook|checkout|place' <<<"$output"
+
+# And it must not silently claim completion.
+assert_equals 'it does not report plain success' '' \
+    "$(printf '%s\n' "$output" | grep -x 'config init: done' || true)"
+
+
 finish

@@ -43,7 +43,7 @@ fi
 # A missing tool does not fail the suite honestly: lib.sh's tmux helpers and
 # the zsh widget tests would error in ways that read as unrelated breakage.
 
-for tool in tmux zsh git python3 dash fzf ripgrep; do
+for tool in tmux zsh git python3 dash fzf ripgrep shellcheck; do
     assert_contains "the image installs $tool" "$tool" "$(cat "$DOCKERFILE")"
 done
 

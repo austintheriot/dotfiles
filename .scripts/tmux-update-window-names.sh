@@ -67,6 +67,7 @@ matches_any_pattern() {
     saved_ifs=$IFS
     IFS='|'
     for pattern in $patterns; do
+        # shellcheck disable=SC2254  # $patterns holds globs; matching them is the point
         case $subject in
             $pattern) IFS=$saved_ifs; set +f; return 0 ;;
         esac

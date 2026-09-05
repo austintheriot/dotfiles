@@ -53,6 +53,7 @@ assert_equals 'terms with a count of 1 does not split' '1' "$(split_in_new_windo
 
 assert_equals 'editor layout with no count gives 1 editor plus 2 terminals' \
     '3' "$(split_in_new_window '|')"
+# shellcheck disable=SC1003  # a lone backslash is the argument under test
 assert_equals 'backslash is an alias for the editor layout' '3' "$(split_in_new_window '\')"
 assert_equals 'code is an alias for the editor layout' '3' "$(split_in_new_window code)"
 assert_equals 'editor layout honours an explicit terminal count' \

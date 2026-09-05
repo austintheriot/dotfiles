@@ -67,7 +67,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            tmux zsh git python3 python3-yaml dash fzf ripgrep
+            tmux zsh git python3 python3-yaml dash fzf ripgrep shellcheck
 
       # macOS runners ship git, python3, zsh, and dash already. tmux, fzf and
       # ripgrep are the ones the suite needs and the image does not carry.
@@ -75,7 +75,7 @@ jobs:
       - name: Install the suite's dependencies (brew)
         if: runner.os == 'macOS'
         run: |
-          brew install tmux fzf ripgrep zsh-autosuggestions
+          brew install tmux fzf ripgrep zsh-autosuggestions shellcheck
           python3 -m pip install --break-system-packages pyyaml
 
       # Rust is preinstalled on both runners. The suite's shell tests call

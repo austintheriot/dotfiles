@@ -82,8 +82,8 @@ done
 python_dirs=''
 if command -v python3 >/dev/null 2>&1; then
     python_dirs=$(find "$DOTFILES_ROOT/.claude" "$DOTFILES_ROOT/.scripts" \
-                     -name 'test_*.py' -type f -not -path '*/plugins/*' 2>/dev/null \
-                  | xargs -n1 dirname 2>/dev/null | sort -u)
+                     -name 'test_*.py' -type f -not -path '*/plugins/*' \
+                     -exec dirname {} + 2>/dev/null | sort -u)
 fi
 
 python_count=0
@@ -111,7 +111,7 @@ done
 if command -v python3 >/dev/null 2>&1; then
     while IFS= read -r directory; do
         [ -n "$directory" ] || continue
-        run_suite "python unit tests in ${directory#$DOTFILES_ROOT/}" \
+        run_suite "python unit tests in ${directory#"$DOTFILES_ROOT"/}" \
             python3 -m unittest discover -s "$directory" -p 'test_*.py'
     done <<< "$python_dirs"
 else

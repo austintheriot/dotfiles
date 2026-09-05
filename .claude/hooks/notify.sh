@@ -17,7 +17,8 @@ AEROSPACE_BIN=${AEROSPACE_BIN:-/opt/homebrew/bin/aerospace}
 OSASCRIPT_BIN=${OSASCRIPT_BIN:-/usr/bin/osascript}
 
 # Drain stdin so the hook returns quickly even though we don't parse it.
-payload="$(cat || true)"
+# The value is discarded on purpose; only the read matters.
+cat >/dev/null 2>&1 || true
 
 # --- Focus check ---------------------------------------------------------
 # Suppress the notification when the user is already looking at this pane.

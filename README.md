@@ -51,6 +51,8 @@ nvc .
 
 - Install `ripgrep` (faster grep alternative written in Rust, used by neovim): https://github.com/BurntSushi/ripgrep
 
+- Install `shellcheck` (shell script linter, run by the test suite): https://www.shellcheck.net/
+
 - Install zoxide for `z` in place of `cd`: https://github.com/ajeetdsouza/zoxide
 
 - Install tmux (terminal multiplexer): https://github.com/tmux/tmux

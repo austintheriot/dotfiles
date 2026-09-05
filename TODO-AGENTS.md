@@ -2,6 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- Migrate the rest of the `config ...` scripts to Rust
 - Provide more details on the flags options for each `config` command. Like `config test`--what does `-q` do, etc. also allow short or long versions of most flags
 - The pre-push Docker gate cannot run the git-dependent assertions, so a
   stale count in `tests/scripts-dir-name.test.sh` passed locally and failed
@@ -14,14 +15,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   git-dependent suites on the host before the container. The badges added
   today make this class of break visible on the README, which is how it was
   noticed at all.
-- [CLAIMED] Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it
-  from `tests/run-all.sh` as its own suite. The code already carries
-  `# shellcheck disable=SC2086` directives while shellcheck is not
-  installed and not a tracked dependency, so those directives are
-  currently decorative and nothing lints. 43 of 51 shell files are bash
-  or sh and fully checkable; the 5 zsh files are not supported by
-  shellcheck and must be excluded explicitly rather than silently.
-  This is the whole of atuin's answer to the same problem.
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so
   `xargs -0` cannot address it; a binary diff has no `+` lines for the

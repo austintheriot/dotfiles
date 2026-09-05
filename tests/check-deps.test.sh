@@ -448,19 +448,26 @@ for manager_bin in "$brew_bin" "$apt_only_bin"; do
         '' "$(printf '%s' "$output" | grep -o 'api\.github\.com')"
 done
 
-# A manager with no zoxide package still gets the installer: pacman does not
-# ship one everywhere, and losing the fallback would turn a working install
-# into a manual step on machines that never had the rate-limit problem.
-pacman_bin="$FIXTURES/pacman-only"
-mkdir -p "$pacman_bin"
-printf '#!/bin/sh\nexit 0\n' > "$pacman_bin/pacman"
-chmod +x "$pacman_bin/pacman"
+# The installer survives only for a manager this engine does not know, which
+# is what the fallback is for.
+#
+# This assertion used to name pacman, on the premise that "pacman does not
+# ship one everywhere". That premise was wrong: Arch carries zoxide 0.10.0-1
+# in `extra`, verified against the archlinux:base image, and the arch leg of
+# deps-check.yml failed with "you have exceeded GitHub's API rate limit"
+# because it took the fallback anyway. A test that pins the behavior which
+# breaks CI is worse than no test, so it now uses a manager that genuinely
+# has no case.
+unknown_pm_bin="$FIXTURES/unknown-pm-only"
+mkdir -p "$unknown_pm_bin"
 for passthrough in sh dirname cd pwd command printf uname; do
     real=$(command -v "$passthrough" 2>/dev/null) || continue
-    ln -sf "$real" "$pacman_bin/$passthrough"
+    ln -sf "$real" "$unknown_pm_bin/$passthrough"
 done
 
-output=$(PATH="$pacman_bin" DEPS_CONF="$conf" \
+# No package-manager detector on PATH at all, so detect_pm returns "unknown"
+# and every dependency takes its default branch.
+output=$(PATH="$unknown_pm_bin" DEPS_CONF="$conf" \
     DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
     "$SCRIPT" --fix --yes --dry-run 2>&1)
 assert_contains 'zoxide keeps the installer where there is no package' \
@@ -641,6 +648,48 @@ assert_contains 'the keyring still lands in /etc/apt/keyrings' \
     '/etc/apt/keyrings/githubcli-archive-keyring.gpg' "$gh_cmd"
 assert_contains 'the sources line still signs by that keyring' \
     'signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg' "$gh_cmd"
+
+
+# --- zoxide never reaches the rate-limited installer where a package exists -
+#
+# zoxide's install.sh resolves the latest release through the unauthenticated
+# GitHub API: 60 requests an hour per IP, shared by every Actions runner on
+# that IP. The installer takes no token and a cache miss still calls the API,
+# so on a busy IP it fails with "you have exceeded GitHub's API rate limit"
+# for reasons that have nothing to do with this repo.
+#
+# apt and brew already had explicit cases for exactly this. pacman fell
+# through to the installer and failed that way in CI (run 33979781481), even
+# though Arch ships zoxide in `extra`. Asserted per manager rather than by
+# reading the fallback, so adding a package manager without a case is what
+# fails here.
+zoxide_conf="$FIXTURES/zoxide-missing.conf"
+printf 'zoxide|false|https://github.com/ajeetdsouza/zoxide\n' > "$zoxide_conf"
+
+for manager in apt brew pacman; do
+    stub_dir="$FIXTURES/pm-$manager"
+    mkdir -p "$stub_dir"
+
+    # Only the one manager's detector on PATH, so detect_pm picks it. sudo is
+    # kept because every install command shells through it.
+    case $manager in
+        apt) tool=apt-get ;;
+        brew) tool=brew ;;
+        pacman) tool=pacman ;;
+    esac
+    printf '#!/bin/sh\nexit 0\n' > "$stub_dir/$tool"
+    chmod +x "$stub_dir/$tool"
+    cp "$BIN/sudo" "$stub_dir/sudo"
+
+    output=$(PATH="$stub_dir:/usr/bin:/bin" DEPS_CONF="$zoxide_conf" \
+        DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+        "$SCRIPT" --fix --dry-run --only zoxide 2>&1)
+
+    assert_equals "zoxide does not use the GitHub installer on $manager" '' \
+        "$(printf '%s\n' "$output" | grep 'raw.githubusercontent.com' || true)"
+    assert_succeeds "zoxide installs from the $manager package manager" \
+        grep -qE "apt-get install|brew install|pacman -S" <<<"$output"
+done
 
 
 finish

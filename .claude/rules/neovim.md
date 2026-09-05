@@ -129,7 +129,9 @@ The reason to use this editor. Worth knowing well enough to recognize when a plu
 - **Operator-pending grammar**: verb plus motion or text object. `d`, `c`, `y` compose with `iw`, `ap`, `i(`, `t,`. Custom text objects extend the grammar; custom mappings that break `d` composition are a regression.
 - **Registers**: named `a`-`z`, append with uppercase, the numbered ring `"0`-`"9`, the yank register `"0`, the black hole `"_`, the system clipboard `"+` and `"*`.
 - **Macros** are register contents; `q` records, `@` replays, and `@@` repeats. Editing a macro means editing text.
-- **`:global`** (`:g/pattern/cmd`) with `:normal` is the batch-editing power tool: `:g/TODO/normal dd`.
+- **`:global`** (`:g/pattern/cmd`) with `:normal` is the batch-editing power tool: `:g/TODO/normal dd`. The part that separates casual from fluent use: **inside `:g`, a range is evaluated with the cursor on each match**, so `.` means "this match," `+1` means "the line after this match," and `/end/` means "the next `end` after this match." `:g/pat/.,/end/d` deletes each match through its following `end`.
+- **`cgn` is the best modern repeat idiom.** Search for a pattern, then `cgn` plus the replacement, then `.` repeats -- each dot **seeks the next match and changes it**, with no `n` needed. `dgn`, `ygn`, and `gUgn` compose the same way. It collapses the search-and-replace-with-review workflow to one keystroke per decision.
+- **`i_CTRL-G_U`** (capital U) keeps the undo block intact across a cursor move, which is how autopair plugins preserve `.` repeatability. Lowercase `<C-g>u` does the opposite and breaks the block.
 - **Quickfix-driven workflow**: `:vimgrep` or `:grep` populates the quickfix list; `:cdo` and `:cfdo` run a command on every entry or every file. This is the built-in project-wide refactor.
 - **Marks and the jumplist**: `` `. `` last change, `` `` `` last jump, `CTRL-O` / `CTRL-I` navigate.
 - **Persistent undo** (`undofile`) survives restarts and is undersold. The undo *tree* (`:undolist`, `g-`, `g+`) is not linear history.

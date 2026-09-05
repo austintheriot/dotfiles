@@ -48,7 +48,11 @@ For live generation there is an additional cost consequence: **shipping content 
 
 **Not legal advice.** The engineering-relevant shape, as of the verification date:
 
-The US Copyright Office's report series treats **copyrightability** (Part 2, final, 2025-01-29) separately from **training** (Part 3, still pre-publication as of 2026-09-05 -- **do not cite Part 3 as settled Office policy**). Part 2's core conclusion is that copyright protects original human expression in a work **even if the work also includes AI-generated material**. Registration guidance sits at 88 Fed. Reg. 16,190 (2023-03-16).
+The US Copyright Office's report series treats **copyrightability** (Part 2, **final**, 2025-01-29) separately from **training** (Part 3, still **pre-publication** -- **do not cite Part 3 as settled Office policy**). Part 2's core conclusion is that copyright protects original human expression in a work **even if the work also includes AI-generated material**. Registration guidance sits at 88 Fed. Reg. 16,190 (2023-03-16).
+
+**The human-authorship question is settled rather than pending**: the Supreme Court **denied certiorari in Thaler on 2026-03-02** (docket 25-449). Advice that treats this as an open question is out of date.
+
+**The EU AI Omnibus entered force 2026-07-27**, delaying high-risk deadlines into 2027 and 2028 -- but **not** the Article 50 transparency obligations or the Article 53 training-data-summary obligations, which are the two that bite for generated creative content.
 
 The practical translation: **AI-generated material may carry no copyright of its own.** For a studio, imagery and assets are normally owned business assets, so this is a business-model question and not only an ethics one -- an asset nobody can own is an asset nobody can stop a competitor from reusing.
 
@@ -76,6 +80,8 @@ The pattern across every successful use is the same: **the output is disposable,
 - **Cross-asset consistency** -- same root cause as art direction.
 - **The last 10%.** Generated output plateaus at "structurally plausible." Shipping requires *correct*: topology, UVs, scale, naming conventions, LODs, collision. That stretch is most of the labor, and it is exactly where generation contributes least.
 
+**The asset market has already priced this.** AI-generated 3D models are roughly **one sixth of new CGTrader listings but about 1% of sales, at 4-5% buyer satisfaction.** Supply is abundant, demand is not, and the gap is the topology and UV problem showing up in buying behaviour rather than in discourse. That is the most useful single data point for a team deciding how far to trust generated assets.
+
 ## AI dialogue and runtime generation
 
 The pitch is infinite dialogue. The critique is that **infinite dialogue is not writing**: writing is selection and compression, and a system that generates unboundedly has removed the operation that produces quality. What players remember is a line someone chose to include.
@@ -92,7 +98,11 @@ Generated asset sets fail this test constantly. The variation is real in paramet
 
 ## Ideation discipline
 
-**The anchoring failure is the most important one.** Early AI output narrows the design space rather than widening it: the team converges on the first striking image instead of exploring, so a tool bought for divergence delivers premature convergence. The mitigation is procedural -- generate widely before looking at anything, review in batches rather than one at a time, and hold the brief before generation rather than letting output define it.
+**The anchoring failure is the most important one, and controlled experiments support it more strongly than the field's own marketing does.** Early AI output narrows the design space rather than widening it: the team converges on the first striking image instead of exploring, so a tool bought for divergence delivers premature convergence.
+
+**This is not merely a plausible worry.** A CHI 2024 study (N=60) found participants using generative assistance produced **fewer ideas, less variety, and lower originality**; a Creativity & Cognition 2024 study (N=36) found **cross-user diversity fell while individuals felt more productive.** That gap between felt productivity and measured diversity is the finding to carry: the tool feels like it is helping divergence at exactly the moment it is reducing it, which is why the failure survives self-report.
+
+The mitigation is procedural -- generate widely before looking at anything, review in batches rather than one at a time, and hold the brief before generation rather than letting output define it.
 
 **The buildability critique.** AI concept art optimizes image plausibility, not physical, topological, or riggable coherence. The result is designs that look excellent and cannot be modeled, rigged, or built -- and the cost lands on whoever has to make it, usually after it has been approved. A concept that cannot be executed is not a concept, it is a mood board with a false promise attached.
 
@@ -156,4 +166,4 @@ There is no unit test for "looks good." The available proxies, in order of relia
 
 ## Changelog
 
-- **2026-09-05** -- Initial version. Steam's disclosure policy quoted from Valve's own 2024-01-09 announcement, retrieved directly; **whether Valve amended it between then and the verification date was not confirmed** and should be checked. Copyright Office report status verified at copyright.gov, including that Part 2 is final and Part 3 remains pre-publication. Omdia / Game Developer Collective sentiment figures verified from the reported survey; **GDC State of the Game Industry figures were not retrievable and are deliberately absent rather than quoted from memory.** The where-it-helps-and-fails analysis is reasoned from verified technical constraints rather than from practitioner surveys, which were unreachable; treat the specific claims as well-founded reasoning rather than as surveyed fact.
+- **2026-09-05** -- Initial version. Steam's disclosure policy quoted from Valve's own 2024-01-09 announcement, retrieved directly; **whether Valve amended it between then and the verification date was not confirmed** and should be checked. Copyright Office report status verified at copyright.gov: Part 2 is final and Part 3 remains pre-publication. **The Supreme Court denied certiorari in Thaler on 2026-03-02**, so human authorship is settled rather than open. The EU AI Omnibus entered force 2026-07-27 and delayed high-risk deadlines but not Articles 50 and 53. The two controlled studies contradicting the divergence claim (CHI 2024 N=60; Creativity & Cognition 2024 N=36) and the CGTrader market figures are the strongest empirical material here. Omdia / Game Developer Collective sentiment figures verified from the reported survey; **GDC State of the Game Industry figures were not retrievable and are deliberately absent rather than quoted from memory.** The where-it-helps-and-fails analysis is reasoned from verified technical constraints rather than from practitioner surveys, which were unreachable; treat the specific claims as well-founded reasoning rather than as surveyed fact.

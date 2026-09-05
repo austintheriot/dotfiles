@@ -10,6 +10,10 @@ is the prose version. The manifest in this directory is the executable one.
   `linux` branches. `.sync-manifest` covers `.scripts/` as a whole
   directory, so this file is checked for drift between the two branches.
   One line per dependency: `name|check_command|docs_url`.
+- `deps-ci.conf` -- dependencies of the test suite itself, not of the
+  working environment: `python3`, `pyyaml`, `dash`. Never selected by
+  platform detection, so a `depcheck` on a developer machine never asks for
+  them. `.github/workflows/test-suite.yml` reads it by setting `DEPS_CONF`.
 - `deps-mac.conf` / `deps-linux.conf` -- dependencies that belong to one
   platform only. Same format. Both files ship on both branches and are
   covered by the drift check like everything else under `.scripts/`; what
@@ -126,9 +130,32 @@ miss still calls the API.
 ~/.scripts/deps/check-deps.sh --fix            # check, then prompt per install
 ~/.scripts/deps/check-deps.sh --fix --yes      # check, then install without prompting
 ~/.scripts/deps/check-deps.sh --fix --dry-run  # print what --fix would run
+~/.scripts/deps/check-deps.sh --only tmux,fzf  # restrict the run to a subset
 depcheck                                          # alias for --fix
 ~/.scripts/deps/test-local.sh                  # bootstrap fresh containers
+~/.scripts/deps/test-bootstrap.sh              # full bootstrap in a container
 ```
+
+### `--only <names>`
+
+Restricts the run to a comma-separated subset of the manifest.
+
+This exists for `.github/workflows/test-suite.yml`. That workflow used to
+carry a hand-written apt list and a hand-written brew list naming `tmux`,
+`zsh`, `git`, `fzf`, `ripgrep` and `shellcheck` -- every one of them already a
+`deps.conf` entry. Two copies of the same package names meant the copy in YAML
+was the one that drifted, and nothing checked it. The workflow now names the
+set it wants and the engine resolves each name to the right package for
+whichever manager the runner has.
+
+The suite's set is a subset on purpose: a test run has no use for `neovim`,
+`alacritty`, `aerospace`, `tpm` or `nvm`, and installing them on every push
+would add minutes and more upstream services that can fail a run about a shell
+script.
+
+A name that matches no entry exits 2 rather than selecting nothing. A typo in
+a workflow file that quietly installed none of what it promised would still
+report success, which is worse than a hard failure.
 
 `depcheck` is defined in `depcheck-hook.sh` as:
 

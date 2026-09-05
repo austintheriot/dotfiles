@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp install-hooks check sync install test reload help'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks init check sync install test reload help'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"
@@ -62,7 +62,13 @@ assert_equals 'every listed subcommand is executable' '' "$not_executable"
 # so each one is a deliberate choice rather than an accident. `config -- <verb>`
 # is the escape hatch that keeps the git command reachable; the passthrough
 # section below proves it works for every name listed here.
-SHADOWED_ON_PURPOSE='help'
+#
+# `init` shadows `git init`, and that is the right way round. Reaching
+# `git init` through this dispatcher would initialize a repository in the
+# current directory using the bare repo's --git-dir, which is never what
+# someone typing `config init` means. The bootstrap step is; `config -- init`
+# still reaches git for anyone who wants it.
+SHADOWED_ON_PURPOSE='help init'
 
 git_commands=$(git --list-cmds=main,others)
 shadowing=''

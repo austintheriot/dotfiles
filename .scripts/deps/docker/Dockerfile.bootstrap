@@ -1,0 +1,65 @@
+# Exercises the full bootstrap from a bare git URL, the way a remote server
+# would: nothing installed but git, curl and certificates, then setup.sh does
+# the rest.
+#
+# This is the image that actually tests the claim "ssh into a box, get my
+# whole setup from a bare git URL". The other two images in this directory
+# cannot: they COPY .scripts/deps and run check-deps.sh directly, so they
+# never clone, never check out, never run setup.sh or `config init`, and never
+# see a $HOME that already has a .zshrc in it.
+#
+# Deliberately a third image rather than an extension of those two. Both carry
+# a comment refusing the whole repo as a build context -- "the repo root
+# carries .claude/ and other machine-local content with no business in a build
+# context" -- and that refusal is correct. This image resolves the tension a
+# different way: it copies nothing at all. The repo arrives through a clone
+# from a bare repo bind-mounted at run time, which is both cleaner than a COPY
+# and a truer rehearsal of the real thing.
+#
+# Pinned by digest, matching Dockerfile.ubuntu's reasoning: ubuntu:24.04 is
+# republished for every point release, so a tag-only reference makes the image
+# change silently under a passing test.
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
+
+# The bootstrap's own prerequisites, and nothing else. git because setup.sh
+# refuses to run without it and cannot install it (installing things is what
+# the not-yet-cloned repo knows how to do); sudo and ca-certificates because
+# the install commands need them; curl because the curl-piped entry point is
+# part of what is under test.
+#
+# Everything the suite and the shell setup need is deliberately absent. tmux,
+# zsh, fzf, ripgrep, neovim and the rest must arrive through the bootstrap, or
+# this image is not testing a bootstrap.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        sudo curl git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# A non-root user with passwordless sudo. Running the bootstrap as root would
+# hide two real failures: ~/.local/bin ownership (config install-hooks refuses
+# a directory it does not own) and every `sudo` in an install command, which
+# is a no-op for root and the usual breakage for everyone else.
+RUN useradd -m -s /bin/sh tester \
+    && printf 'tester ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/tester \
+    && chmod 0440 /etc/sudoers.d/tester
+
+# A pre-existing dotfile, because a real machine has one and it is the single
+# most likely way a naive bootstrap fails: `git checkout` refuses to overwrite
+# an untracked file. setup.sh must move it aside and keep it, and the
+# bootstrap suite asserts that it did.
+RUN printf '# the user own zshrc, predating the bootstrap\n' > /home/tester/.zshrc \
+    && chown tester:tester /home/tester/.zshrc
+
+USER tester
+WORKDIR /home/tester
+ENV HOME=/home/tester
+
+# The bare repo arrives as a bind mount at /seed rather than a COPY, so the
+# build context stays empty and the container performs a real clone.
+#
+#   docker run --rm -v "$archive:/seed:ro" dotfiles-bootstrap
+#
+# entrypoint.sh in this directory is what the container runs; it is mounted
+# alongside the seed. Overriding CMD reaches setup.sh's other flags.
+ENTRYPOINT ["/bin/sh", "/seed/bootstrap-entrypoint.sh"]
+CMD ["--yes"]

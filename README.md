@@ -20,6 +20,46 @@ Both files ship on both branches, so `config check` covers them too.
 
 ## Setup
 
+### Bootstrapping a new machine
+
+One command, on a machine that has nothing but git:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/mac/setup.sh | sh -s -- --yes
+```
+
+`setup.sh` clones the bare repo to `~/.cfg`, detects the platform and offers
+the matching branch, checks the worktree out into `$HOME`, and then hands off
+to `config init`. A pre-existing `.zshrc` is moved into a timestamped
+`~/.dotfiles-backup-*` directory rather than overwritten, so nothing already
+on the machine is lost.
+
+On a machine that is already cloned, run the second half directly:
+
+```sh
+config init            # prompts before each install
+config init --yes      # unattended
+config init --dry-run  # print every step, change nothing
+```
+
+`config init` sets `status.showUntrackedFiles`, links the git hooks, puts
+`config` on `PATH`, installs the missing tracked dependencies, and builds the
+stamped binary, in that order. It is idempotent, so re-running it after a pull
+is the intended way to pick up a new dependency.
+
+The split is the chicken-and-egg boundary: `setup.sh` is what you need
+*before* the repo exists, and it does nothing else. `setup.sh` refuses to run
+against an existing `~/.cfg`, because that directory is the repository and an
+unpushed commit lives nowhere else.
+
+`.scripts/deps/test-bootstrap.sh` runs the whole thing in a container that
+starts with git, curl and sudo and nothing else, and the `bootstrap` job in
+`.github/workflows/deps-check.yml` runs it in CI.
+
+The steps below are the manual equivalents, kept because a bootstrap can only
+automate what a package manager will install unattended. Alacritty on macOS
+and `nvm` still need a human.
+
 ### Git setup
 
 - Install git
@@ -111,6 +151,9 @@ scripts:
 
 - `config build` builds the Rust crate and installs the stamped binary.
 - `config check` reports drift between the mac and linux branches.
+- `config init` finishes a fresh clone: git config, hooks, dependencies,
+  binary. The post-clone half of the bootstrap; `setup.sh` is the other
+  half.
 - `config install` installs any missing tracked dependencies.
 - `config install-hooks` links the git hooks and puts `config` on PATH.
 - `config reload` reloads the tmux config.

@@ -18,6 +18,12 @@ on:
     paths:
       - '.scripts/deps/**'
       - '.github/workflows/deps-check.yml'
+      # The bootstrap job below runs setup.sh and `config init`, so a change
+      # to either is a change to what this workflow verifies. Without these
+      # two lines the job exists but never fires on the commits most likely
+      # to break it.
+      - 'setup.sh'
+      - '.scripts/config/**'
   schedule:
     - cron: '0 13 1,15 * *'
   workflow_dispatch:
@@ -80,3 +86,68 @@ jobs:
 
       - name: Bootstrap and check dependencies (pacman)
         run: docker run --rm depcheck-arch
+
+  bootstrap:
+    name: Full bootstrap / bare clone
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The one job that tests the claim "ssh into a box, get my whole setup
+      # from a bare git URL". The three jobs above run check-deps.sh directly,
+      # so none of them clones, checks out, runs setup.sh or `config init`, or
+      # meets a $HOME that already has a .zshrc in it.
+      #
+      # The container starts with git, curl, sudo and certificates and nothing
+      # else, as a non-root user, with a pre-existing .zshrc planted to force
+      # the checkout collision a real machine would hit. It clones from a bare
+      # repo built out of this checkout, so what runs is this commit's
+      # setup.sh rather than whatever is on the default branch.
+      - name: Build the bootstrap image
+        run: |
+          mkdir -p /tmp/empty-context
+          docker build \
+            -f .scripts/deps/docker/Dockerfile.bootstrap \
+            -t dotfiles-bootstrap \
+            /tmp/empty-context
+
+      # A real bare repo for the container to clone from. The seed is built
+      # here rather than pointing the container at GitHub, so the job tests
+      # the commit under test and needs no credentials.
+      - name: Build the seed repository
+        run: |
+          mkdir -p /tmp/seed
+          git config --global user.email ci@example.com
+          git config --global user.name CI
+          ref="${GITHUB_REF_NAME:-mac}"
+          git init -q -b "$ref" /tmp/staging
+          tar -c --exclude=.git . | tar -x -C /tmp/staging
+          git -C /tmp/staging add -A
+          git -C /tmp/staging commit -q -m "bootstrap test tree"
+
+          # Both platform branches, not just the pushed one. The container is
+          # Linux and setup.sh detects `linux`, so a seed built only on the
+          # pushed ref fails with "Not a valid object name linux" whenever
+          # this workflow runs from the mac branch -- a branch that exists on
+          # the real remote and is missing only from this synthetic seed.
+          # Caught by a real container run, not by the static tests.
+          for platform_branch in mac linux; do
+            if [ "$platform_branch" != "$ref" ]; then
+              git -C /tmp/staging branch -q "$platform_branch"
+            fi
+          done
+
+          git clone -q --bare /tmp/staging /tmp/seed/repo.git
+          git --git-dir=/tmp/seed/repo.git symbolic-ref HEAD "refs/heads/$ref"
+          cp .scripts/deps/docker/bootstrap-entrypoint.sh /tmp/seed/
+
+      # The entrypoint runs the bootstrap and then asserts the state a
+      # finished bootstrap must leave behind: the hooks linked, `config` on
+      # PATH, the git setting written, a dependency the image never carried,
+      # the planted .zshrc preserved, `config init` idempotent, and setup.sh
+      # refusing to re-clone over an existing ~/.cfg.
+      - name: Run and verify the bootstrap
+        run: docker run --rm -v /tmp/seed:/seed:ro dotfiles-bootstrap --yes

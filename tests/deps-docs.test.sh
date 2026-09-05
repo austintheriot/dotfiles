@@ -90,13 +90,37 @@ documented_flags=$(printf '%s\n' "$docs_text" \
     | grep -oE '\-\-[a-z][a-z-]*' | sort -u)
 assert_succeeds 'the docs name at least one flag' test -n "$documented_flags"
 
+# A flag that takes a value cannot be probed bare: it exits 2 on purpose,
+# because selecting the empty set and reporting success would be worse. Give
+# each one a valid value so the probe tests acceptance rather than arity.
+#
+# The value must name a real dependency, since --only rejects a name that
+# matches no entry -- also on purpose, so a typo in a workflow cannot install
+# nothing and pass.
+flag_probe_value() {
+    case $1 in
+        --only) printf 'git' ;;
+    esac
+}
+
 rejected_flags=''
 while IFS= read -r flag; do
     [ -n "$flag" ] || continue
-    "$CHECK_SCRIPT" "$flag" --dry-run >/dev/null 2>&1
+    value=$(flag_probe_value "$flag")
+    if [ -n "$value" ]; then
+        "$CHECK_SCRIPT" "$flag" "$value" --dry-run >/dev/null 2>&1
+    else
+        "$CHECK_SCRIPT" "$flag" --dry-run >/dev/null 2>&1
+    fi
     [ "$?" -ne 2 ] || rejected_flags="$rejected_flags $flag"
 done <<< "$documented_flags"
 assert_equals 'check-deps.sh accepts every documented flag' '' "$rejected_flags"
+
+# The arity guard itself, which the probe above deliberately steps around.
+# Without it `--only` with nothing after it selects the empty set and reports
+# a vacuous success.
+"$CHECK_SCRIPT" --only >/dev/null 2>&1
+assert_equals 'a value-taking flag rejects a missing value' '2' "$?"
 
 parser_flags=$(grep -oE '^ +--[a-z-]+\)' "$CHECK_SCRIPT" 2>/dev/null \
     | tr -d ' )' | sort -u)

@@ -43,7 +43,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   each `python3` call; that is the separate item above. Test: mirror the
   nvm assertions in tests/zshrc-node-startup.test.sh (defined but not yet
   loaded, python3 still resolves).
-- Collapse the git alias checks at `.zshrc:93-106`. Four
+- [CLAIMED] Collapse the git alias checks at `.zshrc:93-106`. Four
   `git config --global --get` subprocesses run on every startup, about
   65ms each, to idempotently install co/br/cm/st. Replace with one guard
   (a single sentinel alias check, or a stamp file) so the common case

@@ -230,4 +230,71 @@ assert_equals 'it does not report plain success' '' \
     "$(printf '%s\n' "$output" | grep -x 'config init: done' || true)"
 
 
+# --- the build step sees a toolchain the install step just placed -----------
+#
+# Reported from a bare container: the run ended with "done, except the build
+# step / run `config build` once cargo is on PATH" on a machine where the
+# install step had just installed rustup successfully. rustup writes to
+# ~/.cargo/bin, which is not on a default non-login PATH, so config-build
+# could not see the cargo that now existed.
+#
+# check-deps.sh already solves this for itself -- it prepends ~/.local/bin and
+# ~/.cargo/bin so a `command -v` check does not fail on the line after its own
+# install succeeded. config init needs the same, because it is the caller that
+# runs an install and a build in one process.
+home=$(make_init_home cargopath)
+
+# A cargo that exists ONLY in ~/.cargo/bin, exactly as rustup leaves it, and a
+# config-build that fails unless it can find it.
+mkdir -p "$home/.cargo/bin"
+printf '#!/bin/sh\nexit 0\n' > "$home/.cargo/bin/cargo"
+chmod +x "$home/.cargo/bin/cargo"
+
+cat > "$home/.scripts/config/config-build" <<'STUB'
+#!/bin/sh
+# help: stub
+# usage: config build
+printf 'build %s\n' "$*" >> "$HOME/.calls"
+command -v cargo >/dev/null 2>&1 || exit 1
+printf 'build-saw-cargo\n' >> "$HOME/.calls"
+STUB
+chmod +x "$home/.scripts/config/config-build"
+
+# A PATH without ~/.cargo/bin, which is what a fresh non-login shell has.
+output=$(cd "$home" && HOME="$home" PATH="/usr/bin:/bin" \
+    "$home/.scripts/config/config" init --yes 2>&1)
+status=$?
+
+calls=$(calls_of "$home")
+assert_contains 'the build step finds a cargo in ~/.cargo/bin' \
+    'build-saw-cargo' "$calls"
+assert_equals 'the run succeeds rather than deferring the build' '0' "$status"
+assert_equals 'it does not tell the reader to run config build later' '' \
+    "$(printf '%s\n' "$output" | grep 'once cargo is on PATH' || true)"
+
+# ~/.local/bin too: config-install-hooks puts `config` there and config-build
+# installs config-manifest there, and both are resolved by name afterwards.
+#
+# Driven rather than grepped. An earlier version grepped config-init for
+# ".local/bin", which passed on a comment mentioning the path and would have
+# kept passing with the export deleted.
+home=$(make_init_home localbinpath)
+mkdir -p "$home/.local/bin"
+printf '#!/bin/sh\nexit 0\n' > "$home/.local/bin/only-in-local-bin"
+chmod +x "$home/.local/bin/only-in-local-bin"
+
+cat > "$home/.scripts/config/config-build" <<'STUB'
+#!/bin/sh
+# help: stub
+# usage: config build
+command -v only-in-local-bin >/dev/null 2>&1 && printf 'saw-local-bin\n' >> "$HOME/.calls"
+STUB
+chmod +x "$home/.scripts/config/config-build"
+
+(cd "$home" && HOME="$home" PATH="/usr/bin:/bin" \
+    "$home/.scripts/config/config" init --yes >/dev/null 2>&1)
+assert_contains 'the steps inherit ~/.local/bin' \
+    'saw-local-bin' "$(calls_of "$home")"
+
+
 finish

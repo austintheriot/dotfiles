@@ -144,7 +144,18 @@ output=$(HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" 2>&1)
 status=$?
 assert_equals 'a second run exits non-zero rather than re-cloning' '1' "$status"
 assert_contains 'it names the existing repo' '.cfg' "$output"
+
+# The advice must be runnable in the reader's CURRENT shell. Reported from a
+# bare container: the message said "run `config init`" and the next line was
+# "bash: config: command not found", because install-hooks symlinks config
+# into ~/.local/bin, which is absent from a default PATH -- and the PATH that
+# config init exports does not reach an interactive shell that already
+# existed.
+#
+# So the suggestion has to spell a path, not a bare command name.
 assert_contains 'it points at config init as the way forward' 'config init' "$output"
+assert_succeeds 'the suggestion is runnable without config on PATH' \
+    grep -qE '(\$HOME|~|/)\.scripts/config/config-init|\.local/bin/config init' <<<"$output"
 
 # --- dry run ----------------------------------------------------------------
 

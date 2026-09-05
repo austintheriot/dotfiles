@@ -781,4 +781,47 @@ literal_sudo=$(grep -nE "printf '[^']*sudo [a-z]" "$SCRIPT" \
 assert_equals 'no emitted command hardcodes the word sudo' '' "$literal_sudo"
 
 
+# --- a C toolchain, which the Rust crate needs to link ----------------------
+#
+# rustup itself warns about this on a bare image: "no default linker (`cc`)
+# was found in your PATH / many Rust crates require a system C toolchain to
+# build". Without cc, cargo installs fine and then cannot link, so the build
+# step fails on a machine where every dependency reported success.
+#
+# The package name differs from the binary on every manager, so this needs a
+# case rather than the default `<manager> install cc`.
+cc_conf="$FIXTURES/cc.conf"
+printf 'cc|false|https://gcc.gnu.org/\n' > "$cc_conf"
+
+for manager in apt pacman; do
+    cc_bin="$FIXTURES/cc-$manager"
+    mkdir -p "$cc_bin"
+    case $manager in
+        apt) tool=apt-get ;;
+        pacman) tool=pacman ;;
+    esac
+    printf '#!/bin/sh\nexit 0\n' > "$cc_bin/$tool"
+    chmod +x "$cc_bin/$tool"
+    cp "$BIN/sudo" "$cc_bin/sudo"
+    for passthrough in sh printf id command test cat sed grep awk uname dirname; do
+        real=$(command -v "$passthrough" 2>/dev/null) || continue
+        ln -sf "$real" "$cc_bin/$passthrough"
+    done
+
+    output=$(PATH="$cc_bin" DEPS_CONF="$cc_conf" \
+        DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+        "$SCRIPT" --fix --yes --dry-run --only cc 2>&1)
+
+    assert_contains "cc has an automated install on $manager" 'would run' "$output"
+    # The bare name is never a package. apt calls it build-essential and
+    # pacman calls it base-devel, so emitting `install cc` would fail on both.
+    assert_equals "cc never installs under its binary name on $manager" '' \
+        "$(printf '%s\n' "$output" | grep -E 'install -y cc$|noconfirm cc$' || true)"
+done
+
+# The real manifest must carry it, or nothing installs it on a fresh machine.
+assert_succeeds 'cc is a tracked dependency' \
+    grep -q '^cc|' "$DOTFILES_ROOT/.scripts/deps/deps.conf"
+
+
 finish

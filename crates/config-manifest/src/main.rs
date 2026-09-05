@@ -3,70 +3,135 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Context;
+use clap::{Args, Parser, Subcommand};
 use config_manifest::plan::{TargetSnapshot, plan_sync};
 use config_manifest::{check, git, manifest};
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-const USAGE: &str = "usage: config-manifest --version | --stamp | check [ref-a] [ref-b] | sync [--dry-run] [--to <branch>]";
 const SYNC_BRANCHES: [&str; 2] = ["mac", "linux"];
 
+/// Keeps the mac and linux branches of the dotfiles repo in step on the paths
+/// the .sync-manifest marks as shared.
+#[derive(Parser)]
+// `subcommand_required` cannot coexist with the exclusive `--stamp` flag, so
+// the missing-subcommand case is handled after parsing instead.
+#[command(name = "config-manifest", version, disable_help_subcommand = true)]
+struct Cli {
+    /// Print the build-time stamp of the crate this binary was built from.
+    ///
+    /// Not `exclusive`: --root is env-backed, so a shell that exports
+    /// DOTFILES_ROOT (config-build does) makes clap treat --root as supplied,
+    /// and an exclusive --stamp would collide with it and exit 2.
+    #[arg(long)]
+    stamp: bool,
+
+    /// The dotfiles worktree to operate on. Defaults to the home directory.
+    #[arg(long, env = "DOTFILES_ROOT", value_name = "dir", global = true)]
+    root: Option<PathBuf>,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Report drift between two refs on the shared paths.
+    Check(CheckArgs),
+    /// Copy the shared paths from the current branch onto the other branch.
+    Sync(SyncArgs),
+}
+
+#[derive(Args)]
+struct CheckArgs {
+    /// The ref whose .sync-manifest defines the shared paths.
+    #[arg(default_value = "origin/mac")]
+    ref_a: String,
+    /// The ref to compare against.
+    #[arg(default_value = "origin/linux")]
+    ref_b: String,
+}
+
+#[derive(Args)]
+struct SyncArgs {
+    /// Print the edits that would be committed and change nothing.
+    #[arg(long)]
+    dry_run: bool,
+    /// The branch to sync onto; must be the other of mac and linux.
+    #[arg(long, value_name = "branch")]
+    to: Option<String>,
+}
+
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.first().map(String::as_str) {
-        Some("--version") => {
-            println!("config-manifest {VERSION}");
-            ExitCode::SUCCESS
-        }
-        Some("--stamp") => {
-            // `option_env!` is read at compile time, so cargo rebuilds when
-            // CONFIG_MANIFEST_STAMP changes. The stamp travels inside the
-            // binary, so a stale or foreign config-manifest on PATH cannot
-            // report a stamp it was not built with.
-            println!(
-                "{}",
-                option_env!("CONFIG_MANIFEST_STAMP").unwrap_or("unstamped")
-            );
-            ExitCode::SUCCESS
-        }
-        Some("check") => match run_check(&args[1..]) {
+    // `--stamp` and `--version` are called directly by .scripts/config/config-build
+    // and compared by the pre-push stamp check, so both stay global flags.
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => return exit_from_clap_error(error),
+    };
+
+    if cli.stamp {
+        // `option_env!` is read at compile time, so cargo rebuilds when
+        // CONFIG_MANIFEST_STAMP changes. The stamp travels inside the
+        // binary, so a stale or foreign config-manifest on PATH cannot
+        // report a stamp it was not built with.
+        println!(
+            "{}",
+            option_env!("CONFIG_MANIFEST_STAMP").unwrap_or("unstamped")
+        );
+        return ExitCode::SUCCESS;
+    }
+
+    match cli.command {
+        Some(Command::Check(args)) => match run_check(&args, cli.root.as_ref()) {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("check-branch-drift: {error:#}");
                 ExitCode::from(1)
             }
         },
-        Some("sync") => match run_sync(&args[1..]) {
+        Some(Command::Sync(args)) => match run_sync(&args, cli.root.as_ref()) {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("config-manifest sync: {error:#}");
                 ExitCode::from(1)
             }
         },
-        _ => {
-            eprintln!("{USAGE}");
+        None => {
+            // A bare invocation is a usage error, so the help goes to stderr
+            // and the exit code stays 2, matching every other usage error.
+            let mut command = <Cli as clap::CommandFactory>::command();
+            let _ = command.write_help(&mut std::io::stderr());
             ExitCode::from(2)
         }
     }
 }
 
-fn dotfiles_root() -> anyhow::Result<PathBuf> {
-    if let Some(root) = std::env::var_os("DOTFILES_ROOT") {
-        return Ok(PathBuf::from(root));
+/// Clap exits 2 on a usage error and 0 on `--help` or `--version`, but writes
+/// help to stdout and errors to stderr; this keeps that split while returning
+/// the exit codes config-build and the shell suite already expect.
+fn exit_from_clap_error(error: clap::Error) -> ExitCode {
+    if error.use_stderr() {
+        let _ = error.print();
+        ExitCode::from(2)
+    } else {
+        let _ = error.print();
+        ExitCode::SUCCESS
+    }
+}
+
+fn dotfiles_root(root: Option<&PathBuf>) -> anyhow::Result<PathBuf> {
+    if let Some(root) = root {
+        return Ok(root.clone());
     }
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .context("neither DOTFILES_ROOT nor HOME is set")
 }
 
-fn run_check(args: &[String]) -> anyhow::Result<u8> {
-    if args.len() > 2 {
-        eprintln!("{USAGE}");
-        return Ok(2);
-    }
-    let ref_a = args.first().map(String::as_str).unwrap_or("origin/mac");
-    let ref_b = args.get(1).map(String::as_str).unwrap_or("origin/linux");
+fn run_check(args: &CheckArgs, root: Option<&PathBuf>) -> anyhow::Result<u8> {
+    let ref_a = args.ref_a.as_str();
+    let ref_b = args.ref_b.as_str();
 
-    let repo = git::Git::discover(&dotfiles_root()?);
+    let repo = git::Git::discover(&dotfiles_root(root)?);
     let Some(manifest_text) = repo.show_manifest(ref_a)? else {
         eprintln!("check-branch-drift: could not read .sync-manifest from {ref_a}");
         return Ok(1);
@@ -85,37 +150,8 @@ fn run_check(args: &[String]) -> anyhow::Result<u8> {
     Ok(rendered.exit_code)
 }
 
-struct SyncArgs {
-    dry_run: bool,
-    to: Option<String>,
-}
-
-fn parse_sync_args(args: &[String]) -> Option<SyncArgs> {
-    let mut parsed = SyncArgs {
-        dry_run: false,
-        to: None,
-    };
-    let mut index = 0;
-    while index < args.len() {
-        match args[index].as_str() {
-            "--dry-run" => parsed.dry_run = true,
-            "--to" => {
-                index += 1;
-                parsed.to = Some(args.get(index)?.clone());
-            }
-            _ => return None,
-        }
-        index += 1;
-    }
-    Some(parsed)
-}
-
-fn run_sync(args: &[String]) -> anyhow::Result<u8> {
-    let Some(parsed) = parse_sync_args(args) else {
-        eprintln!("{USAGE}");
-        return Ok(2);
-    };
-    let repo = git::Git::discover(&dotfiles_root()?);
+fn run_sync(parsed: &SyncArgs, root: Option<&PathBuf>) -> anyhow::Result<u8> {
+    let repo = git::Git::discover(&dotfiles_root(root)?);
 
     let Some(source) = repo.current_branch()? else {
         eprintln!("config-manifest sync: HEAD is detached; check out mac or linux first");
@@ -127,7 +163,7 @@ fn run_sync(args: &[String]) -> anyhow::Result<u8> {
         );
         return Ok(1);
     }
-    let target = match parsed.to {
+    let target = match parsed.to.clone() {
         Some(named) if !SYNC_BRANCHES.contains(&named.as_str()) || named == source => {
             eprintln!("config-manifest sync: --to must name the other of mac and linux");
             return Ok(2);

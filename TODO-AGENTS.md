@@ -2,7 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- [CLAIMED] refactor Rust scripts to use `clap` for env/arg parsing
 - Add a `config --help` script that describes all the utilities we have (and make sure the README.md also reflects these) -- some of this should be for free, coming from `clap`
 - Add image badges to the README for both mac and linux branches showing their current CI status
 - Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it

@@ -22,6 +22,7 @@
 - Shell suites: host `tests/run-all.sh` must pass; Docker `tests/run-in-docker.sh` must pass (the container has no `.cfg`, so every new test runs on fixtures).
 - No em dashes, no emoji, no single-letter identifiers, comments only where the why is non-obvious.
 - Shared paths changed here (`.scripts/`, `tests/`, `.zshrc`, `README.md`, `DOTFILES.md`, `.claude/rules/dotfiles-tests.md`) are synced to `linux` with `config sync` in Task 5. Per-branch files (`.zshrc-mac`, `.zshrc-linux`, `TODO-AGENTS.md`, `docs/superpowers/`) are edited on their own branch.
+- Errata (post-review): `.zshrc` and `README.md` are per-branch, not shared, and the linux copies were edited by plumbing in Task 5.
 
 ---
 

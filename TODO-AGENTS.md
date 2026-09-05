@@ -43,12 +43,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   each `python3` call; that is the separate item above. Test: mirror the
   nvm assertions in tests/zshrc-node-startup.test.sh (defined but not yet
   loaded, python3 still resolves).
-- [CLAIMED] Collapse the git alias checks at `.zshrc:93-106`. Four
-  `git config --global --get` subprocesses run on every startup, about
-  65ms each, to idempotently install co/br/cm/st. Replace with one guard
-  (a single sentinel alias check, or a stamp file) so the common case
-  spawns nothing. Small (~0.25s) but the same per-shell-subprocess
-  pattern as the others.
 - Dropped after measurement, recorded so it is not retried: `compinit -C`.
   An isolated `zsh -f` test showed compinit at 1.17s, but that was an
   fpath artefact. In the real startup trace compinit is ~60ms and did not

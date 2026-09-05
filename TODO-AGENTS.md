@@ -14,7 +14,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   git-dependent suites on the host before the container. The badges added
   today make this class of break visible on the README, which is how it was
   noticed at all.
-- Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it
+- [CLAIMED] Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it
   from `tests/run-all.sh` as its own suite. The code already carries
   `# shellcheck disable=SC2086` directives while shellcheck is not
   installed and not a tracked dependency, so those directives are

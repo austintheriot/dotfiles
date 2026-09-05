@@ -5,6 +5,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 - Readme cleanup:
   - "Welcome! Here is my rather unpolished .dotfile configuration. Below are some setup notes to my future self, for when I inevitably completely forget what I did or how I did it." remove this. This dotfiles repo is now quite polished.
     - Also cut down the README.md down to the most basic need-to-known eli5 details (install script, use `config` to init the repo & stage files, etc.)
+  - Add tests for neovim setup after running setup.sh. When I tested just now, lots of deps failed to install--make sure setup is clean after runnign nvim for the first time on a fresh bootstrap session
   - Migrate the rest of the `config ...` scripts to Rust
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so

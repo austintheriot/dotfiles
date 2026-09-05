@@ -2,6 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- Set up a `config init` script that would allow us to `git clone` the repo then set up everything we need for our working environment (minus the manual installations required). Then we'd also re-use this script in our Docker image for consistency. Ideall,y if I ever ssh into a remote server env. I would be able to get my whole setup working in that env from a bare git URL to this repo.
 - Migrate the rest of the `config ...` scripts to Rust
 - The pre-push Docker gate cannot run the git-dependent assertions, so a
   stale count in `tests/scripts-dir-name.test.sh` passed locally and failed
@@ -39,7 +40,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   pre-push hook already gates on local mac vs linux, so the CI job is a
   re-check, not the only gate.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
-- If I ever ssh into a remote server env. Consider what it would take to get my whole setup working in that env from a bare git URL to this repo. Could I just clone it and run `config:setup` ? etc.
 - Shell startup is currently verrryy slow, and this compounds for large setup tasks like the `se` alias. When I last ran it, it took minutes before Alacritty was responsive again. Let's consider/debug/profile what may be slowing things down here. Let's also take a bigger picture step back to see if there are other options to get the same results as the `se` alias that would run more quickly
 - Renaming tmux windows seems to lag a bit on git branch change. Let's look to see if there are some "smarter" hooks we can hook into to update the window name on git branch change, new branch, checkout, etc.
 

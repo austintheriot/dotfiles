@@ -36,10 +36,16 @@ Linux or WSL:
 curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/linux/setup.sh | sh
 ```
 
-No flags: a piped run has no terminal to answer a prompt, so the script
-treats that as unattended and installs without asking. Passing flags through
-a pipe needs `sh -s -- <flags>`, which is only worth typing when you actually
-want one of the options below.
+No flags, and nothing to install first. A piped run has no terminal to answer
+a prompt, so the script treats that as unattended: it installs git if git is
+missing, then clones, checks out, and installs everything else. Verified from
+a bare `debian:bookworm-slim` with nothing but curl.
+
+With a terminal it asks before installing git, since a machine that is
+missing git is more likely a surprise than an intent.
+
+Passing flags through a pipe needs `sh -s -- <flags>`, which is only worth
+typing when you actually want one of the options below.
 
 The branch in the URL is only where `setup.sh` is fetched from. The script
 detects the platform itself and checks out the matching branch, so either URL

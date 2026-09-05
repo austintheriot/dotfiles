@@ -278,4 +278,83 @@ assert_contains 'an explicit --yes behaves the same way' \
 skip 'an interactive run does not force --yes' \
     'needs a pty harness; two attempts regressed into EOF and a hang'
 
+# --- installing git when it is missing --------------------------------------
+#
+# Reported from a bare root container: the one-liner printed the command that
+# installs git and exited, so a bare image needed two commands. The detection
+# to print that line is the same detection needed to run it, so the script now
+# installs git itself.
+#
+# Piped installs without asking, because the curl one-liner is ALWAYS piped:
+# refusing there would leave the bare-image case -- the case this script exists
+# for -- needing two commands forever. With a terminal it asks first, since a
+# developer machine missing git is more likely a surprise than an intent.
+#
+# A stub package manager on PATH, so no test installs anything for real.
+git_seed=$(make_seed gitinstall)
+git_home=$(new_home gitinstall)
+
+nogit_bin="$FIXTURES/nogit-bin"
+mkdir -p "$nogit_bin"
+
+# apt-get records its invocation and then creates a fake git, so the script's
+# post-install `command -v git` succeeds and the run can continue.
+cat > "$nogit_bin/apt-get" <<STUB
+#!/bin/sh
+printf 'apt-get %s\n' "\$*" >> "$FIXTURES/apt-git.log"
+cat > "$nogit_bin/git" <<'GITSTUB'
+#!/bin/sh
+exit 0
+GITSTUB
+chmod +x "$nogit_bin/git"
+exit 0
+STUB
+chmod +x "$nogit_bin/apt-get"
+
+for passthrough in sh printf id command test cat mkdir rm sed grep uname dirname readlink; do
+    real=$(command -v "$passthrough" 2>/dev/null) || continue
+    ln -sf "$real" "$nogit_bin/$passthrough"
+done
+
+: > "$FIXTURES/apt-git.log"
+
+# Piped (no terminal): installs without asking.
+PATH="$nogit_bin" HOME="$git_home" DOTFILES_PLATFORM=linux \
+    "$SETUP" --repo "$git_seed" < /dev/null > "$FIXTURES/gitinstall.out" 2>&1 || true
+
+apt_git_log=$(cat "$FIXTURES/apt-git.log" 2>/dev/null)
+assert_succeeds 'a piped run installs git rather than only naming it' \
+    test -n "$apt_git_log"
+assert_contains 'it installs git specifically' 'git' "$apt_git_log"
+
+# And it must say so rather than installing silently. A one-liner that mutates
+# the system without a word is worse than one that asks.
+assert_succeeds 'it announces the install' \
+    grep -qiE 'install|git' "$FIXTURES/gitinstall.out"
+
+# No package manager at all: nothing to run, so it must still refuse with the
+# docs URL rather than pretending.
+nopm_bin="$FIXTURES/nopm-bin"
+mkdir -p "$nopm_bin"
+for passthrough in sh printf id command test cat sed grep uname dirname readlink; do
+    real=$(command -v "$passthrough" 2>/dev/null) || continue
+    ln -sf "$real" "$nopm_bin/$passthrough"
+done
+
+nopm_home=$(new_home nopm)
+output=$(PATH="$nopm_bin" HOME="$nopm_home" DOTFILES_PLATFORM=linux \
+    "$SETUP" --repo "$git_seed" < /dev/null 2>&1 || true)
+assert_succeeds 'with no package manager it still refuses' \
+    grep -qi 'git' <<<"$output"
+assert_contains 'and points at the docs' 'git-scm.com' "$output"
+
+# --dry-run must never install git, since its whole contract is changing
+# nothing.
+: > "$FIXTURES/apt-git.log"
+dry_home=$(new_home gitdry)
+PATH="$nogit_bin" HOME="$dry_home" DOTFILES_PLATFORM=linux \
+    "$SETUP" --dry-run --repo "$git_seed" < /dev/null > /dev/null 2>&1 || true
+assert_equals 'a dry run installs no git' '' "$(cat "$FIXTURES/apt-git.log" 2>/dev/null)"
+
+
 finish

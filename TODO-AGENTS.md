@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- Set up a `config init` script that would allow us to `git clone` the repo then set up everything we need for our working environment (minus the manual installations required). Then we'd also re-use this script in our Docker image for consistency. Ideall,y if I ever ssh into a remote server env. I would be able to get my whole setup working in that env from a bare git URL to this repo.
+- Set up a setup.sh script a la (curl -fsSL https://claude.ai/install.sh | bash), perhaps a wrapper around a `config init` script or something that would allow us to set up everything we need for our working environment (minus the manual installations required). Then we'd also re-use this script in our Docker image for consistency. Ideall,y if I ever ssh into a remote server env. I would be able to get my whole setup working in that env from a bare git URL to this repo.
 - Migrate the rest of the `config ...` scripts to Rust
 - The pre-push Docker gate cannot run the git-dependent assertions, so a
   stale count in `tests/scripts-dir-name.test.sh` passed locally and failed

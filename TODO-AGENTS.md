@@ -3,7 +3,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 # TODOS:
 
 - Provide more details on the flags options for each `config` command. Like `config test`--what does `-q` do, etc. also allow short or long versions of most flags
-- Add image badges to the README for both mac and linux branches showing their current CI status
+- [CLAIMED] Add image badges to the README for both mac and linux branches showing their current CI status
 - Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it
   from `tests/run-all.sh` as its own suite. The code already carries
   `# shellcheck disable=SC2086` directives while shellcheck is not

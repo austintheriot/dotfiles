@@ -67,6 +67,29 @@ fi
 PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 export PATH
 
+# apt must never stop to ask a question.
+#
+# Reported from a bare Ubuntu box: the bootstrap halted at tzdata's debconf
+# prompt -- "Please select the geographic area in which you live" -- and waited
+# for a keypress that an unattended run has nobody to supply. Reproduced on
+# ubuntu:24.04, which prints "Configuring tzdata" and then "Geographic area:"
+# and blocks.
+#
+# Every image and CI leg passed anyway, because Dockerfile.ubuntu sets this
+# variable itself. That is the same shape as the hardcoded sudo: the
+# environment was quietly compensating for a gap in the engine, so the engine
+# looked correct everywhere it was tested and failed on a real machine.
+#
+# Exported rather than assigned, because the install commands run through
+# `sh -c` and an unexported variable never reaches that child. Set once here
+# rather than on each of the fourteen apt commands, so a new command cannot
+# forget it.
+#
+# Harmless where apt does not exist: brew and pacman ignore an environment
+# variable they never read.
+DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND
+
 fix=0
 yes=0
 dry_run=0

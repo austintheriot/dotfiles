@@ -232,6 +232,13 @@ install_cmd_for() {
             case "$manager" in
                 apt) printf 'sudo apt-get update -qq && sudo apt-get install -y zoxide' ;;
                 brew) printf 'brew install zoxide' ;;
+                # Arch ships zoxide in `extra`, so pacman had no business
+                # falling through to the installer. It did, and the arch leg
+                # of deps-check.yml failed with "you have exceeded GitHub's
+                # API rate limit" on a run that had nothing to do with
+                # zoxide -- the same failure the apt and brew cases above
+                # were added to prevent.
+                pacman) printf 'sudo pacman -Sy --noconfirm zoxide' ;;
                 *) printf 'curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh' ;;
             esac
             ;;

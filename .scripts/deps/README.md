@@ -116,7 +116,8 @@ usually exports both already, which is what hides the problem on a machine
 already in use.
 
 `zoxide` reaches that fallback only where the package manager has no package
-for it. `apt` and `brew` both do, and it is installed from there, because
+for it. `apt`, `brew` and `pacman` all have one, and it is installed from
+there, because
 zoxide's upstream install script resolves the latest release through the unauthenticated
 GitHub API. That quota is 60 requests an hour per IP, shared by every Actions
 runner on that IP, and it failed a CI run that had nothing to do with zoxide.

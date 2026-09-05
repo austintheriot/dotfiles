@@ -29,6 +29,8 @@ Welcome! Here is my rather unpolished .dotfile configuration. Below are some set
 
 - Install `ripgrep` (faster grep alternative written in Rust, used by neovim): https://github.com/BurntSushi/ripgrep
 
+- Install `shellcheck` (shell script linter, run by the test suite): https://www.shellcheck.net/
+
 - Install zoxide for `z` in place of `cd`: https://github.com/ajeetdsouza/zoxide
 
 - Install xclip (clipboard integration for tmux copy mode -- WSLg bridges this to the Windows clipboard automatically)

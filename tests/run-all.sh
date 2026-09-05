@@ -127,8 +127,23 @@ for suite in "$TESTS_DIR"/*.test.sh; do
     integration_count=$((integration_count + 1))
 done
 
+# The real interpreter, not the pyenv shim. lib.sh resolves this the same way
+# for the suites; run-all.sh does not source lib.sh, so it repeats the four
+# lines rather than sourcing a harness it otherwise has no use for.
+#
+# The shim is a bash script that execs `pyenv exec python3`, measured at 750ms
+# per start against 40ms for the interpreter it reaches. This file gates a
+# pre-commit hook.
+PYTHON_BIN=''
+if command -v pyenv >/dev/null 2>&1; then
+    PYTHON_BIN=$(pyenv which python3 2>/dev/null)
+    [ -n "$PYTHON_BIN" ] && [ -x "$PYTHON_BIN" ] || PYTHON_BIN=''
+fi
+[ -n "$PYTHON_BIN" ] || PYTHON_BIN=$(command -v python3 2>/dev/null || true)
+export PYTHON_BIN
+
 python_dirs=''
-if [ -z "$only" ] && command -v python3 >/dev/null 2>&1; then
+if [ -z "$only" ] && [ -n "$PYTHON_BIN" ]; then
     python_dirs=$(find "$DOTFILES_ROOT/.claude" "$DOTFILES_ROOT/.scripts" \
                      -name 'test_*.py' -type f -not -path '*/plugins/*' \
                      -exec dirname {} + 2>/dev/null | sort -u)
@@ -159,11 +174,11 @@ done
 
 if [ -n "$only" ]; then
     : # as above: not a skip for want of python3, but a narrower run.
-elif command -v python3 >/dev/null 2>&1; then
+elif [ -n "$PYTHON_BIN" ]; then
     while IFS= read -r directory; do
         [ -n "$directory" ] || continue
         run_suite "python unit tests in ${directory#"$DOTFILES_ROOT"/}" \
-            python3 -m unittest discover -s "$directory" -p 'test_*.py'
+            "$PYTHON_BIN" -m unittest discover -s "$directory" -p 'test_*.py'
     done <<< "$python_dirs"
 else
     printf 'SKIP  python unit tests (python3 not found)\n'

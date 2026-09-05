@@ -195,8 +195,11 @@ assert_contains 'arch documents why it is unpinned' \
 # into a `key=value` file the shell then reads. A python3 process per assertion
 # was measured at 10 seconds for this section alone, and run-all.sh gates a
 # pre-commit hook.
+#
+# $PYTHON_BIN rather than `python3`, for the same reason: lib.sh resolves the
+# real interpreter once, and the shim on PATH costs 750ms per start.
 WF_FACTS="$FIXTURES/workflow-facts"
-python3 - "$WORKFLOW" "$WF_FACTS" <<'PY'
+"$PYTHON_BIN" - "$WORKFLOW" "$WF_FACTS" <<'PY'
 import sys, yaml
 
 with open(sys.argv[1]) as handle:

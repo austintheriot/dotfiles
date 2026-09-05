@@ -19,14 +19,16 @@ WORKFLOW_DIR="$DOTFILES_ROOT/.github/workflows"
 
 assert_succeeds 'the workflow directory exists' test -d "$WORKFLOW_DIR"
 
-python_bin=$(command -v python3 || command -v python) || {
+# $PYTHON_BIN comes from lib.sh, which resolves the real interpreter once,
+# past the pyenv shim: 750ms per start against 40ms. Three starts happen below.
+if [ -z "${PYTHON_BIN:-}" ]; then
     printf '      skipped: no python interpreter\n'
     finish
     exit 0
-}
+fi
 
 facts="$FIXTURES/labels.txt"
-"$python_bin" - "$WORKFLOW_DIR" "$facts" <<'PYEOF'
+"$PYTHON_BIN" - "$WORKFLOW_DIR" "$facts" <<'PYEOF'
 import sys, os, re
 
 directory, out = sys.argv[1], sys.argv[2]
@@ -106,7 +108,7 @@ assert_contains 'the suite workflow runs run-all.sh' 'run-all.sh' "$suite_text"
 # The runners are read out of the parsed matrix, not grepped from the file.
 # Grepping matches the human-readable `label:` strings too, so deleting the
 # macOS entry from the matrix left a whole-file grep green.
-runners=$("$python_bin" - "$SUITE_WORKFLOW" <<'RUNNEREOF'
+runners=$("$PYTHON_BIN" - "$SUITE_WORKFLOW" <<'RUNNEREOF'
 import sys, re
 text = open(sys.argv[1]).read()
 # Deliberately regex rather than yaml: pyyaml is not installed everywhere the
@@ -148,7 +150,7 @@ assert_contains 'the drift workflow checks for diverged paths' \
 assert_contains 'the drift workflow checks for unlabeled files' \
     'match no .sync-manifest rule' "$drift_text"
 
-combined_branch=$("$python_bin" - "$DRIFT_WORKFLOW" <<'COMBINEDEOF'
+combined_branch=$("$PYTHON_BIN" - "$DRIFT_WORKFLOW" <<'COMBINEDEOF'
 import sys, re
 text = open(sys.argv[1]).read()
 

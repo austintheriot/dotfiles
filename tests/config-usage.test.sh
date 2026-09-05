@@ -136,8 +136,8 @@ assert_succeeds 'the usage helper sits beside the subcommands' \
 
 # It must not be named config-*, or the dispatcher would treat it as a
 # subcommand called `usage.sh` and `config help` would list it.
-assert_equals 'the helper is outside the config-<sub> namespace' '' \
-    "$(cd "$CONFIG_DIR" && ls config-usage.sh 2>/dev/null || true)"
+assert_succeeds 'the helper is outside the config-<sub> namespace' \
+    test ! -e "$CONFIG_DIR/config-usage.sh"
 
 not_sourcing=''
 for sub in $ALL_SUBCOMMANDS; do

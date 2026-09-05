@@ -17,10 +17,6 @@ set -u
 
 kind="${1:-stop}"
 
-# Not macOS: nothing to do. Silent success, because a hook that fails is
-# noise on every single turn.
-[ "$(uname -s)" = Darwin ] || exit 0
-
 # Overridable so the tests can point these at stubs. The defaults are the real
 # absolute paths, which is what a hook running outside a login shell needs.
 AEROSPACE_BIN=${AEROSPACE_BIN:-/opt/homebrew/bin/aerospace}
@@ -52,6 +48,14 @@ is_focused() {
 
   return 0
 }
+
+# The notifier has to be there at all. aerospace and osascript are macOS-only,
+# so on Linux this exits quietly rather than emitting an error on every turn.
+# Guarded on the binaries rather than on `uname` so the test suite, which
+# points both variables at stubs, still exercises everything below.
+if [ ! -x "$OSASCRIPT_BIN" ]; then
+  exit 0
+fi
 
 if is_focused; then
   exit 0

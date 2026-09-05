@@ -184,4 +184,44 @@ else
     skip 'setup.sh parses under dash' 'dash is not installed'
 fi
 
+# --- an unreachable remote ---------------------------------------------------
+#
+# Reported from a real run: on a box with no DNS, `curl | sh` died with
+# "Could not resolve host" before setup.sh ever started, and once the script
+# was copied over by hand the clone failed with git's own message. Git's
+# wording names the URL, not the cause, so the reader learns that a clone
+# failed rather than that the machine cannot resolve anything.
+#
+# A remote that cannot be reached is the single most likely failure on a
+# freshly provisioned box, which is exactly the machine this script is for, so
+# it is worth naming.
+#
+# Driven with a URL whose host cannot resolve, not by breaking DNS: the suite
+# must not depend on network state, and .test domains are reserved by RFC 2606
+# precisely so they never resolve.
+seed=$(make_seed unreachable)
+home=$(new_home unreachable)
+output=$(HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes \
+    --repo 'https://nonexistent.invalid.test/dotfiles.git' 2>&1)
+status=$?
+
+assert_equals 'an unreachable remote exits non-zero' '1' "$status"
+assert_succeeds 'the failure names the remote as unreachable' \
+    grep -qiE 'reach|resolve|network|connect' <<<"$output"
+
+# Nothing half-created. A ~/.cfg left behind by a failed clone would make the
+# next run refuse with "already cloned", which is the worst possible outcome:
+# the reader fixes their DNS and then cannot re-run the script.
+assert_succeeds 'a failed clone leaves no ~/.cfg behind' test ! -d "$home/.cfg"
+assert_equals 'a failed clone runs no handoff' '' "$(cat "$home/.calls")"
+
+# A local path must not be probed for reachability. The tests and the
+# container both clone from a path or a bare repo on disk, and treating those
+# as unreachable would break every other assertion in this file.
+seed=$(make_seed localpath)
+home=$(new_home localpath)
+status=0
+HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" >/dev/null 2>&1 || status=$?
+assert_equals 'a local repo path is never probed as a network host' '0' "$status"
+
 finish

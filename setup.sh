@@ -97,6 +97,106 @@ if ! command -v git >/dev/null 2>&1; then
     exit 1
 fi
 
+# A remote that cannot be reached is the most likely failure on a freshly
+# provisioned box, which is the machine this script exists for. Reported here
+# rather than left to `git clone`, whose message names the URL and not the
+# cause: a reader with no DNS sees a clone failure and starts debugging the
+# repository, when the answer is an empty /etc/resolv.conf.
+#
+# Only for a real network remote. A local path or a file:// URL is what the
+# tests and the container clone from, and probing those as hostnames would
+# fail every one of them.
+case $repo in
+    *://*)
+        repo_host=${repo#*://}
+        repo_host=${repo_host%%/*}
+        repo_host=${repo_host#*@}
+        repo_host=${repo_host%%:*}
+        case $repo in
+            file://*) repo_host='' ;;
+        esac
+        ;;
+    *) repo_host='' ;;
+esac
+
+if [ -n "$repo_host" ]; then
+    # Resolution only, not a fetch. Whether the repository exists is git's
+    # question to answer; whether the name resolves at all is this one, and it
+    # is the half that produces a misleading error.
+    #
+    # Three tools because no single one is everywhere: getent is absent on
+    # macOS, host and nslookup are absent from a minimal container. If none is
+    # present, skip the check rather than guess -- a false "unreachable" on a
+    # working machine is worse than the unclear git error.
+    # Each tool reports failure differently, and two of them do it while
+    # exiting 0, so each branch decides for itself rather than sharing a
+    # non-empty-output test.
+    #
+    # `host` is the trap: on NXDOMAIN it prints
+    # "Host <name> not found: 3(NXDOMAIN)" and exits 0. A check that only
+    # asked whether the output was non-empty therefore passed for a name that
+    # does not resolve, which is how the first version of this preflight
+    # silently did nothing.
+    # Which tool to ask is a separate question from what the answer was, and
+    # collapsing the two is a bug this went through twice.
+    #
+    # An `elif` chain over `command -v <tool> && <lookup>` treats a lookup
+    # that FAILED the same as a tool that is ABSENT, so it falls through to
+    # the next branch and, when nothing else is installed, to the skip. The
+    # test container is exactly that shape -- getent present, host and
+    # nslookup absent -- so a name that does not resolve was reported as fine
+    # and the preflight never fired there.
+    #
+    # So: pick the tool first, then read its verdict.
+    resolver=''
+    for candidate in getent host nslookup; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            resolver=$candidate
+            break
+        fi
+    done
+
+    resolved=''
+    case $resolver in
+        getent)
+            # The only one of the three that reports failure through its exit
+            # status alone.
+            getent hosts "$repo_host" >/dev/null 2>&1 && resolved=yes
+            ;;
+        host)
+            # Exits 0 on NXDOMAIN while printing "not found", so the text is
+            # the verdict rather than the status.
+            lookup_output=$(host -W 5 "$repo_host" 2>&1 || true)
+            case $lookup_output in
+                *NXDOMAIN*|*'not found'*|*'no servers could be reached'*|*SERVFAIL*) ;;
+                ?*) resolved=yes ;;
+            esac
+            ;;
+        nslookup)
+            lookup_output=$(nslookup "$repo_host" 2>&1 || true)
+            case $lookup_output in
+                *NXDOMAIN*|*'can'\''t find'*|*'no servers could be reached'*|*SERVFAIL*) ;;
+                *[Aa]ddress*) resolved=yes ;;
+            esac
+            ;;
+        *)
+            # No resolver tool at all. Skip rather than guess: a false
+            # "unreachable" on a working machine is worse than git's unclear
+            # error.
+            resolved=yes
+            ;;
+    esac
+
+    if [ -z "$resolved" ]; then
+        printf 'setup.sh: cannot resolve %s\n' "$repo_host" >&2
+        printf 'setup.sh: this machine has no working DNS, so the clone would fail\n' >&2
+        printf 'setup.sh: check /etc/resolv.conf -- an empty one is the usual cause\n' >&2
+        printf 'setup.sh: in a container, pass DNS at run time: docker run --dns 1.1.1.1\n' >&2
+        printf 'setup.sh: behind a proxy, export https_proxy first\n' >&2
+        exit 1
+    fi
+fi
+
 # Refuse rather than re-clone. ~/.cfg *is* the repository: an unpushed commit
 # lives nowhere else, so a script that clobbers it to look idempotent can
 # destroy work that has no other copy. `config init` is the idempotent half,

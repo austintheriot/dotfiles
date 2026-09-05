@@ -8,10 +8,11 @@ set -eu
 self=$(readlink -f "$0")
 here=$(dirname "$self")
 
-if [ "$#" -gt 0 ] && [ -x "$here/config-$1" ]; then
-    sub=$1
-    shift
-    exec "$here/config-$sub" "$@"
+if [ "$#" -gt 0 ]; then
+    case $1 in
+        ''|-*|*[!A-Za-z0-9-]*) ;;
+        *) if [ -x "$here/config-$1" ]; then sub=$1; shift; exec "$here/config-$sub" "$@"; fi ;;
+    esac
 fi
 
 exec git --git-dir="$HOME/.cfg" --work-tree="$HOME" "$@"

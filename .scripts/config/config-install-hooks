@@ -1,8 +1,9 @@
 #!/bin/sh
-# The dispatcher execs whatever sits beside it and ~/.local/bin is on PATH,
-# so those two directories are the trust boundary. Anyone who can write to
-# them can run code as this user; refuse to install into them unless they
-# are owned by this user and writable by nobody else.
+# The dispatcher execs whatever sits beside it, ~/.local/bin is on PATH, and
+# the pre-commit and pre-push hooks run whatever sits in ~/tests, so those
+# three directories plus the hooks directory itself are the trust boundary.
+# Anyone who can write to them can run code as this user; refuse to install
+# into them unless they are owned by this user and writable by nobody else.
 set -eu
 
 self=$(readlink -f "$0")
@@ -24,13 +25,15 @@ check_dir() {
     fi
 }
 
-check_dir "$bin_dir"
-check_dir "$here"
-
 if [ ! -d "$hooks_dir" ]; then
     printf 'config install-hooks: no hooks directory at %s (is %s/.cfg the bare repo?)\n' "$hooks_dir" "$HOME" >&2
     exit 1
 fi
+
+check_dir "$bin_dir"
+check_dir "$here"
+check_dir "$HOME/tests"
+check_dir "$hooks_dir"
 
 link() {
     ln -sfn "$1" "$2"

@@ -87,6 +87,20 @@ actual=$(HOME="$home" "$link_dir/config" probe via-symlink)
 assert_equals 'the dispatcher resolves siblings through its own symlink' \
     'probe:via-symlink' "$actual"
 
+mkdir -p "$sibling_dir/config-x"
+printf '#!/bin/sh\nprintf "escaped\\n"\n' > "$sibling_dir/config-x/go"
+chmod 755 "$sibling_dir/config-x/go"
+output=$(HOME="$home" "$sibling_dir/config" x/go 2>&1)
+status=$?
+assert_equals 'a slash-shaped subcommand does not exec a file inside a config-<sub> directory' \
+    '' "$(printf '%s' "$output" | grep -F 'escaped' || true)"
+assert_equals 'a slash-shaped subcommand falls through to git and fails' '1' "$status"
+assert_contains 'the failure is git own message' 'is not a git command' "$output"
+
+output=$(HOME="$home" "$sibling_dir/config" -x 2>&1)
+assert_contains 'a dash-shaped subcommand falls through to git rather than probing a sibling' \
+    'unknown option' "$output"
+
 # --- install-hooks ----------------------------------------------------------
 
 home=$(make_fixture_home hooks)
@@ -129,6 +143,13 @@ output=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)
 status=$?
 assert_equals 'install-hooks refuses a group-writable dispatcher directory' '1' "$status"
 chmod g-w "$install_dir"
+
+chmod o+w "$home/tests"
+output=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)
+status=$?
+assert_equals 'install-hooks refuses a world-writable tests directory' '1' "$status"
+assert_contains 'the refusal names the tests directory' "$home/tests" "$output"
+chmod o-w "$home/tests"
 
 # --- thin wrappers ----------------------------------------------------------
 
@@ -180,6 +201,24 @@ status=$?
 assert_equals 'config test rejects an unknown flag with exit 2' '2' "$status"
 assert_contains 'the rejection prints usage' 'usage: config test' "$output"
 
+output=$(HOME="$home" "$CONFIG" test a b 2>&1)
+status=$?
+assert_equals 'config test rejects a second positional argument with exit 2' '2' "$status"
+assert_contains 'the second-positional-argument rejection prints usage' 'usage: config test' "$output"
+
+HOME="$home" "$CONFIG" test -q --docker >/dev/null 2>&1
+status=$?
+assert_equals 'config test rejects -q together with --docker with exit 2' '2' "$status"
+
+HOME="$home" "$CONFIG" test -q some-suite >/dev/null 2>&1
+status=$?
+assert_equals 'config test rejects -q together with a suite name with exit 2' '2' "$status"
+
+output=$(HOME="$home" "$CONFIG" test --watch --docker 2>/dev/null)
+status=$?
+assert_equals 'config test rejects --watch together with --docker with exit 2' '2' "$status"
+assert_equals 'the rejection never runs the docker stub' '' "$output"
+
 watch_home=$(make_fixture_home watch)
 mkdir -p "$watch_home/tests"
 printf '#!/bin/sh\nprintf "run\\n" >> "%s/runs"\n' "$watch_home" > "$watch_home/tests/run-all.sh"
@@ -202,8 +241,8 @@ for _attempt in 1 2 3 4 5 6 7 8 9 10; do
     kill -0 "$watch_pid" 2>/dev/null || break
     sleep 0.2
 done
-assert_equals 'the watch loop is gone after kill' '' \
-    "$(pgrep -f "config-test --watch" | grep -x "$watch_pid" || true)"
+kill -0 "$watch_pid" 2>/dev/null && still_running=yes || still_running=no
+assert_equals 'the watch loop is gone after kill' 'no' "$still_running"
 
 # --- reload -----------------------------------------------------------------
 

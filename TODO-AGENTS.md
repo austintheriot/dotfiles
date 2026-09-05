@@ -3,7 +3,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 # TODOS:
 
 - Migrate the rest of the `config ...` scripts to Rust
-- Provide more details on the flags options for each `config` command. Like `config test`--what does `-q` do, etc. also allow short or long versions of most flags
+- [CLAIMED] Provide more details on the flags options for each `config` command. Like `config test`--what does `-q` do, etc. also allow short or long versions of most flags
 - The pre-push Docker gate cannot run the git-dependent assertions, so a
   stale count in `tests/scripts-dir-name.test.sh` passed locally and failed
   on both CI platforms (runs 33934561395 and 33934578084, 2026-09-05). The

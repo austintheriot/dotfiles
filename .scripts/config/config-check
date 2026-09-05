@@ -1,2 +1,3 @@
 #!/bin/sh
+# help: Report drift between the mac and linux branches on shared paths
 exec config-manifest check "$@"

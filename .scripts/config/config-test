@@ -1,4 +1,5 @@
 #!/bin/sh
+# help: Run the test suite, optionally in Docker or in a watch loop
 set -eu
 
 usage='usage: config test [-q] [--docker] [--watch] [suite]'

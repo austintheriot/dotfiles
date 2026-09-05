@@ -1,4 +1,5 @@
 #!/bin/sh
+# help: Reload the tmux config and print the line to re-source zsh
 set -eu
 
 if [ -n "${TMUX:-}" ]; then

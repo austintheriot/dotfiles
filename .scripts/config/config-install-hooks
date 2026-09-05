@@ -1,4 +1,5 @@
 #!/bin/sh
+# help: Link the git hooks and put the dispatcher on PATH
 # The dispatcher execs whatever sits beside it, ~/.local/bin is on PATH, and
 # the pre-commit and pre-push hooks run whatever sits in ~/tests, so those
 # three directories plus the hooks directory itself are the trust boundary.

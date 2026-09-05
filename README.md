@@ -135,6 +135,35 @@ Disable `Displays have separate spaces`
 defaults write com.apple.spaces spans-displays -bool true && killall SystemUIServer
 ```
 
+### Repo utilities
+
+`config` is the front door to this repo. It dispatches to the `config-<sub>`
+scripts in `.scripts/config/`, and passes every other verb to git on the bare
+repo at `~/.cfg`, so `config status`, `config add <path>` and `config commit`
+all work as plain git.
+
+Run `config help` for the current list. The listing is generated from the
+`# help:` line at the top of each `config-<sub>`, so it cannot fall behind the
+scripts:
+
+- `config build` builds the Rust crate and installs the stamped binary.
+- `config check` reports drift between the mac and linux branches.
+- `config install` installs any missing tracked dependencies.
+- `config install-hooks` links the git hooks and puts `config` on PATH.
+- `config reload` reloads the tmux config.
+- `config stamp` prints the tree id of the crate in the worktree.
+- `config sync` copies the shared paths onto the other branch.
+- `config test` runs the test suite.
+
+To add a utility, drop a `config-<name>` script into `.scripts/config/` with a
+`# help:` line, and add its name to `EXPECTED_SUBCOMMANDS` in
+`tests/config.test.sh`.
+
+`config help` shadows `git help`. Use `config -- <verb>` to send a verb
+straight to git without consulting these scripts: `config -- help rebase`
+opens the git manual page. The separator applies only as the first argument,
+so a later `--` is still a git pathspec.
+
 ### Dependency checking
 
 The dependencies listed above, plus a few that exist on one branch only, are

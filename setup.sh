@@ -109,7 +109,38 @@ fi
 # anything is what the repo it has not cloned yet knows how to do.
 if ! command -v git >/dev/null 2>&1; then
     printf 'setup.sh: git is not installed, and it is the one prerequisite\n' >&2
-    printf 'setup.sh: install git, then run this again\n' >&2
+
+    # Name the command rather than leaving the reader to look it up. A bare
+    # container is exactly where this fires, and "install git" is the least
+    # useful thing to say to someone who just pasted a one-liner.
+    #
+    # The escalation is decided the same way check-deps.sh decides it, because
+    # the machine that needs this message is often root with no sudo, where a
+    # hardcoded `sudo` in the suggestion fails the same way it failed there.
+    if [ "$(id -u 2>/dev/null || printf 1)" -eq 0 ]; then
+        setup_sudo=''
+    elif command -v sudo >/dev/null 2>&1; then
+        setup_sudo='sudo '
+    else
+        setup_sudo=''
+    fi
+
+    if command -v apt-get >/dev/null 2>&1; then
+        printf 'setup.sh: try: %sapt-get update && %sapt-get install -y git\n' \
+            "$setup_sudo" "$setup_sudo" >&2
+    elif command -v pacman >/dev/null 2>&1; then
+        printf 'setup.sh: try: %spacman -Sy --noconfirm git\n' "$setup_sudo" >&2
+    elif command -v dnf >/dev/null 2>&1; then
+        printf 'setup.sh: try: %sdnf install -y git\n' "$setup_sudo" >&2
+    elif command -v apk >/dev/null 2>&1; then
+        printf 'setup.sh: try: %sapk add git\n' "$setup_sudo" >&2
+    elif command -v brew >/dev/null 2>&1; then
+        printf 'setup.sh: try: brew install git\n' >&2
+    else
+        printf 'setup.sh: no known package manager here -- see https://git-scm.com/downloads\n' >&2
+    fi
+
+    printf 'setup.sh: then run this again\n' >&2
     exit 1
 fi
 

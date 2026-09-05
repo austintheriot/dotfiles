@@ -1,0 +1,54 @@
+# The bootstrap against a genuinely bare image: root, no sudo, no git.
+#
+# Dockerfile.bootstrap beside this one installs sudo, curl, git and
+# ca-certificates, creates a passwordless-sudo user, and runs as that user.
+# That is a real shape and worth testing, but it is also a comfortable one,
+# and it hid two bugs that a user found in seconds on a plain
+# `docker run debian`:
+#
+#   - every install command carried a hardcoded `sudo`, so on an image with
+#     no sudo all eleven privileged installs failed with
+#     "sh: 1: sudo: not found" while the same commands run directly as root
+#     would have worked;
+#   - setup.sh refused with "install git, then run this again", which is the
+#     least useful sentence available to someone who just pasted a one-liner.
+#
+# Neither could be caught by an image that preinstalls sudo and git and never
+# runs as root. So this image varies exactly those three axes and nothing
+# else.
+#
+# Digest-pinned for the same reason as the others: a republished tag must not
+# change a passing test underneath us.
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+
+# Deliberately NOT installed: sudo, git, and every dependency. Those are the
+# three axes under test, and adding any of them removes the coverage this
+# image exists for.
+#
+# curl and ca-certificates ARE installed, and that is not a concession to
+# convenience. The documented entry point is `curl -fsSL ... | sh`, so a
+# machine with no curl cannot reach setup.sh in the first place -- curl is a
+# prerequisite of the one-liner rather than something the bootstrap installs.
+# Two dependencies also install through `curl | sh` (rustup and oh-my-zsh),
+# and an image without curl reports those as failures that no real user of
+# the one-liner can ever hit. Measured: omitting curl produced exactly two
+# such false failures, "sh: 1: curl: not found" for oh-my-zsh and rustup.
+#
+# ca-certificates for the same reason: without it every https fetch fails
+# with an opaque TLS error instead of testing anything about the bootstrap.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# A pre-existing dotfile, as on any real machine, so the checkout collision is
+# exercised here too.
+RUN printf '# the user own zshrc, predating the bootstrap\n' > /root/.zshrc
+
+# Root, which is the default and is stated here so the intent is not mistaken
+# for an oversight.
+USER root
+WORKDIR /root
+ENV HOME=/root
+
+ENTRYPOINT ["/bin/sh", "/seed/bootstrap-bare-entrypoint.sh"]
+CMD []

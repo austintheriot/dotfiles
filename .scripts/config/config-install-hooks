@@ -8,8 +8,9 @@
 # relinks the same three paths and reports the same three lines.
 #
 # Takes no options. Refuses to install into a directory that is not owned by
-# this user, or that is writable by anyone else. See the note below.
+# this user, or that is writable by anyone else.
 #
+# ---
 # The dispatcher execs whatever sits beside it, ~/.local/bin is on PATH, and
 # the pre-commit and pre-push hooks run whatever sits in ~/tests, so those
 # three directories plus the hooks directory itself are the trust boundary.

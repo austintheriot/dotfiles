@@ -9,6 +9,14 @@
 # maintained beside the parser is the copy that drifts, which is the same
 # reason `config help` reads the `# help:` lines rather than a hand-written
 # list.
+#
+# A `# ---` line ends the block early, so a script can follow its help with a
+# note meant for whoever edits it rather than whoever runs it. A bare `#`
+# cannot serve as the terminator: the blocks already use one to separate
+# their own paragraphs, so it would end every block at its first blank line.
+# config-install-hooks needs this: its trust-boundary rationale explains why
+# the ownership checks exist, which is a maintainer's question, and printing
+# it to someone who asked what the command does buries the answer.
 
 # Prints the block and exits 0 when the first argument is --help or -h.
 # Call it before parsing anything else, so asking a command what it does never
@@ -22,5 +30,7 @@ usage_if_requested() {
 print_usage() {
     script=$(readlink -f "$0")
     sed -n '/^# usage:/,/^[^#]/p' "$script" \
-        | sed -e '/^[^#]/d' -e 's/^# \{0,1\}//'
+        | sed -e '/^[^#]/d' \
+        | awk '/^# ---/ { exit } { print }' \
+        | sed -e 's/^# \{0,1\}//'
 }

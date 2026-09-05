@@ -145,6 +145,27 @@ for sub in $ALL_SUBCOMMANDS; do
 done
 assert_equals 'every config-<sub> sources the shared helper' '' "$not_sourcing"
 
+# --- the block terminator ---------------------------------------------------
+
+# A `# ---` line ends the block, so a script can follow its help with a note
+# for whoever edits it. config-install-hooks does exactly this: its
+# trust-boundary rationale answers a maintainer's question, and printing it to
+# someone who asked what the command does buries the actual answer.
+output=$(run_config install-hooks --help 2>&1)
+assert_contains 'install-hooks help keeps the text above the terminator' \
+    'Takes no options' "$output"
+assert_equals 'install-hooks help stops at the terminator' '' \
+    "$(printf '%s' "$output" | grep -F 'trust boundary' || true)"
+assert_equals 'the terminator line itself never prints' '' \
+    "$(printf '%s' "$output" | grep -x -- '---' || true)"
+
+# The terminator must not be a bare `#`. Every block uses one to separate its
+# own paragraphs, so a bare `#` would truncate each block at its first blank
+# line. config test has four paragraphs; the last one has to survive.
+output=$(run_config test --help 2>&1)
+assert_contains 'a multi-paragraph block prints past its first blank line' \
+    'Exits 2 on a usage error' "$output"
+
 # --- flags are described ----------------------------------------------------
 
 # Every flag the script parses appears in its help text with a description

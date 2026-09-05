@@ -83,6 +83,10 @@ COPY .scripts /root/.scripts
 COPY .claude /root/.claude
 # tmux-conf-split.test.sh loads the real config on a throwaway tmux server.
 COPY .config/tmux /root/.config/tmux
+# alacritty-platform-split.test.sh reads the shared config and both variants
+# to check the import wiring. No Alacritty binary is needed -- the assertions
+# are about which file imports which.
+COPY .config/alacritty /root/.config/alacritty
 COPY .sync-manifest /root/.sync-manifest
 # deps-harness.test.sh asserts on the workflow's triggers, permissions, and
 # job definitions by parsing this file.
@@ -94,8 +98,8 @@ COPY README.md /root/README.md
 # depcheck-hook.test.sh asserts the hook is sourced from .zshrc, and
 # check-deps.test.sh reads the zshrc files to decide whether this branch
 # needs oh-my-zsh. Both silently lose those assertions without this.
-# The glob covers the per-branch companion (.zshrc-mac or .zshrc-linux)
-# without naming either, so this line works unchanged on both branches.
+# The glob covers both platform variants (.zshrc-mac and .zshrc-linux), which
+# now ship on both branches.
 COPY .zshrc* /root/
 
 # notify.test.sh drives aerospace and osascript, both macOS-only, so it can

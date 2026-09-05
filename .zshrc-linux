@@ -1,0 +1,37 @@
+# Linux/WSL-specific shell configuration. Loaded by the shared .zshrc via
+# platform_source_variant. Ships on both branches so the drift check covers
+# it; only a linux shell ever sources it.
+
+# zsh-autosuggestions - installed as an oh-my-zsh custom plugin - see https://github.com/zsh-users/zsh-autosuggestions
+# oh-my-zsh here; the mac variant reaches into Homebrew's share directory.
+[ -f ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ] && \
+  source ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+
+# SETUP NVM (LAZY) #####################################################################################
+# NVM_DIR comes from the shared .zshrc.
+#
+# Same lazy shape as the mac variant, and for the same reason: sourcing
+# nvm.sh costs seconds at every shell startup, and `se` builds 107 panes.
+# This branch previously sourced nvm.sh eagerly here AND again at the bottom
+# of .zshrc, paying that cost twice per pane.
+#
+# The version glob is what actually differs between the platforms, which is
+# why this block is duplicated rather than shared: this install is managed by
+# nvm's own installer under $NVM_DIR/versions/node, and takes whatever major
+# version is newest rather than pinning v24 the way the mac box does.
+() {
+  setopt localoptions numericglobsort
+  local -a versions
+  versions=("$NVM_DIR"/versions/node/v*(N/))
+  [ ${#versions} -eq 0 ] || export PATH="${versions[-1]}/bin:$PATH"
+}
+
+# First call replaces this shim with the real nvm and re-dispatches.
+nvm() {
+  unfunction nvm
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+  nvm "$@"
+}
+
+echo "Loaded linux configuration"

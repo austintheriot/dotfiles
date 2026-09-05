@@ -1,9 +1,14 @@
-# DOTFILE SETUP (for sharing dotfiles accross envs in git)
+# macOS-specific shell configuration. Loaded by the shared .zshrc via
+# platform_source_variant. Ships on both branches so the drift check covers
+# it; only a mac shell ever sources it.
 
 # zsh-autosuggestions init - see https://github.com/zsh-users/zsh-autosuggestions
+# Homebrew here; the linux variant reaches into oh-my-zsh's custom plugins.
 source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 
 # SETUP NVM (LAZY) #####################################################################################
+# NVM_DIR comes from the shared .zshrc.
+#
 # Sourcing nvm.sh costs 2.4s, `nvm ls v24` about 1s, and `nvm use 24` another
 # 2.4s. Paying all three per shell put startup at 7-9s, and `se` builds 107
 # panes, so the terminal took minutes to become usable.
@@ -11,7 +16,6 @@ source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 # `nvm use` only manipulates PATH, so putting the newest v24 bin directory on
 # PATH reproduces its end state for free. nvm.sh is then loaded only when nvm
 # is actually called, which is when a version is switched.
-export NVM_DIR="$HOME/.nvm"
 
 # numericglobsort so v24.15 beats v24.9; a lexical sort gets that backwards.
 # localoptions keeps the option inside this function: a bare `setopt` here
@@ -35,5 +39,8 @@ nvm() {
 # SETUP SHORTCUT FOR USING ALACRITTY ##################################################################
 # reload config with `alacritty -v`
 alias alacritty="/Applications/Alacritty.app/Contents/MacOS/alacritty"
+
+# ebook-convert #######################################################################################
+export PATH="/Applications/calibre.app/Contents/MacOS:$PATH"
 
 echo "Loaded mac configuration"

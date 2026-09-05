@@ -11,9 +11,16 @@
 # one, the rule matches that exact path only, so DOTFILES.md does not cover
 # DOTFILES.md.bak.
 #
-# This file lists itself, so both branches carry identical rules. A ~ rule
-# naming a path that does not exist on this branch is normal, not an error:
-# ~.zshrc-mac is listed on linux too.
+# This file lists itself, so both branches carry identical rules.
+#
+# The ~ list is meant to stay near-empty. A config file with a platform
+# difference is a shared base plus `-mac` / `-linux` variants that ALSO ship
+# on both branches, so the variants are drift-checked too and only the
+# selection differs per machine. ~/.scripts/platform.sh spells that
+# convention once; every base file loads its variant through it.
+#
+# Reach for ~ only when a file has no meaning at all on the other platform
+# and no shared part worth extracting.
 
 # --- shared -------------------------------------------------------------
 
@@ -24,35 +31,50 @@
 .claude/skills/
 .claude/scripts/
 .claude/data/
+.claude/hooks/
 .claude/CLAUDE.md
 tests/
 .scripts/
 crates/
 docs/research/
 docs/porting-a-fix-across-branches.md
-.config/tmux/tmux-common.conf
-.config/nvim/
 .agents/
 DOTFILES.md
 
-# --- excluded from a shared path ----------------------------------------
+# Shell: one shared .zshrc, loaded variants beside it.
+.zshrc
+.zshrc-mac
+.zshrc-linux
 
-# macOS-only: drives aerospace and osascript, so it cannot pass on linux.
-!tests/notify.test.sh
-# Per-branch by design: each machine's own extra dependencies.
-!.scripts/deps/deps-local.conf
+# Terminal multiplexer: tmux.conf sources its variant last, guarded by
+# `source-file -q` so a missing one is not an error.
+.config/tmux/
+
+# Terminal emulator: alacritty.toml imports a generated pointer
+# (alacritty-platform.toml, untracked) that ~/.scripts/alacritty-platform.sh
+# writes from this machine's variant. Alacritty has no conditional import, so
+# importing both variants directly would apply both everywhere.
+.config/alacritty/
+
+# Editor config: no platform difference at all.
+.config/nvim/
+
+# Setup notes: the platform-specific halves are their own files.
+README.md
+README-MAC.md
+README-LINUX.md
 
 # --- per-branch by design -----------------------------------------------
 
-~.zshrc
-~.zshrc-mac
-~.zshrc-linux
-~.claude/hooks/notify.sh
+# aerospace is a macOS window manager. There is no Linux counterpart to
+# share a base with, and no shared part to extract.
 ~.config/aerospace/
-~.config/alacritty/
+
+# iTerm2 is macOS-only, and this is its exported binary plist rather than
+# hand-written config. Diffing it across branches would report noise from
+# whichever machine last opened the app.
 ~.config/iterm-profiles/
-~.config/tmux/tmux.conf
-~README.md
-~TODO-AGENTS.md
+
 # Planning docs describe code that must match; the docs themselves need not.
 ~docs/superpowers/
+~TODO-AGENTS.md

@@ -18,7 +18,7 @@ name: Test suite (linux + macOS)
 # what the pre-push hook uses locally. That is safe here for a reason worth
 # stating: the tmux suites are flaky on a developer machine because they share
 # the live tmux server with its attached client, its windows, and the six
-# global after-* hooks from .config/tmux/tmux-common.conf that fire the
+# global after-* hooks from .config/tmux/tmux.conf that fire the
 # window-naming script asynchronously. A runner is a fresh VM that never loads
 # that config, so it has no client, no windows, and no hooks -- the same
 # pristine conditions under which the container passes. See the tmux isolation
@@ -91,12 +91,12 @@ jobs:
       # display-message output. The window-naming script uses a tab as its
       # field separator, so every field parse breaks and most of that suite's
       # assertions fail with mangled names.
-      # .config/tmux/tmux.conf opens with
-      # `source-file ~/.config/tmux/tmux-common.conf`, and tmux expands that
-      # `~` against HOME rather than $DOTFILES_ROOT. Without this link the
-      # source-file silently resolves to nothing, so no binding, hook, or
-      # mouse setting is applied and tmux-conf-split.test.sh fails three
-      # assertions.
+      # .config/tmux/tmux.conf ends with a `source-file -q` of its
+      # platform variant (~/.config/tmux/tmux-<platform>.conf), and tmux
+      # expands that `~` against HOME rather than $DOTFILES_ROOT. Without
+      # this link the source-file silently resolves to nothing -- and `-q`
+      # means silently is exactly right -- so no clipboard binding is
+      # applied and tmux-conf-split.test.sh fails its variant assertions.
       #
       # Linking rather than setting HOME to the checkout, which was the first
       # attempt: the checkout is a git repository, and

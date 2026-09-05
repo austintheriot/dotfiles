@@ -142,15 +142,14 @@ for dockerfile in "$DOCKERFILE_UBUNTU" "$DOCKERFILE_ARCH"; do
 
     # --- DEPS_LOCAL_CONF neutralization ---------------------------------
     #
-    # deps-local.conf is per-branch and platform-exclusive. On the mac branch
-    # it lists aerospace, which has no Linux package, so an active
-    # deps-local.conf makes every Linux run fail on a dependency that is
-    # correctly absent. check-deps.sh's read_entries() skips a missing file,
-    # so pointing the variable at a path that does not exist is the
-    # neutralization.
+    # These images verify the shared deps.conf only. check-deps.sh would
+    # otherwise select deps-linux.conf here, whose entries (oh-my-zsh, xclip)
+    # belong to the linux machine rather than to this container.
+    # read_entries() skips a missing file, so pointing the variable at a path
+    # that does not exist is the neutralization.
 
     local_conf=$(sed -n 's/^ENV DEPS_LOCAL_CONF=//p' "$dockerfile")
-    assert_contains "$image sets DEPS_LOCAL_CONF" 'deps-local.conf' "$local_conf"
+    assert_succeeds "$image sets DEPS_LOCAL_CONF" test -n "$local_conf"
     assert_equals "$image points DEPS_LOCAL_CONF at a path that does not exist" \
         'absent' "$([ -e "$local_conf" ] && printf present || printf absent)"
 
@@ -336,61 +335,23 @@ assert_contains 'the arch job runs the image it built' \
 assert_contains 'the local harness tags images the way the arch job does' \
     '"depcheck-$image"' "$(cat "$HARNESS")"
 
-# --- .sync-manifest excludes deps-local.conf ----------------------------
+# --- the deps platform variants are shared, not excluded ----------------
 #
-# deps-local.conf is the one file under .scripts/ that must NOT be
-# identical across branches: it holds each machine's platform-exclusive
-# entries (aerospace on mac). Without the exclusion, config-manifest check
-# reports the whole of .scripts/ as diverged forever.
-#
-# config-manifest check collects every "!" line in a first pass and applies
-# the resulting :(exclude) pathspecs to every path it checks, so manifest line
-# order is genuinely irrelevant here -- the exclusion works above or below
-# `.scripts/`. Asserting an ordering the implementation does not have would
-# be asserting a fiction, so what is asserted is that both lines are present
-# and that the exclusion actually takes effect through the real script.
+# deps-local.conf used to be excluded from .sync-manifest so each branch could
+# carry its own. The deps-mac.conf / deps-linux.conf pair replaced it exactly
+# to end that: both ship on both branches, so both sit inside the drift check
+# like the rest of .scripts/. An exclusion reappearing would quietly take them
+# back out of it.
 
-manifest_lines=$(cat "$MANIFEST")
-assert_contains 'the manifest shares .scripts/' '
-.scripts/
-' "
-$manifest_lines
-"
-assert_contains 'the manifest excludes deps-local.conf' \
-    '!.scripts/deps/deps-local.conf' "$manifest_lines"
+for platform in mac linux; do
+    assert_succeeds "deps-$platform.conf ships on this branch" \
+        test -f "$DOTFILES_ROOT/.scripts/deps/deps-$platform.conf"
+    assert_equals "the manifest does not exclude deps-$platform.conf" \
+        '' "$(grep -nxF "!.scripts/deps/deps-$platform.conf" "$MANIFEST")"
+done
 
-# Driven through config-manifest check rather than asserted as text, because
-# the exclusion is only worth anything if the script honors it. A fixture repo
-# with two branches that differ in exactly deps-local.conf must come back
-# clean; the same repo differing in a sibling file under .scripts/ must not.
-drift_repo=$(make_repo drift-manifest mac)
-mkdir -p "$drift_repo/.scripts/deps"
-cp "$MANIFEST" "$drift_repo/.sync-manifest"
-printf 'aerospace|command -v aerospace|https://example.invalid\n' \
-    > "$drift_repo/.scripts/deps/deps-local.conf"
-printf 'shared\n' > "$drift_repo/.scripts/deps/deps.conf"
-drift_git() { git -C "$drift_repo" -c user.email=t@t -c user.name=t "$@"; }
-drift_git add -A
-drift_git commit -q -m mac
+assert_equals 'the retired deps-local.conf is gone from the manifest' \
+    '' "$(grep -n 'deps-local\.conf' "$MANIFEST")"
 
-drift_git checkout -q -b linux
-printf '' > "$drift_repo/.scripts/deps/deps-local.conf"
-drift_git add -A
-drift_git commit -q -m linux
-
-output=$(DOTFILES_ROOT="$drift_repo" config-manifest check mac linux 2>&1)
-status=$?
-assert_equals 'a deps-local.conf-only difference is not drift' '0' "$status"
-assert_contains 'the manifest exclusion is reported as clean' 'match on all' "$output"
-
-drift_git checkout -q linux
-printf 'drifted\n' > "$drift_repo/.scripts/deps/deps.conf"
-drift_git add -A
-drift_git commit -q -m drift
-
-output=$(DOTFILES_ROOT="$drift_repo" config-manifest check mac linux 2>&1)
-status=$?
-assert_equals 'a sibling file under .scripts/ is still drift' '1' "$status"
-assert_contains 'the drifted path is named' 'diverged: .scripts/' "$output"
 
 finish

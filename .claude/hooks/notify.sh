@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # Claude Code notification helper.
 # Reads the hook JSON payload from stdin, decides whether the user is
-# already looking at this pane, and (if not) fires a macOS notification
-# via terminal-notifier.
+# already looking at this pane, and (if not) fires a macOS notification.
+#
+# macOS-only in effect: it drives aerospace and osascript. It ships on both
+# branches so the drift check covers it, and it is wired up through the
+# `Stop` hook in ~/.claude/settings.json, which is machine-local and
+# untracked -- so nothing invokes this on Linux. Should that change, the
+# guard below exits quietly rather than emitting errors from a missing
+# aerospace on every turn.
 #
 # Args:
 #   $1 - notification kind: "stop" | "notification"
@@ -10,6 +16,10 @@
 set -u
 
 kind="${1:-stop}"
+
+# Not macOS: nothing to do. Silent success, because a hook that fails is
+# noise on every single turn.
+[ "$(uname -s)" = Darwin ] || exit 0
 
 # Overridable so the tests can point these at stubs. The defaults are the real
 # absolute paths, which is what a hook running outside a login shell needs.

@@ -1,3 +1,22 @@
+# Shared Alacritty configuration, byte-identical on the mac and linux branches.
+#
+# This is the file Alacritty loads. Anything platform-specific lives in
+# alacritty-mac.toml / alacritty-linux.toml beside it, and both variants ship
+# on both branches so the drift check covers them too.
+#
+# The import target is a GENERATED pointer, not a named variant. Alacritty has
+# no conditional import, so importing both variants would apply both on every
+# machine -- mac's option_as_alt would be set on Linux. Instead
+# ~/.scripts/alacritty-platform.sh writes alacritty-platform.toml from this
+# machine's variant, and that generated file is the only untracked piece.
+#
+# Import semantics: values in THIS file win over an imported file's, so a
+# variant only adds keys. Keep anything a platform must override out of here.
+# Top-level `import`, not `general.import`: the latter is Alacritty 0.14+
+# and this machine runs 0.13, where it parses as an unknown key and every
+# variant is silently ignored.
+import = ["~/.config/alacritty/alacritty-platform.toml"]
+
 [font]
 size = 14.0
 
@@ -17,18 +36,41 @@ style = "Italic"
 family = "Hack Nerd Font Mono"
 style = "Regular"
 
-[[keyboard.bindings]]
-key = "N"
-mods = "Command"
-
-[keyboard.bindings.command]
-args = ["-n", "/Applications/Alacritty.app"]
-program = "open"
-
 [window]
-option_as_alt = "Both"
 startup_mode = "Maximized"
 
+# Nord. Previously present only on the linux branch, so the two terminals did
+# not match.
+[colors.primary]
+background = "0x2E3440"
+foreground = "0xD8DEE9"
+
+[colors.cursor]
+text = "0x2E3440"
+cursor = "0xD8DEE9"
+
+[colors.normal]
+black = "0x3B4252"
+red = "0xBF616A"
+green = "0xA3BE8C"
+yellow = "0xEBCB8B"
+blue = "0x81A1C1"
+magenta = "0xB48EAD"
+cyan = "0x88C0D0"
+white = "0xE5E9F0"
+
+[colors.bright]
+black = "0x4C566A"
+red = "0xBF616A"
+green = "0xA3BE8C"
+yellow = "0xEBCB8B"
+blue = "0x81A1C1"
+magenta = "0xB48EAD"
+cyan = "0x8FBCBB"
+white = "0xECEFF4"
+
+# Shift+Enter sends an escaped carriage return rather than submitting, which
+# is what Claude Code reads as a newline.
 [[keyboard.bindings]]
 key = "Return"
 mods = "Shift"

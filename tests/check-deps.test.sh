@@ -302,16 +302,19 @@ assert_equals 'every docs url survives parsing' '' "$malformed_docs"
 # shared deps.conf check accepts either path, so the check alone cannot say
 # whether this machine needs oh-my-zsh -- the branch's own zshrc can.
 #
-# Moving oh-my-zsh out of the shared deps.conf into deps-local.conf is
+# Moving oh-my-zsh out of the shared deps.conf into deps-linux.conf is
 # correct, because the mac machine does not use it. The move is only safe
-# while the branch that sources from the oh-my-zsh path still lists it: drop
-# it there and the shell sources a plugin nothing installs, silently losing
-# autosuggestions with every check still reporting success.
+# while the variant whose zshrc sources from the oh-my-zsh path still lists
+# it: drop it there and the shell sources a plugin nothing installs, silently
+# losing autosuggestions with every check still reporting success.
 #
-# Both manifests count, because which file owns oh-my-zsh is per-branch.
-
-DEPS_LOCAL_REAL="$DOTFILES_ROOT/.scripts/deps/deps-local.conf"
-all_tracked=$(cat "$DEPS_CONF_REAL" "$DEPS_LOCAL_REAL" 2>/dev/null \
+# Every manifest counts. Both platform variants ship on both branches now, so
+# this reads all of them rather than only the one this machine selects --
+# which is what lets the mac branch's suite catch a dependency dropped from
+# the linux variant.
+all_tracked=$(cat "$DEPS_CONF_REAL" \
+        "$DOTFILES_ROOT"/.scripts/deps/deps-mac.conf \
+        "$DOTFILES_ROOT"/.scripts/deps/deps-linux.conf 2>/dev/null \
     | sed -e 's/#.*//' | cut -d'|' -f1 | grep -E '^[a-z]' | sort -u)
 
 sources_from_oh_my_zsh=0
@@ -374,7 +377,8 @@ assert_contains 'aerospace trusts the tap before installing' \
 # --- a macOS-only dependency never fails --fix on Linux -----------------
 #
 # The deps-check workflow checks out one branch and runs every platform job
-# against it, so mac's deps-local.conf reaches the Ubuntu and Arch jobs.
+# against it, and deps-mac.conf ships on both branches, so it is present in
+# the Ubuntu and Arch jobs.
 # aerospace has no Linux build at all. Emitting the default
 # `apt-get install aerospace` there produced "E: Unable to locate package
 # aerospace" and failed the whole job, which is what the first real

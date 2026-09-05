@@ -38,7 +38,7 @@ bindkey '\e[1;3C' forward-word   # Alt+Right
 
 # End of lines configured by zsh-newuser-install
 # The following lines were added by compinstall
-zstyle :compinstall filename '/home/austin/.zshrc'
+zstyle :compinstall filename "$HOME/.zshrc"
 
 autoload -Uz compinit
 compinit
@@ -79,7 +79,6 @@ alias sp='source ~/.scripts/tmux-split.sh'
 # Example:
 #   c              # Closes all other panes in current window
 alias c='source ~/.scripts/tmux-close.sh'
-
 
 # [r]ename - Rename tmux window names to match the branches
 # that are active in the directory each window is responsible for
@@ -165,17 +164,26 @@ alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn bui
 
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS #######################################################################
-# mac 
-if [ -f ~/.zshrc-mac ]; then
-    source ~/.zshrc-mac
+# This file is shared byte-for-byte between the mac and linux branches, so
+# everything platform-specific lives in .zshrc-mac / .zshrc-linux beside it.
+# Both variants ship on both branches, which is what keeps them inside
+# `config check` rather than exempt from it.
+source ~/.scripts/platform.sh
+platform_source_variant ~/.zshrc
+
+# Alacritty cannot pick an import by platform, so the pointer it imports is
+# generated here instead. Backgrounded and silenced: it writes only when the
+# content actually changed, but nothing about starting a shell should wait on
+# it or report about it.
+(~/.scripts/alacritty-platform.sh &) >/dev/null 2>&1
+
+# Machine-local, never tracked: work credentials and per-box overrides. These
+# are guarded by existence rather than platform because they are not platform
+# facts -- a WSL box is a linux box that also wants clipboard interop.
+if [ -f ~/.zshrc-wsl ]; then
+    source ~/.zshrc-wsl
 fi
 
-# linux
-if [ -f ~/.zshrc-linux ]; then
-    source ~/.zshrc-linux
-fi
-
-# work
 if [ -f ~/.zshrc-work ]; then
     source ~/.zshrc-work
 fi
@@ -194,9 +202,6 @@ export PATH="$HOME/.local/bin:$PATH"
 export CLAUDE_CODE_DISABLE_MOUSE=1
 export CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1
 
-# ebook-convert ##############################################################################################
-export PATH="/Applications/calibre.app/Contents/MacOS:$PATH"
-
 # CUSTOMIZING COMMAND LINE PROMPT ############################################################################
 # see https://arjanvandergaag.nl/blog/customize-zsh-prompt-with-vcs-info.html
 # creates color formatting string based on current staged status
@@ -213,7 +218,7 @@ setopt prompt_subst
 autoload -Uz vcs_info # enable vcs_info
 precmd () {
     vcs_info # always load before displaying the prompt
-    ~/.scripts/tmux-update-window-names.sh 2>/dev/null # update tmux window names
+    ~/.scripts/tmux-update-window-names.sh >/dev/null 2>&1 # update tmux window names
 }
 zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
 PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} ${VI_MODE_COLOR}λ%f '
@@ -226,10 +231,29 @@ eval "$(zoxide init zsh)"
 # Ctrl+R  : Search command history (fuzzy search with preview)
 # Ctrl+T  : Search files in current directory and subdirectories
 # Alt+C   : Fuzzy cd into subdirectories
-source <(fzf --zsh)
+#
+# Newer fzf (0.48+) ships `fzf --zsh`; older distro-packaged fzf (Ubuntu's apt
+# package) does not, so fall back to the shell-integration scripts it ships
+# under /usr/share/doc/fzf/examples instead.
+if fzf_zsh_init="$(fzf --zsh 2>/dev/null)" && [ -n "$fzf_zsh_init" ]; then
+  eval "$fzf_zsh_init"
+elif [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
+  # 2>/dev/null: this old script's `options=(...)` save/restore trick trips
+  # "can't change option: zle" on this zsh version -- harmless, just noisy.
+  source /usr/share/doc/fzf/examples/key-bindings.zsh 2>/dev/null
+  [ -f /usr/share/doc/fzf/examples/completion.zsh ] && source /usr/share/doc/fzf/examples/completion.zsh 2>/dev/null
+fi
+unset fzf_zsh_init
 
 # Ctrl+G  : Fuzzy-pick a git branch and paste it onto the command line
 source ~/.scripts/zsh-git-widgets.sh
+
+# SETUP NVM ################################################################################################
+# NVM_DIR is set here, once, because both platform variants need it. Each
+# variant then installs its own lazy `nvm` shim: the mac and linux nvm
+# installs put the newest node in different places, but neither may pay the
+# 2.4s of sourcing nvm.sh at startup. `se` builds 107 panes.
+export NVM_DIR="$HOME/.nvm"
 
 # SETUP PYENV ##############################################################################################
 # Lazy, the same shape as nvm in .zshrc-mac.
@@ -273,7 +297,7 @@ pyenv() {
 }
 
 # BUN SHELL COMPLETIONS ####################################################################################
-[ -s "/Users/austin/.bun/_bun" ] && source "/Users/austin/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 # VI MODE INDICATOR ########################################################################################
 # zsh picks the vi keymap at startup because EDITOR/VISUAL contain "vi" (nvim).

@@ -33,7 +33,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   every pane switch. Note `/usr/bin/python3` is not a fallback -- it is an
   xcrun stub that does not run without the Xcode command line tools.
 
-- Load pyenv lazily, the same shape as nvm. `eval "$(pyenv init - zsh)"`
+- [CLAIMED] Load pyenv lazily, the same shape as nvm. `eval "$(pyenv init - zsh)"`
   at `.zshrc:225` costs 0.73s per shell: it spawns `bash --norc` just to
   dedupe PATH, then a `pyenv rehash` subprocess (0.52s of the total).
   Put `$PYENV_ROOT/shims` on PATH directly, export PYENV_SHELL=zsh, and

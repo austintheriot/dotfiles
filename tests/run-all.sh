@@ -4,8 +4,18 @@
 # directory, and the unit tests that live next to the code they cover.
 #
 # Usage:
-#   ~/tests/run-all.sh          run everything
-#   ~/tests/run-all.sh -q       print only failures and the summary
+#   ~/tests/run-all.sh              run everything
+#   ~/tests/run-all.sh -q           print only failures and the summary
+#   ~/tests/run-all.sh <suite>      run one integration suite, by name
+#
+# A suite name is matched exactly, with or without the .test.sh suffix. A name
+# that matches nothing is an error rather than a run of zero suites: the
+# failure worth preventing is a green report from a run that tested nothing,
+# and a typo is how that happens.
+#
+# Naming a suite runs the integration suites only. The python and cargo runs
+# are whole-suite concerns with their own runners; `cargo test <filter>` and
+# `python3 -m unittest <name>` already exist for a narrower run there.
 #
 # Exits non-zero when anything fails, so a pre-commit hook can gate on it.
 #
@@ -31,7 +41,44 @@ case ":$PATH:" in
 esac
 
 quiet=0
-[ "${1:-}" = '-q' ] && quiet=1
+only=''
+for arg in "$@"; do
+    case $arg in
+        -q) quiet=1 ;;
+        -*)
+            printf 'run-all: unknown option %s\n' "$arg" >&2
+            printf 'usage: run-all.sh [-q] [suite]\n' >&2
+            exit 2
+            ;;
+        *)
+            if [ -n "$only" ]; then
+                printf 'run-all: name at most one suite (got %s and %s)\n' \
+                    "$only" "$arg" >&2
+                exit 2
+            fi
+            # Accepted with or without the suffix: `config test <suite>` passes
+            # a bare name, and tab-completing a path gives the filename.
+            only=${arg%.test.sh}
+            ;;
+    esac
+done
+
+if [ -n "$only" ] && [ ! -e "$TESTS_DIR/$only.test.sh" ]; then
+    printf 'run-all: no suite named %s in %s\n' "$only" "$TESTS_DIR" >&2
+    printf 'run-all: available suites:\n' >&2
+    for suite in "$TESTS_DIR"/*.test.sh; do
+        [ -e "$suite" ] || continue
+        printf '  %s\n' "$(basename "$suite" .test.sh)" >&2
+    done
+    exit 1
+fi
+
+# Every discovery loop below asks this rather than testing $only itself, so
+# the filter is applied in one place and the [n/total] count cannot disagree
+# with what actually runs.
+selected() {
+    [ -z "$only" ] || [ "$1" = "$only.test.sh" ]
+}
 
 suites_run=0
 suites_failed=0
@@ -76,11 +123,27 @@ run_suite() {
 integration_count=0
 for suite in "$TESTS_DIR"/*.test.sh; do
     [ -e "$suite" ] || continue
+    selected "$(basename "$suite")" || continue
     integration_count=$((integration_count + 1))
 done
 
+# The real interpreter, not the pyenv shim. lib.sh resolves this the same way
+# for the suites; run-all.sh does not source lib.sh, so it repeats the four
+# lines rather than sourcing a harness it otherwise has no use for.
+#
+# The shim is a bash script that execs `pyenv exec python3`, measured at 750ms
+# per start against 40ms for the interpreter it reaches. This file gates a
+# pre-commit hook.
+PYTHON_BIN=''
+if command -v pyenv >/dev/null 2>&1; then
+    PYTHON_BIN=$(pyenv which python3 2>/dev/null)
+    [ -n "$PYTHON_BIN" ] && [ -x "$PYTHON_BIN" ] || PYTHON_BIN=''
+fi
+[ -n "$PYTHON_BIN" ] || PYTHON_BIN=$(command -v python3 2>/dev/null || true)
+export PYTHON_BIN
+
 python_dirs=''
-if command -v python3 >/dev/null 2>&1; then
+if [ -z "$only" ] && [ -n "$PYTHON_BIN" ]; then
     python_dirs=$(find "$DOTFILES_ROOT/.claude" "$DOTFILES_ROOT/.scripts" \
                      -name 'test_*.py' -type f -not -path '*/plugins/*' \
                      -exec dirname {} + 2>/dev/null | sort -u)
@@ -93,7 +156,7 @@ fi
 
 cargo_manifest="$DOTFILES_ROOT/crates/config-manifest/Cargo.toml"
 cargo_count=0
-if command -v cargo >/dev/null 2>&1 && [ -f "$cargo_manifest" ]; then
+if [ -z "$only" ] && command -v cargo >/dev/null 2>&1 && [ -f "$cargo_manifest" ]; then
     cargo_count=1
 fi
 
@@ -103,16 +166,19 @@ total_suites=$((integration_count + python_count + cargo_count))
 
 for suite in "$TESTS_DIR"/*.test.sh; do
     [ -e "$suite" ] || continue
+    selected "$(basename "$suite")" || continue
     run_suite "$(basename "$suite")" "$suite"
 done
 
 # --- unit tests, discovered next to the code they cover ----------------
 
-if command -v python3 >/dev/null 2>&1; then
+if [ -n "$only" ]; then
+    : # as above: not a skip for want of python3, but a narrower run.
+elif [ -n "$PYTHON_BIN" ]; then
     while IFS= read -r directory; do
         [ -n "$directory" ] || continue
         run_suite "python unit tests in ${directory#"$DOTFILES_ROOT"/}" \
-            python3 -m unittest discover -s "$directory" -p 'test_*.py'
+            "$PYTHON_BIN" -m unittest discover -s "$directory" -p 'test_*.py'
     done <<< "$python_dirs"
 else
     printf 'SKIP  python unit tests (python3 not found)\n'
@@ -127,6 +193,9 @@ if [ "$cargo_count" -eq 1 ]; then
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/config-manifest/target}"
     run_suite "cargo test in crates/config-manifest" \
         cargo test --locked --quiet --manifest-path "$cargo_manifest"
+elif [ -n "$only" ]; then
+    : # a named suite is an integration suite; saying "cargo not found" here
+      # would be false, and cargo has its own filter.
 else
     printf 'SKIP  cargo test (cargo not found)\n'
 fi

@@ -17,6 +17,33 @@ set -u
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_OBJECT_DIRECTORY
 
 DOTFILES_ROOT=${DOTFILES_ROOT:-$HOME}
+
+# The real interpreter, resolved once for every suite that sources this.
+#
+# The `python3` on PATH is a pyenv shim: a bash script that execs
+# `pyenv exec python3`, which re-resolves the version and execs again.
+# Measured at 750ms per call against 40ms for the interpreter it eventually
+# reaches. A suite that spells `python3` pays that on every call, and
+# run-all.sh gates a pre-commit hook.
+#
+# `pyenv which` is itself a shim call, so it is paid once here and only where
+# pyenv is actually in use. Everything degrades to whatever `python3` means on
+# this machine. /usr/bin/python3 is deliberately not a fallback: on macOS it is
+# an xcrun stub that does not run without the Xcode command line tools.
+resolve_python() {
+    local candidate
+    if command -v pyenv >/dev/null 2>&1; then
+        candidate=$(pyenv which python3 2>/dev/null)
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            printf '%s' "$candidate"
+            return
+        fi
+    fi
+    command -v python3 2>/dev/null || command -v python 2>/dev/null || true
+}
+PYTHON_BIN=$(resolve_python)
+export PYTHON_BIN
+
 FIXTURES=$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-test-XXXXXX")
 TEST_NAME=$(basename "${BASH_SOURCE[1]:-$0}" .test.sh)
 

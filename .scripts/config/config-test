@@ -1,8 +1,29 @@
 #!/bin/sh
 # help: Run the test suite, optionally in Docker or in a watch loop
+#
+# usage: config test [-q|--quiet] [-d|--docker] [-w|--watch] [suite]
+#
+# Runs every suite in ~/tests by default. Name a suite to run only that one:
+# `config test check-deps` runs tests/check-deps.test.sh.
+#
+# Options:
+#   -q, --quiet    Print only failures and the summary, not every passing
+#                  assertion. Honored by the whole-suite run only, so it
+#                  cannot be combined with --docker or a suite name.
+#   -d, --docker   Run in the Debian container from tests/docker/, the same
+#                  image the pre-push hook uses. Slower, and the container has
+#                  no repository, so git-dependent assertions skip there.
+#   -w, --watch    Rerun after every change to a tracked file. Polls a
+#                  checksum once a second. Cannot be combined with --docker,
+#                  which would rebuild the image on every keystroke.
+#
+# Exits 2 on a usage error, otherwise the exit status of the suite.
 set -eu
 
-usage='usage: config test [-q] [--docker] [--watch] [suite]'
+. "$(dirname "$(readlink -f "$0")")/usage.sh"
+usage_if_requested "${1:-}"
+
+usage='usage: config test [-q|--quiet] [-d|--docker] [-w|--watch] [suite]'
 quiet=''
 docker=''
 watch=''
@@ -10,9 +31,9 @@ suite=''
 
 for arg in "$@"; do
     case $arg in
-        -q) quiet=-q ;;
-        --docker) docker=yes ;;
-        --watch) watch=yes ;;
+        -q|--quiet) quiet=-q ;;
+        -d|--docker) docker=yes ;;
+        -w|--watch) watch=yes ;;
         -*) printf '%s\n' "$usage" >&2; exit 2 ;;
         *) [ -z "$suite" ] || { printf '%s\n' "$usage" >&2; exit 2; }; suite=$arg ;;
     esac

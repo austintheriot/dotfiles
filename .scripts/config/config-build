@@ -11,13 +11,20 @@
 # earlier on PATH passed the check too. A stamp inside the binary is the
 # binary's own claim about what it was built from.
 #
-# Usage: config-build
-#   DOTFILES_ROOT      repo root (default $HOME)
-#   CARGO_TARGET_DIR   default $HOME/.cache/config-manifest/target, so no
-#                      target/ lands inside the tracked tree
-#   CONFIG_BIN_DIR     default $HOME/.local/bin
+# usage: config build
+#
+# Takes no options.
+#
+# Environment:
+#   DOTFILES_ROOT      Repo root. Default $HOME.
+#   CARGO_TARGET_DIR   Default $HOME/.cache/config-manifest/target, so no
+#                      target/ lands inside the tracked tree.
+#   CONFIG_BIN_DIR     Where to install the binary. Default $HOME/.local/bin.
 
 set -eu
+
+. "$(dirname "$(readlink -f "$0")")/usage.sh"
+usage_if_requested "${1:-}"
 
 ROOT=${DOTFILES_ROOT:-$HOME}
 CRATE_DIR="$ROOT/crates/config-manifest"

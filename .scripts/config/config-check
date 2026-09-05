@@ -1,3 +1,26 @@
 #!/bin/sh
 # help: Report drift between the mac and linux branches on shared paths
+#
+# usage: config check [ref-a] [ref-b]
+#
+# Compares two refs on the paths .sync-manifest marks as shared and reports
+# which ones differ. Defaults to origin/mac against origin/linux, so a bare
+# `config check` answers "have the two branches drifted".
+#
+# Arguments:
+#   ref-a   The ref whose .sync-manifest defines the shared paths.
+#           Default origin/mac.
+#   ref-b   The ref to compare against. Default origin/linux.
+#
+# Options:
+#   --root <dir>   The worktree to operate on. Default $HOME. Also read from
+#                  DOTFILES_ROOT.
+#
+# Exits non-zero when the two refs differ on a shared path, so the pre-push
+# hook can gate on it. Run `config-manifest check --help` for the full list.
+set -eu
+
+. "$(dirname "$(readlink -f "$0")")/usage.sh"
+usage_if_requested "${1:-}"
+
 exec config-manifest check "$@"

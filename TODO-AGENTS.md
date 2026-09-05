@@ -23,7 +23,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 - `tests/tmux-update-window-names.test.sh` fails intermittently (1 of 33
   assertions) on a live tmux server and passes on rerun; find the timing
   dependency and make the assertion deterministic.
-- Batch the tmux queries in `.scripts/tmux-update-window-names.sh`. It
+- [CLAIMED] Batch the tmux queries in `.scripts/tmux-update-window-names.sh`. It
   fires on 6 hooks including `after-select-pane`, costs 110-200ms, and
   spawns 13 subprocesses because it loops over windows calling
   `display-message -p -t` once each. One call replaces the loop:

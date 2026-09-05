@@ -2,7 +2,10 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- Migrate the rest of the `config ...` scripts to Rust
+- Readme cleanup:
+  - "Welcome! Here is my rather unpolished .dotfile configuration. Below are some setup notes to my future self, for when I inevitably completely forget what I did or how I did it." remove this. This dotfiles repo is now quite polished.
+    - Also cut down the README.md down to the most basic need-to-known eli5 details
+  - Migrate the rest of the `config ...` scripts to Rust
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so
   `xargs -0` cannot address it; a binary diff has no `+` lines for the

@@ -1,0 +1,17 @@
+# macOS-specific Alacritty configuration. Imported by the shared
+# alacritty.toml. Ships on both branches so the drift check covers it; the
+# keys here are macOS-only and Alacritty ignores them elsewhere.
+
+# Cmd+N opens a new Alacritty window. `open -n` is macOS's launcher.
+[[keyboard.bindings]]
+key = "N"
+mods = "Command"
+
+[keyboard.bindings.command]
+args = ["-n", "/Applications/Alacritty.app"]
+program = "open"
+
+# Treat both Option keys as Alt so Alt+Left/Right word-navigation reaches zsh
+# instead of inserting a special character.
+[window]
+option_as_alt = "Both"

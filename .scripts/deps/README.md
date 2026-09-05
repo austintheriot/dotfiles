@@ -10,19 +10,19 @@ is the prose version. The manifest in this directory is the executable one.
   `linux` branches. `.sync-manifest` covers `.scripts/` as a whole
   directory, so this file is checked for drift between the two branches.
   One line per dependency: `name|check_command|docs_url`.
-- `deps-local.conf` -- dependencies that exist on one branch only. Same
-  format. `.sync-manifest` excludes this file with the line
-  `!.scripts/deps/deps-local.conf`, so each branch carries its own copy
-  and the drift check does not flag the difference. On the `mac` branch this
-  file holds `aerospace`. It also holds `oh-my-zsh` on a branch whose machine
-  uses oh-my-zsh. This machine does not, so `oh-my-zsh` is absent here.
-- `check-deps.sh` -- the engine. Reads `deps.conf`, then `deps-local.conf` if
-  that file exists.
+- `deps-mac.conf` / `deps-linux.conf` -- dependencies that belong to one
+  platform only. Same format. Both files ship on both branches and are
+  covered by the drift check like everything else under `.scripts/`; what
+  differs per machine is only which one gets read. `deps-mac.conf` holds
+  `aerospace`; `deps-linux.conf` holds `oh-my-zsh` and `xclip`.
+- `check-deps.sh` -- the engine. Reads `deps.conf`, then whichever of
+  `deps-mac.conf` and `deps-linux.conf` matches this machine, if that file
+  exists. The platform comes from `~/.scripts/platform.sh`, and the
+  `DEPS_LOCAL_CONF` environment variable overrides the choice.
 - `depcheck-hook.sh` -- sourced from `.zshrc`. Defines the `depcheck` alias
   and a startup check that runs at most once every 24 hours. The logic lives
-  here rather than inside `.zshrc` so that `.sync-manifest` covers it. The
-  platform-conditional content of `.zshrc` itself is not covered, and can
-  drift between branches without anything noticing.
+  here rather than inside `.zshrc` so that `.sync-manifest` covers it.
+  `.zshrc` is now covered too, along with `.zshrc-mac` and `.zshrc-linux`.
 - `docker/Dockerfile.ubuntu`, `docker/Dockerfile.arch` -- minimal images for
   exercising a bootstrap from scratch. Used by `test-local.sh` and by
   `.github/workflows/deps-check.yml`.
@@ -69,8 +69,8 @@ platform that runs it:
 
 ## Adding a dependency
 
-Add a line to `deps.conf`, or to `deps-local.conf` when the dependency
-belongs to one branch only.
+Add a line to `deps.conf`, or to `deps-mac.conf` / `deps-linux.conf` when
+the dependency belongs to one platform only.
 
 The default install command is `<package manager> install <name>`, which is
 correct while the package name matches the `name` field. When the names

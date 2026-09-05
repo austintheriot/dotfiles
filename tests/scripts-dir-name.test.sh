@@ -258,7 +258,12 @@ assert_succeeds 'the CI path filter watches .scripts' \
 manifest="$DOTFILES_ROOT/.sync-manifest"
 assert_succeeds 'the manifest shares the .scripts directory' \
     grep -qxF "$NEW_NAME/" "$manifest"
-assert_succeeds 'the manifest still excludes the local deps config' \
-    grep -qxF "!$NEW_NAME/deps/deps-local.conf" "$manifest"
+
+# The directory is shared with no exclusions carved out of it. deps-local.conf
+# used to be one; the deps-mac.conf / deps-linux.conf pair replaced it so that
+# both platforms' dependency lists sit inside the drift check rather than
+# outside it. A new exclusion under here would take files back out.
+assert_equals 'no path under .scripts is excluded from the manifest' \
+    '' "$(grep -nE "^!$NEW_NAME/" "$manifest")"
 
 finish

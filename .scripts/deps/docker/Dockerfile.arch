@@ -47,15 +47,13 @@ COPY .scripts/deps /dotfiles/.scripts/deps
 WORKDIR /dotfiles
 
 ENV HOME=/root
-# deps-local.conf is per-branch and platform-exclusive by design (see the
-# `!.scripts/deps/deps-local.conf` line in .sync-manifest). On the mac
-# branch it lists aerospace, a macOS window manager with no Linux package,
-# so leaving it active here would make every Linux run fail on a dependency
-# that is correctly absent. Point DEPS_LOCAL_CONF at a path that does not
-# exist: check-deps.sh's read_entries() skips a missing file, so these
-# containers test the shared deps.conf only. That is the right scope --
-# these images verify the cross-platform manifest, and a mac-exclusive
-# dependency is by definition not verifiable on Linux.
-ENV DEPS_LOCAL_CONF=/nonexistent/deps-local.conf
+# These images verify the shared, cross-platform deps.conf only.
+#
+# check-deps.sh would otherwise select deps-linux.conf here, which lists
+# oh-my-zsh and xclip: real dependencies of the linux machine, but not of
+# this container, whose job is the shared manifest. Point DEPS_LOCAL_CONF at
+# a path that does not exist -- read_entries() skips a missing file -- so the
+# platform variant is excluded without pretending it is empty.
+ENV DEPS_LOCAL_CONF=/nonexistent/deps-platform.conf
 ENTRYPOINT ["/dotfiles/.scripts/deps/check-deps.sh"]
 CMD ["--fix", "--yes"]

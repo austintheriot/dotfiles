@@ -38,7 +38,7 @@ bindkey '\e[1;3C' forward-word   # Alt+Right
 
 # End of lines configured by zsh-newuser-install
 # The following lines were added by compinstall
-zstyle :compinstall filename '/home/austin/.zshrc'
+zstyle :compinstall filename "$HOME/.zshrc"
 
 autoload -Uz compinit
 compinit
@@ -164,22 +164,26 @@ alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn bui
 
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS #######################################################################
-# mac
-if [ -f ~/.zshrc-mac ]; then
-    source ~/.zshrc-mac
-fi
+# This file is shared byte-for-byte between the mac and linux branches, so
+# everything platform-specific lives in .zshrc-mac / .zshrc-linux beside it.
+# Both variants ship on both branches, which is what keeps them inside
+# `config check` rather than exempt from it.
+source ~/.scripts/platform.sh
+platform_source_variant ~/.zshrc
 
-# linux
-if [ -f ~/.zshrc-linux ]; then
-    source ~/.zshrc-linux
-fi
+# Alacritty cannot pick an import by platform, so the pointer it imports is
+# generated here instead. Backgrounded and silenced: it writes only when the
+# content actually changed, but nothing about starting a shell should wait on
+# it or report about it.
+(~/.scripts/alacritty-platform.sh &) >/dev/null 2>&1
 
-# wsl-specific tweaks (clipboard interop, etc.) -- no-op if this file doesn't exist
+# Machine-local, never tracked: work credentials and per-box overrides. These
+# are guarded by existence rather than platform because they are not platform
+# facts -- a WSL box is a linux box that also wants clipboard interop.
 if [ -f ~/.zshrc-wsl ]; then
     source ~/.zshrc-wsl
 fi
 
-# work
 if [ -f ~/.zshrc-work ]; then
     source ~/.zshrc-work
 fi
@@ -228,8 +232,8 @@ eval "$(zoxide init zsh)"
 # Ctrl+T  : Search files in current directory and subdirectories
 # Alt+C   : Fuzzy cd into subdirectories
 #
-# Newer fzf (0.48+) ships `fzf --zsh`; older distro-packaged fzf (e.g. Ubuntu's
-# apt package) doesn't, so fall back to the shell-integration scripts it ships
+# Newer fzf (0.48+) ships `fzf --zsh`; older distro-packaged fzf (Ubuntu's apt
+# package) does not, so fall back to the shell-integration scripts it ships
 # under /usr/share/doc/fzf/examples instead.
 if fzf_zsh_init="$(fzf --zsh 2>/dev/null)" && [ -n "$fzf_zsh_init" ]; then
   eval "$fzf_zsh_init"
@@ -244,12 +248,53 @@ unset fzf_zsh_init
 # Ctrl+G  : Fuzzy-pick a git branch and paste it onto the command line
 source ~/.scripts/zsh-git-widgets.sh
 
+# SETUP NVM ################################################################################################
+# NVM_DIR is set here, once, because both platform variants need it. Each
+# variant then installs its own lazy `nvm` shim: the mac and linux nvm
+# installs put the newest node in different places, but neither may pay the
+# 2.4s of sourcing nvm.sh at startup. `se` builds 107 panes.
+export NVM_DIR="$HOME/.nvm"
+
 # SETUP PYENV ##############################################################################################
+# Lazy, the same shape as nvm in .zshrc-mac.
+#
+# `eval "$(pyenv init - zsh)"` cost 380ms at every startup, measured here. Two
+# things account for nearly all of it: a `bash --norc` spawned only to strip
+# the shims directory out of PATH before putting it back, and `pyenv rehash`
+# at 250ms on its own.
+#
+# Neither is needed for python3 to resolve. What `pyenv init` leaves behind is
+# the shims directory on PATH and PYENV_SHELL set, and both are reached here
+# directly. rehash regenerates the shim files, which change when a version or
+# a package with an entry point is installed -- a `pyenv install` concern, not
+# a per-shell one. `pyenv rehash` is still there to run by hand, and `pyenv
+# install` runs it itself.
+#
+# The prepend is guarded rather than unconditional: re-sourcing .zshrc would
+# otherwise stack a second copy of the shims directory onto PATH. That guard
+# is what the `bash --norc` in pyenv's own init was buying.
 export PYENV_ROOT="$HOME/.pyenv"
-if command -v pyenv >/dev/null 2>&1; then
-  [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-  eval "$(pyenv init - zsh)"
+export PYENV_SHELL=zsh
+if [[ -d $PYENV_ROOT/shims && ":$PATH:" != *":$PYENV_ROOT/shims:"* ]]; then
+    export PATH="$PYENV_ROOT/shims:$PATH"
 fi
+[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+
+# The real init is paid for on the first `pyenv` call.
+#
+# The unfunction is belt and braces, not the thing that prevents recursion:
+# `pyenv init - zsh` emits its own `pyenv` function, so the eval replaces this
+# one before the re-dispatch either way (verified). It is here so the shim is
+# gone even if a future pyenv stops emitting that function, which would
+# otherwise turn this into an infinite loop rather than a visible error.
+#
+# `command pyenv` rather than `pyenv`, so the lookup skips this function and
+# finds the real binary regardless of the unfunction's timing.
+pyenv() {
+    unfunction pyenv
+    eval "$(command pyenv init - zsh)"
+    pyenv "$@"
+}
 
 # BUN SHELL COMPLETIONS ####################################################################################
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
@@ -301,10 +346,6 @@ bindkey -M viins '^?' backward-delete-char
 bindkey -M viins '^H' backward-delete-char
 bindkey -M viins '^W' backward-kill-word
 bindkey -M viins '^U' backward-kill-line
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 # DEPENDENCY CHECK #########################################################################################
 [ -f ~/.scripts/deps/depcheck-hook.sh ] && source ~/.scripts/deps/depcheck-hook.sh

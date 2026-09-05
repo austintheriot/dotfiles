@@ -162,12 +162,21 @@ oh_my_zsh_shared=$(printf '%s\n' "$conf_names" | grep -cx 'oh-my-zsh')
 assert_equals 'oh-my-zsh is absent from deps.conf, as documented' \
     '0' "$oh_my_zsh_shared"
 
-# --- the documented deps-local.conf exclusion matches .sync-manifest ----
+# --- the platform variants are shared, not excluded ---------------------
+#
+# deps-local.conf used to be excluded from .sync-manifest so each branch
+# could carry its own. The variants replaced it precisely to end that: both
+# ship on both branches, so both are inside the drift check. An exclusion
+# reappearing would silently take them back out of it.
+for platform in mac linux; do
+    assert_succeeds "deps-$platform.conf ships here" \
+        test -f "$DEPS_DIR/deps-$platform.conf"
+    assert_equals "the manifest does not exclude deps-$platform.conf" \
+        '' "$(grep -nxF "!.scripts/deps/deps-$platform.conf" "$MANIFEST")"
+done
 
-assert_contains 'the deps README documents the manifest exclusion' \
-    '!.scripts/deps/deps-local.conf' "$deps_readme"
-assert_succeeds 'the manifest really excludes deps-local.conf' \
-    grep -qxF '!.scripts/deps/deps-local.conf' "$MANIFEST"
+assert_equals 'the retired deps-local.conf is gone' \
+    '' "$(grep -n 'deps-local\.conf' "$deps_readme")"
 
 # --- the documented pipe constraint matches read_entries ----------------
 #

@@ -1,7 +1,8 @@
 #!/bin/sh
 #
 # Checks whether the CLI dependencies listed in deps.conf (and, if present,
-# deps-local.conf) are installed, and optionally installs the missing ones.
+# this platform's deps-<platform>.conf) are installed, and optionally
+# installs the missing ones.
 #
 # Usage:
 #   check-deps.sh                 check only, exit 1 if anything is missing
@@ -13,10 +14,13 @@
 #                                  running it (always exits 0)
 #
 # Reads dependencies from $DEPS_CONF (default: deps.conf next to this
-# script) and, if it exists, $DEPS_LOCAL_CONF (default: deps-local.conf next
-# to this script) -- the platform-exclusive dependencies that don't belong in
-# the shared, cross-branch-identical deps.conf. See README.md in this
-# directory for the manifest format and how to add a new dependency.
+# script) and, if it exists, $DEPS_LOCAL_CONF -- the platform-exclusive
+# dependencies that don't belong in the shared, cross-branch-identical
+# deps.conf. That defaults to deps-mac.conf or deps-linux.conf beside this
+# script, chosen by ~/.scripts/platform.sh. Both variants ship on both
+# branches, so the drift check covers them; only the selection differs per
+# machine. See README.md in this directory for the manifest format and how to
+# add a new dependency.
 #
 # Exit code:
 #   without --fix: non-zero if anything is missing (informational -- used by
@@ -32,7 +36,27 @@ set -u
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 DEPS_CONF=${DEPS_CONF:-"$SCRIPT_DIR/deps.conf"}
-DEPS_LOCAL_CONF=${DEPS_LOCAL_CONF:-"$SCRIPT_DIR/deps-local.conf"}
+
+# platform.sh lives one directory up and defines platform_variant, which
+# spells the deps.conf -> deps-<platform>.conf convention in one place.
+#
+# Sourced only when the caller has not already chosen a variant, and only
+# when it is actually there. This script is run from stripped environments --
+# the Docker images set DEPS_LOCAL_CONF explicitly, and a test harness may
+# invoke it with a PATH that has no `dirname`, which leaves SCRIPT_DIR empty.
+# Neither case needs platform detection, and neither should fail because of
+# it.
+if [ -z "${DEPS_LOCAL_CONF:-}" ]; then
+    if [ -f "$SCRIPT_DIR/../platform.sh" ]; then
+        # shellcheck source=../platform.sh
+        . "$SCRIPT_DIR/../platform.sh"
+        DEPS_LOCAL_CONF=$(platform_variant "$SCRIPT_DIR/deps.conf")
+    else
+        # No platform helper reachable: the shared manifest is the whole
+        # check. read_entries() skips a file that is not there.
+        DEPS_LOCAL_CONF=''
+    fi
+fi
 
 # The curl-to-shell installers below write outside a default non-login PATH:
 # zoxide to ~/.local/bin, rustup to ~/.cargo/bin. Without these, a `command

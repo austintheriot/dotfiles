@@ -1,0 +1,10 @@
+# Linux/WSL-specific Alacritty configuration. Imported by the shared
+# alacritty.toml. Ships on both branches so the drift check covers it.
+#
+# Deliberately near-empty: everything this platform needs is already in the
+# shared alacritty.toml. The file exists so the split is symmetric and so
+# there is an obvious place to put a Linux-only key, rather than the next one
+# going into the shared file and drifting.
+#
+# `option_as_alt` is macOS-only and is not needed here: on Linux the Alt key
+# already reports as Alt.

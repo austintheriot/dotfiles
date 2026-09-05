@@ -19,5 +19,12 @@ if [ -n "${TMUX:-}" ]; then
     printf 'reloaded tmux config\n'
 fi
 
+# Alacritty has no conditional import, so the file it imports is generated
+# from this machine's variant. Regenerated here because editing a variant is
+# exactly when it goes stale. Alacritty picks the result up on its own.
+if "$HOME/.scripts/alacritty-platform.sh"; then
+    printf 'regenerated alacritty platform config\n'
+fi
+
 printf 'a child process cannot re-source the calling shell; run the line below\n' >&2
 printf 'source ~/.zshrc\n'

@@ -1,9 +1,12 @@
 #!/bin/bash
 #
-# Confirms the tmux.conf / tmux-common.conf split preserves the config's
-# actual behavior: the file parses cleanly, and specific keybindings/hooks
-# that move into tmux-common.conf still resolve when tmux loads the real,
-# split ~/.config/tmux/tmux.conf.
+# Confirms the tmux.conf / tmux-<platform>.conf split preserves the config's
+# actual behavior: the file parses cleanly, the shared keybindings and hooks
+# resolve, and the platform variant's clipboard binding is the one in effect.
+#
+# tmux.conf is the shared file, byte-identical on both branches.
+# tmux-mac.conf and tmux-linux.conf hold the clipboard commands and both ship
+# on both branches, so the drift check covers them too.
 #
 # Runs against the real installed config file, on a throwaway tmux SERVER
 # (its own -L socket), not the developer's live server. `-f` only takes
@@ -41,13 +44,37 @@ assert_contains 'the window-naming after-new-window hook survives the split' \
 
 assert_equals 'mouse mode is on' 'on' "$(tmux_t show-options -g -v mouse)"
 
-# Reads the actually-configured command from the file rather than hardcoding
-# xclip or pbcopy: this test file is itself one of the paths .sync-manifest
-# requires to be identical between the mac and linux branches, so it can't
-# hardcode either platform's command without recreating the exact drift this
-# whole mechanism exists to catch.
-expected_yank_cmd=$(sed -n "s/.*copy-mode-vi 'y'.*copy-pipe \"\([^\"]*\)\".*/\1/p" "$CONFIG")
+# --- the platform variant is the one that took effect ------------------------
+
+# Read from the variant file for THIS platform rather than hardcoding xclip
+# or pbcopy: this test file is itself shared between the mac and linux
+# branches, so naming either platform's command here would recreate the exact
+# drift the whole mechanism exists to catch.
+. "$DOTFILES_ROOT/.scripts/platform.sh"
+VARIANT=$(platform_variant "$CONFIG")
+
+assert_succeeds 'this platform has a tmux variant file' test -f "$VARIANT"
+
+# Both variants ship on both branches, so the one for the other platform must
+# be here too -- that is what keeps it inside `config check`.
+other_platform=mac; [ "$DOTFILES_PLATFORM" = mac ] && other_platform=linux
+assert_succeeds "the $other_platform variant also ships here" \
+    test -f "$DOTFILES_ROOT/.config/tmux/tmux-$other_platform.conf"
+
+expected_yank_cmd=$(sed -n "s/.*copy-mode-vi 'y'.*copy-pipe \"\([^\"]*\)\".*/\1/p" "$VARIANT")
+# Guards against the assertion below passing vacuously: assert_contains with
+# an empty needle matches anything, which is exactly what happened when the
+# clipboard bindings moved out of tmux.conf and this still read from it.
+assert_succeeds 'the variant names a yank command' test -n "$expected_yank_cmd"
+
 yank_binding=$(tmux_t list-keys -T copy-mode-vi | grep "copy-pipe")
-assert_contains 'the platform yank command is present' "$expected_yank_cmd" "$yank_binding"
+assert_contains 'the platform yank command is in effect' "$expected_yank_cmd" "$yank_binding"
+
+# The other platform's command must NOT be bound. Sourcing both variants
+# would leave whichever loaded last in charge, silently, on both machines.
+other_yank_cmd=$(sed -n "s/.*copy-mode-vi 'y'.*copy-pipe \"\([^\"]*\)\".*/\1/p" \
+    "$DOTFILES_ROOT/.config/tmux/tmux-$other_platform.conf")
+assert_equals "the $other_platform yank command is not bound" \
+    '' "$(printf '%s' "$yank_binding" | grep -oF "$other_yank_cmd")"
 
 finish

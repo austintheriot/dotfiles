@@ -8,19 +8,37 @@ on:
 permissions:
   contents: read
 
+# Deliberately NOT keyed on github.ref, unlike test-suite.yml. This job
+# compares mac against linux, so a run for either branch is answering the
+# same question about the same pair. When the two branches are pushed
+# separately, the second push's run supersedes the first one, which was
+# comparing against a tip that has since moved. Keying on the ref would put
+# the two runs in different groups and cancel neither, which is the state
+# this group exists to avoid.
+concurrency:
+  group: branch-drift
+  cancel-in-progress: true
+
 jobs:
   check:
     name: Compare shared paths
     runs-on: ubuntu-latest
+    # `config push-all` lands both refs at once, so this job waits on nothing
+    # and a run that is still going after ten minutes is stuck, not slow.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      # The leading + forces the update. Without it a force-push landing
+      # between the checkout and this step makes the fetch fail outright,
+      # which reports as a broken job rather than as whatever the drift
+      # check would have said.
       - name: Fetch both branches
         run: |
-          git fetch origin mac:refs/remotes/origin/mac
-          git fetch origin linux:refs/remotes/origin/linux
+          git fetch origin +mac:refs/remotes/origin/mac
+          git fetch origin +linux:refs/remotes/origin/linux
 
       - name: Build config-manifest
         run: |

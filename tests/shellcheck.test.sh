@@ -47,7 +47,7 @@ if ! command -v shellcheck >/dev/null 2>&1; then
         finish
         exit 1
     fi
-    printf 'skip: shellcheck is not installed; `config install` adds it\n' >&2
+    skip 'shellcheck is not installed; `config install` adds it'
     finish
     exit 0
 fi

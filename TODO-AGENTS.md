@@ -4,17 +4,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 - Set up a setup.sh script a la (curl -fsSL https://claude.ai/install.sh | bash), perhaps a wrapper around a `config init` script or something that would allow us to set up everything we need for our working environment (minus the manual installations required). Then we'd also re-use this script in our Docker image for consistency. Ideall,y if I ever ssh into a remote server env. I would be able to get my whole setup working in that env from a bare git URL to this repo. Another option would be a sungke `config init` script that would work after a `git clone`. We could then test it in the Docker environments, where basically nothing is pre setup
 - Migrate the rest of the `config ...` scripts to Rust
-- [CLAIMED] The pre-push Docker gate cannot run the git-dependent assertions, so a
-  stale count in `tests/scripts-dir-name.test.sh` passed locally and failed
-  on both CI platforms (runs 33934561395 and 33934578084, 2026-09-05). The
-  container has no repository, so the whole `git rev-parse --verify HEAD`
-  block in that suite is skipped, silently: it prints "skip: no repository
-  here" and still exits 0. Adding `config-help` moved the committed script
-  count from 24 to 25 and nothing local caught it. Options: give the
-  container a repository, make the skip loud enough to notice, or run the
-  git-dependent suites on the host before the container. The badges added
-  today make this class of break visible on the README, which is how it was
-  noticed at all.
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so
   `xargs -0` cannot address it; a binary diff has no `+` lines for the

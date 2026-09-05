@@ -224,4 +224,58 @@ status=0
 HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" >/dev/null 2>&1 || status=$?
 assert_equals 'a local repo path is never probed as a network host' '0' "$status"
 
+# --- a piped run is unattended all the way through --------------------------
+#
+# The curl one-liner needed `sh -s -- --yes`, and the --yes was doing work
+# that the script can determine for itself: a piped run has stdin bound to
+# the pipe, so there is no terminal to answer any prompt.
+#
+# setup.sh already skipped its OWN branch prompt on that basis, but handed off
+# to `config init` with no arguments, which then prompts per dependency
+# install with nobody there. So the flag was not cosmetic -- without it a
+# piped run stalled or silently declined every install.
+#
+# No terminal therefore implies unattended, and the one-liner needs no flags.
+seed=$(make_seed piped)
+home=$(new_home piped)
+
+# `< /dev/null` is what makes stdin not a terminal, which is the same
+# condition `curl ... | sh` creates.
+HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --repo "$seed" < /dev/null > /dev/null 2>&1
+
+assert_contains 'a non-interactive run hands off unattended' \
+    'init --yes' "$(cat "$home/.calls")"
+
+# And it must still have checked out, rather than stopping at the prompt it
+# skipped.
+assert_equals 'a non-interactive run still checks out' \
+    'mac branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+
+# An explicit --yes stays equivalent, so every existing caller (Docker, the
+# CI bootstrap job, the documented one-liner) keeps working unchanged.
+seed=$(make_seed pipedexplicit)
+home=$(new_home pipedexplicit)
+HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" < /dev/null > /dev/null 2>&1
+assert_contains 'an explicit --yes behaves the same way' \
+    'init --yes' "$(cat "$home/.calls")"
+
+# The reverse must not regress: with a terminal and no --yes, the handoff
+# stays interactive so `config init` can prompt per install. Driven only
+# where a pty is available, because that is what makes stdin a terminal.
+# The interactive path is deliberately NOT driven here.
+#
+# It needs a pty that stays open long enough to answer one prompt, and two
+# attempts made things worse rather than better: `script -q /dev/null` treats
+# a piped newline as EOF, so the run died at the prompt without reaching the
+# handoff, and a pty.spawn whose input callback kept returning a newline fed
+# input forever and hung the whole suite. A test that hangs run-all.sh is far
+# worse than an honest gap.
+#
+# What matters most is covered above and does not need a pty: a run with no
+# terminal hands off unattended, and an explicit --yes is equivalent. The
+# interactive branch prompt was verified by hand under `script`, which does
+# print "detected mac. Branch to check out [mac]:" as intended.
+skip 'an interactive run does not force --yes' \
+    'needs a pty harness; two attempts regressed into EOF and a hang'
+
 finish

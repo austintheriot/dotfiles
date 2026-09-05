@@ -90,63 +90,78 @@ alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn bui
 
 # GIT ALIASES ###############################################################################################
 # This allows not having to store the actual root .gitconfig in git itself, which quickly becomes problematic
-if ! git config --global --get "alias.co" >/dev/null; then
-    git config --global alias.co checkout
-fi
-
-if ! git config --global --get "alias.br" >/dev/null; then
-    git config --global alias.br branch
-fi
-
-if ! git config --global --get "alias.cm" >/dev/null; then
-    git config --global alias.cm commit
-fi
-
-if ! git config --global --get "alias.st" >/dev/null; then
-    git config --global alias.st status
-fi
-
-if ! git config --global --get "alias.p" >/dev/null; then
-    git config --global alias.p push
-fi
-
-if ! git config --global --get "alias.pl" >/dev/null; then
-    git config --global alias.pl pull
-fi
-
-if ! git config --global --get "alias.lg" >/dev/null; then
-    git config --global alias.lg 'log --oneline'
-fi
-
-# Rewrite commits with different email
 #
-# Examples:
-# To change the author name:
-# git change-commits GIT_AUTHOR_NAME "old name" "new name"
+# One `--get-regexp` reads every alias at once. The previous shape ran one
+# `git config --global --get` per alias to discover that all nine were
+# already installed: nine subprocesses on every shell startup, measured at
+# 140ms, to change nothing.
 #
-# or the email for only the last 10 commits:
-# git change-commits GIT_AUTHOR_EMAIL "old@email.com" "new@email.com" HEAD~10..HEAD
+# It is a read of the whole set rather than a sentinel on one alias. A
+# sentinel would stop checking the other eight, so adding a tenth alias here
+# would never install it on a machine that already had the first. Reading all
+# of them keeps each one installed independently, which is also what leaves a
+# hand-edited value alone: only an alias that is absent gets written.
 #
-# See https://stackoverflow.com/questions/2919878/git-rewrite-previous-commit-usernames-and-emails
-if ! git config --global --get "alias.change-commits" >/dev/null; then
-    git config --global alias.change-commits '!'"f() { VAR=\$1; OLD=\$2; NEW=\$3; shift 3; git filter-branch --env-filter \"if [[ \\\"\$\`echo \$VAR\`\\\" = '\$OLD' ]]; then export \$VAR='\$NEW'; fi\" \$@; }; f"
-fi
-
-
-# Search for PRs via CLI
+# `git config` exits 1 when nothing matches, which is the fresh-machine case,
+# so the status is ignored and the output is what decides.
 #
-# From Dan Susman
-if ! git config --global --get "alias.pr" >/dev/null; then
-    git config --global alias.pr "!gh pr ls -L 100 | fzf | sed -E \"s/^([0-9]+).*/\\1/\" | xargs gh pr checkout"
-fi
+# change-commits rewrites author identity on a range. Examples:
+#   git change-commits GIT_AUTHOR_NAME "old name" "new name"
+#   git change-commits GIT_AUTHOR_EMAIL "old@email.com" "new@email.com" HEAD~10..HEAD
+# @see https://stackoverflow.com/questions/2919878/git-rewrite-previous-commit-usernames-and-emails
+() {
+    local installed name
+    installed=$(git config --global --get-regexp '^alias\.' 2>/dev/null)
 
-if ! git config --global --get "core.editor" >/dev/null; then
-    git config --global core.editor nvim
-fi
+    # zsh associative arrays keep insertion order out of it; the values are
+    # what matter and each appears exactly once.
+    local -A aliases=(
+        co  'checkout'
+        br  'branch'
+        cm  'commit'
+        st  'status'
+        p   'push'
+        pl  'pull'
+        lg  'log --oneline'
+        pr  "!gh pr ls -L 100 | fzf | sed -E \"s/^([0-9]+).*/\\1/\" | xargs gh pr checkout"
+        change-commits '!'"f() { VAR=\$1; OLD=\$2; NEW=\$3; shift 3; git filter-branch --env-filter \"if [[ \\\"\$\`echo \$VAR\`\\\" = '\$OLD' ]]; then export \$VAR='\$NEW'; fi\" \$@; }; f"
+    )
 
-if ! git config --global --get "core.excludeFile" >/dev/null; then
-    git config --global core.excludeFile ~/.gitignore
-fi
+    # Matched with zsh's own pattern operator rather than grep: a grep per
+    # alias would put the eight subprocesses straight back, just spelled
+    # differently. The newline guards the boundaries so `alias.p` cannot match
+    # the `alias.pl` line.
+    local haystack=$'\n'"$installed"$'\n'
+    for name in ${(k)aliases}; do
+        if [[ $haystack != *$'\n'"alias.$name "* ]]; then
+            git config --global "alias.$name" "${aliases[$name]}"
+        fi
+    done
+}
+
+
+# The same one-read shape for the core settings. A separate call because these
+# are a different config section, not aliases, and folding them into one
+# regexp would match every core.* the user has set for their own reasons.
+() {
+    local installed name
+    installed=$(git config --global --get-regexp '^core\.' 2>/dev/null)
+
+    local -A settings=(
+        editor      'nvim'
+        excludeFile "$HOME/.gitignore"
+    )
+
+    # git lowercases the key when it reports it, so `core.excludeFile` reads
+    # back as `core.excludefile`. Match on the lowercased name or every
+    # startup would rewrite the setting it just found.
+    local haystack=$'\n'"$installed"$'\n'
+    for name in ${(k)settings}; do
+        if [[ $haystack != *$'\n'"core.${(L)name} "* ]]; then
+            git config --global "core.$name" "${settings[$name]}"
+        fi
+    done
+}
 
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS #######################################################################

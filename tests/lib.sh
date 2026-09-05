@@ -89,21 +89,45 @@ trap 'cleanup; exit 143' TERM HUP
 
 # The real config installs hooks globally. A test session inherits them, and
 # they would race any assertion that reads a window name, so every test session
-# overrides them with a no-op and drives the scripts explicitly instead.
+# overrides them and drives the scripts explicitly instead.
+#
+# The override is an explicit no-op at index [0], not the empty string. A hook
+# set to '' still leaves the inherited global array entry in place, so the
+# global hook goes on firing and the isolation this function promises is not
+# delivered.
 isolate_hooks() {
     local session=$1 hook
     for hook in after-new-window after-split-window after-select-window \
                 after-select-pane after-kill-pane client-session-changed; do
-        tmux set-hook -t "$session" "$hook" '' 2>/dev/null
+        tmux set-hook -t "$session" "${hook}[0]" 'run-shell -b true' 2>/dev/null
     done
 }
+
+# The command test windows run instead of an interactive shell.
+#
+# Hooks are only half of the race. .zshrc's precmd calls
+# tmux-update-window-names.sh on every prompt, so a window running a login
+# shell renames ITSELF a beat after it is created, with no hook involved and
+# nothing a hook override can prevent. That is what made
+# `session mode leaves other sessions alone` fail on a developer machine while
+# passing in CI, where the container has no such .zshrc.
+#
+# These suites never need a shell in the window: they assert on window names
+# and pane paths, and drive the scripts under test by hand. A process that
+# just sits there gives a window with a real cwd and no opinion about its own
+# name. `sleep 86400` rather than `cat`, so a window that outlives its test
+# cannot sit on a pipe waiting for input.
+INERT_WINDOW_CMD=${INERT_WINDOW_CMD:-'sleep 86400'}
 
 # Creates a tracked, hook-isolated, detached session and prints its name.
 new_test_session() {
     local suffix=${1:-main} dir=${2:-$FIXTURES}
     local session
     session=$(session_name "$suffix")
-    tmux new-session -d -s "$session" -c "$dir"
+    # Unquoted on purpose: the value is a command plus its argument, and
+    # tmux needs them as separate words.
+    # shellcheck disable=SC2086
+    tmux new-session -d -s "$session" -c "$dir" $INERT_WINDOW_CMD
     track_session "$session"
     isolate_hooks "$session"
     printf '%s' "$session"

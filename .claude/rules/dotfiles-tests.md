@@ -46,11 +46,17 @@ after the push and is the authoritative gate.
 
 `config-manifest sync` does this without switching branches: it commits the
 current branch's shared paths directly onto the other branch through git
-plumbing, refuses if that branch is not at its origin, and prints the two
-push commands. `--dry-run` shows the plan. If the binary is not built, the fallback is by
-hand: check out the target branch, run `git checkout <source> -- <shared
-paths>` (and `git rm` anything the source deleted), commit, then build and
-run `config-manifest check`.
+plumbing, refuses if that branch is not at its origin, and points at
+`config push-all`. `--dry-run` shows the plan. If the binary is not built,
+the fallback is by hand: check out the target branch, run `git checkout
+<source> -- <shared paths>` (and `git rm` anything the source deleted),
+commit, then build and run `config-manifest check`.
+
+Push the pair with `config push-all`, never with two separate pushes. It
+sends mac and linux in one atomic push, so both refs land together. Pushed
+separately they arrive seconds apart, and the branch-drift workflow run for
+the first push compares against the other branch's stale `origin/` ref and
+fails, leaving that branch red until someone reruns the job.
 
 A separate pre-commit hook at `~/tests/pre-commit` (symlinked from
 `~/.cfg/hooks/pre-commit`) runs a leak guard (`~/tests/leak-check.sh`) on every

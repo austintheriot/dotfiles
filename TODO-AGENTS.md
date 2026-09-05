@@ -3,7 +3,17 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 # TODOS:
 
 - Provide more details on the flags options for each `config` command. Like `config test`--what does `-q` do, etc. also allow short or long versions of most flags
-- [CLAIMED] Add image badges to the README for both mac and linux branches showing their current CI status
+- The pre-push Docker gate cannot run the git-dependent assertions, so a
+  stale count in `tests/scripts-dir-name.test.sh` passed locally and failed
+  on both CI platforms (runs 33934561395 and 33934578084, 2026-09-05). The
+  container has no repository, so the whole `git rev-parse --verify HEAD`
+  block in that suite is skipped, silently: it prints "skip: no repository
+  here" and still exits 0. Adding `config-help` moved the committed script
+  count from 24 to 25 and nothing local caught it. Options: give the
+  container a repository, make the skip loud enough to notice, or run the
+  git-dependent suites on the host before the container. The badges added
+  today make this class of break visible on the README, which is how it was
+  noticed at all.
 - Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it
   from `tests/run-all.sh` as its own suite. The code already carries
   `# shellcheck disable=SC2086` directives while shellcheck is not

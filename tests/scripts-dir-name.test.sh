@@ -54,13 +54,14 @@ assert_succeeds 'the .my-scripts directory is gone' \
 # executing tmux-split.sh in a subshell changes that subshell and exits.
 
 EXECUTED_SCRIPTS='deps/check-deps.sh deps/test-local.sh
+alacritty-platform.sh
 tmux-update-window-names.sh tmux-worktree-config.sh
 config/config-stamp config/config-build config/config
 config/config-install-hooks config/config-check config/config-sync
 config/config-install config/config-test config/config-reload'
 
 SOURCED_SCRIPTS='tmux-close.sh tmux-setup.sh tmux-split.sh tmux-start.sh
-zsh-git-widgets.sh deps/depcheck-hook.sh'
+zsh-git-widgets.sh deps/depcheck-hook.sh platform.sh'
 
 missing_scripts=''
 non_executable=''
@@ -112,7 +113,7 @@ SEARCH_ROOTS='.agents .config .github tests docs
 .claude/agents .claude/data .claude/hooks .claude/rules
 .claude/scripts .claude/skills .claude/CLAUDE.md
 .sync-manifest .zshrc .zshrc-mac .zshrc-linux
-DOTFILES.md README.md TODO-AGENTS.md'
+DOTFILES.md README.md README-MAC.md README-LINUX.md TODO-AGENTS.md'
 
 present_roots=''
 for root in $SEARCH_ROOTS; do
@@ -194,8 +195,8 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
 
     # An exact count rather than "more than zero": a partial add is the
     # failure that actually happened, and it leaves some files staged.
-    assert_equals 'all 26 scripts are committed, not only on disk' \
-        '26' "$committed_count"
+    assert_equals 'all 29 scripts are committed, not only on disk' \
+        '29' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine
@@ -213,6 +214,7 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
         "$NEW_NAME/config/config-stamp" \
         "$NEW_NAME/config/config-sync" \
         "$NEW_NAME/config/config-test" \
+        "$NEW_NAME/alacritty-platform.sh" \
         "$NEW_NAME/deps/check-deps.sh" \
         "$NEW_NAME/deps/test-local.sh" \
         "$NEW_NAME/tmux-update-window-names.sh" \

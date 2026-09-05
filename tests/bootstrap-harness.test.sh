@@ -216,13 +216,30 @@ assert_equals 'the bare Dockerfile copies nothing in' '' \
 
 entry_text=$(cat "$BARE_ENTRYPOINT")
 
-# Phase 1 exists to assert the git message, which was the second reported bug.
+# Phase 1 covers the missing-git path, which was the second reported bug. It
+# used to assert a printed suggestion; the script now installs git itself,
+# because the documented entry point is always piped and refusing there left a
+# bare image needing two commands. These assertions follow that change.
 assert_contains 'the entrypoint runs setup.sh before git is installed' \
     'phase 1' "$entry_text"
-assert_contains 'it asserts the git suggestion names a command' \
-    'apt-get install -y git' "$entry_text"
-assert_contains 'it asserts the suggestion carries no sudo' \
-    'does not assume sudo' "$entry_text"
+assert_contains 'it asserts git gets installed rather than only named' \
+    'installs git rather than only naming it' "$entry_text"
+assert_contains 'it asserts the install is confirmed' \
+    'it confirms git arrived' "$entry_text"
+assert_contains 'it asserts the git install assumes no sudo' \
+    'assumes no sudo' "$entry_text"
+
+# The one-command claim: having installed git, the run must carry on into the
+# clone rather than stopping. Without this the leg could pass on a script that
+# installed git and then exited, which is the behavior being replaced.
+assert_contains 'it asserts the run continues into the clone' \
+    'continues into the clone' "$entry_text"
+
+# Piped is the case under test, so the entrypoint must drive it that way. A
+# run with a terminal takes the prompt path instead and would prove nothing
+# about the one-liner.
+assert_contains 'the entrypoint drives the piped path' \
+    '/dev/null' "$entry_text"
 
 # Phase 2's load-bearing assertion: a PRIVILEGED install succeeded. Without
 # this the leg could pass on an image where nothing needing root was ever

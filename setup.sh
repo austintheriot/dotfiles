@@ -110,13 +110,13 @@ fi
 if ! command -v git >/dev/null 2>&1; then
     printf 'setup.sh: git is not installed, and it is the one prerequisite\n' >&2
 
-    # Name the command rather than leaving the reader to look it up. A bare
-    # container is exactly where this fires, and "install git" is the least
-    # useful thing to say to someone who just pasted a one-liner.
+    # Install it rather than only naming it. A bare image is exactly where
+    # this fires, and printing the command left the reader running two
+    # commands to bootstrap one machine.
     #
-    # The escalation is decided the same way check-deps.sh decides it, because
-    # the machine that needs this message is often root with no sudo, where a
-    # hardcoded `sudo` in the suggestion fails the same way it failed there.
+    # Escalation is decided the same way check-deps.sh decides it, because the
+    # machine that needs this is often root with no sudo, where a
+    # sudo-prefixed command is one the reader cannot run.
     if [ "$(id -u 2>/dev/null || printf 1)" -eq 0 ]; then
         setup_sudo=''
     elif command -v sudo >/dev/null 2>&1; then
@@ -125,23 +125,67 @@ if ! command -v git >/dev/null 2>&1; then
         setup_sudo=''
     fi
 
+    git_install_cmd=''
     if command -v apt-get >/dev/null 2>&1; then
-        printf 'setup.sh: try: %sapt-get update && %sapt-get install -y git\n' \
-            "$setup_sudo" "$setup_sudo" >&2
+        git_install_cmd="${setup_sudo}apt-get update && ${setup_sudo}apt-get install -y git"
     elif command -v pacman >/dev/null 2>&1; then
-        printf 'setup.sh: try: %spacman -Sy --noconfirm git\n' "$setup_sudo" >&2
+        git_install_cmd="${setup_sudo}pacman -Sy --noconfirm git"
     elif command -v dnf >/dev/null 2>&1; then
-        printf 'setup.sh: try: %sdnf install -y git\n' "$setup_sudo" >&2
+        git_install_cmd="${setup_sudo}dnf install -y git"
     elif command -v apk >/dev/null 2>&1; then
-        printf 'setup.sh: try: %sapk add git\n' "$setup_sudo" >&2
+        git_install_cmd="${setup_sudo}apk add git"
     elif command -v brew >/dev/null 2>&1; then
-        printf 'setup.sh: try: brew install git\n' >&2
-    else
-        printf 'setup.sh: no known package manager here -- see https://git-scm.com/downloads\n' >&2
+        git_install_cmd='brew install git'
     fi
 
-    printf 'setup.sh: then run this again\n' >&2
-    exit 1
+    if [ -z "$git_install_cmd" ]; then
+        printf 'setup.sh: no known package manager here, so git cannot be installed for you\n' >&2
+        printf 'setup.sh: install git by hand -- see https://git-scm.com/downloads\n' >&2
+        printf 'setup.sh: then run this again\n' >&2
+        exit 1
+    fi
+
+    # A dry run changes nothing, including this.
+    if [ "$dry_run" -eq 1 ]; then
+        printf 'setup.sh: would run: %s\n' "$git_install_cmd" >&2
+        printf 'setup.sh: then would continue the bootstrap\n' >&2
+        exit 1
+    fi
+
+    # Ask when there is somebody to ask. Piped installs without asking,
+    # because the documented entry point is `curl ... | sh`, which is always
+    # piped: refusing there would leave the bare-image case needing two
+    # commands forever, which is the case this script exists for. A developer
+    # machine missing git is more likely a surprise than an intent, so that
+    # one gets a question.
+    if [ "$yes" -eq 0 ] && [ -t 0 ]; then
+        printf 'setup.sh: install it now with `%s`? [y/N] ' "$git_install_cmd" >&2
+        read -r git_reply
+        case "$git_reply" in
+            y|Y) ;;
+            *)
+                printf 'setup.sh: declined -- run that command, then run this again\n' >&2
+                exit 1
+                ;;
+        esac
+    fi
+
+    printf 'setup.sh: installing git: %s\n' "$git_install_cmd" >&2
+    if ! sh -c "$git_install_cmd"; then
+        printf 'setup.sh: installing git failed\n' >&2
+        printf 'setup.sh: fix the package manager, then run this again\n' >&2
+        exit 1
+    fi
+
+    # Confirm rather than assume. A package manager can exit 0 having
+    # installed nothing useful, and continuing without git fails later in a
+    # place that says nothing about the cause.
+    if ! command -v git >/dev/null 2>&1; then
+        printf 'setup.sh: the install reported success but git is still not on PATH\n' >&2
+        exit 1
+    fi
+
+    printf 'setup.sh: git installed\n' >&2
 fi
 
 # A remote that cannot be reached is the most likely failure on a freshly

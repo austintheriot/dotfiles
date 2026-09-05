@@ -23,7 +23,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 - `tests/tmux-update-window-names.test.sh` fails intermittently (1 of 33
   assertions) on a live tmux server and passes on rerun; find the timing
   dependency and make the assertion deterministic.
-- The `python3` on PATH is a pyenv shim, which is itself a bash script that
+- [CLAIMED] The `python3` on PATH is a pyenv shim, which is itself a bash script that
   execs `pyenv exec`. Measured here at 1.34s per call against 0.05s for
   the real interpreter at `$(pyenv which python3)` -- a 25x tax. The test
   suite pays it: `tests/run-all.sh` runs `python3 -m unittest`, and

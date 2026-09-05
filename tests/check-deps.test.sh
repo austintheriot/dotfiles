@@ -853,4 +853,58 @@ unguarded=$(grep -n 'ohmyzsh' "$SCRIPT" | grep -v 'keep-zshrc' || true)
 assert_equals 'every oh-my-zsh install keeps the zshrc' '' "$unguarded"
 
 
+# --- apt must never stop to ask a question ----------------------------------
+#
+# Reported from a bare Ubuntu box: the bootstrap stopped at tzdata's debconf
+# prompt -- "Please select the geographic area in which you live" -- and waited
+# for a keypress. An unattended bootstrap that blocks on a question never
+# finishes, and a curl-piped run has no terminal to answer it with.
+#
+# Every image and CI leg passed because Dockerfile.ubuntu sets
+# DEBIAN_FRONTEND itself. That made the engine look correct while a real
+# machine outside those images prompted, which is the same shape as the
+# hardcoded sudo: the environment was compensating for a gap in the engine.
+#
+# So the engine exports it, once, rather than each of the fourteen apt
+# commands carrying it.
+assert_succeeds 'the engine exports DEBIAN_FRONTEND' \
+    grep -qE '^export DEBIAN_FRONTEND|^DEBIAN_FRONTEND=' "$SCRIPT"
+assert_succeeds 'it is set to noninteractive' \
+    grep -q 'DEBIAN_FRONTEND=noninteractive' "$SCRIPT"
+
+# It has to be exported, not merely assigned: the install commands run through
+# `sh -c`, which is a child process, and an unexported variable does not reach
+# it. This is the difference between a fix and the appearance of one.
+frontend_line=$(grep -n 'DEBIAN_FRONTEND' "$SCRIPT" | head -1)
+assert_succeeds 'DEBIAN_FRONTEND reaches the child shell' \
+    grep -qE 'export .*DEBIAN_FRONTEND|DEBIAN_FRONTEND=noninteractive$' <<<"$frontend_line"
+
+# Driven, not just grepped: a stub apt-get reports whether it saw the variable,
+# which is what proves the export survives into the command as run.
+frontend_conf="$FIXTURES/frontend.conf"
+printf 'some-tool|false|https://example.invalid\n' > "$frontend_conf"
+
+frontend_bin="$FIXTURES/frontend-bin"
+mkdir -p "$frontend_bin"
+cat > "$frontend_bin/apt-get" <<STUB
+#!/bin/sh
+printf '%s\n' "\${DEBIAN_FRONTEND:-UNSET}" >> "$FIXTURES/frontend.log"
+exit 0
+STUB
+chmod +x "$frontend_bin/apt-get"
+cp "$BIN/sudo" "$frontend_bin/sudo"
+for passthrough in sh printf id command test cat sed grep awk uname dirname; do
+    real=$(command -v "$passthrough" 2>/dev/null) || continue
+    ln -sf "$real" "$frontend_bin/$passthrough"
+done
+
+: > "$FIXTURES/frontend.log"
+PATH="$frontend_bin" DEPS_CONF="$frontend_conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+    "$SCRIPT" --fix --yes --only some-tool >/dev/null 2>&1 || true
+
+assert_contains 'the apt command runs with a noninteractive frontend' \
+    'noninteractive' "$(cat "$FIXTURES/frontend.log" 2>/dev/null)"
+
+
 finish

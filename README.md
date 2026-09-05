@@ -162,9 +162,23 @@ scripts:
 - `config sync` copies the shared paths onto the other branch.
 - `config test` runs the test suite.
 
+Each command documents its own flags. `config <command> --help` (or `-h`)
+prints the `# usage:` block from the top of that script, so the help text and
+the script header are the same lines:
+
+```
+$ config test --help
+usage: config test [-q|--quiet] [-d|--docker] [-w|--watch] [suite]
+...
+```
+
+Flags come in both spellings where a command takes them, so there is nothing
+to remember about which form a given flag uses.
+
 To add a utility, drop a `config-<name>` script into `.scripts/config/` with a
-`# help:` line, and add its name to `EXPECTED_SUBCOMMANDS` in
-`tests/config.test.sh`.
+`# help:` line and a `# usage:` block, source `.scripts/config/usage.sh` and call
+`usage_if_requested "${1:-}"` before parsing anything, and add its name to
+`EXPECTED_SUBCOMMANDS` in `tests/config.test.sh`.
 
 `config help` shadows `git help`. Use `config -- <verb>` to send a verb
 straight to git without consulting these scripts: `config -- help rebase`

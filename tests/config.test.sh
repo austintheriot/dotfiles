@@ -144,6 +144,11 @@ mkdir -p "$install_dir"
 install_dir=$(readlink -f "$install_dir")
 cp "$CONFIG" "$install_dir/config"
 cp "$CONFIG_DIR/config-install-hooks" "$install_dir/config-install-hooks"
+# usage.sh is sourced by every config-<sub> to print its `# usage:` block, so
+# it is part of the set a subcommand needs beside it, not an optional extra.
+# Copying the scripts without it is what a partial install looks like, and the
+# assertion below is what makes that visible rather than a line-23 not-found.
+cp "$CONFIG_DIR/usage.sh" "$install_dir/usage.sh"
 chmod 755 "$install_dir/config" "$install_dir/config-install-hooks"
 
 output=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)

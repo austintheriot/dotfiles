@@ -9,9 +9,17 @@
 # identically whether or not it is committed yet, and `git add` honours
 # .gitignore, so an ignored target/ never moves the stamp.
 #
-# Usage: config-stamp        (respects DOTFILES_ROOT, default $HOME)
+# usage: config stamp
+#
+# Takes no options.
+#
+# Environment:
+#   DOTFILES_ROOT   The worktree to read the crate out of. Default $HOME.
 
 set -eu
+
+. "$(dirname "$(readlink -f "$0")")/usage.sh"
+usage_if_requested "${1:-}"
 
 ROOT=${DOTFILES_ROOT:-$HOME}
 CRATE=crates/config-manifest

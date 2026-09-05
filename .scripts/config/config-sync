@@ -1,3 +1,23 @@
 #!/bin/sh
 # help: Copy the shared paths from this branch onto the other branch
+#
+# usage: config sync [--dry-run] [--to <branch>]
+#
+# Copies every path .sync-manifest marks as shared from the current branch
+# onto the other one, and commits the result there. This is the write half of
+# `config check`.
+#
+# Options:
+#   --dry-run      Report what would be copied and change nothing.
+#   --to <branch>  The branch to write onto. Defaults to the other of
+#                  mac and linux.
+#   --root <dir>   The worktree to operate on. Default $HOME. Also read from
+#                  DOTFILES_ROOT.
+#
+# Run `config-manifest sync --help` for the full list.
+set -eu
+
+. "$(dirname "$(readlink -f "$0")")/usage.sh"
+usage_if_requested "${1:-}"
+
 exec config-manifest sync "$@"

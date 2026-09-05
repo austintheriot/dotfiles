@@ -1,6 +1,18 @@
 #!/bin/sh
 # help: Reload the tmux config and print the line to re-source zsh
+#
+# usage: config reload
+#
+# Re-sources ~/.config/tmux/tmux.conf when run inside tmux, then prints the
+# line to re-source zsh.
+#
+# Takes no options. The zsh half is printed rather than done: a child process
+# cannot re-source the shell that called it, so the line has to be run by
+# that shell.
 set -eu
+
+. "$(dirname "$(readlink -f "$0")")/usage.sh"
+usage_if_requested "${1:-}"
 
 if [ -n "${TMUX:-}" ]; then
     tmux source "$HOME/.config/tmux/tmux.conf"

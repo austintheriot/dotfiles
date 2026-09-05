@@ -1,5 +1,15 @@
 #!/bin/sh
 # help: Link the git hooks and put the dispatcher on PATH
+#
+# usage: config install-hooks
+#
+# Symlinks tests/pre-commit and tests/pre-push into ~/.cfg/hooks, and this
+# directory's dispatcher into ~/.local/bin. Idempotent: running it again
+# relinks the same three paths and reports the same three lines.
+#
+# Takes no options. Refuses to install into a directory that is not owned by
+# this user, or that is writable by anyone else. See the note below.
+#
 # The dispatcher execs whatever sits beside it, ~/.local/bin is on PATH, and
 # the pre-commit and pre-push hooks run whatever sits in ~/tests, so those
 # three directories plus the hooks directory itself are the trust boundary.
@@ -9,6 +19,10 @@ set -eu
 
 self=$(readlink -f "$0")
 here=$(dirname "$self")
+
+. "$here/usage.sh"
+usage_if_requested "${1:-}"
+
 bin_dir="$HOME/.local/bin"
 hooks_dir="$HOME/.cfg/hooks"
 

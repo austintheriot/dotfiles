@@ -1,3 +1,16 @@
 #!/bin/sh
 # help: Check the tracked CLI dependencies and install what is missing
+#
+# usage: config install [check-deps flags]
+#
+# Reads .scripts/deps/deps.conf, reports which tracked CLI dependencies are
+# missing, and installs them. This is `check-deps.sh --fix`; every flag is
+# passed through to it.
+#
+# Run `~/.scripts/deps/check-deps.sh --help` for the full list.
+set -eu
+
+. "$(dirname "$(readlink -f "$0")")/usage.sh"
+usage_if_requested "${1:-}"
+
 exec "$HOME/.scripts/deps/check-deps.sh" --fix "$@"

@@ -29,6 +29,7 @@ tests/
 .scripts/
 crates/
 docs/research/
+docs/porting-a-fix-across-branches.md
 .config/tmux/tmux-common.conf
 .config/nvim/
 .agents/

@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp install-hooks init check sync install test reload help'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks init check sync push-all install test reload help'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"

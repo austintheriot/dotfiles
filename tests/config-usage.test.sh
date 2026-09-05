@@ -28,7 +28,13 @@ FLAG_TAKING='test'
 
 # Every subcommand, flags or not, answers --help. A reader who types it should
 # never get git usage or a stack trace.
-ALL_SUBCOMMANDS='build stamp install-hooks check sync install test reload help'
+#
+# Discovered from the directory rather than listed by hand. A hand-written
+# list is a second copy of the same facts, and a subcommand missing from it
+# is not reported as a failure -- it is simply never checked, which is the
+# quietest way for this suite to stop covering something.
+# shellcheck disable=SC2012  # config-<sub> names cannot contain spaces
+ALL_SUBCOMMANDS=$(cd "$CONFIG_DIR" && ls config-* | sed 's/^config-//' | tr '\n' ' ')
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"

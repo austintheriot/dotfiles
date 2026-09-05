@@ -189,6 +189,9 @@ scripts:
   half.
 - `config install` installs any missing tracked dependencies.
 - `config install-hooks` links the git hooks and puts `config` on PATH.
+- `config push-all` pushes mac and linux together in one atomic push.
+  Use it after `config sync`, so the pair lands as one transaction
+  instead of two pushes seconds apart.
 - `config reload` reloads the tmux config.
 - `config stamp` prints the tree id of the crate in the worktree.
 - `config sync` copies the shared paths onto the other branch.

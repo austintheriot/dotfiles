@@ -137,14 +137,21 @@ automatic_name() {
     fi
 }
 
+# The fields update_window needs, in the order it unpacks them. Named once so
+# the batched read and the single-window read cannot ask for different things
+# or ask for them in a different order.
+STATE_FORMAT="#{window_name}$TAB#{$OWNERSHIP_OPTION}$TAB#{$LABEL_OPTION}$TAB#{$BARE_REPOS_OPTION}$TAB#{automatic-rename}$TAB#{pane_current_path}"
+
 # We own a window's name when we set it last, when it is empty, or when tmux
 # is still auto-renaming it. Anything else means the name was set by hand.
+#
+# Takes the window id and that window's already-read state line, so the caller
+# decides how the state was fetched. update_each_window reads every window in
+# one call; the single-window path reads just the one.
 update_window() {
     window=$1
+    state=$2
 
-    state=$(tmux display-message -p -t "$window" -F \
-        "#{window_name}$TAB#{$OWNERSHIP_OPTION}$TAB#{$LABEL_OPTION}$TAB#{$BARE_REPOS_OPTION}$TAB#{automatic-rename}$TAB#{pane_current_path}" \
-        2>/dev/null) || return 0
     [ -n "$state" ] || return 0
 
     # Split on tabs with parameter expansion rather than `cut`. This runs on
@@ -176,10 +183,31 @@ update_window() {
     fi
 }
 
+# One tmux call for every window's state, rather than a list call followed by
+# a display-message per window. Measured at 287ms across 21 windows against
+# 16ms for the single call on this machine.
+#
+# `list-windows -F` resolves the same format strings, and `pane_current_path`
+# in a window context is the active pane's path, which is exactly what the
+# per-window read was asking for.
+#
+# This is the -a and -s path only. The hook that fires on every pane switch
+# takes the single-window path below, which was already one call: measured at
+# 30ms before and after this change. The saving here is real but it is not on
+# the keystroke.
 update_each_window() {
-    tmux list-windows "$@" -F '#{window_id}' 2>/dev/null | while read -r window; do
-        update_window "$window"
-    done
+    tmux list-windows "$@" -F "#{window_id}$TAB$STATE_FORMAT" 2>/dev/null \
+        | while IFS= read -r line; do
+            update_window "${line%%"$TAB"*}" "${line#*"$TAB"}"
+        done
+}
+
+# The single-window path. Still one call, so it stays a display-message rather
+# than filtering a list of every window down to one.
+update_one_window() {
+    state=$(tmux display-message -p -t "$1" -F "$STATE_FORMAT" 2>/dev/null) \
+        || return 0
+    update_window "$1" "$state"
 }
 
 mode=default
@@ -206,8 +234,8 @@ fi
 case $mode in
     all)     update_each_window -a ;;
     session) update_each_window -t "$target" ;;
-    window)  update_window "$target" ;;
+    window)  update_one_window "$target" ;;
     default)
-        [ -n "${TMUX_PANE:-}" ] && update_window "$TMUX_PANE"
+        [ -n "${TMUX_PANE:-}" ] && update_one_window "$TMUX_PANE"
         ;;
 esac

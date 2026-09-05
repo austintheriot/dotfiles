@@ -89,6 +89,22 @@ done
 
 git_dir="$HOME/.cfg"
 
+# No terminal means unattended, whether or not --yes was passed.
+#
+# This is the whole reason the documented one-liner no longer needs
+# `sh -s -- --yes`. A `curl ... | sh` run has stdin bound to the pipe, so
+# there is nobody to answer a prompt, and every prompt from here down must be
+# skipped rather than asked into the void.
+#
+# Getting this half-right is worse than not doing it. An earlier version
+# checked `-t 0` for this script's own branch prompt but still handed off to
+# `config init` with no arguments, so the branch prompt was skipped and then
+# the dependency prompts were asked anyway -- a piped bootstrap stalled or
+# silently declined every install. One decision, applied to both.
+if [ ! -t 0 ]; then
+    yes=1
+fi
+
 # `git` is the one thing this script cannot install, because installing
 # anything is what the repo it has not cloned yet knows how to do.
 if ! command -v git >/dev/null 2>&1; then
@@ -252,10 +268,9 @@ if [ -z "$branch" ]; then
 
     branch=$platform
 
-    # Offer it rather than take it. A prompt is skipped under --yes, and
-    # skipped when there is no terminal to answer it -- a curl-piped run has
-    # stdin bound to the pipe, so reading from it would consume the script.
-    if [ "$yes" -eq 0 ] && [ "$dry_run" -eq 0 ] && [ -t 0 ]; then
+    # Offer it rather than take it. Skipped under --yes, which a run with no
+    # terminal has already set for itself above.
+    if [ "$yes" -eq 0 ] && [ "$dry_run" -eq 0 ]; then
         printf 'setup.sh: detected %s. Branch to check out [%s]: ' "$platform" "$branch"
         read -r reply
         [ -n "$reply" ] && branch=$reply

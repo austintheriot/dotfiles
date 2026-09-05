@@ -27,14 +27,19 @@ One command, on a machine that has nothing but git.
 macOS:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/mac/setup.sh | sh -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/mac/setup.sh | sh
 ```
 
 Linux or WSL:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/linux/setup.sh | sh -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/linux/setup.sh | sh
 ```
+
+No flags: a piped run has no terminal to answer a prompt, so the script
+treats that as unattended and installs without asking. Passing flags through
+a pipe needs `sh -s -- <flags>`, which is only worth typing when you actually
+want one of the options below.
 
 The branch in the URL is only where `setup.sh` is fetched from. The script
 detects the platform itself and checks out the matching branch, so either URL
@@ -44,15 +49,18 @@ works on either machine. The file is byte-identical on both branches, which
 Flags, all optional:
 
 ```sh
-sh -s -- --yes              # do not prompt: accept the detected branch, install unattended
 sh -s -- --dry-run          # print every step and change nothing
 sh -s -- --branch work      # check out a branch uname cannot imply
 sh -s -- --repo <url|path>  # clone from somewhere other than the default remote
+sh -s -- --yes              # force unattended where a terminal IS present
 ```
 
-Without `--yes` the script offers the detected branch and prompts before each
-install. The prompt is skipped when there is no terminal to answer it, which
-a curl-piped run has -- stdin is the script.
+Run from a file rather than a pipe (`sh setup.sh --dry-run`) and the flags
+need no `-s --`.
+
+With a terminal, the script offers the detected branch and `config init`
+prompts before each install; `--yes` skips both. Without a terminal it does
+not ask at all, which is what makes the flagless one-liner above work.
 
 `setup.sh` clones the bare repo to `~/.cfg`, detects the platform and offers
 the matching branch, checks the worktree out into `$HOME`, and then hands off

@@ -368,4 +368,71 @@ PATH="$nogit_bin" HOME="$dry_home" DOTFILES_PLATFORM=linux \
 assert_equals 'a dry run installs no git' '' "$(cat "$FIXTURES/apt-git.log" 2>/dev/null)"
 
 
+# --- one URL serves every platform ------------------------------------------
+#
+# The README documents a single `mac` URL for macOS, Linux and WSL. That is
+# only safe while two facts hold, and both can rot silently, so both are
+# asserted here rather than trusted.
+#
+# Fact one: the branch a copy of setup.sh came from must not influence which
+# branch it checks out. Detection reads uname (or DOTFILES_PLATFORM), never
+# the fetch URL, so the same file picks `linux` on Linux and `mac` on macOS.
+# Verified for real against the published mac URL from a Linux container,
+# which selected `linux`.
+seed=$(make_seed oneurl)
+
+home=$(new_home oneurl_linux)
+HOME="$home" DOTFILES_PLATFORM=linux "$SETUP" --yes --repo "$seed" >/dev/null 2>&1
+assert_equals 'a linux machine checks out linux regardless of the fetch branch' \
+    'linux branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+
+home=$(new_home oneurl_mac)
+HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" >/dev/null 2>&1
+assert_equals 'a mac machine checks out mac regardless of the fetch branch' \
+    'mac branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+
+# Fact two: the URL the README documents must name a branch that exists and
+# carries this file. A README pointing at a renamed or deleted branch is a
+# broken one-liner, and nothing else in the suite would notice.
+readme_url=$(grep -o 'https://raw.githubusercontent.com/[^ ]*/setup.sh' \
+    "$DOTFILES_ROOT/README.md" | head -1)
+assert_succeeds 'the README documents a raw URL' test -n "$readme_url"
+
+readme_branch=$(printf '%s\n' "$readme_url" | sed 's|.*/dotfiles/||; s|/setup.sh||')
+
+# Every git-backed assertion below is guarded on the repository existing.
+# The test container carries a COPY of the tree with no .cfg at all, so an
+# unguarded `git --git-dir` there fails on the absence of a repository rather
+# than on anything this suite means to check. scripts-dir-name.test.sh guards
+# the same way for the same reason.
+if [ -d "$DOTFILES_ROOT/.cfg" ]; then
+    assert_succeeds 'the documented branch is a real branch here' \
+        git --git-dir="$DOTFILES_ROOT/.cfg" rev-parse --verify --quiet "refs/heads/$readme_branch"
+    assert_succeeds 'that branch carries setup.sh' \
+        git --git-dir="$DOTFILES_ROOT/.cfg" cat-file -e "$readme_branch:setup.sh"
+
+    # setup.sh must be identical on both branches, or the single URL silently
+    # serves one platform a different script. .sync-manifest is what enforces
+    # it; this asserts the outcome rather than the rule.
+    mac_blob=$(git --git-dir="$DOTFILES_ROOT/.cfg" rev-parse "mac:setup.sh" 2>/dev/null || true)
+    linux_blob=$(git --git-dir="$DOTFILES_ROOT/.cfg" rev-parse "linux:setup.sh" 2>/dev/null || true)
+    if [ -n "$mac_blob" ] && [ -n "$linux_blob" ]; then
+        assert_equals 'setup.sh is the same blob on mac and linux' "$mac_blob" "$linux_blob"
+    else
+        skip 'setup.sh is the same blob on mac and linux' 'one of the branches is missing here'
+    fi
+else
+    skip 'the documented branch is a real branch here' 'no repository in this environment'
+    skip 'that branch carries setup.sh' 'no repository in this environment'
+    skip 'setup.sh is the same blob on mac and linux' 'no repository in this environment'
+fi
+
+# The README must not reintroduce a second per-platform URL. That is the
+# duplication this simplification removed, and a well-meaning edit adding
+# "Linux or WSL:" back would make the two copies drift.
+url_count=$(grep -c 'raw.githubusercontent.com/austintheriot/dotfiles/[a-z]*/setup.sh' \
+    "$DOTFILES_ROOT/README.md")
+assert_equals 'the README documents exactly one bootstrap URL' '1' "$url_count"
+
+
 finish

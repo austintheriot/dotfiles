@@ -22,35 +22,28 @@ Both files ship on both branches, so `config check` covers them too.
 
 ### Bootstrapping a new machine
 
-One command, on a machine that has nothing but git.
-
-macOS:
+One command, on macOS, Linux or WSL:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/mac/setup.sh | sh
 ```
 
-Linux or WSL:
+The same URL on every platform. `mac` in it is only the branch the file is
+fetched from, not the branch you get: `setup.sh` reads `uname` and checks out
+the matching branch itself. The file is byte-identical on `mac` and `linux`,
+which `.sync-manifest` enforces, so one URL is the whole story. Verified on
+Linux against the `mac` URL: it selects `linux`.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/linux/setup.sh | sh
-```
-
-No flags, and nothing to install first. A piped run has no terminal to answer
+Nothing to install first, not even git. A piped run has no terminal to answer
 a prompt, so the script treats that as unattended: it installs git if git is
 missing, then clones, checks out, and installs everything else. Verified from
-a bare `debian:bookworm-slim` with nothing but curl.
+a bare `debian:bookworm-slim` carrying nothing but curl.
 
 With a terminal it asks before installing git, since a machine that is
 missing git is more likely a surprise than an intent.
 
 Passing flags through a pipe needs `sh -s -- <flags>`, which is only worth
 typing when you actually want one of the options below.
-
-The branch in the URL is only where `setup.sh` is fetched from. The script
-detects the platform itself and checks out the matching branch, so either URL
-works on either machine. The file is byte-identical on both branches, which
-`.sync-manifest` enforces.
 
 Flags, all optional:
 

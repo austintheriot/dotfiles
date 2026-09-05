@@ -28,7 +28,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   fpath artefact. In the real startup trace compinit is ~60ms and did not
   clear a 40ms bar. `-C` would save nothing meaningful and removes the
   compaudit security check.
-- The branch-drift GitHub workflow races the two-branch push. `config sync`
+- [CLAIMED] The branch-drift GitHub workflow races the two-branch push. `config sync`
   style pushes land `linux` then `mac` seconds apart; the workflow run for
   the first push compares the new branch against the other branch's stale
   `origin/` ref and fails, while the second push's run passes. Seen three

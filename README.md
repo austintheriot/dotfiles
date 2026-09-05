@@ -22,11 +22,37 @@ Both files ship on both branches, so `config check` covers them too.
 
 ### Bootstrapping a new machine
 
-One command, on a machine that has nothing but git:
+One command, on a machine that has nothing but git.
+
+macOS:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/mac/setup.sh | sh -s -- --yes
 ```
+
+Linux or WSL:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/linux/setup.sh | sh -s -- --yes
+```
+
+The branch in the URL is only where `setup.sh` is fetched from. The script
+detects the platform itself and checks out the matching branch, so either URL
+works on either machine. The file is byte-identical on both branches, which
+`.sync-manifest` enforces.
+
+Flags, all optional:
+
+```sh
+sh -s -- --yes              # do not prompt: accept the detected branch, install unattended
+sh -s -- --dry-run          # print every step and change nothing
+sh -s -- --branch work      # check out a branch uname cannot imply
+sh -s -- --repo <url|path>  # clone from somewhere other than the default remote
+```
+
+Without `--yes` the script offers the detected branch and prompts before each
+install. The prompt is skipped when there is no terminal to answer it, which
+a curl-piped run has -- stdin is the script.
 
 `setup.sh` clones the bare repo to `~/.cfg`, detects the platform and offers
 the matching branch, checks the worktree out into `$HOME`, and then hands off

@@ -23,16 +23,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 - `tests/tmux-update-window-names.test.sh` fails intermittently (1 of 33
   assertions) on a live tmux server and passes on rerun; find the timing
   dependency and make the assertion deterministic.
-- [CLAIMED] The `python3` on PATH is a pyenv shim, which is itself a bash script that
-  execs `pyenv exec`. Measured here at 1.34s per call against 0.05s for
-  the real interpreter at `$(pyenv which python3)` -- a 25x tax. The test
-  suite pays it: `tests/run-all.sh` runs `python3 -m unittest`, and
-  `tests/deps-harness.test.sh` spawns a python3 process per assertion.
-  Resolve the interpreter once and reuse it, rather than calling the shim
-  in a loop. Never put the shim in a tmux hook: at 1.3s it would stall
-  every pane switch. Note `/usr/bin/python3` is not a fallback -- it is an
-  xcrun stub that does not run without the Xcode command line tools.
-
 - Dropped after measurement, recorded so it is not retried: `compinit -C`.
   An isolated `zsh -f` test showed compinit at 1.17s, but that was an
   fpath artefact. In the real startup trace compinit is ~60ms and did not

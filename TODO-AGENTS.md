@@ -23,14 +23,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 - `tests/tmux-update-window-names.test.sh` fails intermittently (1 of 33
   assertions) on a live tmux server and passes on rerun; find the timing
   dependency and make the assertion deterministic.
-- [CLAIMED] Batch the tmux queries in `.scripts/tmux-update-window-names.sh`. It
-  fires on 6 hooks including `after-select-pane`, costs 110-200ms, and
-  spawns 13 subprocesses because it loops over windows calling
-  `display-message -p -t` once each. One call replaces the loop:
-  `tmux list-panes -a -F '#{window_id} #{pane_id} #{pane_current_path} #{window_name}'`
-  measured at 20ms for the whole server. Pure shell change, no new
-  dependency. Do this before considering any port, so the port has an
-  honest baseline to beat.
 - The `python3` on PATH is a pyenv shim, which is itself a bash script that
   execs `pyenv exec`. Measured here at 1.34s per call against 0.05s for
   the real interpreter at `$(pyenv which python3)` -- a 25x tax. The test

@@ -101,7 +101,7 @@ if [ "$branch" = "$current_branch" ]; then
         fi
     done
 
-    for file in .sync-manifest README.md .zshrc .zshrc-mac .zshrc-linux; do
+    for file in .sync-manifest README.md setup.sh .zshrc .zshrc-mac .zshrc-linux; do
         if [ -f "$HOME/$file" ]; then
             cp "$HOME/$file" "$workdir/$file"
         fi

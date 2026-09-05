@@ -109,6 +109,10 @@ COPY .zshrc* /root/
 # one at the repo root is absent from this image until it is listed, and the
 # suites that read it fail in the container while passing on the host.
 COPY setup.sh /root/setup.sh
+# profile-path.test.sh sources this in a real sh and bash to check that
+# ~/.local/bin lands on PATH. Another root-level file needing its own COPY
+# line, caught by the guard in container.test.sh rather than by CI this time.
+COPY .profile /root/.profile
 
 # notify.test.sh drives aerospace and osascript, both macOS-only, so it can
 # never pass here. It is already excluded from .sync-manifest for the same

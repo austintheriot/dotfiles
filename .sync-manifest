@@ -64,6 +64,12 @@ README.md
 README-MAC.md
 README-LINUX.md
 
+# Login PATH for bash and sh. Shared: it names ~/.local/bin and ~/.cargo/bin,
+# which are the same on both platforms, and zsh gets the same directories from
+# .zshrc rather than from here. Nothing in it is platform-specific, so a
+# per-branch copy would only be a second place to forget.
+.profile
+
 # The bootstrap entry point. Shared rather than per-branch on purpose: it
 # detects the platform at run time and checks out the matching branch, so one
 # copy has to work from either branch's raw URL. A per-branch setup.sh would

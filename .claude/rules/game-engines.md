@@ -39,18 +39,31 @@ The exclusions matter as much as the rate:
 
 - **The first $1,000,000 in lifetime gross revenue for each Royalty Product is excluded.** Per product, not per company. The EULA states plainly that "you will never owe us royalty payments under this Agreement unless a Product directly generates more than $1,000,000 USD in gross revenue."
 - **The first $5,000,000 in lifetime gross revenue from the Oculus Store** (or its successor) is excluded. This is a substantially larger threshold that most summaries omit, and it materially changes the economics of a VR title.
-- There is also a quarterly exclusion and a set of royalty-alternative exclusions preventing double payment where an advance or other fee obligation to Epic already applied.
-- Royalties are waived for games published exclusively on the Epic Games Store.
+- **The quarterly exclusion (below $10,000) is a cliff, not a deductible.** Cross it and the whole quarter's revenue is subject to royalty, not just the excess. This is the detail that makes the arithmetic surprising.
+- There is a set of royalty-alternative exclusions preventing double payment where an advance or other fee obligation to Epic already applied.
+- **Epic Games Store sales are excluded from Royalty Revenue entirely**, which is a stronger position than "royalties are waived."
+- **A 3.5% tier exists** (EULA update 20) for "Launch Everywhere with Epic" -- an EGS release on every platform with content, feature, and marketing parity. iOS is temporarily waived given Apple's terms.
+- Reporting is due within 45 days per quarter; late fees moved from a flat 2% to 30-day SOFR.
 
-Source access is via GitHub after linking accounts. Since 2023 the terms differentiate non-game industries, which matters for architectural visualization, film, and simulation work.
+Source access is via GitHub after linking accounts. **Non-game seats are $1,850 per seat per year**, free below **$1M trailing-twelve-month group revenue including funding** -- now folded into the main EULA rather than a separate program. This matters for architectural visualization, film, and simulation work.
 
-**As of 2026-09-05**: stable is **5.8**. **UE6 was announced 2026-05-24**, with early access targeted "late 2027-ish" and full release 12 to 18 months after. Rocket League is the first confirmed title moving to it. **Blueprints and Actors are slated for eventual replacement by Verse and Scene Graph** -- a long-horizon planning consideration rather than a present concern, but a real one for a project starting now that expects a decade of life.
+**As of 2026-09-05**: stable is **5.8** (released 2026-06-23), and it is the **last planned UE5 release** -- there is no 5.9 and no LTS programme. **UE6 was announced at Unreal Fest Chicago**, with Verse and Scene Graph replacing Blueprints and Actors, early access targeted around the end of 2027 and full release around 2029. A UE6 stream is already public on GitHub. Treat the Blueprint and Actor deprecation as a long-horizon planning consideration for a project expecting a decade of life, not a present concern.
+
+Two current-version notes worth carrying: **PSO precaching is on by default in 5.8**, which is the real answer to UE5's shader-compilation stutter; and **Mass Entity / ECS remains experimental** after four years, so plans that assume it is production-ready are wrong.
+
+**Fab is 88/12.** Megascans' free-for-all ended 2024-12-31 and Quixel content is now paid. **Epic sold ArtStation and Sketchfab to KitBash on 2026-08-10**, partially unwinding the 2024 consolidation.
 
 ### Unity
 
-**The Runtime Fee is cancelled.** Announced September 2023, it triggered the largest developer backlash in the engine's history, was revised, and was **fully cancelled in September 2024**, replaced with seat-price increases. Any advice premised on install-based fees is stale. **Re-verify current seat pricing, the Personal tier's revenue cap, and splash-screen requirements at unity.com/pricing before quoting numbers** -- these are the fastest-moving figures in this file.
+**The Runtime Fee is cancelled** -- announced September 2023, and **fully cancelled 2024-09-12**, replaced with seat-price increases (Pro +8% and Enterprise +25% effective 2025-01-01). Any advice premised on install-based fees is stale.
 
-Structurally: subscription per seat by tier, with a revenue and funding ceiling on the free Personal tier. The technical facts that persist: IL2CPP for ahead-of-time compilation to native targets, the ECS/DOTS stack as a separate performance-oriented path with its own learning curve and maturity questions, and a large asset ecosystem whose licence terms are per-asset and worth reading.
+**As of 2026-09-05, verified at unity.com/pricing**: Personal is **free below $200K** total finances trailing twelve months; **Pro is $210/month or $2,310/year per seat**; Enterprise is custom above $25M; Industry is custom for non-games above $1M. Current LTS is **6.3** (released 2025-12-03, supported to December 2027), with 6.4 as a Supported Update rather than an LTS. **Pro has been priced up twice in two years -- treat this as high volatility and re-verify before quoting.**
+
+**The attribution trap is separate from the splash screen.** The "Made with Unity" *splash screen* became optional for Personal on Unity 6+. But the Editor Software Terms separately require a **credits attribution** with no tier exemption found. Disabling the splash does not discharge the attribution obligation, and teams routinely assume it does.
+
+Structurally: subscription per seat by tier, with a revenue and funding ceiling on the free Personal tier. The technical facts that persist: IL2CPP for ahead-of-time compilation to native targets, the ECS/DOTS stack as a separate performance-oriented path with its own learning curve and maturity questions, and a large asset ecosystem whose licence terms are per-asset and worth reading -- **Unity Asset Store Extension Assets are single-seat and two-computer, and there is no guaranteed continued access if a publisher delists.**
+
+**The migration wave did not happen, and this is worth stating plainly because the opposite is widely assumed.** GDC's State of the Game Industry shows Unity at 33% (2024), 32% (2025), 30% (2026); Godot moved 4% to 5%. GDC's own 2025 commentary: "it appears that few developers have moved on from Unity." The 2026 figure showing Unreal at 42% against Unity's 30% reflects a **narrowed sample** (hands-on roles only, 3,000 down to 2,300) rather than a measured shift. The real split is by segment: Global Game Jam Unity usage fell from 61% to 36%, so **hobbyists moved and professionals largely did not.** Money moved to Godot; developers did not.
 
 ### Godot
 
@@ -58,23 +71,66 @@ Structurally: subscription per seat by tier, with a revenue and funding ceiling 
 
 **As of 2026-09-05**: 4.7.2 stable, with 3.6.3 still maintained. Governance sits with the **Godot Foundation** (Stichting Godot, a Dutch nonprofit formed 2022-08-23), which notably **does not own the Godot Project**. **W4 Games is a separate commercial entity** providing console porting as approved middleware -- the practical answer to Godot's console gap, since the engine itself cannot ship platform SDKs under an open licence.
 
-The real constraints: **C# web export has been the persistent gap**, GDExtension is the native-extension path, and the mobile and .NET story is worth verifying against the current release rather than assumed. The "Redot" fork exists and is a governance controversy rather than a technical one.
+**MIT's practical scope**: no royalties, no thresholds, close the source freely, modify without publishing, and **static versus dynamic linking is irrelevant**. The only obligation is reproducing the licence text, which a credits screen, a licences menu, an output log, or a link all satisfy. **The real compliance risk is bundled third-party dependencies, not Godot's own MIT.**
+
+The real constraints, verified:
+
+- **C# is second-class.** It is **not supported on web at all** (the tracking issue has been open since 2023-01-01, and the documentation suggests considering Godot 3 instead), and remains experimental on Android and iOS. Recent releases shipped little for C#.
+- **The renderer split is a structural cost**: Forward+ is desktop-only, and web is Compatibility-only -- no screen-space reflections, volumetric fog, SDFGI, temporal antialiasing, or FSR2.
+- **Consoles cannot be fixed.** MIT and platform NDAs are legally incompatible, so this is permanent rather than a roadmap item. **W4 Consoles is the path: $800/year per platform or $2,000/year for all platforms** below $300k revenue and 30 employees, rising to $4,000/$10,000 for Pro, **with no revenue share.** Switch, Switch 2 (beta), PS5, and Xbox Series X|S.
+- Jolt became the default 3D physics engine in 4.6.
+- Funding runs about **EUR 35,514/month across 1,828 members and 23 corporate sponsors**, roughly 2.3 times Bevy's funding with 8 times the donors.
+
+**Redot** is a live fork -- a US nonprofit since February 2026 with quarterly LTS releases -- but it tracks Godot 4.5, two releases behind, while simultaneously running a hard fork and a from-scratch engine, on volunteer labour, with no commercial shipped game found. Treat it as a governance controversy with an uncertain technical future.
+
+### Bevy
+
+**The most important single fact: after six years and 19 releases there are no published 1.0 criteria** -- not in the release posts, the birthday post, or the README. If a team is waiting for 1.0 to signal stability, **there is no signal coming.**
+
+The churn is the defining property and it is not tapering: the 0.18-to-0.19 migration guide runs roughly 80 to 90 breaking changes across 15,000-plus words, including Resources becoming Components and the render graph becoming ECS schedules. **Bevy's own documentation recommends Godot for production stability** -- take that at face value. There is still no editor ("very close," six years running), no console path (the Rust console toolchain does not exist), and experimental web support. Funding is about $16,901/month, and the Foundation states developers earn roughly 54% below market. The rendering work is genuinely impressive and much of it is experimental.
 
 ### Others worth knowing
 
 **Bevy** (Rust, ECS-first) is pre-1.0 with a migration guide per release -- the churn is the defining fact, and it is a deliberate tradeoff for architectural freedom. **GameMaker** changed to free for non-commercial use in 2023; verify current commercial terms. **Defold** (King) is free. **O3DE** (Apache-2.0) is the Lumberyard successor. **Construct 3**, **RPG Maker**, **Ren'Py**, and **Twine** are genre-specific and often the correct answer for their genre. **LÖVE**, **raylib**, **SDL3**, **MonoGame**, **libGDX**, and **Heaps** are frameworks rather than engines -- no editor, more control, more work. **Phaser**, **PlayCanvas**, **Three.js**, and **Babylon.js** are web-first.
 
-**Middleware licensing is a frequently-missed cost.** FMOD and Wwise both have their own tiers and thresholds, and a project can clear an engine's royalty threshold while tripping a separate audio-middleware one.
+A licence correction worth carrying because it is routinely stated wrong: **MonoGame is Microsoft Public License, not MIT.** Ms-PL is file-level weak copyleft with a patent grant and is not interchangeable with MIT for compliance purposes. Similarly **Flax is source-available rather than OSI-licensed, with a 4% royalty above $250,000 per calendar quarter** -- per quarter, not lifetime, which is a materially different shape from Unreal's. **Ren'Py's core is MIT but its dependencies are LGPL**, so commercial shipping carries relinking obligations that are routinely skipped. **Construct 3 is subscription-only with no perpetual licence**, meaning project files are effectively rented. **PlayCanvas's engine is MIT but its cloud editor is proprietary, and private projects lock on cancellation** -- an MIT engine does not protect your data.
+
+## Licensing traps
+
+These sit outside the engine's own terms and are where projects actually get hurt.
+
+**Audio middleware is per-title, and sequels need new licences.**
+
+- **FMOD**: Indie free or $2,000, Basic $6,000, Premium $18,000 -- **per game, all platforms included, consoles free.** Logo waivers cost extra. The free tier has **two triggers**: under $600k budget **and** under $200k/year company revenue, with funding counting toward revenue.
+- **Wwise**: Indie free, Pro $8,000, Premium $25,000, Platinum $45,000 -- but **priced per platform**, so Pro across three consoles is $24,000 rather than $8,000. A 1% gross royalty alternative exists. **The old 500-asset limit no longer exists** on commercial tiers; the 200 cap is trial-only.
+
+**FFmpeg is the sharpest trap in the list.** Building with `--enable-gpl` or `--enable-libx264`/`libx265` flips the entire binary to GPL, and statically linking that into a console build violates on several axes at once, silently. FFmpeg's own position is that it "is not available under any other licensing terms... not even in exchange for payment."
+
+**LGPL static linking is effectively unsatisfiable on consoles and iOS**, because you cannot grant relinking rights on a signed, locked platform. This is a structural incompatibility, not a paperwork problem.
+
+**Fonts are the most-violated licence in games.** Desktop licences do not cover binary embedding -- that needs an app or embedding licence -- and an SDF atlas is a derivative work. The Open Font License is the safe default, with the caveat that its Reserved Font Name clause bites when you subset.
+
+**Creative Commons** carries two specific hazards: BY-NC forbids commercial games outright, and BY-SA can infect an OST release if you arrange the track.
 
 ## Deployment reality
 
 **Console is a gate, not a build target.** Shipping to Switch, PlayStation, or Xbox requires being an approved developer, signing NDAs, and obtaining devkits. The engine question is downstream of that. Unity and Unreal have first-party console support available to approved developers. **Godot's path is through commercial porting partners** such as W4 Games, operating as approved middleware -- workable, and a cost and dependency that an MIT licence does not remove.
 
-**Web is where scripting-language choice becomes a deployment constraint.** WebAssembly is the target; the gaps are specific and persistent. C# on the web has been Godot's notable hole. Threads require SharedArrayBuffer, which requires COOP and COEP headers, which is a hosting constraint many teams discover late. iOS Safari imposes its own limits, and download size gates conversion far more aggressively than on desktop.
+Two console specifics worth knowing: **Nintendo was refusing Switch 2 devkits to indies as of August 2025**, directing them to Switch 1 backward compatibility, and **ID@Xbox provides two free devkits**, the lowest barrier of the three platform holders.
 
-**Mobile** brings store-imposed deadlines that arrive whether or not the project is ready: target API level requirements, 64-bit mandates, size limits, and privacy-manifest obligations. These are release-engineering concerns (see `platform-release`) but they constrain engine and plugin choice early.
+**Web is where scripting-language choice becomes a deployment constraint.** WebAssembly is the target; the gaps are specific and persistent. C# on the web is Godot's outright hole -- unsupported, not merely limited. Threads require SharedArrayBuffer, which requires COOP and COEP headers, a hosting constraint teams discover late. iOS Safari imposes its own limits, and download size gates conversion far more aggressively than on desktop.
 
-**Store terms** are a real line in the model: the conventional 30% platform cut, with variations and exceptions worth checking per store rather than assumed.
+**The 3D-on-web gap has genuinely closed, though**: WebGPU now ships in all four major browsers -- Chrome since 2023, **Safari 26 in June 2025, Firefox 141 in July 2025**. Advice written before mid-2025 understates what the web can do.
+
+**Mobile economics were rewritten in 2025 and 2026, and this is the fastest-moving part of the deployment picture.**
+
+- **Epic v Google settled 2026-03-04**: Google's cut is now **at most 20%**, third-party stores are permitted globally, and Fortnite returned to Play on 2026-03-19. **The flat 30% is gone on Android.**
+- **Epic v Apple is unsettled.** An April 2025 contempt ruling barred Apple from taking a fee on external link-outs, and **the Supreme Court granted certiorari for the 2026 term.** Do not treat US iOS terms as stable, and verify Apple's Core Technology Fee position directly -- it was not confirmed in this pass.
+- Apple's standard terms remain 30%, 15% for subscriptions after year one, and 15% under the Small Business Program below $1M.
+
+Mobile also brings store-imposed deadlines that arrive whether or not the project is ready: target API levels, 64-bit mandates, size limits, privacy manifests. Those are release-engineering concerns (see `platform-release`) but they constrain engine and plugin choice early.
+
+**Store terms**: Steam Direct is $100, refunded above $1,000, with the 30/25/20 tiers and the two-hour/fourteen-day refund window unchanged. Epic Games Store and Fab are both 88/12. **itch.io defaults to 10% and is creator-settable to zero**, but it delisted thousands of adult games on 2025-07-24 under payment-processor pressure -- a reminder that platform risk is not only about revenue splits.
 
 ## Lock-in and what survives
 
@@ -142,4 +198,8 @@ Both are arguing from real evidence. The it-matters camp is usually thinking abo
 
 ## Changelog
 
-- **2026-09-05** -- Initial version. Unreal royalty terms verified by reading the EULA text directly, including the 5% rate, the per-product $1,000,000 lifetime exclusion, the $5,000,000 Oculus Store exclusion, and the quarterly and royalty-alternative exclusions. Unreal 5.8 current with UE6 announced 2026-05-24; Godot 4.7.2 with 3.6.3 maintained; Godot Foundation governance and its separation from W4 Games verified. **Unity's current seat pricing and Personal-tier ceiling were not re-verified in this pass and must be checked before quoting** -- the file records the Runtime Fee's cancellation (September 2024) but not current figures. Store revenue splits and middleware thresholds are stated structurally rather than numerically for the same reason.
+- **2026-09-05** -- Initial version. Unreal royalty terms read directly from the EULA text: the 5% rate, the per-product $1,000,000 lifetime exclusion, the $5,000,000 Oculus Store exclusion, the quarterly exclusion as a cliff rather than a deductible, the 3.5% "Launch Everywhere with Epic" tier, and EGS revenue being excluded entirely. Unity pricing verified at unity.com/pricing (Personal free below $200K; Pro $210/month or $2,310/year; 6.3 LTS). Godot 4.7.2, its MIT scope, the C#-on-web gap, the renderer split, and W4 console pricing verified. Middleware, font, FFmpeg, and LGPL traps verified.
+
+  Three corrections to widely-held premises are recorded in the body because they change advice: **the Unity-to-Godot migration wave did not happen** among professionals (GDC's own data shows Unity 33/32/30% across 2024-2026, with the apparent 2026 shift explained by a narrowed sample); **UE 5.8 is the last planned UE5 release** with UE6 targeting roughly 2029; and **MonoGame is Ms-PL, not MIT.**
+
+  **Known gaps**: Apple's Core Technology Fee in its current form, Fab's Personal-versus-Professional revenue threshold, and Roblox's DevEx rate were not verifiable in this pass. Two research hazards worth remembering for the next refresh: gamedeveloper.com and pocketgamer.biz return HTTP 200 for nonexistent pages while serving unrelated articles, so verify page identity by headline rather than status code; and GDC Vault is not machine-fetchable, so talk citations need a different route.

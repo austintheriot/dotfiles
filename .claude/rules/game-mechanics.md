@@ -32,7 +32,17 @@ Empirical priority, in rough order of how often it decides whether a design work
 
 The standard critique is that "aesthetics" is doing too much work as a category and that MDA under-describes the authored and narrative parts of games. **DDE (Design, Dynamics, Experience)** is one response. Marc LeBlanc's **eight kinds of fun** (sensation, fantasy, narrative, challenge, fellowship, discovery, expression, submission) is the more useful half of the framework in practice, because it forces the question "which of these is this game actually for" and most weak designs are chasing three at once.
 
-**Sid Meier: "a game is a series of interesting decisions."** The most quoted line in design, and the operative word is *interesting*: a decision is interesting when the options are meaningfully different, the outcome is uncertain, and the player has enough information to have an opinion. Most bad mechanics fail one of those three, and naming which one is a complete diagnosis.
+**"A game is a series of interesting decisions"** is the most quoted line in design and is **attributed to Sid Meier on folklore rather than on a verifiable source** -- treat the attribution as unconfirmed and use the idea rather than the citation. The idea is still the useful part: a decision is interesting when the options are meaningfully different, the outcome is uncertain, and the player has enough information to have an opinion. Most bad mechanics fail one of those three, and naming which one is a complete diagnosis. **Costikyan's uncertainty thesis is the substantive version of the same argument** and is properly sourced.
+
+**Dan Cook's loops and arcs** is the sharpest structural tool in the set. A loop is where "the player starts with a mental model that prompts them to apply an action to the game system and in return receives feedback that updates their mental model." An arc is "a broken loop you exit immediately." **Loops scale; arcs must be authored one at a time**, which is why arc-heavy designs produce content treadmills and consumption burnout. His **skill atom** (action, simulation, feedback, modeling) chains into skill graphs and is the most concrete available model of how a game teaches.
+
+**Doug Church's Formal Abstract Design Tools** proposed three: **intention**, **perceivable consequence**, and **story**. The ambition was a common design vocabulary; the three tools are cited constantly and the accumulating corpus never materialized, which is itself a finding about the field.
+
+**Bernard Suits' definition** is the most precise one available: to play a game is "to attempt to achieve a specific state of affairs, using only means permitted by rules, where the rules prohibit use of more efficient in favour of less efficient means, and where the rules are accepted just because they make possible such activity." The **lusory attitude** -- accepting inefficient means voluntarily -- is what separates a game from a task.
+
+Two attribution corrections worth carrying, because both circulate widely in the wrong form. **The "a delayed game is eventually good, a bad game is bad forever" line is not Miyamoto's** -- it traces to Siobhan Beeman of Origin Systems at GDC 1996, phrased as "a game's only late until it ships, but it sucks forever." And **Bushnell's Law is of uncertain provenance**, sourced to a 2009 Bogost piece rather than to any confirmed Bushnell statement.
+
+**The magic circle is a misattribution too.** Huizinga described play spaces as "forbidden spots, isolated, hedged round, hallowed" but **argued against** strict separation; Zimmerman later acknowledged that he and Salen "more or less invented the concept." Much of the critique of the magic circle attacks a position Huizinga never held.
 
 **Raph Koster, *A Theory of Fun*.** Fun is the feeling of the brain learning a pattern. The consequence is uncomfortable and correct: **fun has an expiry date.** Once the pattern is mastered the fun stops, and the design question becomes what the game offers after mastery -- new patterns, social context, expression, or nothing.
 
@@ -56,6 +66,12 @@ The central action of a game is performed thousands of times, and how it *feels*
 - **Screen shake, particles, sound layering, animation anticipation and follow-through.** The "juice" catalogue. Cheap, and the difference between a prototype that reads as broken and one that reads as good.
 - **Cancel windows and frame data.** In combat, when a player can interrupt an action determines whether the system feels responsive or committed. Both are valid; the wrong one for the intended feel is not.
 
+**Celeste's published constants make the principle concrete** (drawn from decompilation, so treat the exact figures as well-attested rather than official): coyote time is **0.1s, six frames**; the jump input buffer is **0.08s**; the grab buffer is **zero**. **Coyote time is deliberately longer than the input buffer** -- forgiving a late jump matters more than forgiving an early press, which is a real design claim and not an accident. Corner correction scans one to four pixels and **biases upward on ties**. Half-gravity applies only within a narrow band around the apex and only while jump is held. Stamina refunds exactly a quarter within 0.2s.
+
+Maddy Thorson's framing is the cleanest statement of the whole category: **"matching the player's intent over requiring near-perfect execution,"** and "everything is fudged a tiny bit in the player's favor... it wants you to succeed." Worth noting alongside it that Celeste's Assist Mode was originally called **"Cheat Mode" and renamed as too judgmental** -- a naming decision that did real work on how players related to it.
+
+The same principle shows up as presentation rather than simulation: **Touhou hitboxes are as small as a 2-pixel radius, and the focus-mode dot that depicts the hitbox is larger than the hitbox itself.** Forgiveness implemented in the drawing rather than the collision.
+
 **This class of technique is invisible forgiveness: the game is lying slightly in the player's favour, and telling them would break the effect.** That is not deception in the ethical sense; it is compensating for the gap between simulation and perception.
 
 ## Randomness
@@ -64,8 +80,8 @@ Players do not experience probability; they experience streaks. Designers who mo
 
 - **True random** produces clumping. Seven misses in a row at 70% hit chance happens routinely and feels like a bug.
 - **Shuffle bags / bounded distributions** draw from a shuffled set rather than sampling independently, guaranteeing distribution over a window. Tetris piece randomizers are the canonical case.
-- **Pseudo-random distribution** (as in Dota's crit model) escalates probability on each failure and resets on success, producing a tighter distribution around the nominal rate with no long droughts.
-- **Pity timers** guarantee an outcome after N failures. Universal in gacha systems, and the reason they are tolerable at all.
+- **Pseudo-random distribution** escalates probability on each failure and resets on success. Dota 2's implementation is `P(N) = C * N`, and the constants are instructive: a **25% nominal rate needs C = 0.084744**, so the first attack is about 8.5%, the second about 17%, the third about 25.5%. **The payoff is that standard deviation drops from 3.49 to 1.90 while the mean is preserved** -- variance halved at no cost to the expected rate. Valve applies it to evasion and drops but deliberately **not** to Ogre Magi's Multicast, reserving true randomness for effects where a streak reads as a fun highlight rather than an unearned win. That distinction is the design judgment worth copying.
+- **Pity timers** guarantee an outcome after N failures. Universal in gacha systems, and the reason they are tolerable at all. Note that **soft pity is frequently community-datamined rather than published** -- Genshin's is a well-known case where the publisher has never disclosed the curve, so any specific figure is a datamined estimate rather than a documented rate.
 - **Perceived fairness diverges systematically from actual fairness.** Players over-remember losses, expect small samples to look like large ones, and read agency into noise. Designing for felt fairness means deliberately deviating from uniform randomness, and saying so in the design rather than pretending the model is neutral.
 
 ## Progression, economy, and feedback loops
@@ -84,9 +100,17 @@ Monetization design is systems design, and treating it as a business-layer conce
 
 The structural question is always: **does the monetization pull in the same direction as the fun, or against it?** A cosmetic economy in a game about self-expression is aligned. An energy timer in a game about flow is directly opposed -- it monetizes by interrupting the thing the player came for.
 
-**Randomized monetization** (loot boxes, gacha) sits at the intersection of the randomness section above and the regulatory layer. **The regulatory picture is genuinely fragmented and moving**: several jurisdictions have acted, disclosure requirements exist in some markets, rating boards apply labels, and consultations continue elsewhere. **Verify the current position for the specific jurisdictions a title ships in rather than working from a general impression** -- this is the fastest-rotting material in this file, and getting it wrong is a compliance problem rather than a design one.
+**Randomized monetization** (loot boxes, gacha) sits at the intersection of the randomness section above and the regulatory layer. **Verify the current position for the specific jurisdictions a title ships in** -- this is the fastest-rotting material in this file, and getting it wrong is a compliance problem rather than a design one.
 
-**The dark-pattern taxonomy in games** (Zagal, Björk, and Lewis, "Dark Patterns in the Design of Games") gives the field its vocabulary: grinding, playing by appointment, pay to skip, social pyramid schemes, impersonation of social obligation, and premium currency as an abstraction that obscures real cost. Its value is that it names the pattern independently of intent, so a design can be assessed on what it does to players rather than on what the team meant.
+**The structural throughline is worth knowing even as specifics change: every instrument that actually landed between 2023 and 2026 avoided gambling law.** Consumer protection, child protection, children's privacy and deception, and content classification produced enacted rules; the 2018-2021 gambling framing largely stopped producing them. That tells you which regulatory theory to watch.
+
+Anchors verified as of 2026-09-05, each needing re-verification before it gates a decision: **Brazil prohibited loot boxes outright** in games directed at or likely accessed by minors (Lei 15.211/2025, Article 20, effective 2026-03-17) -- the first large market to prohibit rather than disclose. **PEGI made paid random items an age-rating driver** (announced 2026-03-12, effective June 2026), defaulting to PEGI 16. The **FTC's Genshin settlement ($20M, January 2025)** bars loot box sales to under-16s without parental consent and prohibits selling loot boxes for virtual currency without a direct real-money option. **The Netherlands overturned its EA fine in March 2022** -- the single most misreported item in this space.
+
+**The dark-pattern taxonomy in games** (Zagal, Björk, and Lewis) has **three categories: Temporal, Monetary, and Social Capital-Based, covering seven patterns.** There is no fourth psychological category -- that is a later extension by others and is frequently misattributed to the original paper. The taxonomy's value is that it names patterns independently of intent, so a design can be assessed on what it does to players rather than on what the team meant.
+
+**Two numbers to handle carefully.** The famous whale statistic is **0.15% of all players, not of payers** -- the common misquote implies roughly ten times more concentration than the finding, and the underlying report is no longer recoverable. And the **leftover-currency pattern** has a clean documented case: Genshin pulls cost 160 primogems while bundles are sold in denominations of which **not one divides evenly**.
+
+**The evidence on harm is genuinely contested, and the honest version cites both sides from the same literature.** Zendle and Cairns (2018, n=7,422) is the most-cited link between loot boxes and problem gambling and states in its own text that the causal direction "may be" reversed. Etchells et al. (2022, n=2,728, Bayesian) found extremely strong evidence for the gambling correlation but **no evidence** for links to wellbeing or distress. On the imprecision of dark-pattern research, the strongest critique comes from the field's own leading empiricists: Mathur, Mayer and Kshirsagar (2021) note that "the literature does not reflect a singular concern or consistent definition."
 
 ## Playtesting
 
@@ -108,6 +132,10 @@ The structural question is always: **does the monetization pull in the same dire
 
 **The authored position.** Emergence is uneven by construction: it produces brilliant moments and long stretches of nothing, and a designer cannot promise an experience they do not control. The most affecting moments in the medium are authored, and "the player makes their own story" is frequently a rationalization for not having written one.
 
+**The most useful fact in this debate is that Warren Spector -- the systemic camp's leading advocate -- concedes that "emergent narrative lacks the emotional impact of linear storytelling."** Both sides' strongest proponents agree the tradeoff is real, which means the argument is about which cost to pay, not about whether there is one. The commercial record is also part of the honest picture: System Shock 2 sold roughly 58,000 units in eight months, and Deus Ex: Mankind Divided did not reach a million in a year. The immersive sim's critical standing and its sales have never matched.
+
+A useful diagnostic from Juul: **emergence games generate strategy guides; progression games generate walkthroughs.** If you know which artifact your players will make, you know which kind of game you built.
+
 ### Mechanics first versus theme first
 
 **Mechanics-first** (the Vlambeer school -- Rami Ismail, Jan Willem Nijman). Find the verb that feels good, then discover what game it belongs to. If the core action is not fun in a grey box with no art, no theme will save it, and the "Art of Screenshake" argument is that feel is a craft skill with specific techniques rather than an emergent property.
@@ -118,7 +146,11 @@ The structural question is always: **does the monetization pull in the same dire
 
 **The PCG position.** Generation multiplies content beyond what a team can author, enables replayability, and creates the run-to-run variance that roguelikes are built on.
 
-**Kate Compton's "10,000 bowls of oatmeal" critique.** You can generate ten thousand mathematically unique bowls of oatmeal, and to a human they are all just oatmeal. **Perceptual uniqueness, not mathematical uniqueness, is what matters**, and generators routinely optimize the wrong one. The fix is structural variety at the level people actually perceive, which is much harder than parameter randomization. *This critique transfers directly to AI-generated content and is the sharpest tool for evaluating it.*
+**Kate Compton's "10,000 bowls of oatmeal" critique.** You can generate ten thousand mathematically unique bowls of oatmeal, and to a human they are all just oatmeal. The precise distinction Compton draws is **perceptual differentiation versus perceptual uniqueness**, and generators routinely optimize combinatorial variety while delivering neither. The fix is structural variety at the level people actually perceive, which is much harder than parameter randomization. *This critique transfers directly to AI-generated content and is the sharpest tool for evaluating it.*
+
+**No Man's Sky is evidence for both camps**, which is why it settles nothing: it demonstrated the critique on release and then recovered -- and what fixed it was **authored content, not better generators.**
+
+Two attribution notes: **Wave Function Collapse has a priority claim against it** -- Merrell's Model Synthesis (2007) predates Gumin's 2016 work -- and the **Berlin Interpretation carries an explicit self-disclaimer that is nearly always dropped when it is cited**: "missing a factor does not eliminate a game from being a roguelike, nor does possessing the features make a game roguelike."
 
 ### Difficulty options and accessibility
 
@@ -126,7 +158,7 @@ The structural question is always: **does the monetization pull in the same dire
 
 **The authored-difficulty position** (the Souls discourse). In some designs difficulty is the content: the meaning of an accomplishment comes from its cost, and a shared assumption that everyone faced the same wall is what makes the community's culture work. An easy mode does not merely add an option; it changes what the achievement means.
 
-This one is genuinely unresolved, and the honest version notes that the two camps are frequently discussing different games.
+This one is genuinely unresolved, and the honest version notes that the two camps are frequently discussing different games. **It is also worth knowing that the Miyazaki quotation both sides deploy does not say what either claims**: his actual documented position is that the difficulty "had no intention of being that way compared to others" -- a claim about earned accomplishment rather than about defending a sacred difficulty level. It is compatible with both camps, which is precisely why both quote it.
 
 ### Realism versus feel
 
@@ -175,4 +207,8 @@ This one is genuinely unresolved, and the honest version notes that the two camp
 
 ## Changelog
 
-- **2026-09-05** -- Initial version. Design frameworks, game-feel technique, randomness models, economy structure, and the named disagreements are drawn from the field's canonical literature and are durable. **The regulatory section is deliberately non-specific**: loot box and gacha regulation is fragmented, jurisdiction-dependent, and moving, and per-market positions were not verified in this pass. Treat any specific regulatory claim as requiring verification against the regulator's own publications before it informs a shipping decision.
+- **2026-09-05** -- Initial version. Design frameworks, game-feel technique, randomness models, economy structure, and the named disagreements are drawn from the field's canonical literature and are durable.
+
+  **Several widely-repeated attributions are recorded here as corrections because they circulate in the wrong form**: the "interesting decisions" line is folklore rather than a verifiable Sid Meier citation (Costikyan's uncertainty thesis is the sourced version); the "delayed game" line is Siobhan Beeman at GDC 1996, not Miyamoto; Bushnell's Law is of uncertain provenance; the magic circle was, by Zimmerman's own later admission, largely invented rather than drawn from Huizinga, who argued against strict separation; the Zagal dark-pattern taxonomy has three categories and seven patterns, with no psychological category; the whale statistic is 0.15% of all players rather than of payers; and the Berlin Interpretation's own self-disclaimer is nearly always dropped when cited.
+
+  Dota's pseudo-random distribution constants and its variance effect, and Celeste's forgiveness constants, are quoted because they turn abstract principles into checkable numbers -- the Celeste figures come from decompilation rather than official publication and should be described that way. **Regulatory anchors (Brazil's prohibition, the PEGI change, the FTC settlement) are dated and need re-verification before informing a shipping decision**; the structural observation that enacted rules came from consumer and child protection rather than gambling law is the more durable finding.

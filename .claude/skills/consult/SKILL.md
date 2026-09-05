@@ -81,6 +81,17 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`llm-app`** -- prompt engineering, tool use, RAG, evals, context management (caching / compaction), prompt-injection defense, agentic patterns.
 - **`browser-spec`** -- WhatWG specs, DOM event model, modern platform primitives (`<dialog>`, Popover, AbortController, `Intl.*`), Web Components.
 - **`web-analytics`** -- Mixpanel / Amplitude / Segment / PostHog; event taxonomy, identity correctness, funnels / retention, A/B test instrumentation, privacy.
+- **`neovim`** -- config load order and timing, Lua API pitfalls (fast events, index bases, option scope), plugin managers and `vim.pack`, LSP and treesitter transitions, agent-editor integration over RPC.
+- **`blender-3d`** -- Blender and 3D authoring: transform state, color management, normals and tangent space, the modifier stack and depsgraph, UVs and texel density, rigging and skinning, `bpy` automation.
+- **`game-art-pipeline`** -- the authored-content-to-engine boundary: interchange formats and their data loss, identity and reference stability, texture compression, collision and lightmap conventions, binary version control, CI asset validation.
+- **`level-design`** -- spatial gameplay: legibility and wayfinding, guidance without instruction, pacing and rhythm, encounter composition, the blockout discipline.
+- **`game-engines`** -- engine and tool selection as a procurement decision: licence and royalty structure, deployment-target reality (console, web, mobile), lock-in and migration cost.
+- **`game-mechanics`** -- gameplay systems: core loops, game feel, randomness and perceived fairness, progression and economy, feedback-loop sign, monetization alignment, playtesting.
+- **`ai-3d-integration`** -- model-driven creative tooling: the MCP trust boundary, why model-written DCC scripts fail silently, the perception loop and its cost, programmatic verification over visual inspection.
+- **`ai-creative-tooling`** -- AI in creative production as a practice: where generative tooling helps and fails in a content workflow, ideation discipline and its anchoring failure, provenance and disclosure, the labor and consent debate.
+- **`architectural-design`** -- building architecture (not software): design theory and proportion, historical movements and their arguments, urbanism and its critiques, practice and codes, sustainability frameworks, acoustics, environmental graphics.
+- **`interior-and-spatial`** -- interiors and the inhabited room: spatial planning and anthropometrics, lighting design, room acoustics, colour and materials, furniture and FF&E, biophilia and its evidence base.
+- **`architectural-tooling`** -- CAD and BIM authoring, openBIM and IFC interoperability, parametric design (Rhino, Grasshopper), archviz rendering pipelines, reality capture and scan-to-BIM, drawing standards.
 
 ### NOT exposed (review-only)
 

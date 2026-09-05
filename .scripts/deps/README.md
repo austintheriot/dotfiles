@@ -105,10 +105,19 @@ and reported. It never gets installed, and it never fails the exit code of
 ## PATH
 
 `check-deps.sh` prepends `~/.local/bin` and `~/.cargo/bin` to `PATH`.
-`zoxide` installs into the first directory and `rustup` into the second, so
-without this a `command -v` check fails on the line right after its own
-install succeeded. An interactive shell usually exports both already, which
-is what hides the problem on a machine already in use.
+`rustup` installs into the second directory, and `zoxide` into the first when
+it falls back to its own installer, so without this a `command -v` check
+fails on the line right after its own install succeeded. An interactive shell
+usually exports both already, which is what hides the problem on a machine
+already in use.
+
+`zoxide` reaches that fallback only where the package manager has no package
+for it. `apt` and `brew` both do, and it is installed from there, because
+zoxide's upstream install script resolves the latest release through the unauthenticated
+GitHub API. That quota is 60 requests an hour per IP, shared by every Actions
+runner on that IP, and it failed a CI run that had nothing to do with zoxide.
+The installer accepts no token, so caching would not have helped: a cache
+miss still calls the API.
 
 ## Running it
 

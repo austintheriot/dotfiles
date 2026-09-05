@@ -20,9 +20,13 @@ pane_id() {
 
 # Windows created without -n keep tmux's automatic-rename flag on, which is
 # what a window made by a keybinding looks like.
+# $INERT_WINDOW_CMD rather than the default shell: a login shell's precmd
+# calls the very script under test, so a shell-backed window renames itself
+# a beat after creation and races every assertion here. See lib.sh.
 new_window() {
     local dir=$1
-    tmux new-window -d -t "$SESSION" -c "$dir" -P -F '#{window_id}'
+    # shellcheck disable=SC2086  # command plus argument, split on purpose
+    tmux new-window -d -t "$SESSION" -c "$dir" -P -F '#{window_id}' $INERT_WINDOW_CMD
 }
 
 # --- setup -------------------------------------------------------------
@@ -156,7 +160,8 @@ assert_equals '@wname_bare_repos adds the prefix back when nothing matches' 'Not
 
 # --- an explicitly named window counts as manual ---
 
-win_named=$(tmux new-window -d -t "$SESSION" -n 'Preset' -c "$repo_main" -P -F '#{window_id}')
+# shellcheck disable=SC2086  # command plus argument, split on purpose
+win_named=$(tmux new-window -d -t "$SESSION" -n 'Preset' -c "$repo_main" -P -F '#{window_id}' $INERT_WINDOW_CMD)
 "$SCRIPT" -w "$win_named"
 assert_equals 'window created with an explicit name is left alone' 'Preset' "$(window_name "$win_named")"
 
@@ -174,7 +179,8 @@ assert_equals 'switching active pane updates the name' 'repo-main/another' "$(wi
 # --- target selection --------------------------------------------------
 
 SESSION_B=$(new_test_session other "$plain_dir")
-other=$(tmux new-window -d -t "$SESSION_B" -c "$repo_feature" -P -F '#{window_id}')
+# shellcheck disable=SC2086  # command plus argument, split on purpose
+other=$(tmux new-window -d -t "$SESSION_B" -c "$repo_feature" -P -F '#{window_id}' $INERT_WINDOW_CMD)
 
 tmux rename-window -t "$win" 'stale'
 tmux set -w -t "$win" @wname_auto 'stale'

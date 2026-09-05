@@ -404,6 +404,68 @@ assert_contains 'aerospace is manual-only on a non-brew system' \
 assert_equals 'a macOS-only dependency does not fail --fix on Linux' \
     '0' "$status"
 
+# --- zoxide installs from the package manager, not the GitHub API --------
+#
+# zoxide's install.sh resolves the latest release through
+# api.github.com/repos/.../releases/latest, unauthenticated. That quota is 60
+# requests an hour per IP, shared across every GitHub Actions runner on that
+# IP, so the deps-check workflow failed with "you have exceeded GitHub's API
+# rate limit" on a run that changed nothing about zoxide.
+#
+# Caching does not fix that: a cache miss still calls the API, and the
+# installer offers no way to pass a token. zoxide is packaged by both apt and
+# brew, so on the platforms CI actually runs, the curl-to-shell installer was
+# never needed. The script keeps it only for a manager that has no package.
+
+conf="$FIXTURES/deps-zoxide.conf"
+printf 'zoxide|command -v zoxide-not-installed|https://github.com/ajeetdsouza/zoxide\n' > "$conf"
+
+# PATH is the stub directory alone, with no /usr/bin appended. detect_pm
+# picks pacman, then apt, then brew, so a real apt-get left on PATH shadows
+# the brew stub -- which is exactly what happens inside the Debian test
+# container. Each stub directory already symlinks the utilities the script
+# needs.
+for manager_bin in "$brew_bin" "$apt_only_bin"; do
+    manager_name=brew
+    [ "$manager_bin" = "$apt_only_bin" ] && manager_name=apt
+
+    output=$(PATH="$manager_bin" DEPS_CONF="$conf" \
+        DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+        "$SCRIPT" --fix --yes --dry-run 2>&1)
+
+    # Matched on the package name plus the manager, not on an exact command
+    # string: apt spells it `install -y zoxide` and brew `install zoxide`.
+    assert_contains "zoxide installs through $manager_name" \
+        "$manager_name" "$output"
+    assert_contains "the $manager_name command names the zoxide package" \
+        "zoxide" "$output"
+
+    # The specific failure being prevented. An installer reached through the
+    # unauthenticated API is what the rate limit hits.
+    assert_equals "zoxide does not curl an installer on $manager_name" \
+        '' "$(printf '%s' "$output" | grep -o 'install\.sh')"
+    assert_equals "zoxide does not reach the GitHub API on $manager_name" \
+        '' "$(printf '%s' "$output" | grep -o 'api\.github\.com')"
+done
+
+# A manager with no zoxide package still gets the installer: pacman does not
+# ship one everywhere, and losing the fallback would turn a working install
+# into a manual step on machines that never had the rate-limit problem.
+pacman_bin="$FIXTURES/pacman-only"
+mkdir -p "$pacman_bin"
+printf '#!/bin/sh\nexit 0\n' > "$pacman_bin/pacman"
+chmod +x "$pacman_bin/pacman"
+for passthrough in sh dirname cd pwd command printf uname; do
+    real=$(command -v "$passthrough" 2>/dev/null) || continue
+    ln -sf "$real" "$pacman_bin/$passthrough"
+done
+
+output=$(PATH="$pacman_bin" DEPS_CONF="$conf" \
+    DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+    "$SCRIPT" --fix --yes --dry-run 2>&1)
+assert_contains 'zoxide keeps the installer where there is no package' \
+    'install.sh' "$output"
+
 # --- a cask disabled upstream is reported, not attempted -----------------
 #
 # Homebrew disabled the alacritty cask on 2026-09-01: "does not pass the

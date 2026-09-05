@@ -155,7 +155,25 @@ install_cmd_for() {
             esac
             ;;
         zoxide)
-            printf 'curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh'
+            # Package manager first, installer only as a fallback.
+            #
+            # zoxide's install.sh resolves the latest release through
+            # api.github.com/repos/.../releases/latest with no credentials.
+            # That quota is 60 requests an hour per IP and every GitHub
+            # Actions runner on a given IP shares it, so the deps-check
+            # workflow failed with "you have exceeded GitHub's API rate
+            # limit" on a run that had nothing to do with zoxide.
+            #
+            # Caching the binary would not have helped: a cache miss still
+            # calls the API, and the installer takes no token. Both apt and
+            # brew package zoxide, so on the platforms CI runs, the API is
+            # simply not needed. The installer stays for a manager that has
+            # no package for it.
+            case "$manager" in
+                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y zoxide' ;;
+                brew) printf 'brew install zoxide' ;;
+                *) printf 'curl -sS https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh' ;;
+            esac
             ;;
         oh-my-zsh)
             printf 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'

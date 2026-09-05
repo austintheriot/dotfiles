@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp install-hooks check sync install test reload'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks check sync install test reload help'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"
@@ -56,12 +56,37 @@ for sub in $EXPECTED_SUBCOMMANDS; do
 done
 assert_equals 'every listed subcommand is executable' '' "$not_executable"
 
+# A config-<sub> that shares a git verb makes that verb unreachable by name,
+# so each one is a deliberate choice rather than an accident. `config -- <verb>`
+# is the escape hatch that keeps the git command reachable; the passthrough
+# section below proves it works for every name listed here.
+SHADOWED_ON_PURPOSE='help'
+
 git_commands=$(git --list-cmds=main,others)
 shadowing=''
 for sub in $EXPECTED_SUBCOMMANDS; do
+    printf '%s\n' "$SHADOWED_ON_PURPOSE" | grep -qw "$sub" && continue
     printf '%s\n' "$git_commands" | grep -qx "$sub" && shadowing="$shadowing $sub"
 done
-assert_equals 'no config-<sub> shadows a git command' '' "$shadowing"
+assert_equals 'no config-<sub> shadows a git command by accident' '' "$shadowing"
+
+# The reverse: a name on the deliberate list that no longer shadows anything
+# (or never did) is stale, and would silently excuse a future accident.
+not_actually_shadowing=''
+for sub in $SHADOWED_ON_PURPOSE; do
+    printf '%s\n' "$git_commands" | grep -qx "$sub" \
+        || not_actually_shadowing="$not_actually_shadowing $sub"
+done
+assert_equals 'every deliberately-shadowed name really is a git command' '' \
+    "$not_actually_shadowing"
+
+# A name is only worth shadowing if a sibling script actually claims it.
+without_script=''
+for sub in $SHADOWED_ON_PURPOSE; do
+    [ -x "$CONFIG_DIR/config-$sub" ] || without_script="$without_script $sub"
+done
+assert_equals 'every deliberately-shadowed name has a config-<sub>' '' \
+    "$without_script"
 
 line_count=$(grep -c '' "$CONFIG")
 [ "$line_count" -lt 40 ] && under_40=yes || under_40="no ($line_count lines)"
@@ -243,6 +268,106 @@ for _attempt in 1 2 3 4 5 6 7 8 9 10; do
 done
 kill -0 "$watch_pid" 2>/dev/null && still_running=yes || still_running=no
 assert_equals 'the watch loop is gone after kill' 'no' "$still_running"
+
+# --- help -------------------------------------------------------------------
+
+# `config help`, `config --help` and `config -h` all list the subcommands.
+# The listing is generated from the `# help:` line in each config-<sub>, so a
+# new utility that lands beside the dispatcher documents itself; there is no
+# second list to update, and no way for the two to drift.
+
+for help_form in help --help -h; do
+    output=$(HOME="$home" "$CONFIG" "$help_form" 2>&1)
+    status=$?
+    assert_equals "config $help_form exits 0" '0' "$status"
+    missing=''
+    for sub in $EXPECTED_SUBCOMMANDS; do
+        printf '%s\n' "$output" | grep -q "[^-]$sub" || missing="$missing $sub"
+    done
+    assert_equals "config $help_form lists every subcommand" '' "$missing"
+done
+
+output=$(HOME="$home" "$CONFIG" help 2>&1)
+assert_contains 'help says unknown verbs go to git' 'git' "$output"
+
+# Every subcommand carries its own one-line description, and help prints it.
+undescribed=''
+for sub in $EXPECTED_SUBCOMMANDS; do
+    line=$(sed -n 's/^# help: //p' "$CONFIG_DIR/config-$sub" | head -1)
+    [ -n "$line" ] || undescribed="$undescribed $sub"
+done
+assert_equals 'every config-<sub> carries a "# help:" description' '' "$undescribed"
+
+unprinted=''
+for sub in $EXPECTED_SUBCOMMANDS; do
+    line=$(sed -n 's/^# help: //p' "$CONFIG_DIR/config-$sub" | head -1)
+    [ -n "$line" ] || continue
+    printf '%s\n' "$output" | grep -qF "$line" || unprinted="$unprinted $sub"
+done
+assert_equals 'help prints each subcommand own description' '' "$unprinted"
+
+# A help listing that scrolls off the screen is not read. The dispatcher has
+# eight subcommands; this is a ceiling, not a target.
+help_lines=$(printf '%s\n' "$output" | grep -c '')
+[ "$help_lines" -le 30 ] && under_30=yes || under_30="no ($help_lines lines)"
+assert_equals 'the help listing stays under 30 lines' 'yes' "$under_30"
+
+# help must not reach the git passthrough, which would print git usage.
+assert_equals 'help does not fall through to git' '' \
+    "$(printf '%s' "$output" | grep -F 'usage: git' || true)"
+
+# --- explicit git passthrough with -- ---------------------------------------
+
+# `config -- <verb>` sends <verb> to git without consulting the sibling
+# scripts. Without it, a config-<sub> that shares a name with a git command
+# makes that git command unreachable through the dispatcher; `config help` is
+# the first such name, and any future one lands the same way.
+
+output=$(HOME="$home" "$CONFIG" -- help 2>&1)
+status=$?
+assert_equals 'config -- help exits 0' '0' "$status"
+assert_contains 'config -- help reaches git, not the help listing' \
+    'usage: git' "$output"
+assert_equals 'config -- help does not print the subcommand listing' '' \
+    "$(printf '%s' "$output" | grep -F 'config <command>' || true)"
+
+expected=$(git --git-dir="$home/.cfg" --work-tree="$home" rev-parse HEAD)
+actual=$(HOME="$home" "$CONFIG" -- rev-parse HEAD)
+assert_equals 'config -- passes ordinary git verbs through unchanged' \
+    "$expected" "$actual"
+
+# The separator is consumed, not forwarded. Passing it on would turn
+# `config -- log <path>` into `git log -- <path>`, a pathspec, which is a
+# different command.
+actual=$(HOME="$home" "$CONFIG" -- status --porcelain --untracked-files=no 2>&1)
+assert_equals 'config -- status behaves like config status' '' "$actual"
+
+# A verb that has no sibling script is unaffected by the separator.
+output=$(HOME="$home" "$CONFIG" -- definitely-not-a-command 2>&1)
+status=$?
+assert_equals 'config -- with an unknown git verb still fails' '1' "$status"
+assert_contains 'the failure is git own message' \
+    "git: 'definitely-not-a-command' is not a git command" "$output"
+
+# A bare `config --` has nothing to pass through. git treats it as no verb
+# and prints its usage, which is the honest answer.
+HOME="$home" "$CONFIG" -- >/dev/null 2>&1
+status=$?
+assert_equals 'a bare config -- does not succeed silently' '1' "$status"
+
+# Only the FIRST argument is the separator. A later -- is a git pathspec and
+# must survive untouched.
+printf 'content\n' > "$home/passthrough.txt"
+git --git-dir="$home/.cfg" --work-tree="$home" add passthrough.txt
+actual=$(HOME="$home" "$CONFIG" diff --cached --name-only -- passthrough.txt)
+assert_equals 'a -- later in the line stays a git pathspec' \
+    'passthrough.txt' "$actual"
+git --git-dir="$home/.cfg" --work-tree="$home" reset -q
+
+# Sibling dispatch must not be reachable through the separator.
+actual=$(HOME="$home" "$sibling_dir/config" -- probe one 2>&1 || true)
+assert_equals 'config -- does not dispatch to a sibling script' '' \
+    "$(printf '%s' "$actual" | grep -F 'probe:' || true)"
 
 # --- reload -----------------------------------------------------------------
 

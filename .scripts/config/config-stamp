@@ -1,4 +1,5 @@
 #!/bin/sh
+# help: Print the tree id of crates/config-manifest in the worktree
 #
 # Prints the tree id of crates/config-manifest as it is in the worktree.
 #

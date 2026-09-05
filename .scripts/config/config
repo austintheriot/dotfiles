@@ -8,6 +8,22 @@ set -eu
 self=$(readlink -f "$0")
 here=$(dirname "$self")
 
+# A leading -- sends everything after it straight to git, skipping the
+# sibling lookup. It is the escape hatch that makes a config-<sub> sharing a
+# git verb safe: `config help` lists these utilities, `config -- help`
+# reaches git. The separator is consumed, so `config -- log <path>` stays
+# `git log <path>` rather than becoming a pathspec.
+if [ "${1:-}" = "--" ]; then
+    shift
+    exec git --git-dir="$HOME/.cfg" --work-tree="$HOME" "$@"
+fi
+
+# --help and -h are the two spellings people try before `config help`, and
+# git answers both with its own usage, which never mentions these utilities.
+case ${1:-} in
+    --help|-h) exec "$here/config-help" ;;
+esac
+
 if [ "$#" -gt 0 ]; then
     case $1 in
         ''|-*|*[!A-Za-z0-9-]*) ;;

@@ -1,2 +1,3 @@
 #!/bin/sh
+# help: Check the tracked CLI dependencies and install what is missing
 exec "$HOME/.scripts/deps/check-deps.sh" --fix "$@"

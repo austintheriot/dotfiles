@@ -1,2 +1,3 @@
 #!/bin/sh
+# help: Copy the shared paths from this branch onto the other branch
 exec config-manifest sync "$@"

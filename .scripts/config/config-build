@@ -1,4 +1,5 @@
 #!/bin/sh
+# help: Build crates/config-manifest and install the stamped binary
 #
 # Builds crates/config-manifest and installs the binary with the stamp
 # pre-push compares against embedded inside it. Run this after editing the

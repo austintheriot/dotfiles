@@ -2,43 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED 2026-09-05. Bootstrap entry point: `setup.sh` plus `config init`.
-  Design settled with Austin before implementation; recorded here so the
-  decisions survive a resumed session.
-  Shape: a thin tracked `setup.sh` at the repo root does only clone,
-  branch selection, and checkout, then execs `config init`. `config init`
-  owns every post-clone step (status.showUntrackedFiles, install-hooks,
-  install, build) and lives in `.scripts/config/` like every other
-  subcommand, so the logic sits in one place and the dispatcher pattern
-  holds. `curl -fsSL .../setup.sh | sh` is the bare-server path;
-  `config init` is the already-cloned path.
-  Branch selection: detect from `.scripts/platform.sh`, then offer the
-  detected branch as a prompt rather than taking it silently, with a flag
-  to skip the prompt for unattended runs.
-  Safety: `config init` prompts per install by default (passes through to
-  `check-deps.sh --fix`). `--yes` for unattended use in Docker, CI, and a
-  remote box. `--dry-run` prints every step and changes nothing.
-  CI reuse: one engine, per-caller subsets. `test-suite.yml` currently
-  hand-maintains a brew list and an apt list that duplicate what
-  `deps.conf` already owns, and that copy is the one that drifts. Replace
-  those with a call through the same engine selecting a CI subset (a
-  `deps-ci.conf`, or an `--only` selector, reusing the existing
-  `DEPS_LOCAL_CONF` mechanism). The FULL bootstrap from a bare clone runs
-  in a container on `deps-check.yml`'s scheduled + dispatch cadence, NOT on
-  push: every full run installs packages over the network, and
-  `deps-check.yml` is already structured to keep an upstream outage from
-  failing unrelated commits. Do not put the full bootstrap on the push path.
-  Known implementation risk, not yet resolved: the suite needs
-  `python3-yaml` / `pyyaml` and `dash`, and
-  `python3 -m pip install --break-system-packages pyyaml` is not a
-  `<pkg-manager> install <name>` shape, so it likely needs a case in
-  `install_cmd_for()` alongside `nvm` and `alacritty`.
-  Container coverage: a new `docker/Dockerfile.bootstrap` that clones from
-  a bind-mounted bare repo and runs the real entry point end to end, plus a
-  test suite for it. The two existing deps images stay single-purpose --
-  they deliberately `COPY .scripts/deps` only and reject dragging
-  `.claude/` and machine-local content into the build context, so they
-  cannot exercise a bootstrap and should not be bent into it.
 - Migrate the rest of the `config ...` scripts to Rust
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so

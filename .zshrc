@@ -232,9 +232,45 @@ source <(fzf --zsh)
 source ~/.scripts/zsh-git-widgets.sh
 
 # SETUP PYENV ##############################################################################################
+# Lazy, the same shape as nvm in .zshrc-mac.
+#
+# `eval "$(pyenv init - zsh)"` cost 380ms at every startup, measured here. Two
+# things account for nearly all of it: a `bash --norc` spawned only to strip
+# the shims directory out of PATH before putting it back, and `pyenv rehash`
+# at 250ms on its own.
+#
+# Neither is needed for python3 to resolve. What `pyenv init` leaves behind is
+# the shims directory on PATH and PYENV_SHELL set, and both are reached here
+# directly. rehash regenerates the shim files, which change when a version or
+# a package with an entry point is installed -- a `pyenv install` concern, not
+# a per-shell one. `pyenv rehash` is still there to run by hand, and `pyenv
+# install` runs it itself.
+#
+# The prepend is guarded rather than unconditional: re-sourcing .zshrc would
+# otherwise stack a second copy of the shims directory onto PATH. That guard
+# is what the `bash --norc` in pyenv's own init was buying.
 export PYENV_ROOT="$HOME/.pyenv"
+export PYENV_SHELL=zsh
+if [[ -d $PYENV_ROOT/shims && ":$PATH:" != *":$PYENV_ROOT/shims:"* ]]; then
+    export PATH="$PYENV_ROOT/shims:$PATH"
+fi
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init - zsh)"
+
+# The real init is paid for on the first `pyenv` call.
+#
+# The unfunction is belt and braces, not the thing that prevents recursion:
+# `pyenv init - zsh` emits its own `pyenv` function, so the eval replaces this
+# one before the re-dispatch either way (verified). It is here so the shim is
+# gone even if a future pyenv stops emitting that function, which would
+# otherwise turn this into an infinite loop rather than a visible error.
+#
+# `command pyenv` rather than `pyenv`, so the lookup skips this function and
+# finds the real binary regardless of the unfunction's timing.
+pyenv() {
+    unfunction pyenv
+    eval "$(command pyenv init - zsh)"
+    pyenv "$@"
+}
 
 # BUN SHELL COMPLETIONS ####################################################################################
 [ -s "/Users/austin/.bun/_bun" ] && source "/Users/austin/.bun/_bun"

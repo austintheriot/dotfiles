@@ -13,9 +13,21 @@ for arg in "$@"; do
         --docker) docker=yes ;;
         --watch) watch=yes ;;
         -*) printf '%s\n' "$usage" >&2; exit 2 ;;
-        *) suite=$arg ;;
+        *) [ -z "$suite" ] || { printf '%s\n' "$usage" >&2; exit 2; }; suite=$arg ;;
     esac
 done
+
+# -q is only honored by run-all.sh, and a watch loop would rebuild the docker
+# image on every change, so both combinations are usage errors rather than a
+# flag that silently does nothing.
+if [ -n "$quiet" ] && { [ -n "$docker" ] || [ -n "$suite" ]; }; then
+    printf '%s\n' "$usage" >&2
+    exit 2
+fi
+if [ -n "$watch" ] && [ -n "$docker" ]; then
+    printf '%s\n' "$usage" >&2
+    exit 2
+fi
 
 run_suite() {
     if [ -n "$docker" ]; then
@@ -42,7 +54,8 @@ if [ -z "$watch" ]; then
     exit "$exec_status"
 fi
 
-trap 'pkill -P $$ 2>/dev/null; exit 143' TERM INT
+# sh runs a trap only after the current command (the sleep) returns, so teardown can take up to one poll interval
+trap 'command -v pkill >/dev/null 2>&1 && { pkill -P $$ 2>/dev/null || true; }; exit 143' TERM INT
 
 last=$(fingerprint)
 run_suite || true

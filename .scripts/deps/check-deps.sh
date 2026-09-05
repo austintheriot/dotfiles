@@ -310,6 +310,25 @@ install_cmd_for() {
         tpm)
             printf 'git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"'
             ;;
+        cc)
+            # A C linker, which the config-manifest crate needs to build.
+            # rustup itself warns about the absence: "no default linker (`cc`)
+            # was found in your PATH / many Rust crates require a system C
+            # toolchain to build". Without it cargo installs fine and then
+            # cannot link, so the build step fails on a machine where every
+            # dependency reported success.
+            #
+            # The package name is never `cc` on any manager, so the default
+            # case would emit a command that fails everywhere.
+            case "$manager" in
+                apt) printf '${SUDO}apt-get update -qq && ${SUDO}apt-get install -y build-essential' ;;
+                pacman) printf '${SUDO}pacman -Sy --noconfirm base-devel' ;;
+                # macOS ships clang with the Xcode command line tools, and
+                # `xcode-select --install` is an interactive GUI prompt, so
+                # there is no unattended path. Reported manual-only, like
+                # alacritty.
+            esac
+            ;;
         rustup)
             printf "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
             ;;

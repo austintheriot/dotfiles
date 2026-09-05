@@ -294,7 +294,22 @@ fi
 # and it is what the reader wants here.
 if [ -d "$git_dir" ]; then
     printf 'setup.sh: %s already exists, so this machine is already cloned\n' "$git_dir" >&2
-    printf 'setup.sh: run `config init` to finish or re-run the setup steps\n' >&2
+
+    # Spell the path rather than the bare command. Reported from a bare
+    # container: this message said "run `config init`" and the next line was
+    # "bash: config: command not found". install-hooks symlinks config into
+    # ~/.local/bin, which is absent from a default PATH, and the PATH that
+    # config init exports cannot reach an interactive shell that already
+    # existed. Advice that does not run in the reader's current shell is a
+    # dead end.
+    if [ -x "$HOME/.scripts/config/config-init" ]; then
+        printf 'setup.sh: to finish or re-run the setup steps:\n' >&2
+        printf 'setup.sh:   %s/.scripts/config/config-init\n' "$HOME" >&2
+        printf 'setup.sh: (or `config init`, once %s/.local/bin is on your PATH)\n' "$HOME" >&2
+    else
+        printf 'setup.sh: the clone looks incomplete -- %s/.scripts/config/config-init is missing\n' \
+            "$HOME" >&2
+    fi
     exit 1
 fi
 

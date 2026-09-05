@@ -69,6 +69,24 @@ done
 ROOT=${DOTFILES_ROOT:-$HOME}
 git_dir="$HOME/.cfg"
 
+# The install step places tools that a default non-login PATH does not carry,
+# and the build step runs in the same process, so it has to be able to see
+# them.
+#
+# rustup installs cargo into ~/.cargo/bin. Without this the run ended with
+# "done, except the build step -- run `config build` once cargo is on PATH" on
+# a machine where the install step had just installed rustup successfully: the
+# toolchain existed and was invisible. check-deps.sh already prepends these
+# two directories for exactly this reason, so a `command -v` check does not
+# fail on the line after its own install succeeded; this is the same problem
+# one level up, where an install and a build happen in one process.
+#
+# ~/.local/bin as well, because config-install-hooks puts `config` there and
+# config-build installs config-manifest there, and both are resolved by name
+# afterwards.
+PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+export PATH
+
 step=0
 announce() {
     step=$((step + 1))
@@ -118,7 +136,10 @@ if [ "$dry_run" -eq 0 ]; then
     if [ "$install_status" -ne 0 ]; then
         printf '\nconfig init: the install step failed\n' >&2
         printf 'config init: the repo is cloned, the hooks are linked, and config is on PATH\n' >&2
-        printf 'config init: fix the package manager, then run `config install` and `config build`\n' >&2
+        printf 'config init: fix the package manager, then run:\n' >&2
+        printf 'config init:   %s/config-install && %s/config-build\n' "$here" "$here" >&2
+        printf 'config init: (or `config install` and `config build`, once %s/.local/bin is on your PATH)\n' \
+            "$HOME" >&2
         exit "$install_status"
     fi
 fi
@@ -152,7 +173,12 @@ fi
 
 if [ "$build_failed" -eq 1 ]; then
     printf '\nconfig init: done, except the build step\n'
-    printf 'config init: run `config build` once cargo is on PATH\n'
+    # The path, not the bare command: a shell that predates install-hooks has
+    # no `config` on PATH, so naming it alone is a dead end. Reported from a
+    # bare container, where "run `config init`" was followed by
+    # "bash: config: command not found".
+    printf 'config init:   %s/config-build\n' "$here"
+    printf 'config init: (or `config build`, once %s/.local/bin is on your PATH)\n' "$HOME"
     exit 0
 fi
 

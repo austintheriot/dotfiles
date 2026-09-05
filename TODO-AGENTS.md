@@ -2,6 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- refactor Rust scripts to use `clap` for env/arg parsing
 - Add image badges to the README for both mac and linux branches showing their current CI status
 - Install shellcheck, add it to `.scripts/deps/deps.conf`, and run it
   from `tests/run-all.sh` as its own suite. The code already carries

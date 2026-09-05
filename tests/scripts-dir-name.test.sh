@@ -226,7 +226,7 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
         "$(git_cmd ls-tree -r --name-only HEAD 2>/dev/null \
             | grep "^$OLD_NAME/" || true)"
 else
-    printf 'skip: no repository here, so the commit cannot be inspected\n'
+    skip 'no repository here, so the commit cannot be inspected'
 fi
 
 # --- the three anchored regexes point at the new directory --------------
@@ -244,7 +244,7 @@ if [ -f "$leak_allow" ]; then
     assert_succeeds 'the leak-check allow list matches .scripts' \
         grep -qF '^\.scripts/tmux-.*\.sh$' "$leak_allow"
 else
-    printf 'skip: leak-allow.conf is machine-local and absent here\n'
+    skip 'leak-allow.conf is machine-local and absent here'
 fi
 
 assert_succeeds 'the CI path filter watches .scripts' \

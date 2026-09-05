@@ -47,7 +47,7 @@ if ! command -v shellcheck >/dev/null 2>&1; then
         finish
         exit 1
     fi
-    printf 'skip: shellcheck is not installed; `config install` adds it\n' >&2
+    skip 'shellcheck is not installed; `config install` adds it'
     finish
     exit 0
 fi
@@ -75,10 +75,19 @@ assert_succeeds 'the test container installs shellcheck' \
 
 # Both runners, not just one. A lint that gates on Linux and not macOS lets a
 # macOS-only script regress.
-linux_install=$(grep -n 'apt-get install' -A 3 "$CI_WORKFLOW" | grep 'ripgrep' || true)
-macos_install=$(grep -n 'brew install' "$CI_WORKFLOW" || true)
-assert_contains 'CI installs shellcheck on Linux' 'shellcheck' "$linux_install"
-assert_contains 'CI installs shellcheck on macOS' 'shellcheck' "$macos_install"
+#
+# The workflow no longer carries a per-platform package list to grep: it calls
+# check-deps.sh with an --only set, and the engine resolves each name to the
+# right package for whichever manager the runner has. So the fact to assert is
+# that shellcheck is in that set, and that the step naming it is not gated to
+# one platform -- an `if: runner.os == ...` on that step would restore exactly
+# the one-platform gap this pair of assertions exists to prevent.
+only_step=$(grep -n 'check-deps.sh --fix --yes' -A 2 "$CI_WORKFLOW" || true)
+assert_contains 'CI installs shellcheck through the deps engine' 'shellcheck' "$only_step"
+
+install_step_block=$(awk '/Install the suite.s dependencies \(from deps.conf\)/{found=1} found && /^      - name:/ && ++seen>1{exit} found' "$CI_WORKFLOW")
+assert_equals 'the dependency step runs on both runners' '' \
+    "$(printf '%s\n' "$install_step_block" | grep 'runner.os' || true)"
 
 # --- the two exclusion lists ------------------------------------------------
 #

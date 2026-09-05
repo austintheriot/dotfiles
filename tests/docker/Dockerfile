@@ -101,6 +101,14 @@ COPY README.md /root/README.md
 # The glob covers both platform variants (.zshrc-mac and .zshrc-linux), which
 # now ship on both branches.
 COPY .zshrc* /root/
+# setup.sh is the bootstrap entry point, and three suites read it:
+# setup.test.sh drives it against a fixture HOME, bootstrap-harness.test.sh
+# asserts it is at the repo root and documents a reachable raw URL, and
+# deps-docs.test.sh resolves it as a path cited by the docs. A root-level
+# file needs its own COPY line here -- the COPYs above are per-path, so a new
+# one at the repo root is absent from this image until it is listed, and the
+# suites that read it fail in the container while passing on the host.
+COPY setup.sh /root/setup.sh
 
 # notify.test.sh drives aerospace and osascript, both macOS-only, so it can
 # never pass here. It is already excluded from .sync-manifest for the same

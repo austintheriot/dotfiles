@@ -82,6 +82,7 @@ selected() {
 
 suites_run=0
 suites_failed=0
+skips_total=0
 failed_names=()
 
 report() {
@@ -103,13 +104,40 @@ run_suite() {
     status=$?
     elapsed=$((SECONDS - started))
 
+    # Read back out of the captured output rather than passed up a variable:
+    # each suite runs as its own process, so there is no other channel. The
+    # count comes from the summary line `finish` prints, which is the one
+    # place a suite states its own totals.
+    #
+    # This is the line a developer reads. A skipped assertion that only ever
+    # appeared in the indented body -- suppressed entirely under -q -- is
+    # exactly how the commit-inspection block in scripts-dir-name.test.sh went
+    # unnoticed until CI failed on it.
+    local skips
+    skips=$(printf '%s\n' "$output" \
+        | sed -n 's/^[^:]*: [0-9]* passed, [0-9]* failed, \([0-9]*\) skipped$/\1/p' \
+        | tail -n1)
+    if [ -n "$skips" ] && [ "$skips" -gt 0 ] 2>/dev/null; then
+        skips_total=$((skips_total + skips))
+    else
+        skips=''
+    fi
+
     if [ "$status" -eq 0 ]; then
-        printf 'PASS (%ds)\n' "$elapsed"
+        if [ -n "$skips" ]; then
+            printf 'PASS (%ds, %s skipped)\n' "$elapsed" "$skips"
+        else
+            printf 'PASS (%ds)\n' "$elapsed"
+        fi
         [ "$quiet" -eq 1 ] || printf '%s\n' "$output" | sed 's/^/      /'
     else
         suites_failed=$((suites_failed + 1))
         failed_names+=("$name")
-        printf 'FAIL (%ds)\n' "$elapsed"
+        if [ -n "$skips" ]; then
+            printf 'FAIL (%ds, %s skipped)\n' "$elapsed" "$skips"
+        else
+            printf 'FAIL (%ds)\n' "$elapsed"
+        fi
         printf '%s\n' "$output" | sed 's/^/      /'
     fi
     report ''
@@ -203,12 +231,20 @@ fi
 # --- summary -----------------------------------------------------------
 
 printf '%s\n' '----------------------------------------'
+
+# Appended only when non-zero, for the reason `finish` gives: a clean run has
+# to stay clean, or the phrase stops carrying information.
+skip_note=''
+if [ "$skips_total" -gt 0 ]; then
+    skip_note=$(printf ' (%d assertion(s) skipped)' "$skips_total")
+fi
+
 if [ "$suites_failed" -eq 0 ]; then
-    printf 'all %d suite(s) passed\n' "$suites_run"
+    printf 'all %d suite(s) passed%s\n' "$suites_run" "$skip_note"
     exit 0
 fi
 
-printf '%d of %d suite(s) failed:\n' "$suites_failed" "$suites_run"
+printf '%d of %d suite(s) failed%s:\n' "$suites_failed" "$suites_run" "$skip_note"
 for name in "${failed_names[@]}"; do
     printf '  - %s\n' "$name"
 done

@@ -492,4 +492,155 @@ assert_contains 'alacritty is manual-only on brew' \
 assert_contains 'alacritty points at its own docs' 'alacritty.org' "$output"
 assert_equals 'a cask disabled upstream does not fail --fix' '0' "$status"
 
+# --- --only <set> -----------------------------------------------------------
+#
+# The CI-subset selector. .github/workflows/test-suite.yml used to carry a
+# hand-written apt list and a hand-written brew list naming tmux, zsh, git,
+# fzf, ripgrep and shellcheck -- every one of them already a deps.conf entry.
+# That second copy is the one that drifts, so the workflow now calls this
+# engine and names the set it wants instead.
+
+only_conf="$FIXTURES/only.conf"
+cat > "$only_conf" <<'CONF'
+present-tool|command -v some-tool|https://example.com/present
+wanted-tool|command -v definitely-not-installed-wanted|https://example.com/wanted
+other-tool|command -v definitely-not-installed-other|https://example.com/other
+CONF
+
+# A named set restricts the run to its members. The unnamed missing entry
+# must not be reported at all: a CI step that installs the suite's set should
+# not fail because the developer environment wants neovim.
+output=$(run_check "$only_conf" --only wanted-tool 2>&1)
+status=$?
+assert_equals '--only exits non-zero when a named entry is missing' '1' "$status"
+assert_contains '--only reports the named missing entry' 'wanted-tool' "$output"
+assert_equals '--only ignores entries outside the set' '' \
+    "$(printf '%s\n' "$output" | grep 'other-tool' || true)"
+
+# A comma-separated list, because a workflow step names several at once.
+output=$(run_check "$only_conf" --only wanted-tool,other-tool 2>&1)
+assert_contains '--only takes a comma-separated list (first)' 'wanted-tool' "$output"
+assert_contains '--only takes a comma-separated list (second)' 'other-tool' "$output"
+
+# A set whose members are all present is a pass, and says so with the count
+# of what it actually checked rather than the whole manifest.
+output=$(run_check "$only_conf" --only present-tool 2>&1)
+status=$?
+assert_equals '--only exits 0 when every named entry is present' '0' "$status"
+assert_contains '--only counts only the selected entries' 'all 1 dependencies present' "$output"
+
+# A name that matches no entry is a typo in a workflow file, and a typo that
+# silently installs nothing would make the step pass while installing none of
+# what it promised. That is the failure mode this guard exists for.
+output=$(run_check "$only_conf" --only no-such-dependency 2>&1)
+status=$?
+assert_equals '--only with an unknown name exits 2' '2' "$status"
+assert_contains '--only names the unmatched selector' 'no-such-dependency' "$output"
+
+# --only composes with --fix, which is the whole point: the workflow runs
+# `--fix --yes --only <set>`.
+rm -f "$FIXTURES/apt.log"
+cat > "$BIN/apt" <<'STUB'
+#!/bin/sh
+exit 0
+STUB
+chmod +x "$BIN/apt"
+output=$(run_check "$only_conf" --fix --yes --dry-run --only wanted-tool 2>&1)
+assert_contains '--only composes with --fix --dry-run' 'would run' "$output"
+assert_equals '--only --fix touches nothing outside the set' '' \
+    "$(printf '%s\n' "$output" | grep 'other-tool' || true)"
+
+# --only needs a value. Without this guard `--only` followed by nothing
+# would select the empty set and report a vacuous success.
+output=$(run_check "$only_conf" --only 2>&1)
+status=$?
+assert_equals '--only with no value exits 2' '2' "$status"
+
+
+# --- the CI-only manifest ---------------------------------------------------
+#
+# deps-ci.conf holds what the test suite needs and the working environment
+# does not: python3, pyyaml, dash. It is never selected by platform detection,
+# so `depcheck` on a developer machine does not ask for them.
+
+CI_CONF="$DOTFILES_ROOT/.scripts/deps/deps-ci.conf"
+assert_succeeds 'deps-ci.conf exists' test -f "$CI_CONF"
+
+# No literal pipe in a check field. read_entries splits on `|`, so one there
+# truncates the check and leaks the rest into docs_url -- silently, with the
+# truncated check still returning an answer. This is the manifest format's
+# sharpest edge, and deps.conf has its own version of this assertion.
+bad_pipe=''
+while IFS= read -r line; do
+    case $line in
+        ''|'#'*) continue ;;
+    esac
+    field_count=$(printf '%s\n' "$line" | awk -F'|' '{print NF}')
+    [ "$field_count" -eq 3 ] || bad_pipe="$bad_pipe $line"
+done < "$CI_CONF"
+assert_equals 'every deps-ci.conf line has exactly three fields' '' "$bad_pipe"
+
+# pyyaml is the entry that needed a case in install_cmd_for: it is a pip
+# package, not a `<pkg-manager> install pyyaml`, so the default case would
+# have produced a command that fails on every platform.
+#
+# Driven against a manifest whose check always fails rather than against
+# deps-ci.conf, because pyyaml is installed on any machine that can run this
+# suite -- a dry run there reports nothing missing and would assert nothing.
+pyyaml_conf="$FIXTURES/pyyaml-missing.conf"
+printf 'pyyaml|false|https://pyyaml.org/\n' > "$pyyaml_conf"
+
+output=$(DEPS_CONF="$pyyaml_conf" DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+    PATH="$BIN:$PATH" "$SCRIPT" --fix --dry-run --only pyyaml 2>&1)
+assert_contains 'pyyaml has an automated install' 'would run' "$output"
+
+# The bug this case exists to prevent: the default branch would emit
+# `<manager> install pyyaml`, and no package manager has a package by that
+# name. apt calls it python3-yaml, pacman calls it python-yaml, and brew has
+# no formula at all, so any of those three spellings is correct and the bare
+# name never is.
+assert_equals 'pyyaml never installs under its pip name as a system package' '' \
+    "$(printf '%s\n' "$output" | grep -E 'install -y pyyaml|brew install pyyaml|noconfirm pyyaml' || true)"
+assert_succeeds 'pyyaml resolves to a real package name or to pip' \
+    grep -qE 'python3-yaml|python-yaml|pip install' <<<"$output"
+
+# The suite's own dependencies must be checkable on this machine, since this
+# machine runs the suite. A failure here means deps-ci.conf disagrees with
+# what run-all.sh actually needs.
+output=$(DEPS_CONF="$CI_CONF" DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" "$SCRIPT" 2>&1)
+status=$?
+assert_equals 'every deps-ci.conf entry is satisfied on this machine' '0' "$status"
+
+
+# --- the gh keyring write must be privileged --------------------------------
+#
+# Found by the bootstrap container, which is the first environment that runs
+# as a genuine non-root user with gh absent. The install command ran
+# `sudo mkdir -p -m 755 /etc/apt/keyrings` and then a BARE
+# `wget -O /etc/apt/keyrings/...`, so the write into the root-owned directory
+# it had just created failed with "Permission denied" and the check for gh
+# failed right after its own install reported success.
+#
+# Every write into /etc must carry its own privilege. `sudo` on the mkdir does
+# not extend to the next command in the chain, which is the whole trap.
+gh_cmd=$(sed -n '/^        gh)/,/^            ;;/p' "$SCRIPT" | grep 'apt-get' || true)
+assert_succeeds 'the gh apt install command is still there to check' test -n "$gh_cmd"
+
+# Any redirect or -O into /etc must be preceded by sudo. Checked as a
+# property rather than by matching one spelling, so switching between
+# `sudo tee`, `sudo dd` and `sudo install` keeps passing while an unprivileged
+# write fails.
+assert_equals 'no unprivileged -O write into /etc' '' \
+    "$(printf '%s\n' "$gh_cmd" | grep -oE '[^ ]* -O /etc/[^ ]*' | grep -v 'sudo' || true)"
+assert_equals 'no unprivileged shell redirect into /etc' '' \
+    "$(printf '%s\n' "$gh_cmd" | grep -oE '> */etc/[^ ]*' | grep -v 'tee\|dd\|sudo' || true)"
+
+# The keyring still has to end up somewhere apt reads, and the repo line must
+# still point at it, or the install silently adds an unverifiable source.
+assert_contains 'the keyring still lands in /etc/apt/keyrings' \
+    '/etc/apt/keyrings/githubcli-archive-keyring.gpg' "$gh_cmd"
+assert_contains 'the sources line still signs by that keyring' \
+    'signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg' "$gh_cmd"
+
+
 finish

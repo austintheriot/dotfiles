@@ -91,6 +91,33 @@ Use the helpers in `lib.sh` rather than calling tmux directly:
 - `in_session` is for scripts that refuse to run when `$TMUX` is empty. It
   points `$TMUX` at a test session instead of clearing it.
 
+### Skipping an assertion
+
+Call `skip '<reason>'` when a check cannot run in the current environment.
+Do not `printf` the skip yourself and do not silently `return`.
+
+A skip is green on purpose: it says a check could not execute here, not that
+it would have failed. The container harness builds its tree with
+`git archive` and so carries no repository, which is a correct reason for the
+commit-inspection block in `scripts-dir-name.test.sh` to stand down.
+
+What a skip must not be is free. That block used to print one line into a
+suite's captured output and nothing else, so `finish` counted only passes and
+failures and the pre-push Docker gate printed `PASS` over an assertion that
+never ran. A stale committed-script count shipped, and both CI platforms
+caught it instead, because `actions/checkout` gives a runner the repository
+the container lacks.
+
+`skip` counts the skip so `finish` reports it, and `run-all.sh` carries the
+count up to the per-suite verdict line and the run summary. Both survive
+`-q`, which is what the pre-push hook shows. A run with no skips says nothing
+about them: a trailing "0 skipped" everywhere is noise, and noise is what a
+reader learns to scan past.
+
+The rule is the one the pre-push hook already states one level up: a gate that
+says nothing when it skips is indistinguishable from a gate that is not
+installed. `tests/skip-reporting.test.sh` holds this behavior in place.
+
 Two failure modes are worth knowing about, because both have bitten this repo:
 
 - A test that creates tmux sessions must clean them up on signals, not only on

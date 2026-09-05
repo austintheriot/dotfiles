@@ -64,6 +64,13 @@ README.md
 README-MAC.md
 README-LINUX.md
 
+# The bootstrap entry point. Shared rather than per-branch on purpose: it
+# detects the platform at run time and checks out the matching branch, so one
+# copy has to work from either branch's raw URL. A per-branch setup.sh would
+# mean the curl one-liner behaved differently depending on which branch the
+# reader happened to copy it from.
+setup.sh
+
 # --- per-branch by design -----------------------------------------------
 
 # aerospace is a macOS window manager. There is no Linux counterpart to

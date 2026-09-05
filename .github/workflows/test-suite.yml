@@ -62,21 +62,44 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install the suite's dependencies (apt)
-        if: runner.os == 'Linux'
+      # Installed through check-deps.sh rather than a hand-written apt list
+      # and a hand-written brew list. Those two lists named tmux, zsh, git,
+      # fzf, ripgrep and shellcheck -- every one already a deps.conf entry --
+      # so the package names lived in two places and the YAML copy was the one
+      # that drifted, with nothing checking it. The engine already knows each
+      # platform's spelling (python3-yaml on apt, python-yaml on pacman, pip
+      # elsewhere), which is knowledge that does not belong in a workflow.
+      #
+      # Two calls, because the two manifests answer different questions.
+      # --only names the deps.conf entries the SUITE needs, which is a subset:
+      # a test run has no use for neovim, alacritty, aerospace, tpm or nvm, and
+      # installing them here would add minutes and more upstream services that
+      # can fail a run about a shell script.
+      #
+      # deps-ci.conf is the suite's own harness dependencies -- python3, pyyaml,
+      # dash -- which are deliberately absent from deps.conf because nothing in
+      # the working environment needs them.
+      #
+      # The full bootstrap is NOT run here. It belongs on deps-check.yml's
+      # scheduled cadence: every full run installs over the network, and a push
+      # about a shell script must not turn red because an upstream package
+      # server is down. See the bootstrap job in that workflow.
+      - name: Install the suite's dependencies (from deps.conf)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            tmux zsh git python3 python3-yaml dash fzf ripgrep shellcheck
+          .scripts/deps/check-deps.sh --fix --yes \
+            --only tmux,zsh,git,fzf,ripgrep,shellcheck,zsh-autosuggestions
 
-      # macOS runners ship git, python3, zsh, and dash already. tmux, fzf and
-      # ripgrep are the ones the suite needs and the image does not carry.
-      # pyyaml is imported by deps-harness.test.sh to parse the workflows.
-      - name: Install the suite's dependencies (brew)
-        if: runner.os == 'macOS'
-        run: |
-          brew install tmux fzf ripgrep zsh-autosuggestions shellcheck
-          python3 -m pip install --break-system-packages pyyaml
+      - name: Install the suite's harness dependencies (from deps-ci.conf)
+        env:
+          DEPS_CONF: .scripts/deps/deps-ci.conf
+          # Platform detection would otherwise add deps-mac.conf or
+          # deps-linux.conf on top of the CI manifest, pulling in aerospace or
+          # oh-my-zsh, which the suite does not need. read_entries skips a
+          # missing file, so a path that does not exist excludes the variant
+          # without pretending it is empty -- the same technique the Docker
+          # images use.
+          DEPS_LOCAL_CONF: /nonexistent/deps-platform.conf
+        run: .scripts/deps/check-deps.sh --fix --yes
 
       # Rust is preinstalled on both runners. The suite's shell tests call
       # config-manifest by name, so the release binary goes on PATH. cargo test

@@ -70,17 +70,57 @@ export PATH
 fix=0
 yes=0
 dry_run=0
-for arg in "$@"; do
-    case "$arg" in
+only=''
+while [ "$#" -gt 0 ]; do
+    case "$1" in
         --fix) fix=1 ;;
         --yes) yes=1 ;;
         --dry-run) dry_run=1 ;;
+        --only)
+            # Takes a value, so this loop shifts rather than iterating "$@".
+            # Without the arity check, `--only` with nothing after it would
+            # select the empty set and report a vacuous success -- a workflow
+            # step that installed none of what it promised and passed.
+            if [ "$#" -lt 2 ]; then
+                printf 'check-deps: --only needs a comma-separated list of names\n' >&2
+                exit 2
+            fi
+            only=$2
+            shift
+            ;;
         *)
-            printf 'check-deps: unknown argument: %s\n' "$arg" >&2
+            printf 'check-deps: unknown argument: %s\n' "$1" >&2
             exit 2
             ;;
     esac
+    shift
 done
+
+# Restricts the run to a named subset of the manifest.
+#
+# This exists so .github/workflows/test-suite.yml can name the dependencies
+# the suite needs instead of hand-maintaining an apt list and a brew list
+# that restate deps.conf. Two copies of the package names meant the copy in
+# YAML was the one that drifted, and nothing checked it.
+#
+# A name matching no entry is a typo in a caller, and it exits 2 rather than
+# selecting nothing: an install step that quietly installs none of what it
+# promised still reports success, which is worse than a hard failure.
+in_only_set() {
+    in_only_name=$1
+    in_only_rest=$only
+    while [ -n "$in_only_rest" ]; do
+        in_only_head=${in_only_rest%%,*}
+        if [ "$in_only_head" = "$in_only_name" ]; then
+            unset in_only_name in_only_rest in_only_head
+            return 0
+        fi
+        [ "$in_only_rest" = "$in_only_head" ] && break
+        in_only_rest=${in_only_rest#*,}
+    done
+    unset in_only_name in_only_rest in_only_head
+    return 1
+}
 
 detect_pm() {
     if command -v pacman >/dev/null 2>&1; then
@@ -104,9 +144,29 @@ install_cmd_for() {
     manager=$2
     case "$name" in
         gh)
+            # The apt path writes the keyring through `sudo tee` rather than
+            # `wget -O <path>`, and that is load-bearing rather than stylistic.
+            #
+            # `sudo mkdir -p -m 755 /etc/apt/keyrings` creates a root-owned
+            # directory, and the sudo on that command does not extend to the
+            # next command in the chain. A bare `wget -O
+            # /etc/apt/keyrings/...` therefore fails with "Permission denied"
+            # for any non-root user, and because the failure is a write error
+            # rather than a non-zero install, the check for gh failed
+            # immediately after its own install reported success.
+            #
+            # This survived because every environment that ran it before was
+            # root or already had gh: the Docker deps images run as root, and
+            # the GitHub runners ship gh preinstalled. The bootstrap container
+            # (docker/Dockerfile.bootstrap) is the first one that is neither,
+            # which is what surfaced it.
+            #
+            # `wget -O-` to stdout piped into `sudo tee` is the shape
+            # upstream's own instructions use, and it keeps the privilege with
+            # the write.
             case "$manager" in
                 apt)
-                    printf '%s' 'sudo apt-get update -qq && sudo apt-get install -y wget && sudo mkdir -p -m 755 /etc/apt/keyrings && wget -nv -O /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt-get update -qq && sudo apt-get install -y gh'
+                    printf '%s' 'sudo apt-get update -qq && sudo apt-get install -y wget && sudo mkdir -p -m 755 /etc/apt/keyrings && wget -nv -O- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt-get update -qq && sudo apt-get install -y gh'
                     ;;
                 brew) printf 'brew install gh' ;;
                 pacman) printf 'sudo pacman -Sy --noconfirm github-cli' ;;
@@ -207,6 +267,49 @@ install_cmd_for() {
             # version-pinned install URLs, so a hardcoded one here would go
             # stale. Manual only -- see the docs_url column.
             ;;
+        pyyaml)
+            # A pip package, not a system package, so the default
+            # `<manager> install pyyaml` case produces a command that fails
+            # everywhere: apt calls it python3-yaml, brew has no formula, and
+            # pacman calls it python-yaml. Named here so the one manifest
+            # entry works on every platform the suite runs on.
+            #
+            # apt and pacman prefer the distribution package. On a
+            # Debian-derived system pip refuses to install into the
+            # system interpreter at all (PEP 668, "externally-managed-
+            # environment") without a flag that overrides the protection,
+            # and the distro package is what the runner's python3 imports.
+            #
+            # --break-system-packages is the brew and fallback path. The name
+            # is alarming and the flag is correct here: a CI runner and a
+            # throwaway container are exactly where overriding PEP 668 costs
+            # nothing, and it is what test-suite.yml already did by hand.
+            case "$manager" in
+                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y python3-yaml' ;;
+                pacman) printf 'sudo pacman -Sy --noconfirm python-yaml' ;;
+                *) printf 'python3 -m pip install --break-system-packages pyyaml' ;;
+            esac
+            ;;
+        dash)
+            # Not packaged by Homebrew under this name, and macOS ships no
+            # dash at all. The suite's one dash assertion skips when it is
+            # absent, so reporting it manual-only on brew is the honest
+            # answer rather than installing something else and calling it
+            # dash.
+            case "$manager" in
+                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y dash' ;;
+                pacman) printf 'sudo pacman -Sy --noconfirm dash' ;;
+            esac
+            ;;
+        python3)
+            # apt and pacman spell the package differently from the binary,
+            # and macOS runners ship python3 already.
+            case "$manager" in
+                apt) printf 'sudo apt-get update -qq && sudo apt-get install -y python3' ;;
+                pacman) printf 'sudo pacman -Sy --noconfirm python' ;;
+                brew) printf 'brew install python' ;;
+            esac
+            ;;
         *)
             case "$manager" in
                 apt) printf 'sudo apt-get update -qq && sudo apt-get install -y %s' "$name" ;;
@@ -234,6 +337,56 @@ checked_count=0
 failed_fix_count=0
 
 entries=$( { read_entries "$DEPS_CONF"; read_entries "$DEPS_LOCAL_CONF"; } )
+
+if [ -n "$only" ]; then
+    selected=''
+    old_ifs=$IFS
+    IFS='
+'
+    for entry in $entries; do
+        IFS=$old_ifs
+        if in_only_set "${entry%%|*}"; then
+            selected="${selected:+$selected
+}$entry"
+        fi
+        IFS='
+'
+    done
+    IFS=$old_ifs
+
+    # Every selector must have matched. Checked per name rather than by
+    # counting, so the error names the one that is wrong.
+    unmatched=''
+    rest=$only
+    while [ -n "$rest" ]; do
+        head=${rest%%,*}
+        if [ -n "$head" ]; then
+            found=0
+            old_ifs=$IFS
+            IFS='
+'
+            for entry in $selected; do
+                IFS=$old_ifs
+                [ "${entry%%|*}" = "$head" ] && found=1
+                IFS='
+'
+            done
+            IFS=$old_ifs
+            [ "$found" -eq 1 ] || unmatched="$unmatched $head"
+        fi
+        [ "$rest" = "$head" ] && break
+        rest=${rest#*,}
+    done
+
+    if [ -n "$unmatched" ]; then
+        printf 'check-deps: --only named no such dependency:%s\n' "$unmatched" >&2
+        printf 'check-deps: known names come from %s and %s\n' \
+            "$DEPS_CONF" "${DEPS_LOCAL_CONF:-(no platform variant)}" >&2
+        exit 2
+    fi
+
+    entries=$selected
+fi
 
 old_ifs=$IFS
 IFS='

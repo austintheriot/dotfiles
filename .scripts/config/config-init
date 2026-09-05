@@ -1,0 +1,146 @@
+#!/bin/sh
+# help: Finish a fresh clone: git config, hooks, dependencies, binary
+#
+# usage: config init [-y|--yes] [-n|--dry-run]
+#
+# Takes a home that already has the bare repo checked out and finishes the
+# job: sets the one git setting the bare-repo-over-home technique depends on,
+# links the git hooks and puts `config` on PATH, installs the missing tracked
+# dependencies, then builds and installs the stamped binary.
+#
+# This is the post-clone half of the bootstrap. setup.sh is the other half:
+# it clones, picks the branch, checks out, and then runs this. On a machine
+# that is already cloned, run this directly.
+#
+# Idempotent. Every step converges on a machine that is already set up, so
+# re-running it after a pull is safe and is the intended way to pick up a new
+# dependency.
+#
+# Options:
+#   -y, --yes      Install without prompting per dependency. For Docker, CI,
+#                  and a remote box with no one at the terminal.
+#   -n, --dry-run  Print every step and change nothing.
+#
+# Environment:
+#   DOTFILES_ROOT  Repo root. Default $HOME.
+#
+# ---
+# Step order is a contract, not an accident, and the tests assert it:
+#
+#   install-hooks first, because it is what puts `config` on PATH. A later
+#   step, a later shell, or the reader's next command resolves `config`
+#   through ~/.local/bin, and on a fresh machine nothing else has put it
+#   there.
+#
+#   install second, because it is what places the Rust toolchain. rustup is a
+#   deps.conf entry, so on a genuinely fresh machine cargo does not exist
+#   until this step has run.
+#
+#   build last, for the same reason: it compiles the crate with the cargo
+#   that install just placed. Running it first fails on exactly the machine
+#   this script exists to serve.
+#
+# Every step is delegated to the sibling config-<sub> rather than reimplemented
+# here, so there is one place that knows how to install dependencies and one
+# place that knows how to build the crate. This script owns the order and
+# nothing else.
+set -eu
+
+self=$(readlink -f "$0")
+here=$(dirname "$self")
+
+. "$here/usage.sh"
+usage_if_requested "${1:-}"
+
+yes=0
+dry_run=0
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes) yes=1 ;;
+        -n|--dry-run) dry_run=1 ;;
+        *)
+            printf 'config init: unknown argument: %s\n' "$arg" >&2
+            printf 'config init: run `config init --help` for usage\n' >&2
+            exit 2
+            ;;
+    esac
+done
+
+ROOT=${DOTFILES_ROOT:-$HOME}
+git_dir="$HOME/.cfg"
+
+step=0
+announce() {
+    step=$((step + 1))
+    if [ "$dry_run" -eq 1 ]; then
+        printf 'config init: [%d/4] would %s\n' "$step" "$1"
+    else
+        printf 'config init: [%d/4] %s\n' "$step" "$1"
+    fi
+}
+
+# The bare repo is this script's one precondition. Checking it here names the
+# problem where it can be fixed, rather than letting `git config` fail four
+# lines down with a message about a directory the reader never typed.
+if [ "$dry_run" -eq 0 ] && [ ! -d "$git_dir" ]; then
+    printf 'config init: no bare repo at %s\n' "$git_dir" >&2
+    printf 'config init: clone first, or run setup.sh, which does both\n' >&2
+    exit 1
+fi
+
+# Without this, every untracked file in $HOME shows up in `config status`.
+# That is what makes a bare repo over a home directory usable at all, and it
+# is local to the repo, so a fresh clone does not carry it.
+announce 'set status.showUntrackedFiles to no'
+if [ "$dry_run" -eq 0 ]; then
+    git --git-dir="$git_dir" config status.showUntrackedFiles no
+fi
+
+announce 'link the git hooks and put config on PATH'
+if [ "$dry_run" -eq 0 ]; then
+    "$here/config-install-hooks"
+fi
+
+announce 'install the missing tracked dependencies'
+if [ "$dry_run" -eq 0 ]; then
+    if [ "$yes" -eq 1 ]; then
+        "$here/config-install" --yes
+    else
+        "$here/config-install"
+    fi
+fi
+
+# Last, and the only step allowed to fail without failing the bootstrap.
+#
+# Everything above leaves a working shell; the crate is one utility on top of
+# that. A machine with no cargo is a real state, not a broken one: rustup is a
+# deps.conf entry with no automated install on some package managers, and a
+# container can omit the toolchain deliberately. Exiting non-zero here would
+# report a usable machine -- hooks linked, dependencies installed, shell
+# working -- as a failed bootstrap, and would turn the CI bootstrap job red
+# for something that is not a bootstrap failure.
+#
+# So the gap is reported with the one command that closes it, and the exit
+# code stays 0. Every step that the reader cannot recover from on their own
+# runs before this one, which is why this is the step that gets the exception
+# and no other does.
+announce 'build and install the stamped binary'
+build_failed=0
+if [ "$dry_run" -eq 0 ]; then
+    if ! DOTFILES_ROOT="$ROOT" "$here/config-build"; then
+        build_failed=1
+    fi
+fi
+
+if [ "$dry_run" -eq 1 ]; then
+    printf '\nconfig init: dry run, nothing was changed\n'
+    exit 0
+fi
+
+if [ "$build_failed" -eq 1 ]; then
+    printf '\nconfig init: done, except the build step\n'
+    printf 'config init: run `config build` once cargo is on PATH\n'
+    exit 0
+fi
+
+printf '\nconfig init: done\n'

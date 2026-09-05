@@ -195,4 +195,77 @@ assert_succeeds 'TRIGGER_PATHS still matches a claude hooks edit' \
 assert_succeeds 'TRIGGER_PATHS still matches a tests edit' \
     path_matches_trigger 'tests/some-suite.test.sh'
 
+# --- every root-level file a suite reads is in the image --------------------
+#
+# The COPYs in this Dockerfile are per-path, so a new file at the repo root is
+# absent from the image until it gets its own line. The failure is nasty: the
+# suite that reads it passes on the host and fails only in the container, so
+# it surfaces at pre-push rather than during development.
+#
+# That is exactly how setup.sh shipped broken: three suites read it, all three
+# passed on the host, and all three failed in the container with
+# "No such file or directory".
+#
+# Derived from what the suites actually reference, rather than a hand-kept
+# list, so a new root-level dependency is caught without anyone remembering
+# to update this test.
+# Only the COPY directives, never the prose. A first attempt matched the whole
+# Dockerfile text and passed with the COPY line deleted, because the comment
+# above it named the file -- a guard that cannot fail.
+dockerfile_copies=$(grep -E '^COPY ' "$DOCKERFILE" | sed 's/^COPY //')
+
+referenced_root_files=$(grep -ohE 'DOTFILES_ROOT/[A-Za-z0-9_.-]+' "$DOTFILES_ROOT"/tests/*.test.sh 2>/dev/null \
+    | sed 's|.*DOTFILES_ROOT/||' \
+    | grep -E '^[A-Za-z0-9_.-]+$' \
+    | sort -u)
+
+# A COPY source can be a literal path or a glob (.zshrc* covers .zshrc-linux),
+# so each candidate is matched against the sources with shell globbing rather
+# than by substring.
+copied_by_image() {
+    copied_target=$1
+    for copy_line in $dockerfile_copies; do
+        case $copy_line in
+            /*|--*) continue ;;
+        esac
+        # shellcheck disable=SC2254  # the pattern is a glob on purpose
+        case $copied_target in
+            $copy_line) unset copied_target copy_line; return 0 ;;
+        esac
+    done
+    unset copied_target copy_line
+    return 1
+}
+
+missing_from_image=''
+while IFS= read -r root_file; do
+    [ -n "$root_file" ] || continue
+    # Only files that really exist at the root; a suite may reference a path
+    # it creates under a fixture.
+    [ -f "$DOTFILES_ROOT/$root_file" ] || continue
+    copied_by_image "$root_file" || missing_from_image="$missing_from_image $root_file"
+done <<EOF
+$referenced_root_files
+EOF
+assert_equals 'every root-level file the suites read is COPYed into the image' \
+    '' "$missing_from_image"
+
+# The runner overlays the working tree so an uncommitted edit is what gets
+# tested. A file in the image but not in the overlay list tests the last
+# commit instead, which is the quieter half of the same bug. Matched against
+# the overlay loop's own file list, not the whole script, for the same
+# reason the image check reads only COPY lines.
+overlay_list=$(sed -n 's/^ *for file in \(.*\); do$/\1/p' "$RUNNER")
+assert_succeeds 'the overlay file list is still parseable' test -n "$overlay_list"
+
+missing_from_overlay=''
+for root_file in setup.sh README.md .sync-manifest; do
+    [ -f "$DOTFILES_ROOT/$root_file" ] || continue
+    printf '%s\n' "$overlay_list" | tr ' ' '\n' | grep -qxF "$root_file" \
+        || missing_from_overlay="$missing_from_overlay $root_file"
+done
+assert_equals 'the runner overlays the root-level files it copies' \
+    '' "$missing_from_overlay"
+
+
 finish

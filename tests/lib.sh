@@ -49,6 +49,7 @@ TEST_NAME=$(basename "${BASH_SOURCE[1]:-$0}" .test.sh)
 
 passed=0
 failed=0
+skipped=0
 
 # Tracked in a file, not an array: `new_test_session` is normally called inside
 # a command substitution, and a subshell cannot append to the parent's array.
@@ -231,7 +232,34 @@ assert_succeeds() {
     fi
 }
 
+# Records an assertion that did not run, and why.
+#
+# A skip is green: it says a check could not execute here, not that it would
+# have failed. The container harness builds its tree with `git archive` and so
+# has no repository, which is a correct reason for the commit-inspection block
+# in scripts-dir-name.test.sh to stand down.
+#
+# What it must not be is free. That block skipped silently, `finish` counted
+# only passes and failures, and the pre-push Docker gate printed PASS over an
+# assertion that never ran -- so a stale committed-script count shipped and
+# both CI platforms caught it instead. Counting the skip is what puts it on
+# the summary line, and run-all.sh carries it up to the verdict from there.
+#
+# The reason is required rather than optional: "skipped" with no cause is a
+# line a reader cannot act on, and acting on it is the whole point.
+skip() {
+    local reason=$1
+    skipped=$((skipped + 1))
+    printf 'skip: %s\n' "$reason"
+}
+
+# The skip count is appended only when there is one. A trailing "0 skipped" on
+# every clean suite is noise, and noise is what a reader learns to scan past --
+# which is the habit this whole mechanism exists to interrupt.
 finish() {
-    printf '\n%s: %d passed, %d failed\n' "$TEST_NAME" "$passed" "$failed"
+    local summary
+    summary=$(printf '%s: %d passed, %d failed' "$TEST_NAME" "$passed" "$failed")
+    [ "$skipped" -eq 0 ] || summary="$summary, $skipped skipped"
+    printf '\n%s\n' "$summary"
     [ "$failed" -eq 0 ]
 }

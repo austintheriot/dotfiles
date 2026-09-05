@@ -287,7 +287,19 @@ install_cmd_for() {
             esac
             ;;
         oh-my-zsh)
-            printf 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
+            # --keep-zshrc is load-bearing, not a preference.
+            #
+            # KEEP_ZSHRC defaults to `no` upstream, so without the flag the
+            # installer REPLACES ~/.zshrc with its own template and moves the
+            # real one to ~/.zshrc.pre-oh-my-zsh. Found in a bare container:
+            # the bootstrap checked out the tracked .zshrc, this install threw
+            # it away, and `config` was then not found in a fresh zsh because
+            # the line that puts ~/.local/bin on PATH had gone with it.
+            #
+            # A bootstrap that installs dotfiles and then lets a dependency
+            # discard the most important one is worse than not installing the
+            # dependency at all.
+            printf 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended --keep-zshrc'
             ;;
         zsh-autosuggestions)
             # The oh-my-zsh custom-plugin clone only satisfies the check on a

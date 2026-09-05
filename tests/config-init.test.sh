@@ -297,4 +297,38 @@ assert_contains 'the steps inherit ~/.local/bin' \
     'saw-local-bin' "$(calls_of "$home")"
 
 
+# --- it says how to reach config in the shell that just ran it --------------
+#
+# Reported from a bare container: `config init: done`, and then
+# `config st` was "command not found". install-hooks links config into
+# ~/.local/bin, but no process can change the PATH of the shell that started
+# it, so the shell running the bootstrap can never see the new command by
+# itself.
+#
+# Reporting success while leaving the reader with an uncallable command is a
+# dead end. The closing output has to name the one line that fixes the current
+# shell, and say where new shells get it from.
+home=$(make_init_home pathhint)
+output=$(cd "$home" && HOME="$home" "$home/.scripts/config/config" init --yes 2>&1)
+
+assert_contains 'the closing output names the export' \
+    'export PATH=' "$output"
+assert_contains 'the export names local bin' '.local/bin' "$output"
+
+# It must also say that new shells are already handled, or the reader assumes
+# they have to run that export forever.
+assert_succeeds 'it says where new shells pick it up' \
+    grep -qiE 'profile|zshrc|new shell' <<<"$output"
+
+# Only when config is not already reachable. On a machine where ~/.local/bin
+# is already on PATH the hint is noise, and noise in a success message is how
+# real warnings get ignored.
+home=$(make_init_home pathhintquiet)
+mkdir -p "$home/.local/bin"
+output=$(cd "$home" && HOME="$home" PATH="$home/.local/bin:/usr/bin:/bin" \
+    "$home/.scripts/config/config" init --yes 2>&1)
+assert_equals 'no hint when local bin is already on PATH' '' \
+    "$(printf '%s\n' "$output" | grep 'export PATH=' || true)"
+
+
 finish

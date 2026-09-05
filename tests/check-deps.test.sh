@@ -824,4 +824,33 @@ assert_succeeds 'cc is a tracked dependency' \
     grep -q '^cc|' "$DOTFILES_ROOT/.scripts/deps/deps.conf"
 
 
+# --- oh-my-zsh must not replace the tracked .zshrc --------------------------
+#
+# Found in a bare container: the bootstrap checked out the tracked .zshrc,
+# then check-deps installed oh-my-zsh, and the installer REPLACED that file
+# with its own template -- backing the real one up to ~/.zshrc.pre-oh-my-zsh.
+# Every customization went with it, including the line that puts
+# ~/.local/bin on PATH, so `config` was not found in a fresh zsh even though
+# install-hooks had linked it correctly.
+#
+# A bootstrap that installs dotfiles and then lets a dependency discard the
+# most important one is worse than not installing that dependency.
+#
+# KEEP_ZSHRC defaults to `no` upstream (verified in tools/install.sh), so the
+# flag is required rather than optional.
+omz_cmd=$(sed -n '/^        oh-my-zsh)/,/^            ;;/p' "$SCRIPT")
+assert_succeeds 'the oh-my-zsh install command is still there to check' \
+    test -n "$omz_cmd"
+assert_contains 'oh-my-zsh keeps the existing .zshrc' \
+    '--keep-zshrc' "$omz_cmd"
+
+# --unattended too, or the installer prompts and a piped bootstrap stalls.
+assert_contains 'oh-my-zsh installs unattended' '--unattended' "$omz_cmd"
+
+# Nothing else in the manifest may install oh-my-zsh without that flag, since
+# a second call site would reintroduce the overwrite for one platform only.
+unguarded=$(grep -n 'ohmyzsh' "$SCRIPT" | grep -v 'keep-zshrc' || true)
+assert_equals 'every oh-my-zsh install keeps the zshrc' '' "$unguarded"
+
+
 finish

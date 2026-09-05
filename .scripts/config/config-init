@@ -84,6 +84,12 @@ git_dir="$HOME/.cfg"
 # ~/.local/bin as well, because config-install-hooks puts `config` there and
 # config-build installs config-manifest there, and both are resolved by name
 # afterwards.
+# Remembered before the prepend below, because the closing hint has to answer
+# "can the CALLER'S shell see config?" and not "can this script see it?". The
+# prepend makes the answer always yes for this process, which would silence
+# the hint exactly when it is needed.
+caller_path=$PATH
+
 PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 export PATH
 
@@ -183,3 +189,24 @@ if [ "$build_failed" -eq 1 ]; then
 fi
 
 printf '\nconfig init: done\n'
+
+# No process can change the PATH of the shell that started it, so the shell
+# that just ran this cannot see the newly linked `config` on its own.
+#
+# Reported from a bare container: "config init: done" followed immediately by
+# "config: command not found". Reporting success and leaving the reader with
+# an uncallable command is a dead end, so name the one line that fixes the
+# current shell.
+#
+# Printed only when it is actually needed. On a machine where ~/.local/bin is
+# already on PATH this is noise, and noise inside a success message is how
+# real warnings come to be ignored.
+case ":$caller_path:" in
+    *":$HOME/.local/bin:"*) ;;
+    *)
+        printf 'config init: `config` is at %s/.local/bin, which this shell has not picked up.\n' \
+            "$HOME"
+        printf 'config init: for this shell:  export PATH="$HOME/.local/bin:$PATH"\n'
+        printf 'config init: new shells get it from ~/.profile (bash, sh) or ~/.zshrc (zsh).\n'
+        ;;
+esac

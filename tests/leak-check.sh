@@ -89,14 +89,18 @@ RANGE_LOG_FLAGS=(--diff-filter=ACMR --diff-merges=first-parent)
 TMP_OUT=$(mktemp) || exit 2
 TMP_ERR=$(mktemp) || exit 2
 trap 'rm -f "$TMP_OUT" "$TMP_ERR"' EXIT
+trap 'rm -f "$TMP_OUT" "$TMP_ERR"; exit 130' INT
+trap 'rm -f "$TMP_OUT" "$TMP_ERR"; exit 143' TERM HUP
 
 # The paths the scan covers, one per line, for the current mode.
 changed_paths() {
   if [ "$mode" = push ]; then
-    if ! git log --format= --name-only "${RANGE_LOG_FLAGS[@]}" "$range" > "$TMP_OUT" 2>"$TMP_ERR"; then
+    : > "$TMP_OUT"
+    if ! git log --format= --name-only "${RANGE_LOG_FLAGS[@]}" "$range" \
+        >> "$TMP_OUT" 2>"$TMP_ERR"; then
       echo "leak-check: git log failed scanning changed paths for $range" >&2
       cat "$TMP_ERR" >&2
-      exit 2
+      return 2
     fi
     grep -v '^$' "$TMP_OUT" | sort -u
   else
@@ -104,32 +108,90 @@ changed_paths() {
   fi
 }
 
-# The added lines across the given paths (read from stdin, one per line),
-# for the current mode. Only '+' lines, never the '+++' file header.
-added_lines() {
+# The diff text for the given paths (read from stdin, one per line).
+#
+# Returns the whole diff rather than only the added lines, because the caller
+# needs both: the content rules read the + lines, and the hunk-coverage check
+# needs the file headers. Returning one value that serves both keeps a single
+# git invocation and removes the TMP_OUT aliasing the two callers had.
+scan_diff() {
   if [ "$mode" = push ]; then
-    tr '\n' '\0' | xargs -0 git log --format= --no-color -U0 "${RANGE_LOG_FLAGS[@]}" -p "$range" -- \
-      > "$TMP_OUT" 2>"$TMP_ERR"
-    if [ "$?" -ne 0 ]; then
+    : > "$TMP_OUT"
+    if ! tr '\n' '\0' | xargs -0 git log --format= --no-color -U0 \
+        "${RANGE_LOG_FLAGS[@]}" -p "$range" -- >> "$TMP_OUT" 2>"$TMP_ERR"; then
       echo "leak-check: git log failed scanning added lines for $range" >&2
       cat "$TMP_ERR" >&2
-      exit 2
+      return 2
     fi
-    grep '^+' "$TMP_OUT" | grep -v '^+++'
+    cat "$TMP_OUT"
   else
-    tr '\n' '\0' | xargs -0 git diff --cached --no-color -U0 -- 2>/dev/null | grep '^+' | grep -v '^+++'
+    tr '\n' '\0' | xargs -0 git diff --cached --no-color -U0 -- 2>/dev/null
   fi
 }
 
+# The scanned paths that produced no file header in the diff.
+#
+# Pure: both inputs are caller-supplied, so this makes no git call and is
+# exercisable without a repository.
+#
+# Matched against the anchored `+++ b/<path>` header rather than by searching
+# the diff for the path anywhere. A free-text search reports a path as scanned
+# when a longer path containing it appears (styles.css satisfied by
+# vendor/styles.css, verified), which is a hole in the shape this check exists
+# to close.
+#
+# A path with no header was not scanned. Two evasions share that signature: a
+# .gitattributes `-diff` marking on ordinary text, and a genuinely binary
+# file. Both produce "Binary files ... differ" and no header.
+unscannable_paths() {
+  local path_list=$1 diff_text=$2
+  local headers
+  # The header set is extracted once, then compared as sets. Re-piping the
+  # whole diff through a fresh grep per path is quadratic: measured at 3.7
+  # seconds for 400 paths against a small diff, and pre-push runs this per
+  # pushed range with two refs on a `config push-all`.
+  #
+  # Both header spellings are kept: `+++ b/path` is the default, and
+  # `+++ path` is what --no-prefix output produces.
+  headers=$(printf '%s\n' "$diff_text" \
+    | sed -n -e 's|^+++ b/\(.*\)$|\1|p' -e 's|^+++ \([^b].*\)$|\1|p' \
+    | grep -v '^/dev/null$' \
+    | sort -u)
+  printf '%s\n' "$path_list" | sort -u | comm -23 - <(printf '%s\n' "$headers")
+}
+
+raw_paths=$(changed_paths)
+scan_status=$?
+[ "$scan_status" -eq 0 ] || exit 2
+
+# The self-exclusion is a separate step, not a pipe on the capture above:
+# piping would make $? describe grep rather than changed_paths.
+#
 # This script's own source contains the generic patterns it searches for, so
-# scanning it would always self-trip. Exclude it; it is reviewed by hand.
-# This is the only path excluded from the scan in either mode; a change to
-# this file is therefore unguarded and depends on human review, so do not add
-# another file to this exclusion without the same tradeoff in mind.
-scan_paths=$(changed_paths | grep -v '^tests/leak-check\.sh$')
+# scanning it would always self-trip. It is the only path excluded in either
+# mode, and a change to this file is therefore unguarded and depends on human
+# review, so do not add another file here without the same tradeoff in mind.
+scan_paths=$(printf '%s\n' "$raw_paths" | grep -v '^tests/leak-check\.sh$')
 [ -z "$scan_paths" ] && exit 0
 
-staged=$(echo "$scan_paths" | added_lines)
+diff_text=$(printf '%s\n' "$scan_paths" | scan_diff)
+scan_status=$?
+[ "$scan_status" -eq 0 ] || exit 2
+
+unscannable=$(unscannable_paths "$scan_paths" "$diff_text")
+if [ -n "$unscannable" ]; then
+  echo "" >&2
+  echo "  $hook: BLOCKED, these paths produced no readable diff:" >&2
+  printf '    %s\n' "${(@f)unscannable}" >&2
+  echo "" >&2
+  echo "  A path with no diff header was not scanned. Causes: a" >&2
+  echo "  .gitattributes -diff marking, or a binary file." >&2
+  echo "  Remove the marking, or move the content out of the repo." >&2
+  echo "" >&2
+  exit 2
+fi
+
+staged=$(printf '%s\n' "$diff_text" | grep '^+' | grep -v '^+++')
 [ -z "$staged" ] && exit 0
 
 fail=0
@@ -188,7 +250,18 @@ else
   fi
 
   if [ -n "$term_scope" ]; then
-    term_staged=$(echo "$term_scope" | added_lines)
+    # Filtered from $diff_text rather than a second git invocation: a header
+    # line names its path right after "+++ b/", so restricting to hunks whose
+    # header path is in term_scope reuses the diff already captured above.
+    term_headers=$(printf '%s\n' "$term_scope" | sed 's|^|+++ b/|')
+    term_staged=$(awk -v headers="$term_headers" '
+      BEGIN {
+        split(headers, lines, "\n")
+        for (i in lines) want[lines[i]] = 1
+      }
+      /^\+\+\+ / { in_scope = ($0 in want); next }
+      in_scope && /^\+/ && !/^\+\+\+/ { print }
+    ' <<< "$diff_text")
 
     while IFS= read -r pattern; do
       case "$pattern" in

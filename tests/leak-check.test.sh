@@ -208,6 +208,90 @@ assert_contains 'range: the error names the unresolved range' \
 out=$(run_leak_check --range "$key_tip..$key_tip")
 assert_equals 'range: an empty range passes' '0' "$(exit_of "$out")"
 
+# A git failure mid-scan must block, not pass. The scan functions run inside a
+# command substitution, so an `exit` inside them cannot reach the parent; the
+# parent has to observe the failure some other way. Without that, the guard
+# prints its own diagnostic and then exits 0.
+#
+# The shim resolves the real git first rather than hardcoding a path: the
+# suite's other calls use whatever git is on PATH, and shadowing it with a
+# different build mid-suite is its own confusion.
+real_git=$(command -v git)
+shim_dir="$FIXTURES/git-shim-fail"
+mkdir -p "$shim_dir"
+cat > "$shim_dir/git" <<SHIM
+#!/bin/sh
+# Fail only the -p invocation added_lines makes, so the range still resolves
+# and the path list is still produced normally.
+for arg in "\$@"; do
+    if [ "\$arg" = "-p" ]; then
+        printf 'simulated git failure\n' >&2
+        exit 128
+    fi
+done
+exec "$real_git" "\$@"
+SHIM
+chmod 755 "$shim_dir/git"
+
+printf 'token = ghp_%s\n' "$(printf 'A%.0s' $(seq 1 24))" > "$repo/planted.txt"
+git -C "$repo" add planted.txt
+git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m 'plant'
+
+output=$(cd "$repo" && PATH="$shim_dir:$PATH" \
+    "$LEAK_CHECK" --range 'HEAD~1..HEAD' 2>&1)
+status=$?
+assert_equals 'a git failure mid-scan exits 2, not 0' '2' "$status"
+assert_contains 'the failure names the range' 'HEAD~1..HEAD' "$output"
+
+# A one-line .gitattributes entry makes an ordinary text file unscannable: git
+# prints "Binary files differ" and there are no + lines for the content rules
+# to read. The guard must notice a path it listed produced no hunk.
+printf 'token = ghp_%s\n' "$(printf 'B%.0s' $(seq 1 24))" > "$repo/hidden.txt"
+git -C "$repo" add hidden.txt
+
+status=0
+(cd "$repo" && "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
+assert_equals 'a credential in a plain staged file is blocked' '1' "$status"
+
+printf 'hidden.txt -diff\n' > "$repo/.gitattributes"
+git -C "$repo" add .gitattributes hidden.txt
+
+output=$(cd "$repo" && "$LEAK_CHECK" 2>&1)
+status=$?
+assert_equals 'a -diff marked path does not pass silently' '2' "$status"
+assert_contains 'the block names the unscannable path' 'hidden.txt' "$output"
+
+# The substring hazard, in the one shape that distinguishes the two
+# implementations. A shorter path must not read as scanned because a longer
+# path containing it has a header.
+#
+# The gitattributes pattern is anchored with a leading slash on purpose: a
+# bare `styles.css` matches at ANY depth, so it would unset diff for
+# vendor/styles.css too and both paths would be unscannable, which both the
+# buggy and the fixed form report identically. Verified with
+# `git check-attr diff styles.css vendor/styles.css`.
+#
+# With only styles.css unset: the substring form finds "styles.css" inside
+# "+++ b/vendor/styles.css" and lets the credential through, and the anchored
+# form blocks. Verified both directions before writing this test.
+git -C "$repo" reset -q HEAD hidden.txt .gitattributes
+rm -f "$repo/hidden.txt" "$repo/.gitattributes"
+mkdir -p "$repo/vendor"
+printf 'token = ghp_%s\n' "$(printf 'D%.0s' $(seq 1 24))" > "$repo/styles.css"
+printf 'plain\n' > "$repo/vendor/styles.css"
+printf '/styles.css -diff\n' > "$repo/.gitattributes"
+git -C "$repo" add styles.css vendor/styles.css .gitattributes
+
+output=$(cd "$repo" && "$LEAK_CHECK" 2>&1)
+status=$?
+assert_equals 'a -diff path is blocked even when a longer path shares its name' \
+    '2' "$status"
+assert_contains 'the block names the short path, not the long one' \
+    'styles.css' "$output"
+
+git -C "$repo" reset -q HEAD styles.css vendor/styles.css .gitattributes
+rm -rf "$repo/styles.css" "$repo/vendor" "$repo/.gitattributes"
+
 # --- range mode: merge commits ----------------------------------------------
 #
 # `git log -p` shows no diff for a merge commit by default, so content that

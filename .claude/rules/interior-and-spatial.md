@@ -1,7 +1,7 @@
 ---
 paths:
   - "__agent_only_never_match_at_startup__/**"
-last-verified: 2026-09-05
+last-verified: 2026-09-06
 ---
 
 # Interiors and inhabited space
@@ -18,7 +18,7 @@ Empirical priority, in rough order of how often it makes a space unusable: **aco
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. Human factors are durable. Standards, certification schemes, and professional-credential structures are not.
+`last-verified: 2026-09-06`. Human factors are durable. Standards, certification schemes, and professional-credential structures are not.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|
@@ -51,11 +51,13 @@ Room acoustics is set by volume, geometry, and surface, all of which are decided
 
 **Open-plan acoustics is where the evidence and the marketing diverge most sharply.** The claim is collaboration; **the measured finding (Bernstein and Turban) is that open-plan conversion reduced face-to-face interaction substantially while electronic messaging rose.** People respond to a loss of acoustic privacy by withdrawing. That result does not settle the question -- cost per head, flexibility, and sightline arguments remain -- but any open-plan proposal that asserts increased collaboration is asserting something the best-known study contradicts.
 
+**A second, quieter piece of evidence is arguably more useful because it is longitudinal on one building.** The Elizabeth Fry Building at UEA scored among the best-measured buildings in the PROBE dataset in 1998. Resurveyed in 2011, after conversion toward open plan and an increase in occupant density, **overall comfort had fallen from 5.41 to 5.20 and summer temperature satisfaction from 5.30 to 4.24.** That is the same building, measured before and after, on the same instrument -- which is a stronger design than most open-plan studies manage.
+
 ## Lighting
 
 **Layered lighting** -- ambient, task, accent -- is the working structure, and the failure mode is a single uniform layer that serves no task well.
 
-The measurable properties worth specifying: **illuminance** targets by task (read from the governing standard, not recalled), **correlated colour temperature**, and **colour rendering**, where **TM-30 is the more informative modern metric and CRI remains the one most specifications use**. Glare is specified through UGR in most interior contexts and is the property most often ignored until occupancy.
+The measurable properties worth specifying: **illuminance** targets by task (read from the governing standard, not recalled), **correlated colour temperature**, and **colour rendering**, where **TM-30 is the more informative modern metric and CRI remains the one most specifications use** (note the current revision is **TM-30-24**, superseding TM-30-20). Glare is specified through UGR in most interior contexts and is the property most often ignored until occupancy.
 
 **Daylight is the highest-quality source and the hardest to control.** Daylight factor and the newer climate-based metrics quantify availability; the design problem is almost always glare and solar gain rather than quantity.
 
@@ -97,7 +99,9 @@ Furniture, fixtures, and equipment is where interior intent survives or dies. Th
 
 At room and floor scale the Lynch vocabulary still applies -- landmarks, nodes, districts -- but the dominant tools are sightline, threshold, and sequence rather than signage. **A signage system compensating for an illegible plan is a permanent tax**, and it is the usual outcome when wayfinding is engaged after the plan is fixed.
 
-Signage carries accessibility requirements with specific dimensional rules: **tactile character stroke thickness is 10% to 30% of character height, character spacing is 10% of character height with a 1/16 inch minimum, line spacing is 135% to 170%, and there is a 70% contrast minimum in the standard** -- not merely advisory. Verify against the current edition.
+Signage carries accessibility requirements with specific dimensional rules: **tactile character stroke thickness is 10% to 30% of character height, character spacing is 10% of character height with a 1/16 inch minimum, and line spacing is 135% to 170%.** Visual characters (§703.5) use different figures -- stroke 10% to 30%, spacing 10% to 35%. Verify against the current edition.
+
+**Do not cite a 70% contrast requirement.** It is not in the ADA Standards: §703.5.1 requires a non-glare finish and *directional* contrast only (light-on-dark or dark-on-light), with no numeric value in the enforceable text. The 70% Light Reflectance Value differential comes from non-enforceable 1991 ADAAG appendix material. It is a reasonable design target and a common industry rule of thumb, and calling it a requirement in a specification is an error.
 
 ## Schools of thought
 
@@ -143,8 +147,12 @@ Signage carries accessibility requirements with specific dimensional rules: **ta
 
 ## Changelog
 
+- **2026-09-06 (second pass)** -- TM-30-20 superseded by **TM-30-24**. Added the Elizabeth Fry Building longitudinal result (comfort 5.41 to 5.20, summer temperature satisfaction 5.30 to 4.24, measured 1998 and again in 2011 after open-plan conversion and higher density) as before-and-after evidence on a single building, which is a stronger design than most open-plan studies achieve.
+
+- **2026-09-06** -- **Correction: the 70% contrast minimum claimed here on 2026-09-05 is not an ADA requirement.** Verified by extracting the full 2010 ADA Standards text: SS703.5.1 mandates a non-glare finish and directional contrast (light-on-dark or dark-on-light) with no numeric value anywhere in the enforceable text. The 70% Light Reflectance Value differential is non-enforceable 1991 ADAAG appendix material -- a sound design target, not a requirement. Also added the visual-character figures (SS703.5), which differ from the tactile ones.
+
 **Source research**: `~/.claude/local/research-notes/architecture-research.md` (the interiors material is in the summary layer rather than the written parts). Read it before a refresh -- it records what was verified against a primary source, what was not, and which sites blocked automated fetching, so a refresh pass need not re-derive any of that.
 
-- **2026-09-05** -- Initial version. NCIDQ's replacement of PRAC with IDIX and the Red List's move to 19 class-based categories verified. The UK Architects Act title exceptions, including the golf-course carve-out, verified. ADA signage dimensions (tactile stroke 10-30% of character height, character spacing 10% with a 1/16 in minimum, line spacing 135-170%, and the 70% contrast minimum being in the standard rather than advisory) verified and correct several commonly-misstated figures.
+- **2026-09-05** -- Initial version. NCIDQ's replacement of PRAC with IDIX and the Red List's move to 19 class-based categories verified. The UK Architects Act title exceptions, including the golf-course carve-out, verified. ADA signage dimensions (tactile stroke 10-30% of character height, character spacing 10% with a 1/16 in minimum, line spacing 135-170%) verified and correct several commonly-misstated figures.
 
   **Known gaps requiring verification before use**: ISO 3382-1 acoustic parameter definitions, noise-criteria targets by room type, and specific illuminance targets by task were not verified in this pass and are deliberately stated as "read the standard" rather than given as numbers. Passivhaus comfort and overheating criteria are likewise unverified. The biophilia and circadian evidence characterizations are directional summaries of a contested literature rather than a systematic review.

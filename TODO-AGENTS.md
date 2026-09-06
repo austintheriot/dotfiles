@@ -35,7 +35,30 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
     - whether the earlier "minutes" was a cold cache, a since-fixed
       eager init, or contention from something else on the machine.
       No measurement from that period survives, so this is unresolved.
-- Renaming tmux windows seems to lag a bit on git branch change. Let's look to see if there are some "smarter" hooks we can hook into to update the window name on git branch change, new branch, checkout, etc.
+- Renaming tmux windows lags on a git branch change. Investigated
+  2026-09-05; cause found, not yet fixed.
+  Nothing in tmux watches git. The tmux hooks in .config/tmux/tmux.conf
+  (after-new-window, after-split-window, after-select-window,
+  after-select-pane, after-kill-pane, client-session-changed) all fire
+  on tmux events only. The git-aware trigger is precmd in .zshrc, which
+  runs the script before drawing each prompt.
+  So the name is not late, it is waiting for a prompt: `git checkout` in
+  pane A does not rename until that pane draws its next prompt, and a
+  checkout made anywhere else (another pane, an editor, a script) never
+  triggers a rename in the window showing it.
+  Also worth weighing before choosing a fix: the script costs 57ms
+  (best of 5, measured) and precmd runs it on EVERY prompt, in every
+  pane, whether or not the branch changed. With 105 panes that is a lot
+  of repeated work to keep a name that usually did not change.
+  Options to weigh, none implemented:
+    - a git post-checkout / post-merge hook, which fires on the actual
+      event rather than on the next prompt. Needs a per-repo hook or
+      core.hooksPath, and does not cover a detached-HEAD move.
+    - cache the last-seen branch per pane and skip the tmux calls when
+      it has not changed, which cuts the 57ms on the common path
+      without changing when the update happens.
+    - keep precmd but make the no-change path cheap, which is the same
+      idea one level down.
 
 # QUESTIONS (leave until queried)
 

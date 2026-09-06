@@ -138,7 +138,7 @@ Agents rot. Pricing changes, licenses change, APIs deprecate, tools get abandone
 2. **Extract the volatile surface.** Read the rules file's volatility table and grep the body for `**VOLATILE**` markers. That set is the work list; the rest of the file is presumed durable.
 3. **Re-verify in parallel.** One subagent per file, or per cluster of related files. Give each the current claims verbatim and ask it to confirm, correct, or mark unverifiable against primary sources. Demand the URL it checked.
 4. **Patch surgically.** Change the facts that moved. Do not rewrite prose that is still correct -- a refresh that churns the whole file loses the review history and wastes tokens.
-5. **Bump `last-verified`.** And add a dated line to a short changelog at the bottom of the rules file naming what moved. The next refresh reads that to know what is churning fastest.
+5. **Bump `last-verified` in the frontmatter, and only there.** A date stored in two places drifts, and the duplicated copy is the one a reader sees first. Add a dated line to a short changelog at the bottom of the rules file naming what moved. The next refresh reads that to know what is churning fastest.
 6. **Report what changed.** The user needs to know which of their assumptions expired, not just that the file was touched.
 
 A fact that has moved twice in two refreshes is a fact that should be looked up at call time instead of stored. Consider giving that agent `WebSearch` and marking the section "verify before citing".
@@ -152,7 +152,7 @@ Two mechanisms, both required in every rules file.
 ```markdown
 ## Volatile surface
 
-`last-verified: 2026-09-05`. These rot; the rest of this file is comparatively durable.
+`last-verified` (see frontmatter -- do not restate the date here). These rot; the rest of this file is comparatively durable.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

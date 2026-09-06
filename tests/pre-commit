@@ -6,7 +6,7 @@
 # symlink at ~/.cfg/hooks/pre-commit; core.hooksPath is not set. See the
 # install note in ~/.claude/rules/dotfiles-tests.md.
 #
-# The branch-drift check and the dotfiles test suite run at pre-push instead
+# The stamp gate and the dotfiles test suite run at pre-push instead
 # (tests/pre-push): the suite costs ~25s, and paying that once per push beats
 # paying it once per commit. The leak guard stays here because a leak should
 # never even land in a local commit, not just never reach GitHub.

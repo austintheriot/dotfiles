@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Runs the leak scan, the branch-drift check, and the dotfiles test suite before a push.
+# Runs the leak scan, the stamp gate, and the dotfiles test suite before a push.
 #
 # Installed for the bare dotfiles repo at ~/.cfg. Git finds it through the
 # symlink at ~/.cfg/hooks/pre-push; core.hooksPath is not set. See the
@@ -8,10 +8,10 @@
 #
 # The leak guard runs twice: at pre-commit on staged content, and here in
 # range mode over every commit being pushed. The push-time scan exists
-# because `git commit-tree` (used by `config sync`) and `--no-verify` never
-# invoke pre-commit, so a commit can exist locally that no scan has seen.
-# The branch-drift check and the full suite run here only, so their cost is
-# paid once per push, not once per commit.
+# because `git commit-tree` and `--no-verify` never invoke pre-commit, so a
+# commit can exist locally that no scan has seen. The stamp gate and the
+# full suite run here only, so their cost is paid once per push, not once
+# per commit.
 #
 # The suite runs in Docker (tests/run-in-docker.sh), against the ref being
 # pushed rather than the working tree. Requires a running Docker daemon.
@@ -59,9 +59,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
     # The suite runs against the ref being pushed, which is not always the
     # checked-out branch. The first ref is the one the suite runs against;
-    # `config push-all` sends mac and linux together, and running the whole
-    # suite once per ref would double a push's cost for branches that share
-    # almost every tracked file.
+    # mac and linux can be pushed together in one call, and running the
+    # whole suite once per ref would double a push's cost for branches that
+    # share almost every tracked file.
     #
     # The stamp check is different and gets every ref (see push_refs below):
     # it is a cheap `rev-parse`, and mac and linux can hold different crate

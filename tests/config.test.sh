@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp install-hooks init check sync push-all install test reload help doctor'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks init install test reload help doctor'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"
@@ -193,21 +193,6 @@ chmod o-w "$home/tests"
 
 shim_dir="$FIXTURES/shims"
 mkdir -p "$shim_dir"
-printf '#!/bin/sh\nprintf "manifest:%%s\\n" "$@"\n' > "$shim_dir/config-manifest"
-chmod 755 "$shim_dir/config-manifest"
-
-actual=$(PATH="$shim_dir:$PATH" "$CONFIG" check origin/mac origin/linux)
-assert_equals 'config check execs config-manifest check with its args' \
-    'manifest:check
-manifest:origin/mac
-manifest:origin/linux' "$actual"
-
-actual=$(PATH="$shim_dir:$PATH" "$CONFIG" sync --dry-run --to linux)
-assert_equals 'config sync execs config-manifest sync with its args' \
-    'manifest:sync
-manifest:--dry-run
-manifest:--to
-manifest:linux' "$actual"
 
 home=$(make_fixture_home wrappers)
 mkdir -p "$home/.scripts/deps" "$home/tests"

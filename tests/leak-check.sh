@@ -160,7 +160,7 @@ unscannable_paths() {
   # The header set is extracted once, then compared as sets. Re-piping the
   # whole diff through a fresh grep per path is quadratic: measured at 3.7
   # seconds for 400 paths against a small diff, and pre-push runs this per
-  # pushed range with two refs on a `config push-all`.
+  # pushed range, with two ranges when mac and linux land in one atomic push.
   #
   # Both header spellings are kept: `+++ b/path` is the default, and
   # `+++ path` is what --no-prefix output produces.

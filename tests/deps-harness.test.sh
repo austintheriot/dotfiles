@@ -41,7 +41,6 @@ HARNESS="$DOTFILES_ROOT/.scripts/deps/test-local.sh"
 DOCKERFILE_UBUNTU="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.ubuntu"
 DOCKERFILE_ARCH="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.arch"
 WORKFLOW="$DOTFILES_ROOT/.github/workflows/deps-check.yml"
-MANIFEST="$DOTFILES_ROOT/.sync-manifest"
 
 # `case` inside a command substitution trips bash's parser on the `)` of a
 # pattern, so the two predicates that need one live in functions instead.
@@ -61,9 +60,9 @@ path_shape() {
 
 # --- test-local.sh is POSIX sh -------------------------------------------
 #
-# It carries a #!/bin/sh shebang and is one of the paths .sync-manifest keeps
-# identical across branches, so it has to parse under the linux branch's
-# /bin/sh (dash) too, not just the bash-flavored /bin/sh on macOS.
+# It carries a #!/bin/sh shebang and ships on every branch, so it has to
+# parse under the linux branch's /bin/sh (dash) too, not just the
+# bash-flavored /bin/sh on macOS.
 
 assert_succeeds 'test-local.sh parses as POSIX sh' sh -n "$HARNESS"
 
@@ -335,23 +334,19 @@ assert_contains 'the arch job runs the image it built' \
 assert_contains 'the local harness tags images the way the arch job does' \
     '"depcheck-$image"' "$(cat "$HARNESS")"
 
-# --- the deps platform variants are shared, not excluded ----------------
+# --- the deps platform variants both ship --------------------------------
 #
-# deps-local.conf used to be excluded from .sync-manifest so each branch could
-# carry its own. The deps-mac.conf / deps-linux.conf pair replaced it exactly
-# to end that: both ship on both branches, so both sit inside the drift check
-# like the rest of .scripts/. An exclusion reappearing would quietly take them
-# back out of it.
+# deps-local.conf used to hold one branch's own entries. The deps-mac.conf /
+# deps-linux.conf pair replaced it exactly to end that: both ship together
+# and the platform check at runtime decides which one gets read.
 
 for platform in mac linux; do
-    assert_succeeds "deps-$platform.conf ships on this branch" \
+    assert_succeeds "deps-$platform.conf ships here" \
         test -f "$DOTFILES_ROOT/.scripts/deps/deps-$platform.conf"
-    assert_equals "the manifest does not exclude deps-$platform.conf" \
-        '' "$(grep -nxF "!.scripts/deps/deps-$platform.conf" "$MANIFEST")"
 done
 
-assert_equals 'the retired deps-local.conf is gone from the manifest' \
-    '' "$(grep -n 'deps-local\.conf' "$MANIFEST")"
+assert_equals 'the retired deps-local.conf is gone' \
+    '' "$(grep -rn 'deps-local\.conf' "$DOTFILES_ROOT/.scripts/deps/README.md")"
 
 
 finish

@@ -2,12 +2,12 @@
 #
 # Tests that the pre-push hook gates every ref in a push, not just the first.
 #
-# `config push-all` sends mac and linux in one atomic push, so two refs
-# arrive on the hook's stdin where one used to. The hook took the first ref
-# and ran the stamp check and the suite against that one, which was defended
-# by a comment calling a second ref "rare enough" that testing the first was
-# the honest simple behavior. push-all makes two refs the normal case and
-# retires that premise.
+# mac and linux can be pushed together in one atomic push (`git push --atomic
+# origin mac linux`), so two refs can arrive on the hook's stdin where one
+# used to. The hook took the first ref and ran the stamp check and the suite
+# against that one, which was defended by a comment calling a second ref
+# "rare enough" that testing the first was the honest simple behavior. An
+# atomic two-branch push makes two refs a real case and retires that premise.
 #
 # The gap that matters is the stamp check. It verifies the built
 # config-manifest against the crate tree in the pushed ref, and mac and
@@ -87,7 +87,6 @@ make_stubs() {
 #!/bin/sh
 case \$1 in
     --stamp) printf '%s\n' "$stamp" ;;
-    check) exit 0 ;;
     verify-stamps)
         status=0
         while IFS= read -r line; do

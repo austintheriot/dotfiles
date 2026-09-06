@@ -22,8 +22,8 @@ CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
 # The subcommands that parse flags of their own, and so owe the reader a
-# description of each one. The thin wrappers (check, sync, install) forward to
-# a program that prints its own help, and reload and stamp take no flags.
+# description of each one. The thin wrapper (install) forwards to a program
+# that prints its own help, and reload and stamp take no flags.
 FLAG_TAKING='test'
 
 # Every subcommand, flags or not, answers --help. A reader who types it should
@@ -86,10 +86,6 @@ done
 output=$(run_config test --help 2>&1)
 assert_equals 'config test --help does not run the suite' '' \
     "$(printf '%s' "$output" | grep -F 'all:' || true)"
-
-output=$(run_config check --help 2>&1)
-assert_equals 'config check --help does not exec config-manifest' '' \
-    "$(printf '%s' "$output" | grep -F 'manifest:' || true)"
 
 output=$(run_config install --help 2>&1)
 assert_equals 'config install --help does not exec check-deps' '' \

@@ -96,7 +96,6 @@ COPY .config/alacritty /root/.config/alacritty
 # health module. No nvim binary is needed -- the assertions are about which
 # runtimes the config asks for and whether the health module is discoverable.
 COPY .config/nvim /root/.config/nvim
-COPY .sync-manifest /root/.sync-manifest
 # deps-harness.test.sh asserts on the workflow's triggers, permissions, and
 # job definitions by parsing this file.
 COPY .github /root/.github
@@ -124,9 +123,8 @@ COPY setup.sh /root/setup.sh
 COPY .profile /root/.profile
 
 # notify.test.sh drives aerospace and osascript, both macOS-only, so it can
-# never pass here. It is already excluded from .sync-manifest for the same
-# reason. Removing it is honest: run-all.sh globs tests/*.test.sh, so a
-# skip-by-absence keeps the runner's suite count accurate instead of
+# never pass here. Removing it is honest: run-all.sh globs tests/*.test.sh,
+# so a skip-by-absence keeps the runner's suite count accurate instead of
 # reporting a failure that means nothing on Linux.
 RUN rm -f /root/tests/notify.test.sh
 

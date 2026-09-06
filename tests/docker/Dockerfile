@@ -20,11 +20,14 @@ FROM rust:1.94-slim-bookworm@sha256:cf9dd0ec73e75f827fe59123fff9dc65af1a1c8363c3
 WORKDIR /build
 COPY crates/Cargo.toml crates/Cargo.lock ./
 COPY crates/config-manifest/Cargo.toml config-manifest/
-RUN mkdir config-manifest/src \
+COPY crates/dotfiles-path/Cargo.toml dotfiles-path/
+RUN mkdir config-manifest/src dotfiles-path/src \
     && echo 'fn main() {}' > config-manifest/src/main.rs \
+    && echo '' > dotfiles-path/src/lib.rs \
     && cargo build --release --locked --quiet \
     && rm -rf config-manifest/src target/release/config-manifest target/release/deps/config_manifest*
 COPY crates/config-manifest/src ./config-manifest/src
+COPY crates/dotfiles-path/src ./dotfiles-path/src
 RUN cargo build --release --locked --quiet
 
 FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171

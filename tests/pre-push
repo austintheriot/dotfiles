@@ -35,7 +35,14 @@ empty_tree='4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 #
 # container.test.sh asserts each pattern against a real example path, so a
 # regex that stops matching fails there rather than silently skipping.
-TRIGGER_PATHS='^\.scripts/.*\.sh$|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/|^\.sync-manifest$|^\.github/workflows/|^crates/|^\.config/nvim/|^\.config/tmux/'
+#
+# `^\.scripts/` is deliberately extension-free. It used to be
+# `^\.scripts/.*\.sh$`, which matched no `config-*` subcommand at all: every
+# one of them is extensionless, so a push editing only `config-stamp` or
+# `config-build` ran zero tests while config.test.sh and
+# config-manifest-lifecycle.test.sh read them both. `setup.sh` and `.zshrc`
+# were missing for the same reason, and zshrc-*.test.sh reads the latter.
+TRIGGER_PATHS='^\.scripts/|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/|^\.sync-manifest$|^\.github/workflows/|^crates/|^\.config/nvim/|^\.config/tmux/|^setup\.sh$|^\.zshrc'
 
 pushing_synced_branch=0
 changed_paths=''

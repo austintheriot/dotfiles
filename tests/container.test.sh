@@ -196,6 +196,30 @@ assert_succeeds 'TRIGGER_PATHS matches an nvim config edit' \
 assert_succeeds 'TRIGGER_PATHS matches a tmux config edit' \
     path_matches_trigger '.config/tmux/tmux.conf'
 
+# The extensionless config subcommands. `^\.scripts/` used to be
+# `^\.scripts/.*\.sh$`, which matched none of them, so a push editing only
+# `config-stamp` ran zero tests while two suites read it. Asserted per file
+# rather than as one pattern check, because the failure was silent and
+# per-file is what makes it legible when it returns.
+assert_succeeds 'TRIGGER_PATHS matches an extensionless config subcommand' \
+    path_matches_trigger '.scripts/config/config-stamp'
+assert_succeeds 'TRIGGER_PATHS matches the config dispatcher itself' \
+    path_matches_trigger '.scripts/config/config'
+assert_succeeds 'TRIGGER_PATHS matches setup.sh' \
+    path_matches_trigger 'setup.sh'
+assert_succeeds 'TRIGGER_PATHS matches a .zshrc edit' \
+    path_matches_trigger '.zshrc'
+assert_succeeds 'TRIGGER_PATHS matches a platform zshrc variant' \
+    path_matches_trigger '.zshrc-mac'
+
+# And the negative control: a docs-only push must still run no suite, or the
+# broadened pattern has made the gate meaningless. lib.sh has no assert_fails,
+# so the match is captured as a value and compared.
+docs_only_match=$(path_matches_trigger 'docs/superpowers/plans/some-plan.md' \
+    && printf 'matched' || printf 'no-match')
+assert_equals 'TRIGGER_PATHS ignores a docs-only edit' \
+    'no-match' "$docs_only_match"
+
 # The new patterns must not have come at the cost of the ones already
 # guarding this hook.
 assert_succeeds 'TRIGGER_PATHS still matches a .scripts shell edit' \

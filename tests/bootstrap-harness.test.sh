@@ -341,5 +341,24 @@ else
     skip 'the workflow declares the curl-pipe bootstrap jobs' 'no python3'
 fi
 
+# --- the toolchain seam ------------------------------------------------------
+#
+# After spec step 3, check-deps.sh IS the Rust binary, so it must exist before
+# the dependency install that places rustup. The images cannot compile it
+# themselves: the build context is only .scripts/deps and there is no
+# toolchain. A seam now means the deps-core plan points the gate at a prebuilt
+# binary rather than editing this harness under time pressure.
+assert_succeeds 'the curl-pipe entrypoint honors a prebuilt binary seam' \
+    grep -q 'BOOTSTRAP_PREBUILT_BIN' "$CURL_ENTRYPOINT"
+
+# The seam must be optional, or today's green run breaks: the whole point is
+# that the shell path still works until step 3 lands.
+assert_succeeds 'the prebuilt seam is optional' \
+    grep -qE 'BOOTSTRAP_PREBUILT_BIN:-' "$CURL_ENTRYPOINT"
+
+# And it must not silently accept a path that is not there. A gate that
+# ignores a misspelled seam tests the wrong binary and passes.
+assert_succeeds 'a set-but-missing prebuilt binary is refused' \
+    grep -q 'prebuilt binary was named but does not exist' "$CURL_ENTRYPOINT"
 
 finish

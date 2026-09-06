@@ -184,6 +184,18 @@ assert_succeeds 'TRIGGER_PATHS matches a .sync-manifest edit' \
 assert_succeeds 'TRIGGER_PATHS matches a workflow file edit' \
     path_matches_trigger '.github/workflows/branch-drift.yml'
 
+# Config trees a suite asserts on belong here for the same reason. Without
+# the pattern, a push that edits only that config runs no tests, and the
+# suite reading it finds out on somebody else's push.
+#
+# .config/nvim reached this list when nvim-mason-runtimes.test.sh started
+# reading the Mason ensure_installed list and the health module. .config/tmux
+# was already read by tmux-conf-split.test.sh.
+assert_succeeds 'TRIGGER_PATHS matches an nvim config edit' \
+    path_matches_trigger '.config/nvim/lua/plugins/lsp.lua'
+assert_succeeds 'TRIGGER_PATHS matches a tmux config edit' \
+    path_matches_trigger '.config/tmux/tmux.conf'
+
 # The new patterns must not have come at the cost of the ones already
 # guarding this hook.
 assert_succeeds 'TRIGGER_PATHS still matches a .scripts shell edit' \

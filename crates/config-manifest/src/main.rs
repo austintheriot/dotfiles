@@ -274,6 +274,11 @@ fn run_sync(parsed: &SyncArgs, root: Option<&PathBuf>) -> anyhow::Result<u8> {
         return Ok(1);
     }
 
-    println!("next: config push origin {source} && config push origin {target}");
+    // One atomic push rather than two. Pushing the branches separately lands
+    // them seconds apart, and the branch-drift workflow run triggered by the
+    // first push compares against the other branch's stale origin ref and
+    // fails. push-all sends both refs in one transaction, so no run can
+    // observe a half-updated pair.
+    println!("next: config push-all");
     Ok(0)
 }

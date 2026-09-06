@@ -94,8 +94,16 @@ fn sync_commits_onto_the_other_branch_and_leaves_the_worktree_alone() {
     let before = git_out(dir.path(), &["rev-parse", "linux"]);
     let assert = sync(dir.path(), &[]).success();
     let stdout = String::from_utf8(assert.get_output().stdout.clone()).expect("utf8");
-    assert!(stdout.contains("config push origin mac"), "{stdout}");
-    assert!(stdout.contains("config push origin linux"), "{stdout}");
+    // One atomic push, not two sequential ones. Two pushes land the branches
+    // seconds apart, and the branch-drift workflow run for the first push
+    // then compares against the other branch's stale origin ref and fails.
+    // The advice sync prints is where a reader learns which way to push, so
+    // it is pinned here rather than left to drift.
+    assert!(stdout.contains("config push-all"), "{stdout}");
+    assert!(
+        !stdout.contains("config push origin"),
+        "sync must not recommend two sequential pushes: {stdout}"
+    );
 
     assert_eq!(
         git_out(dir.path(), &["rev-parse", "linux^"]),

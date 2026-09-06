@@ -73,6 +73,11 @@ assert_succeeds 'the fixture branches hold different crate trees' \
 # genuine config-stamp reads a genuine per-ref tree id from it. The fixed
 # lock/workspace blobs come along for free since both refs share one
 # crates/Cargo.lock and crates/Cargo.toml.
+#
+# verify-stamps IS stubbed, rather than left to a wildcard `exit 0`. The real
+# subcommand reads stdin and refuses on a mismatch; a stub that exits 0
+# unconditionally would pass this file regardless of what pre-push piped in,
+# which would hide the exact regression this suite exists to catch.
 stub_dir="$FIXTURES/hook-stubs"
 mkdir -p "$stub_dir" "$FIXTURES/hookhome/tests"
 
@@ -83,6 +88,20 @@ make_stubs() {
 case \$1 in
     --stamp) printf '%s\n' "$stamp" ;;
     check) exit 0 ;;
+    verify-stamps)
+        status=0
+        while IFS= read -r line; do
+            [ -n "\$line" ] || continue
+            crate=\${line%% *}
+            expected=\${line#* }
+            if [ "\$expected" != "$stamp" ]; then
+                printf 'stub: %s is stale (built %s, pushed %s)\n' \
+                    "\$crate" "$stamp" "\$expected" >&2
+                status=1
+            fi
+        done
+        exit "\$status"
+        ;;
     *) exit 0 ;;
 esac
 STUB

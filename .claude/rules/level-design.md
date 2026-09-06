@@ -16,7 +16,7 @@ Empirical priority, in rough order of how often it decides whether a space works
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. Level design principles are among the most durable material in this reference set, because they derive from human perception and locomotion rather than from technology. Engine-specific tooling is the exception.
+`last-verified` (see frontmatter). Level design principles are among the most durable material in this reference set, because they derive from human perception and locomotion rather than from technology. Engine-specific tooling is the exception.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

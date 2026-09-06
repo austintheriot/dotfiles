@@ -18,7 +18,7 @@ Empirical priority, in rough order of how often it makes a space unusable: **aco
 
 ## Volatile surface
 
-`last-verified: 2026-09-06`. Human factors are durable. Standards, certification schemes, and professional-credential structures are not.
+`last-verified` (see frontmatter). Human factors are durable. Standards, certification schemes, and professional-credential structures are not.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|
@@ -29,7 +29,7 @@ Empirical priority, in rough order of how often it makes a space unusable: **aco
 | Anthropometric and ergonomic principles | Very slow | Durable |
 | The evidence disputes (biophilia, open plan, circadian) | Slow | Durable, though the literature grows |
 
-**Verified anchors as of 2026-09-05:** **NCIDQ no longer has a PRAC section** -- it was replaced by **IDIX (Implementation)**, with new blueprints effective 2026 organized so each exam covers two design phases. **The ILFI Red List is now 19 class-based categories** rather than a per-chemical list, with cadmium, chromium VI, lead, mercury, and arsenic consolidated into "Toxic Heavy Metals" and chloroprene and CPVC folded into "Chlorinated Polymers."
+**Verified anchors** (as-of the frontmatter date): **NCIDQ no longer has a PRAC section** -- it was replaced by **IDIX (Implementation)**, with new blueprints effective 2026 organized so each exam covers two design phases. **The ILFI Red List is now 19 class-based categories** rather than a per-chemical list, with cadmium, chromium VI, lead, mercury, and arsenic consolidated into "Toxic Heavy Metals" and chloroprene and CPVC folded into "Chlorinated Polymers."
 
 ## The discipline question
 

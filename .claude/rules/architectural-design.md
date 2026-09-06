@@ -18,7 +18,7 @@ Empirical priority, in rough order of how often it produces real harm: **envelop
 
 ## Volatile surface
 
-`last-verified: 2026-09-06`. Design theory and history are durable. **Standards editions, regulatory dates, and rating-system versions are not, and they are exactly what people cite with false confidence.**
+`last-verified` (see frontmatter). Design theory and history are durable. **Standards editions, regulatory dates, and rating-system versions are not, and they are exactly what people cite with false confidence.**
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|
@@ -29,7 +29,7 @@ Empirical priority, in rough order of how often it produces real harm: **envelop
 | Effective dates for new requirements | Fast | The regulator |
 | Design theory, history, the named debates | Very slow | Durable |
 
-**Verified anchors as of 2026-09-05, each with a caution attached:**
+**Verified anchors, each with a caution attached** (dates are as-of the verification date in the frontmatter):
 
 - **ICC A117.1**: the sequence is 2009, then **2017 (current, with Supplement 1)**, then **2026 releasing in the autumn**, referenced by the 2027 I-Codes. **There is no 2023 edition** despite frequent citation of one.
 - **IBC dead-end corridors are section 1020.5** in the 2021 IBC (Chapter 10 was renumbered; the 20 ft / 50 ft sprinklered values are unchanged).

@@ -16,7 +16,7 @@ Empirical priority, in rough order of how often it decides whether a design work
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. Design theory is among the most durable material in this reference set; the regulatory and platform layer is not.
+`last-verified` (see frontmatter). Design theory is among the most durable material in this reference set; the regulatory and platform layer is not.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

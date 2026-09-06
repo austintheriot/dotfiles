@@ -16,7 +16,7 @@ Empirical priority, in rough order of how often it bites: **silent failure and m
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. **This is the fastest-rotting file in the reference set.** The MCP specification has had five revisions in under two years, the most recent of which removed primitives that existing servers depend on. Treat every specific claim below as a dated snapshot.
+`last-verified` (see frontmatter). **This is the fastest-rotting file in the reference set.** The MCP specification has had five revisions in under two years, the most recent of which removed primitives that existing servers depend on. Treat every specific claim below as a dated snapshot.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

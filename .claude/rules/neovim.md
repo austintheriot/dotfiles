@@ -16,7 +16,7 @@ Empirical priority, in rough order of how often it bites: **load order and timin
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. Neovim's Lua API is still moving; the deprecation cycle runs roughly two releases. The editing model and the ordering semantics are durable; specific function names are not.
+`last-verified` (see frontmatter). Neovim's Lua API is still moving; the deprecation cycle runs roughly two releases. The editing model and the ordering semantics are durable; specific function names are not.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

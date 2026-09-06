@@ -16,7 +16,7 @@ Empirical priority, in rough order of how often it hurts: **licence and cost str
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. **Pricing and licensing are the fastest-rotting facts in this file and also the most consequential.** The Unity Runtime Fee episode is the cautionary case: announced September 2023, walked back, and fully cancelled in September 2024 in favour of seat-price increases. Anyone advising from a 2023 recollection would have been confidently wrong for a year.
+`last-verified` (see frontmatter). **Pricing and licensing are the fastest-rotting facts in this file and also the most consequential.** The Unity Runtime Fee episode is the cautionary case: announced September 2023, walked back, and fully cancelled in September 2024 in favour of seat-price increases. Anyone advising from a 2023 recollection would have been confidently wrong for a year.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

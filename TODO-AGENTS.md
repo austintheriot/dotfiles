@@ -2,12 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- [CLAIMED] `config sync` refuses whenever local target != origin/target, which
-  also refuses the safe case where local is strictly AHEAD of origin (the
-  commits are ones sync itself wrote from this machine). That deadlocks the
-  normal flow: push-all blocks on the resulting drift, and sync is the tool
-  that fixes drift. Refuse only when origin carries commits local lacks.
-
 - Add tests for neovim setup after running setup.sh. When I tested just now, lots of deps failed to install--make sure setup is clean after runnign nvim for the first time on a fresh bootstrap session. Example: "eslint-lsp: failed to install
 css-variables-language-server: failed to install
 Press ENTER or type command to continue

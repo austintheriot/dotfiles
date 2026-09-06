@@ -36,7 +36,10 @@ trap 'extra_cleanup; exit 143' TERM HUP
 parse_errors=$(tmux_t -f "$CONFIG" new-session -d -s "$SESSION" -c "$FIXTURES" 2>&1 >/dev/null)
 assert_equals 'the split config parses with no errors' '' "$parse_errors"
 
-assert_contains 'wheel-scroll forwarding survives the split' 'Up Up Up' \
+# PageUp, not an arrow key: Claude Code binds Up/Down to prompt history, so
+# an arrow translation cycles prompts instead of scrolling. Assert the page
+# key so a revert to arrows fails here rather than in a live pane.
+assert_contains 'wheel-scroll forwarding survives the split' 'PageUp' \
     "$(tmux_t list-keys -T root)"
 
 assert_contains 'the window-naming after-new-window hook survives the split' \

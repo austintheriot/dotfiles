@@ -16,7 +16,7 @@ Empirical priority, in rough order of how often it bites: **transform and unit s
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. These rot. The conventions and failure mechanisms in the body are comparatively durable; version-gated API and UI locations are not.
+`last-verified` (see frontmatter). These rot. The conventions and failure mechanisms in the body are comparatively durable; version-gated API and UI locations are not.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

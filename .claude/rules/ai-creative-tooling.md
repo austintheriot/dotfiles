@@ -16,7 +16,7 @@ Empirical priority, in rough order of consequence: **provenance and disclosure o
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. **This file's legal and platform-policy material rots fastest and matters most.** It is jurisdiction-dependent, changes monthly, and none of it is legal advice.
+`last-verified` (see frontmatter). **This file's legal and platform-policy material rots fastest and matters most.** It is jurisdiction-dependent, changes monthly, and none of it is legal advice.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

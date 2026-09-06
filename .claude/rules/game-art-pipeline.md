@@ -16,7 +16,7 @@ Empirical priority, in rough order of how often it bites: **identity and referen
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. Engine behavior changes per release, and much of this section is version-gated. The failure *classes* are durable; the settings, defaults, and menu paths are not.
+`last-verified` (see frontmatter). Engine behavior changes per release, and much of this section is version-gated. The failure *classes* are durable; the settings, defaults, and menu paths are not.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

@@ -2,14 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- [CLAIMED] Add tests for neovim setup after running setup.sh. When I tested just now, lots of deps failed to install--make sure setup is clean after runnign nvim for the first time on a fresh bootstrap session. Example: "eslint-lsp: failed to install
-css-variables-language-server: failed to install
-Press ENTER or type command to continue
-typescript-language-server: failed to install
-Press ENTER or type command to continue
-stylua: failed to install
-Press ENTER or type command to continue
-"
 - Migrate the rest of the `config ...` scripts to Rust
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so

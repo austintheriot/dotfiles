@@ -1,0 +1,10 @@
+[package]
+name = "dotfiles-path"
+edition = "2024"
+version = "0.1.0"
+publish = false
+
+# No dependencies, deliberately. This crate exists so deps-core and
+# config-manifest can share validated newtypes without one depending on the
+# other, and a dependency here would be inherited by both.
+[dependencies]

@@ -53,9 +53,14 @@ evidence and is recorded in the Rejected Findings section.
   four in the first draft with none. An `assert_equals 'no X' '' "$(cmd)"`
   passes when `cmd` breaks for an unrelated reason, so assert first that the
   pipeline produced something, then assert the narrow property.
-- `tests/leak-check.sh` is `#!/bin/zsh`: arrays, `${(f)}` and `pipefail` are
-  available. `tests/lib.sh` and `*.test.sh` are bash, with `set -u` and NOT
-  `set -e` (verified). `.scripts/config/*`, `setup.sh`, `.scripts/platform.sh`
+- `tests/leak-check.sh` is `#!/bin/zsh`: arrays and `${(f)}` are available.
+  Two zsh facts that already cost this plan a wrong answer, both verified:
+  `status` is a **read-only** variable, so a script assigning to it aborts;
+  and `${pipestatus[1]}` does not survive a command substitution assignment,
+  because the pipeline runs in a subshell. Do not set `pipefail` globally
+  there either: six of its nine grep-terminated pipelines return non-zero on a
+  clean scan by design. `tests/lib.sh` and `*.test.sh` are bash, with `set -u`
+  and NOT `set -e` (verified), where `status` is an ordinary name. `.scripts/config/*`, `setup.sh`, `.scripts/platform.sh`
   and `.scripts/deps/check-deps.sh` are POSIX sh.
 - Every task ends green: `~/tests/run-all.sh` passes before the commit.
 - Any new or renamed path must match `TRIGGER_PATHS` in `tests/pre-push:38`,
@@ -217,22 +222,36 @@ status=$?
 assert_equals 'a -diff marked path does not pass silently' '2' "$status"
 assert_contains 'the block names the unscannable path' "$output" 'hidden.txt'
 
-# The substring hazard. A path must not read as scanned merely because a
-# longer path containing it appears in the diff, or the check has a hole in
-# exactly the shape it exists to close.
+# The substring hazard, in the one shape that distinguishes the two
+# implementations. A shorter path must not read as scanned because a longer
+# path containing it has a header.
+#
+# The gitattributes pattern is anchored with a leading slash on purpose: a
+# bare `styles.css` matches at ANY depth, so it would unset diff for
+# vendor/styles.css too and both paths would be unscannable, which both the
+# buggy and the fixed form report identically. Verified with
+# `git check-attr diff styles.css vendor/styles.css`.
+#
+# With only styles.css unset: the substring form finds "styles.css" inside
+# "+++ b/vendor/styles.css" and lets the credential through, and the anchored
+# form blocks. Verified both directions before writing this test.
 git -C "$repo" reset -q HEAD hidden.txt .gitattributes
 rm -f "$repo/hidden.txt" "$repo/.gitattributes"
 mkdir -p "$repo/vendor"
-printf 'plain\n' > "$repo/styles.css"
+printf 'token = ghp_%s\n' "$(printf 'D%.0s' $(seq 1 24))" > "$repo/styles.css"
 printf 'plain\n' > "$repo/vendor/styles.css"
-git -C "$repo" add styles.css vendor/styles.css
+printf '/styles.css -diff\n' > "$repo/.gitattributes"
+git -C "$repo" add styles.css vendor/styles.css .gitattributes
 
-status=0
-(cd "$repo" && "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
-assert_equals 'two paths sharing a suffix both scan cleanly' '0' "$status"
+output=$(cd "$repo" && "$LEAK_CHECK" 2>&1)
+status=$?
+assert_equals 'a -diff path is blocked even when a longer path shares its name' \
+    '2' "$status"
+assert_contains 'the block names the short path, not the long one' \
+    "$output" 'styles.css'
 
-git -C "$repo" reset -q HEAD styles.css vendor/styles.css
-rm -rf "$repo/styles.css" "$repo/vendor"
+git -C "$repo" reset -q HEAD styles.css vendor/styles.css .gitattributes
+rm -rf "$repo/styles.css" "$repo/vendor" "$repo/.gitattributes"
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -243,18 +262,25 @@ on `a -diff marked path does not pass silently` (reporting `0`).
 
 - [ ] **Step 3: Write the implementation**
 
-In `tests/leak-check.sh`, first set `pipefail` beside the existing options, so
-a failure anywhere in `tr | xargs git` is visible rather than only the last
-element's. The panel verified that without it `zsh` reports success when an
-earlier pipeline element fails.
+Do NOT set `pipefail` globally in this file, and do not read `pipestatus`.
+Both were in an earlier draft of this plan and both are wrong. Verified:
 
-Near the top, after the existing `set` line:
+- **`${pipestatus[1]}` does not work through a command substitution
+  assignment.** `out=$(f | grep ...)` runs the pipeline in a subshell, so the
+  outer `pipestatus` describes the assignment, not `f`. Measured: it returned
+  `0` where the function returned `2`, which silently loses exactly the status
+  this task exists to propagate.
+- **Global `pipefail` arms a trap in six unrelated pipelines.**
+  `tests/leak-check.sh` has nine pipelines ending in `grep`, and six of them
+  want no match on a clean scan (the credential rules at lines 152, 158, 163,
+  the term scope at 185, the term rules at 197). Under `pipefail` each returns
+  non-zero on clean input. They sit inside `$(...)` so nothing checks them
+  today, which makes the option harmless now and a false failure the moment
+  anyone adds a status check.
 
-```zsh
-# A failure anywhere in `tr | xargs git` must be visible. Without this only
-# the last element's status survives, so a tr failure reads as a clean scan.
-set -o pipefail
-```
+The form that works needs neither. Capture the function's output **without a
+pipe**, so `$?` is the function's own status, then filter in a separate step.
+Verified: `0` on the clean path, `2` on the failing path.
 
 Change both scan functions to return a status instead of exiting, and to
 truncate-then-append so multiple `xargs` batches accumulate rather than each
@@ -314,27 +340,47 @@ scan_diff() {
 # file. Both produce "Binary files ... differ" and no header.
 unscannable_paths() {
   local path_list=$1 diff_text=$2
-  local path
-  printf '%s\n' "$path_list" | while IFS= read -r path; do
-    [ -n "$path" ] || continue
-    printf '%s\n' "$diff_text" | grep -qxF -- "+++ b/$path" && continue
-    printf '%s\n' "$diff_text" | grep -qxF -- "+++ $path" && continue
-    printf '%s\n' "$path"
-  done
+  local headers
+  # The header set is extracted once, then compared as sets. Re-piping the
+  # whole diff through a fresh grep per path is quadratic: measured at 3.7
+  # seconds for 400 paths against a small diff, and pre-push runs this per
+  # pushed range with two refs on a `config push-all`.
+  #
+  # Both header spellings are kept: `+++ b/path` is the default, and
+  # `+++ path` is what --no-prefix output produces.
+  headers=$(printf '%s\n' "$diff_text" \
+    | sed -n -e 's|^+++ b/\(.*\)$|\1|p' -e 's|^+++ \([^b].*\)$|\1|p' \
+    | grep -v '^/dev/null$' \
+    | sort -u)
+  printf '%s\n' "$path_list" | sort -u | comm -23 - <(printf '%s\n' "$headers")
 }
 ```
 
-Then rewrite the caller block. `scan_status` reads the function's status
-through `pipestatus`, because the `grep -v` pipeline would otherwise mask it,
-and no sentinel file is needed at all:
+Then rewrite the caller block. Each capture is unpiped so `$?` is the
+function's own status, and the self-exclusion filter is a separate step. No
+sentinel file, no global option, no `pipestatus`.
+
+Note `scan_status` rather than `status`: **`status` is a read-only variable in
+zsh** (verified), so assigning to it aborts the script. That matters only in
+this file, since `tests/lib.sh` and the test suites are bash where `status` is
+an ordinary name.
 
 ```zsh
-scan_paths=$(changed_paths | grep -v '^tests/leak-check\.sh$')
-scan_status=${pipestatus[1]}
+raw_paths=$(changed_paths)
+scan_status=$?
 [ "$scan_status" -eq 0 ] || exit 2
+
+# The self-exclusion is a separate step, not a pipe on the capture above:
+# piping would make $? describe grep rather than changed_paths.
+#
+# This script's own source contains the generic patterns it searches for, so
+# scanning it would always self-trip. It is the only path excluded in either
+# mode, and a change to this file is therefore unguarded and depends on human
+# review, so do not add another file here without the same tradeoff in mind.
+scan_paths=$(printf '%s\n' "$raw_paths" | grep -v '^tests/leak-check\.sh$')
 [ -z "$scan_paths" ] && exit 0
 
-diff_text=$(echo "$scan_paths" | scan_diff)
+diff_text=$(printf '%s\n' "$scan_paths" | scan_diff)
 scan_status=$?
 [ "$scan_status" -eq 0 ] || exit 2
 
@@ -398,8 +444,14 @@ scan\" and exited 0. The guard printed the correct diagnostic and then passed
 the push. tests/pre-push:96 already treats status 2 as \"could not scan, push
 blocked\"; that branch was unreachable.
 
-The functions now return a status and the caller reads it through pipestatus,
-so no sentinel file is needed.
+The functions now return a status and the caller captures their output without
+a pipe, so \$? is the function's own status and no sentinel file is needed.
+
+Two forms were tried and rejected on measurement. \`\${pipestatus[1]}\` does
+not survive a command substitution assignment: it reported 0 where the
+function returned 2, which loses the very status this fixes. A global
+\`pipefail\` would arm six unrelated pipelines whose clean-scan outcome is
+grep finding nothing.
 
 Also blocks a path that produced no diff header, which closes the
 .gitattributes -diff evasion and the binary-file gap with one mechanism.
@@ -411,10 +463,10 @@ diff for the path. A free-text search reported styles.css as scanned because
 vendor/styles.css appeared in the diff, which would have left a hole in
 exactly the shape this check exists to close.
 
-Sets pipefail, so a failure anywhere in \`tr | xargs git\` is visible rather
-than only the last element's, and truncates-then-appends so multiple xargs
-batches accumulate instead of each clobbering the previous. Extends the trap
-to INT, TERM and HUP, matching tests/lib.sh."
+Truncates-then-appends so multiple xargs batches accumulate instead of each
+clobbering the previous. BSD xargs batches at roughly 5000 arguments, so the
+single redirect kept only the final batch's diff. Extends the trap to INT,
+TERM and HUP, matching tests/lib.sh."
 ```
 
 ---
@@ -624,28 +676,28 @@ same file:
 # assert_succeeds must report the real exit code. failed=$((failed + 1)) ran
 # before the printf read $?, so every failure across 170+ call sites reported
 # "exited 0", losing the one diagnostic a container-only failure depends on.
-rc_suite=$(write_suite 'rc' "
-assert_succeeds 'a command that exits 42' sh -c 'exit 42'
-")
+See the note below: `write_suite` already exists with the signature
+`write_suite <path> <body>`.
+```
+
+`write_suite` **already exists** in that file at line 41, with a different
+contract: `write_suite <path> <body>`, returning nothing. Seven call sites use
+it (lines 53, 75, 85, 98, 111, 131, 133). Verified.
+
+Use the existing one rather than redefining it. The call becomes:
+
+```bash
+rc_suite="$FIXTURES/rc.test.sh"
+write_suite "$rc_suite" "assert_succeeds 'a command that exits 42' sh -c 'exit 42'"
 
 output=$(bash "$rc_suite" 2>&1 || true)
 assert_contains 'assert_succeeds reports the real exit code' "$output" 'exited 42'
 ```
 
-If `write_suite` does not exist in that file, define it once at the top and use
-it for every generated suite in the file:
-
-```bash
-# Writes a generated suite and prints its path. One construction idiom for
-# every generated suite in this file, so the sourcing boilerplate is stated
-# once.
-write_suite() {
-    local name=$1 body=$2 path="$FIXTURES/$1.test.sh"
-    printf '. "%s/tests/lib.sh"\n%s\nfinish\n' "$DOTFILES_ROOT" "$body" > "$path"
-    chmod 755 "$path"
-    printf '%s' "$path"
-}
-```
+Do not introduce a second `write_suite` shape. An earlier draft of this plan
+said "if it does not exist, define it", which was wrong: following that
+literally writes a file named `rc` into the repo root and then runs
+`bash ""`.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -778,7 +830,8 @@ assert_equals 'a clean summary omits the skip count' \
     'probe: 1 passed, 0 failed' "$(summary_for 'probe' 1 0 0)"
 
 # A suite that runs no assertions is not a passing suite.
-empty_suite=$(write_suite 'empty' '')
+empty_suite="$FIXTURES/empty.test.sh"
+write_suite "$empty_suite" ''
 output=$(bash "$empty_suite" 2>&1)
 status=$?
 assert_equals 'a zero-assertion suite exits non-zero' '1' "$status"
@@ -787,9 +840,8 @@ assert_contains 'the verdict says no assertions ran' "$output" 'no assertions ra
 # An assertion inside a command substitution must still count. This is the
 # latent bug the tally file fixes: a subshell cannot increment its parent's
 # variable, so these vanished silently.
-sub_suite=$(write_suite 'subshell' '
-result=$(assert_equals "inside a substitution" a a)
-')
+sub_suite="$FIXTURES/subshell.test.sh"
+write_suite "$sub_suite" 'result=$(assert_equals "inside a substitution" a a)'
 output=$(bash "$sub_suite" 2>&1)
 assert_contains 'a subshell assertion reaches the tally' "$output" '1 passed'
 ```
@@ -1454,17 +1506,21 @@ fi
 # Captured into a variable with an explicit check, because a failing
 # rev-parse inside a command substitution does not trip `set -e`: it yields an
 # empty string and the caller formats a truncated stamp and exits 0.
+# Returns 2 rather than exiting, because every caller invokes this inside a
+# command substitution and an `exit` there dies in the subshell. An earlier
+# draft used `exit 2` and was verified to print a member name with an EMPTY
+# stamp and exit 0, which config-build would then embed. That is the same
+# defect Task 1 exists to fix, so it must not be reintroduced here.
 object_at() {
-    path=$1
-    if ! id=$(git_cmd rev-parse --verify --quiet "$root_tree:$path"); then
-        printf 'config-stamp: %s is not in the stamped tree\n' "$path" >&2
-        exit 2
+    if ! object_id=$(git_cmd rev-parse --verify --quiet "$root_tree:$1"); then
+        printf 'config-stamp: %s is not in the stamped tree\n' "$1" >&2
+        return 2
     fi
-    printf '%s' "$id"
+    printf '%s' "$object_id"
 }
 
-lock_blob=$(object_at "$WORKSPACE/Cargo.lock")
-ws_blob=$(object_at "$WORKSPACE/Cargo.toml")
+lock_blob=$(object_at "$WORKSPACE/Cargo.lock") || exit 2
+ws_blob=$(object_at "$WORKSPACE/Cargo.toml") || exit 2
 
 # Read from the same tree the stamps come from, so the member list and the
 # subtrees cannot disagree. `members` must be a single-line array; the
@@ -1485,7 +1541,12 @@ fi
 
 # Member names become path components and, in pre-push, the basename of a
 # binary to execute. Validated so a manifest cannot name `rm` or `../thing`.
-printf '%s\n' "$members" | while IFS= read -r member; do
+# A `for` over the validated list rather than a piped `while`: an `exit`
+# inside a pipeline runs in a subshell and does not abort the script, so a
+# piped loop would announce an invalid name and then process it anyway.
+# Word splitting is safe here because the loop is what establishes that every
+# name is [a-zA-Z0-9_-].
+for member in $members; do
     case $member in
         ''|*[!a-zA-Z0-9_-]*)
             printf 'config-stamp: invalid member name: %s\n' "$member" >&2
@@ -1495,7 +1556,7 @@ printf '%s\n' "$members" | while IFS= read -r member; do
 done
 
 stamp_for() {
-    crate_tree=$(object_at "$WORKSPACE/$1")
+    crate_tree=$(object_at "$WORKSPACE/$1") || return 2
     printf '%s:%s:%s' "$crate_tree" "$lock_blob" "$ws_blob"
 }
 
@@ -1509,8 +1570,15 @@ if [ -n "$crate" ]; then
     exit 0
 fi
 
-printf '%s\n' "$members" | while IFS= read -r member; do
-    printf '%s %s\n' "$member" "$(stamp_for "$member")"
+# Each stamp is captured with an explicit check, and the loop runs in the
+# parent shell. An earlier draft used `printf '%s %s' "$member"
+# "$(stamp_for ...)"` inside a piped `while`, which was verified to print a
+# member name with an EMPTY stamp and exit 0 when the lookup failed:
+# command substitution swallows the status, and the pipeline subshell
+# swallows the exit. config-build would then embed that empty stamp.
+for member in $members; do
+    stamp=$(stamp_for "$member") || exit 2
+    printf '%s %s\n' "$member" "$stamp"
 done
 ```
 
@@ -1581,7 +1649,22 @@ absolute binary path:
 ```
 
 The `|| exit 1` after the inner loop matters: the pipeline runs its body in a
-subshell, so an `exit 1` inside it would otherwise not stop the hook.
+subshell, so an `exit 1` inside it would otherwise not stop the hook. Verified
+that an `exit 1` inside a piped `while` does make the pipeline return 1.
+
+**This change requires editing `tests/pre-push-multi-ref.test.sh`, not only
+appending to it.** That suite injects a fake `config-manifest` through
+`PATH="$stub_dir:$PATH"` and never sets `CONFIG_BIN_DIR`. After this rewrite
+the hook resolves `${CONFIG_BIN_DIR:-$HOME/.local/bin}/config-manifest`, so
+the stub is invisible: the matching-binary assertion goes red for the wrong
+reason and the two stale assertions go green for the wrong reason. Pass
+`CONFIG_BIN_DIR="$stub_dir"` wherever the suite runs the hook, and keep the
+`PATH` entry only if something else still needs it.
+
+Also hoist the installed-stamp gather above the ref loop. The installed binary
+does not change between refs, so probing it once per member per ref is 2N
+spawns where N suffice, and it makes the two lifetimes legible: the installed
+set belongs to the push, the expected set belongs to the ref.
 
 - [ ] **Step 5: Run tests to verify they pass**
 

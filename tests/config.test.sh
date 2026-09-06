@@ -409,28 +409,42 @@ assert_succeeds 'config doctor exists and is executable' test -x "$DOCTOR"
 assert_equals 'doctor does not shadow a git verb' '' \
     "$(git --list-cmds=main,others 2>/dev/null | grep -x doctor || true)"
 
-# Status asserted separately from output. A silent failure (the binary not on
-# PATH, a crash before writing) would otherwise read as "silent because
-# everything is current".
-"$DOTFILES_ROOT/.scripts/config/config-build" >/dev/null 2>&1
-doctor_out=$("$DOCTOR" 2>&1)
-doctor_status=$?
-assert_equals 'doctor exits 0 when every binary is current' '0' "$doctor_status"
-assert_equals 'doctor is silent when every binary is current' '' "$doctor_out"
+# Driven against the ambient $DOTFILES_ROOT, not a fixture: doctor gathers its
+# expected side by reading the real crates/ tree through git, so it needs a
+# real .cfg or .git there. The Docker runner's image carries no repository at
+# all (see the "no repository here" skips elsewhere in this suite), so a call
+# against $DOTFILES_ROOT would fail there for a reason unrelated to doctor
+# itself.
+if [ -d "$DOTFILES_ROOT/.cfg" ] || [ -d "$DOTFILES_ROOT/.git" ]; then
+    # Status asserted separately from output. A silent failure (the binary not
+    # on PATH, a crash before writing) would otherwise read as "silent because
+    # everything is current".
+    "$DOTFILES_ROOT/.scripts/config/config-build" >/dev/null 2>&1
+    doctor_out=$("$DOCTOR" 2>&1)
+    doctor_status=$?
+    assert_equals 'doctor exits 0 when every binary is current' '0' "$doctor_status"
+    assert_equals 'doctor is silent when every binary is current' '' "$doctor_out"
 
-# The behavior doctor exists for, asserted rather than checked by hand.
-probe="$DOTFILES_ROOT/crates/config-manifest/src/doctor.rs"
-cp "$probe" "$FIXTURES/doctor.rs.orig"
-printf '\n// staleness probe\n' >> "$probe"
+    # The behavior doctor exists for, asserted rather than checked by hand.
+    probe="$DOTFILES_ROOT/crates/config-manifest/src/doctor.rs"
+    cp "$probe" "$FIXTURES/doctor.rs.orig"
+    printf '\n// staleness probe\n' >> "$probe"
 
-doctor_out=$("$DOCTOR" 2>&1 || true)
-doctor_status=0
-"$DOCTOR" >/dev/null 2>&1 || doctor_status=$?
-assert_equals 'doctor exits 1 when a binary is stale' '1' "$doctor_status"
-assert_contains 'doctor names the stale crate' 'config-manifest' "$doctor_out"
-assert_contains 'doctor names the fix' 'config build' "$doctor_out"
+    doctor_out=$("$DOCTOR" 2>&1 || true)
+    doctor_status=0
+    "$DOCTOR" >/dev/null 2>&1 || doctor_status=$?
+    assert_equals 'doctor exits 1 when a binary is stale' '1' "$doctor_status"
+    assert_contains 'doctor names the stale crate' 'config-manifest' "$doctor_out"
+    assert_contains 'doctor names the fix' 'config build' "$doctor_out"
 
-cp "$FIXTURES/doctor.rs.orig" "$probe"
-"$DOTFILES_ROOT/.scripts/config/config-build" >/dev/null 2>&1
+    cp "$FIXTURES/doctor.rs.orig" "$probe"
+    "$DOTFILES_ROOT/.scripts/config/config-build" >/dev/null 2>&1
+else
+    skip 'doctor exits 0 when every binary is current (no repository here)'
+    skip 'doctor is silent when every binary is current (no repository here)'
+    skip 'doctor exits 1 when a binary is stale (no repository here)'
+    skip 'doctor names the stale crate (no repository here)'
+    skip 'doctor names the fix (no repository here)'
+fi
 
 finish

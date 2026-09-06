@@ -24,6 +24,8 @@ BUILD="$DOTFILES_ROOT/.scripts/config/config-build"
 
 repo=$(make_repo stamp main)
 mkdir -p "$repo/crates/config-manifest/src"
+printf '[workspace]\nmembers = ["config-manifest"]\n' > "$repo/crates/Cargo.toml"
+printf 'lock\n' > "$repo/crates/Cargo.lock"
 printf '[package]\nname = "config-manifest"\nversion = "0.1.0"\nedition = "2024"\n' \
     > "$repo/crates/config-manifest/Cargo.toml"
 printf 'fn main() {}\n' > "$repo/crates/config-manifest/src/main.rs"
@@ -31,22 +33,22 @@ git -C "$repo" add crates
 git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m 'add crate'
 
 committed=$(git -C "$repo" rev-parse HEAD:crates/config-manifest)
-stamped=$(DOTFILES_ROOT="$repo" "$STAMP")
+stamped=$(DOTFILES_ROOT="$repo" "$STAMP" config-manifest)
 
-assert_succeeds 'the stamp is a 40-hex object id' \
-    sh -c "printf '%s' '$stamped' | grep -qE '^[0-9a-f]{40}$'"
+assert_succeeds 'the stamp is a folded triple of 40-hex object ids' \
+    sh -c "printf '%s' '$stamped' | grep -qE '^[0-9a-f]{40}:[0-9a-f]{40}:[0-9a-f]{40}$'"
 assert_equals 'a clean worktree stamps to the committed subtree id' \
-    "$committed" "$stamped"
+    "$committed" "$(printf '%s' "$stamped" | cut -d: -f1)"
 
 printf 'fn main() { println!("edited"); }\n' > "$repo/crates/config-manifest/src/main.rs"
-edited=$(DOTFILES_ROOT="$repo" "$STAMP")
+edited=$(DOTFILES_ROOT="$repo" "$STAMP" config-manifest)
 assert_succeeds 'an uncommitted edit changes the stamp' \
     test "$edited" != "$committed"
 
 git -C "$repo" add crates
 git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m 'edit'
 assert_equals 'committing the same content stamps to the new subtree id' \
-    "$(git -C "$repo" rev-parse HEAD:crates/config-manifest)" "$edited"
+    "$(git -C "$repo" rev-parse HEAD:crates/config-manifest)" "$(printf '%s' "$edited" | cut -d: -f1)"
 
 # Files that are not tracked and not addable (ignored) do not move the stamp.
 mkdir -p "$repo/crates/config-manifest/target"
@@ -55,7 +57,8 @@ printf 'target/\n' > "$repo/crates/config-manifest/.gitignore"
 git -C "$repo" add crates/config-manifest/.gitignore
 git -C "$repo" -c user.email=t@t -c user.name=t commit -q -m 'ignore target'
 assert_equals 'ignored files do not move the stamp' \
-    "$(git -C "$repo" rev-parse HEAD:crates/config-manifest)" "$(DOTFILES_ROOT="$repo" "$STAMP")"
+    "$(git -C "$repo" rev-parse HEAD:crates/config-manifest)" \
+    "$(DOTFILES_ROOT="$repo" "$STAMP" config-manifest | cut -d: -f1)"
 
 # --- the binary is on PATH wherever the suite runs ---------------------------
 
@@ -79,8 +82,9 @@ if command -v cargo >/dev/null 2>&1; then
     # or foreign config-manifest on PATH cannot report a stamp it was not
     # built with.
     assert_equals 'the installed binary reports the worktree stamp' \
-        "$("$STAMP")" "$("$bin_dir/config-manifest" --stamp)"
-    assert_contains 'config-build reports the stamp it embedded' "$("$STAMP")" "$output"
+        "$("$STAMP" config-manifest)" "$("$bin_dir/config-manifest" --stamp)"
+    assert_contains 'config-build reports the stamp it embedded' \
+        "$("$STAMP" config-manifest)" "$output"
 
     # A build with no CONFIG_MANIFEST_STAMP must say so rather than print an
     # empty line, which pre-push would compare against a real tree id. This
@@ -163,5 +167,36 @@ else
     skip 'no per-crate lockfile remains (no repository here)'
     skip 'no proptest regressions file is tracked (no repository here)'
 fi
+
+# --- config stamp is per-crate and ref-scoped --------------------------------
+#
+# Driven against the $repo fixture above, not the ambient $DOTFILES_ROOT: the
+# Docker runner's image carries no .git or .cfg at all (see the "no repository
+# here" skips above), so a call defaulting to $DOTFILES_ROOT/$HOME would fail
+# there for a reason unrelated to config-stamp itself.
+
+# config stamp enumerates crates. The per-crate form is what pre-push
+# iterates; the single-crate form is for scripting.
+output=$(DOTFILES_ROOT="$repo" "$STAMP")
+assert_succeeds 'config stamp names config-manifest with a folded stamp' \
+    grep -qE '^config-manifest [0-9a-f]{40}:[0-9a-f]{40}:[0-9a-f]{40}$' <<<"$output"
+
+one=$(DOTFILES_ROOT="$repo" "$STAMP" config-manifest)
+assert_succeeds 'config stamp <crate> prints a bare folded stamp' \
+    grep -qE '^[0-9a-f]{40}:[0-9a-f]{40}:[0-9a-f]{40}$' <<<"$one"
+
+# The error path names the crate, so a status 2 from an unrelated cause
+# (a missing usage.sh, a mktemp failure) does not read as this error.
+err=$(DOTFILES_ROOT="$repo" "$STAMP" no-such-crate 2>&1 || true)
+assert_contains 'an unknown crate is named in the error' 'no-such-crate' "$err"
+status=0
+DOTFILES_ROOT="$repo" "$STAMP" no-such-crate >/dev/null 2>&1 || status=$?
+assert_equals 'an unknown crate exits 2' '2' "$status"
+
+# A ref-scoped stamp is what the push gate needs: it must compare the binary
+# against what is being published, not against the worktree.
+head_stamp=$(DOTFILES_ROOT="$repo" "$STAMP" --ref HEAD config-manifest)
+assert_succeeds 'a ref-scoped stamp is well formed' \
+    grep -qE '^[0-9a-f]{40}:[0-9a-f]{40}:[0-9a-f]{40}$' <<<"$head_stamp"
 
 finish

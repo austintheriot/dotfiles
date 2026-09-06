@@ -1,20 +1,41 @@
 #!/bin/sh
-# help: Print the tree id of crates/config-manifest in the worktree
+# help: Print the build stamp of each workspace crate
 #
-# Prints the tree id of crates/config-manifest as it is in the worktree.
+# Prints "<crate> <stamp>" for every member of the crates/ workspace, or one
+# bare stamp when given a crate name.
 #
-# A HEAD-based stamp false-refuses the `commit -a` workflow: build while
+# A stamp is <crate-tree>:<lock-blob>:<workspace-blob>. The lockfile and
+# workspace manifest are folded into every crate's stamp because they are
+# shared inputs: a bump to either changes what each binary is, without
+# touching that crate's own subtree.
+#
+# Per-crate rather than one id over the whole workspace. A single stamp is
+# coarser than any one binary's input set, so editing one crate would mark
+# every binary stale and pre-push would refuse a push over a binary identical
+# to what its own sources produce. False refusals are how a gate gets
+# bypassed.
+#
+# This rule lives in shell and has no Rust counterpart on purpose.
+# config-build calls this script to decide what to compile, so the stamp has
+# to be computable before any binary exists. A Rust owner would be a circular
+# dependency, and a second implementation would be a format that can silently
+# disagree with the one that ships.
+#
+# A HEAD-based stamp would false-refuse the `commit -a` workflow: build while
 # dirty, commit that same content, push, refused although the binary matches.
 # Reading the worktree through a temp index makes the same content stamp
 # identically whether or not it is committed yet, and `git add` honours
 # .gitignore, so an ignored target/ never moves the stamp.
 #
-# usage: config stamp
+# usage: config stamp [--ref <ref>] [<crate>]
 #
-# Takes no options.
+# Options:
+#   --ref <ref>   Stamp the crate as committed at <ref> rather than in the
+#                 worktree. This is what the pre-push gate uses: it must
+#                 compare a binary against what is being published.
 #
 # Environment:
-#   DOTFILES_ROOT   The worktree to read the crate out of. Default $HOME.
+#   DOTFILES_ROOT   The worktree to read the crates out of. Default $HOME.
 
 set -eu
 
@@ -22,7 +43,27 @@ set -eu
 usage_if_requested "${1:-}"
 
 ROOT=${DOTFILES_ROOT:-$HOME}
-CRATE=crates/config-manifest
+WORKSPACE=crates
+
+ref=''
+crate=''
+while [ "$#" -gt 0 ]; do
+    case $1 in
+        --ref)
+            [ "$#" -ge 2 ] || { printf 'config-stamp: --ref needs a value\n' >&2; exit 2; }
+            ref=$2
+            shift 2
+            ;;
+        -*)
+            printf 'config-stamp: unknown option %s\n' "$1" >&2
+            exit 2
+            ;;
+        *)
+            crate=$1
+            shift
+            ;;
+    esac
+done
 
 if [ -d "$ROOT/.cfg" ]; then
     git_cmd() { git --git-dir="$ROOT/.cfg" --work-tree="$ROOT" "$@"; }
@@ -30,12 +71,98 @@ else
     git_cmd() { git -C "$ROOT" "$@"; }
 fi
 
-index=$(mktemp "${TMPDIR:-/tmp}/config-stamp-XXXXXX")
-rm -f "$index"
-trap 'rm -f "$index"' EXIT INT TERM HUP
-export GIT_INDEX_FILE="$index"
+# The root tree the stamps are read out of. The worktree by default, through a
+# temp index; a committed ref when --ref is given.
+if [ -n "$ref" ]; then
+    root_tree=$(git_cmd rev-parse --verify --quiet "$ref^{tree}") || {
+        printf 'config-stamp: cannot resolve ref %s\n' "$ref" >&2
+        exit 2
+    }
+else
+    index=$(mktemp "${TMPDIR:-/tmp}/config-stamp-XXXXXX")
+    rm -f "$index"
+    trap 'rm -f "$index"' EXIT INT TERM HUP
+    export GIT_INDEX_FILE="$index"
 
-git_cmd read-tree --empty
-(cd "$ROOT" && git_cmd add -- "$CRATE")
-root_tree=$(git_cmd write-tree)
-git_cmd rev-parse "$root_tree:$CRATE"
+    git_cmd read-tree --empty
+    (cd "$ROOT" && git_cmd add -- "$WORKSPACE")
+    root_tree=$(git_cmd write-tree)
+fi
+
+# Captured into a variable with an explicit check, because a failing
+# rev-parse inside a command substitution does not trip `set -e`: it yields an
+# empty string and the caller formats a truncated stamp and exits 0.
+# Returns 2 rather than exiting, because every caller invokes this inside a
+# command substitution and an `exit` there dies in the subshell. An earlier
+# draft used `exit 2` and was verified to print a member name with an EMPTY
+# stamp and exit 0, which config-build would then embed. That is the same
+# defect Task 1 exists to fix, so it must not be reintroduced here.
+object_at() {
+    if ! object_id=$(git_cmd rev-parse --verify --quiet "$root_tree:$1"); then
+        printf 'config-stamp: %s is not in the stamped tree\n' "$1" >&2
+        return 2
+    fi
+    printf '%s' "$object_id"
+}
+
+lock_blob=$(object_at "$WORKSPACE/Cargo.lock") || exit 2
+ws_blob=$(object_at "$WORKSPACE/Cargo.toml") || exit 2
+
+# Read from the same tree the stamps come from, so the member list and the
+# subtrees cannot disagree. `members` must be a single-line array; the
+# workspace manifest says so, and an empty result aborts below rather than
+# iterating zero crates.
+members=$(git_cmd show "$root_tree:$WORKSPACE/Cargo.toml" \
+    | sed -n 's/^members = \[\(.*\)\]$/\1/p' \
+    | tr ',' '\n' \
+    | sed 's/^[[:space:]]*"//; s/"[[:space:]]*$//' \
+    | grep -v '^[[:space:]]*$' || true)
+
+if [ -z "$members" ]; then
+    printf 'config-stamp: no workspace members found in %s/Cargo.toml\n' "$WORKSPACE" >&2
+    printf 'config-stamp: members must be a single-line array; a gate that\n' >&2
+    printf 'config-stamp: checks zero crates would pass silently.\n' >&2
+    exit 2
+fi
+
+# Member names become path components and, in pre-push, the basename of a
+# binary to execute. Validated so a manifest cannot name `rm` or `../thing`.
+# A `for` over the validated list rather than a piped `while`: an `exit`
+# inside a pipeline runs in a subshell and does not abort the script, so a
+# piped loop would announce an invalid name and then process it anyway.
+# Word splitting is safe here because the loop is what establishes that every
+# name is [a-zA-Z0-9_-].
+for member in $members; do
+    case $member in
+        ''|*[!a-zA-Z0-9_-]*)
+            printf 'config-stamp: invalid member name: %s\n' "$member" >&2
+            exit 2
+            ;;
+    esac
+done
+
+stamp_for() {
+    crate_tree=$(object_at "$WORKSPACE/$1") || return 2
+    printf '%s:%s:%s' "$crate_tree" "$lock_blob" "$ws_blob"
+}
+
+if [ -n "$crate" ]; then
+    if ! printf '%s\n' "$members" | grep -qxF -- "$crate"; then
+        printf 'config-stamp: no such workspace crate: %s\n' "$crate" >&2
+        exit 2
+    fi
+    stamp_for "$crate"
+    printf '\n'
+    exit 0
+fi
+
+# Each stamp is captured with an explicit check, and the loop runs in the
+# parent shell. An earlier draft used `printf '%s %s' "$member"
+# "$(stamp_for ...)"` inside a piped `while`, which was verified to print a
+# member name with an EMPTY stamp and exit 0 when the lookup failed:
+# command substitution swallows the status, and the pipeline subshell
+# swallows the exit. config-build would then embed that empty stamp.
+for member in $members; do
+    stamp=$(stamp_for "$member") || exit 2
+    printf '%s %s\n' "$member" "$stamp"
+done

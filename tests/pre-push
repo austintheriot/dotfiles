@@ -131,26 +131,118 @@ fi
 # a stale local ref here is a fast pre-flight, not the only gate.
 
 if [ "$pushing_synced_branch" -eq 1 ]; then
-    # The drift check runs the config-manifest binary. It is built by
-    # ~/.scripts/config/config-build, never here: a hook that compiles gets
-    # bypassed. The stamp comes from the binary itself (`--stamp`), not from a
-    # file beside it, so a stale build or a foreign config-manifest earlier on
-    # PATH cannot pass this check: whatever binary the drift call will run is
-    # the same one that just reported its stamp.
+    # Every workspace crate is checked against its own subtree, as committed
+    # at the ref being pushed. A single workspace-wide stamp would refuse a
+    # push over a binary whose own sources did not change, and reading the
+    # worktree instead of the ref would compare the binary against whatever
+    # happens to be checked out rather than against what is being published.
+    #
+    # The installed binary does not change between refs, so probing it once
+    # per member per ref is 2N spawns where N suffice. Gathered once here,
+    # ahead of the ref loop: the installed set belongs to the push, the
+    # expected set belongs to each ref.
+    #
+    # A crate with no src/main.rs is a library: it has no installed binary to
+    # gate, and its content is already covered by the stamp of whichever crate
+    # depends on it. Detected from the worktree rather than per-ref, since
+    # whether a member currently has an installed binary at all is a property
+    # of this machine's build, not of any one pushed ref.
+    #
+    # config-stamp is the copy that ships beside this hook, resolved from the
+    # hook's own location rather than $HOME: the two coincide in production
+    # (this hook is installed at $HOME/.cfg/hooks, a symlink into the tracked
+    # tree), but a test drives the hook against a throwaway fixture repo while
+    # $HOME points at a fake home with none of the real tooling under it.
+    # DOTFILES_ROOT is pinned to $PWD for the same reason: git invokes this
+    # hook with the pushed repo as the working directory, which is $HOME in
+    # production and the fixture repo under test.
+    hook_dir=$(dirname "$(readlink -f "$0")")
+    stamp_cmd="$hook_dir/../.scripts/config/config-stamp"
+    BIN_DIR=${CONFIG_BIN_DIR:-$HOME/.local/bin}
+    installed_stamps=$(DOTFILES_ROOT="$PWD" "$stamp_cmd" 2>/dev/null) || {
+        printf 'pre-push: cannot read workspace members\n' >&2
+        exit 1
+    }
+    [ -n "$installed_stamps" ] || {
+        printf 'pre-push: no workspace members, refusing to check nothing\n' >&2
+        exit 1
+    }
+
+    # Captured through a plain command substitution around the whole loop,
+    # not a piped `while`: a piped loop's body runs in a subshell, so any
+    # variable it assigns is lost the moment the pipeline ends. Capturing the
+    # loop's stdout has no such problem, and IFS/set -f are restored right
+    # after the split so they cannot leak into the rest of the hook.
+    old_ifs=$IFS
+    IFS='
+'
+    set -f
+    installed_report=$(
+        for line in $installed_stamps; do
+            member=${line%% *}
+            [ -n "$member" ] || continue
+
+            if [ ! -f "$PWD/crates/$member/src/main.rs" ]; then
+                printf '%s library\n' "$member"
+                continue
+            fi
+
+            # Absolute path, never PATH resolution: the member name comes
+            # from a manifest in the pushed tree, and executing it by name
+            # would run whatever answers to that name.
+            if [ ! -x "$BIN_DIR/$member" ]; then
+                printf '%s missing\n' "$member"
+                continue
+            fi
+
+            built=$("$BIN_DIR/$member" --stamp)
+            printf '%s built %s\n' "$member" "$built"
+        done
+    )
+    set +f
+    IFS=$old_ifs
+
     for ref in $push_refs; do
-        pushed_tree=$(git rev-parse --verify --quiet "$ref:crates/config-manifest" 2>/dev/null || true)
-        [ -n "$pushed_tree" ] || continue
-        if ! command -v config-manifest >/dev/null 2>&1; then
-            printf 'pre-push: config-manifest is not on PATH; run ~/.scripts/config/config-build\n' >&2
+        pushed_stamps=$(DOTFILES_ROOT="$PWD" "$stamp_cmd" --ref "$ref" 2>/dev/null) || {
+            printf 'pre-push: cannot read workspace stamps for %s\n' "$ref" >&2
             exit 1
-        fi
-        built=$(config-manifest --stamp)
-        if [ "$built" != "$pushed_tree" ]; then
-            printf 'pre-push: config-manifest is stale for %s (built %s); run ~/.scripts/config/config-build\n' \
-                "$ref" "$built" >&2
+        }
+        [ -n "$pushed_stamps" ] || {
+            printf 'pre-push: no workspace members for %s, refusing to check nothing\n' "$ref" >&2
             exit 1
-        fi
-        printf 'pre-push: config-manifest stamp matches the pushed crate for %s\n' "$ref"
+        }
+
+        printf '%s\n' "$pushed_stamps" | while IFS=' ' read -r member expected; do
+            [ -n "$member" ] || continue
+
+            status_line=$(printf '%s\n' "$installed_report" | grep -m1 "^$member ")
+            case $status_line in
+                "$member library")
+                    printf 'pre-push: %s is a library for %s, nothing to gate\n' "$member" "$ref"
+                    continue
+                    ;;
+                "$member missing")
+                    printf 'pre-push: %s is not installed; run ~/.scripts/config/config-build\n' \
+                        "$member" >&2
+                    exit 1
+                    ;;
+                "$member built "*)
+                    built=${status_line#"$member built "}
+                    ;;
+                *)
+                    printf 'pre-push: could not determine installed status of %s\n' "$member" >&2
+                    exit 1
+                    ;;
+            esac
+
+            if [ "$built" != "$expected" ]; then
+                printf 'pre-push: %s is stale for %s (built %s, expected %s)\n' \
+                    "$member" "$ref" "$built" "$expected" >&2
+                printf 'pre-push: run ~/.scripts/config/config-build\n' >&2
+                exit 1
+            fi
+            printf 'pre-push: %s stamp matches the pushed crate for %s\n' "$member" "$ref"
+        done || exit 1
     done
 
     if ! config-manifest check mac linux; then

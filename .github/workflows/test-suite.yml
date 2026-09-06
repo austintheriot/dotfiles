@@ -26,7 +26,7 @@ name: Test suite (linux + macOS)
 
 on:
   push:
-    branches: [mac, linux]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 

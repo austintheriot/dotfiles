@@ -31,8 +31,8 @@ curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/mac/setup.sh
 
 The same URL on every platform. `mac` in it is only the branch the file is
 fetched from, not the branch you get: `setup.sh` reads `uname` and checks out
-the matching branch itself. The file is byte-identical on `mac` and `linux`,
-which `.sync-manifest` enforces, so one URL is the whole story. Verified on
+the matching branch itself. `tests/setup.test.sh` asserts the file is the
+same blob on `mac` and `linux`, so one URL is the whole story. Verified on
 Linux against the `mac` URL: it selects `linux`.
 
 ## Unattended versus interactive

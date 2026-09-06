@@ -6,27 +6,22 @@ is the prose version. The manifest in this directory is the executable one.
 
 ## Files
 
-- `deps.conf` -- shared dependencies, tracked identically on the `mac` and
-  `linux` branches. `.sync-manifest` covers `.scripts/` as a whole
-  directory, so this file is checked for drift between the two branches.
-  One line per dependency: `name|check_command|docs_url`.
+- `deps.conf` -- dependencies shared by every machine, regardless of
+  platform. One line per dependency: `name|check_command|docs_url`.
 - `deps-ci.conf` -- dependencies of the test suite itself, not of the
   working environment: `python3`, `pyyaml`, `dash`. Never selected by
   platform detection, so a `depcheck` on a developer machine never asks for
   them. `.github/workflows/test-suite.yml` reads it by setting `DEPS_CONF`.
 - `deps-mac.conf` / `deps-linux.conf` -- dependencies that belong to one
-  platform only. Same format. Both files ship on both branches and are
-  covered by the drift check like everything else under `.scripts/`; what
-  differs per machine is only which one gets read. `deps-mac.conf` holds
-  `aerospace`; `deps-linux.conf` holds `oh-my-zsh` and `xclip`.
+  platform only. Same format. Both files ship together; what differs per
+  machine is only which one gets read. `deps-mac.conf` holds `aerospace`;
+  `deps-linux.conf` holds `oh-my-zsh` and `xclip`.
 - `check-deps.sh` -- the engine. Reads `deps.conf`, then whichever of
   `deps-mac.conf` and `deps-linux.conf` matches this machine, if that file
   exists. The platform comes from `~/.scripts/platform.sh`, and the
   `DEPS_LOCAL_CONF` environment variable overrides the choice.
 - `depcheck-hook.sh` -- sourced from `.zshrc`. Defines the `depcheck` alias
-  and a startup check that runs at most once every 24 hours. The logic lives
-  here rather than inside `.zshrc` so that `.sync-manifest` covers it.
-  `.zshrc` is now covered too, along with `.zshrc-mac` and `.zshrc-linux`.
+  and a startup check that runs at most once every 24 hours.
 - `docker/Dockerfile.ubuntu`, `docker/Dockerfile.arch` -- minimal images for
   exercising a bootstrap from scratch. Used by `test-local.sh` and by
   `.github/workflows/deps-check.yml`.

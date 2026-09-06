@@ -91,13 +91,6 @@ config show linux:.zshrc | awk '/^# GIT ALIASES/{f=1} f && /^# ENVIRONMENT-SPECI
    config worktree add /tmp/linux-wt linux
    ```
 
-## Adding a doc while you are here
-
-`.sync-manifest` requires every tracked file to match a rule, so a new file
-under `docs/` that matches no rule fails `check-branch-drift.sh`. Only
-`docs/research/` (shared) and `~docs/superpowers/` (per-branch) are covered.
-Add the rule in the same commit as the file.
-
 ## What not to do
 
 - Do not run the suite against `$HOME` and conclude the pushed branch is fine.

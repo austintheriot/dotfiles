@@ -28,35 +28,13 @@ which made `tmux-update-window-names.test.sh` flaky enough to block a push
 whose code was fine.
 
 The hook tests the ref being pushed, not the working tree. It sets
-`$DOTFILES_TEST_REF` so the container archives that ref, which matters
-because the pushed ref is not always the checked-out branch: pushing `linux`
-from a worktree while `$HOME` sits on `mac` is the normal way this repo ships
-a linux change. When that variable names a ref other than the checked-out
-branch, the working-tree overlay is skipped and the container tests the ref
-exactly as it will land on the remote.
+`$DOTFILES_TEST_REF` so the container archives that ref. When that variable
+names a ref other than the checked-out branch, the working-tree overlay is
+skipped and the container tests the ref exactly as it will land on the
+remote.
 
 Run `~/tests/run-in-docker.sh` yourself first anyway. Discovering a failure
 from a blocked push costs a round trip.
-
-The same hook runs `config-manifest check mac linux` when the push
-includes the `mac` or `linux` branch, and blocks the push if a path listed in
-`.sync-manifest` differs between the two. This is a local pre-flight: the
-`branch-drift` GitHub Action re-checks `origin/mac` against `origin/linux`
-after the push and is the authoritative gate.
-
-`config-manifest sync` does this without switching branches: it commits the
-current branch's shared paths directly onto the other branch through git
-plumbing, refuses if that branch is not at its origin, and points at
-`config push-all`. `--dry-run` shows the plan. If the binary is not built,
-the fallback is by hand: check out the target branch, run `git checkout
-<source> -- <shared paths>` (and `git rm` anything the source deleted),
-commit, then build and run `config-manifest check`.
-
-Push the pair with `config push-all`, never with two separate pushes. It
-sends mac and linux in one atomic push, so both refs land together. Pushed
-separately they arrive seconds apart, and the branch-drift workflow run for
-the first push compares against the other branch's stale `origin/` ref and
-fails, leaving that branch red until someone reruns the job.
 
 A separate pre-commit hook at `~/tests/pre-commit` (symlinked from
 `~/.cfg/hooks/pre-commit`) runs a leak guard (`~/tests/leak-check.sh`) on every
@@ -157,20 +135,16 @@ Two failure modes are worth knowing about, because both have bitten this repo:
 A bare repo cloned with `--bare` has no `remote.origin.fetch`, so
 `config fetch origin` updates `FETCH_HEAD` and leaves `refs/remotes/origin/*`
 frozen at whatever they were when the remote was added. Nothing warns about
-this.
-
-`config-manifest check` defaults to comparing `origin/mac` against
-`origin/linux`, so on a machine missing the refspec it reads stale refs and
-reports drift that does not exist (or, worse, misses drift that does). Set it
-once per machine:
+this, and a stale tracking ref makes `config rev-list --left-right --count
+origin/main...main` report a wrong count. Set the refspec once per machine:
 
     config config --add remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
     config fetch origin
 
-Confirm with `config rev-list --left-right --count origin/mac...mac`. A local
-branch that is level with the remote reports `0 0`. A nonzero left count on a
-branch you just pushed means the tracking refs are stale, not that the push
-failed.
+Confirm with `config rev-list --left-right --count origin/main...main`. A
+local branch that is level with the remote reports `0 0`. A nonzero left
+count on a branch you just pushed means the tracking ref is stale, not that
+the push failed.
 
 ## Installing the hooks on another machine
 

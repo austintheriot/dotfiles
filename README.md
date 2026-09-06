@@ -1,9 +1,6 @@
 # Dot Files
 
-| | mac | linux |
-| --- | --- | --- |
-| Test suite | [![mac test suite](https://github.com/austintheriot/dotfiles/actions/workflows/test-suite.yml/badge.svg?branch=mac)](https://github.com/austintheriot/dotfiles/actions/workflows/test-suite.yml?query=branch%3Amac) | [![linux test suite](https://github.com/austintheriot/dotfiles/actions/workflows/test-suite.yml/badge.svg?branch=linux)](https://github.com/austintheriot/dotfiles/actions/workflows/test-suite.yml?query=branch%3Alinux) |
-| Branch drift | [![mac branch drift](https://github.com/austintheriot/dotfiles/actions/workflows/branch-drift.yml/badge.svg?branch=mac)](https://github.com/austintheriot/dotfiles/actions/workflows/branch-drift.yml?query=branch%3Amac) | [![linux branch drift](https://github.com/austintheriot/dotfiles/actions/workflows/branch-drift.yml/badge.svg?branch=linux)](https://github.com/austintheriot/dotfiles/actions/workflows/branch-drift.yml?query=branch%3Alinux) |
+[![test suite](https://github.com/austintheriot/dotfiles/actions/workflows/test-suite.yml/badge.svg?branch=main)](https://github.com/austintheriot/dotfiles/actions/workflows/test-suite.yml?query=branch%3Amain)
 
 My shell, editor, terminal and tmux configuration, tracked in a bare git
 repository with `$HOME` as the worktree.
@@ -37,31 +34,24 @@ the ones you already know:
 config status            # what has changed
 config add .zshrc        # stage a file, by its path under $HOME
 config commit -m "..."   # commit
-config push-all          # push mac and linux together
+config push              # push
 ```
 
 Paths are always home-relative: `config add .claude/skills/foo/SKILL.md`, never
 an absolute path. `config status` hides untracked files by default, because
 `$HOME` is full of them; use `config status -uall` to see them.
 
-Two things are not git verbs:
-
-- `config sync` copies the shared paths onto the other branch. Run it after a
-  commit that touches a shared file, then `config push-all` so both branches
-  land in one push.
-- `config test` runs the test suite. The pre-push hook runs it too.
+One thing is not a git verb: `config test` runs the test suite. The pre-push
+hook runs it too.
 
 Run `config help` for the full list of subcommands, or see
 [Repo utilities](#repo-utilities) below.
 
 ## Branches
 
-`mac` and `linux` are both live. Most files are shared byte-for-byte between
-them, and `.sync-manifest` lists which; `config check` reports drift and
-`config sync` fixes it.
-
-Anything true of only one machine lives in its own file, and both ship on both
-branches so the drift check covers them:
+Everything lives on `main`. Platform differences that used to need their own
+branch now live in per-platform FILES selected at runtime instead, so one
+branch carries every machine:
 
 - [README-MAC.md](./README-MAC.md) -- Homebrew, aerospace, macOS build
   performance, and the Claude Code notification hook.
@@ -83,17 +73,14 @@ hand-written and can, so `config help` wins on any disagreement:
 
 - `config build` builds every workspace crate and installs each stamped
   binary.
-- `config check` reports drift between the mac and linux branches.
 - `config doctor` reports installed binaries that no longer match their
   source. Silent when everything is current.
 - `config init` finishes a fresh clone: git config, hooks, dependencies,
   binary. The post-clone half of the bootstrap; `setup.sh` is the other half.
 - `config install` installs any missing tracked dependencies.
 - `config install-hooks` links the git hooks and puts `config` on PATH.
-- `config push-all` pushes mac and linux together in one atomic push.
 - `config reload` reloads the tmux config.
 - `config stamp` prints the build stamp of each workspace crate.
-- `config sync` copies the shared paths onto the other branch.
 - `config test` runs the test suite.
 
 `config <command> --help` prints that command's usage block.

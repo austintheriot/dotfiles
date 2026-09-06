@@ -185,11 +185,20 @@ fn run_sync(parsed: &SyncArgs, root: Option<&PathBuf>) -> anyhow::Result<u8> {
 
     if repo.has_remote("origin")? {
         repo.fetch("origin")?;
-        let local = repo.rev_parse(&target)?;
-        let remote = repo.rev_parse(&format!("origin/{target}"))?;
-        if local != remote {
+        // What makes a sync unsafe is origin carrying work this clone has
+        // never seen: the sync commit would build on a stale base and the
+        // later push would conflict.
+        //
+        // Local being AHEAD of origin is not that. Sync commits on top of the
+        // target, so an unpushed local commit becomes the new commit's parent
+        // rather than something it replaces. Refusing that case deadlocks the
+        // normal flow, because it is exactly what an earlier unpushed sync
+        // from this machine leaves behind, and push-all then blocks on the
+        // drift that only sync can fix.
+        let remote_ref = format!("origin/{target}");
+        if !repo.is_ancestor(&remote_ref, &target)? {
             eprintln!(
-                "config-manifest sync: refusing, local {target} is not at origin/{target}; the other machine may have pushed work this would overwrite."
+                "config-manifest sync: refusing, origin/{target} has commits local {target} does not; the other machine may have pushed work this would build on top of a stale base."
             );
             eprintln!(
                 "  fetch and integrate first, for example: config pull origin {target}:{target}"

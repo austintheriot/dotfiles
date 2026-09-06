@@ -164,6 +164,25 @@ impl Git {
             .success())
     }
 
+    /// True when `ancestor` is reachable from `descendant`, so `descendant`
+    /// already contains every commit `ancestor` has.
+    ///
+    /// `git merge-base --is-ancestor` answers with an exit code: 0 for yes, 1
+    /// for no. Any other code is a real failure (a missing ref, a broken
+    /// repository) and must not be read as "no", because treating a broken
+    /// repository as a clean answer is how a guard silently stops guarding.
+    pub fn is_ancestor(&self, ancestor: &str, descendant: &str) -> anyhow::Result<bool> {
+        let output = self.output(&["merge-base", "--is-ancestor", ancestor, descendant])?;
+        match output.status.code() {
+            Some(0) => Ok(true),
+            Some(1) => Ok(false),
+            _ => bail!(
+                "git merge-base --is-ancestor {ancestor} {descendant} failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ),
+        }
+    }
+
     pub fn fetch(&self, remote: &str) -> anyhow::Result<()> {
         self.output_text(&["fetch", "--quiet", remote]).map(|_| ())
     }

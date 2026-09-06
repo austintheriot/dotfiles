@@ -161,9 +161,10 @@ fn a_bad_to_target_is_a_usage_error() {
     sync(dir.path(), &["--bogus"]).code(2);
 }
 
-#[test]
-fn a_target_not_at_its_origin_is_refused() {
-    let dir = fixture();
+/// Wires `dir` to a fresh bare origin and pushes both branches to it, so the
+/// two start out identical. Returns the origin, which the caller must keep
+/// alive for as long as the remote is used.
+fn with_origin(dir: &Path) -> tempfile::TempDir {
     let origin = tempfile::tempdir().expect("tempdir");
     assert!(
         Command::new("git")
@@ -174,7 +175,7 @@ fn a_target_not_at_its_origin_is_refused() {
             .success()
     );
     git(
-        dir.path(),
+        dir,
         &[
             "remote",
             "add",
@@ -182,17 +183,109 @@ fn a_target_not_at_its_origin_is_refused() {
             origin.path().to_str().expect("path"),
         ],
     );
-    git(dir.path(), &["push", "-q", "origin", "mac", "linux"]);
-    git(dir.path(), &["checkout", "-q", "linux"]);
-    std::fs::write(dir.path().join("dir/local-only.txt"), "not pushed\n").expect("write");
-    git(dir.path(), &["add", "dir/local-only.txt"]);
-    git(dir.path(), &["commit", "-q", "-m", "linux moved locally"]);
+    git(dir, &["push", "-q", "origin", "mac", "linux"]);
+    origin
+}
+
+/// The hazard the origin comparison exists for: origin carries a commit this
+/// clone has never seen, so syncing would build on a stale base and the later
+/// push would conflict.
+#[test]
+fn a_target_behind_its_origin_is_refused() {
+    let dir = fixture();
+    let _origin = with_origin(dir.path());
+
+    // Move origin/linux forward without moving local linux. Cloning to a
+    // scratch directory and pushing from there is what another machine does.
+    let other = tempfile::tempdir().expect("tempdir");
+    let url = git_out(dir.path(), &["remote", "get-url", "origin"]);
+    assert!(
+        Command::new("git")
+            .args(["clone", "-q", "-b", "linux", &url])
+            .arg(other.path().join("clone"))
+            .status()
+            .expect("git")
+            .success()
+    );
+    let clone = other.path().join("clone");
+    std::fs::write(clone.join("dir/from-elsewhere.txt"), "other machine\n").expect("write");
+    git(&clone, &["add", "dir/from-elsewhere.txt"]);
+    git(&clone, &["commit", "-q", "-m", "another machine pushed"]);
+    git(&clone, &["push", "-q", "origin", "linux"]);
+
     git(dir.path(), &["checkout", "-q", "mac"]);
     let before = git_out(dir.path(), &["rev-parse", "linux"]);
     let assert = sync(dir.path(), &[]).code(1);
     let stderr = String::from_utf8(assert.get_output().stderr.clone()).expect("utf8");
     assert!(stderr.contains("origin/linux"), "{stderr}");
     assert_eq!(git_out(dir.path(), &["rev-parse", "linux"]), before);
+}
+
+/// Diverged: both sides moved. `is_ancestor` is what separates this from the
+/// ahead case -- a plain "is local ahead" count would pass here, and syncing
+/// would then build on a base that origin has already moved away from.
+#[test]
+fn a_target_diverged_from_its_origin_is_refused() {
+    let dir = fixture();
+    let _origin = with_origin(dir.path());
+
+    let other = tempfile::tempdir().expect("tempdir");
+    let url = git_out(dir.path(), &["remote", "get-url", "origin"]);
+    assert!(
+        Command::new("git")
+            .args(["clone", "-q", "-b", "linux", &url])
+            .arg(other.path().join("clone"))
+            .status()
+            .expect("git")
+            .success()
+    );
+    let clone = other.path().join("clone");
+    std::fs::write(clone.join("dir/from-elsewhere.txt"), "other machine\n").expect("write");
+    git(&clone, &["add", "dir/from-elsewhere.txt"]);
+    git(&clone, &["commit", "-q", "-m", "another machine pushed"]);
+    git(&clone, &["push", "-q", "origin", "linux"]);
+
+    // ...and this machine moved linux too, onto the older base.
+    git(dir.path(), &["checkout", "-q", "linux"]);
+    std::fs::write(dir.path().join("local.txt"), "diverged\n").expect("write");
+    git(dir.path(), &["add", "local.txt"]);
+    git(
+        dir.path(),
+        &["commit", "-q", "-m", "linux moved locally too"],
+    );
+    git(dir.path(), &["checkout", "-q", "mac"]);
+
+    let before = git_out(dir.path(), &["rev-parse", "linux"]);
+    sync(dir.path(), &[]).code(1);
+    assert_eq!(git_out(dir.path(), &["rev-parse", "linux"]), before);
+}
+
+/// The safe case, which the equality check used to refuse. Local linux is
+/// strictly ahead of origin/linux, which is what an earlier unpushed `config
+/// sync` from THIS machine leaves behind. Sync commits on top of the target,
+/// so there is nothing on origin to overwrite -- and refusing here deadlocks
+/// the normal flow, because push-all blocks on the drift that only sync fixes.
+#[test]
+fn a_target_ahead_of_its_origin_is_synced() {
+    let dir = fixture();
+    let _origin = with_origin(dir.path());
+
+    git(dir.path(), &["checkout", "-q", "linux"]);
+    std::fs::write(dir.path().join("local.txt"), "per-branch, unpushed\n").expect("write");
+    git(dir.path(), &["add", "local.txt"]);
+    git(dir.path(), &["commit", "-q", "-m", "linux moved locally"]);
+    let ahead = git_out(dir.path(), &["rev-parse", "linux"]);
+    git(dir.path(), &["checkout", "-q", "mac"]);
+
+    sync(dir.path(), &[]).code(0);
+
+    // The sync commit stacks on top of the unpushed local commit rather than
+    // replacing it. Losing that parent is the actual overwrite the guard is
+    // named for, so it is asserted rather than assumed.
+    let after = git_out(dir.path(), &["rev-parse", "linux"]);
+    assert_ne!(after, ahead, "sync should have committed to linux");
+    let parent = git_out(dir.path(), &["rev-parse", "linux^"]);
+    assert_eq!(parent, ahead, "the sync commit must build on the local one");
 }
 
 #[test]

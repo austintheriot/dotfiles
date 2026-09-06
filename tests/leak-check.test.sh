@@ -458,7 +458,11 @@ status=0
 (cd "$repo" && SKIP_LEAK_CHECK=0 "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
 assert_equals 'SKIP_LEAK_CHECK=0 does not skip' '1' "$status"
 
-output=$(cd "$repo" && SKIP_LEAK_CHECK=maybe "$LEAK_CHECK" 2>&1 || true)
+# The subshell keeps the `cd` local and the `|| true` outside the
+# substitution rather than inside it: `$(A && B || true)` reads as an
+# if-then-else it is not, and shellcheck flags it (SC2015) on the version the
+# Docker gate runs.
+output=$( (cd "$repo" && SKIP_LEAK_CHECK=maybe "$LEAK_CHECK" 2>&1) ) || true
 assert_contains 'an unrecognized skip value is announced' 'not a recognized' "$output"
 
 git -C "$repo" reset -q HEAD skip-probe.txt

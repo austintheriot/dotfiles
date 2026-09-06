@@ -2,6 +2,259 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+Items marked BLOCKER came from an /expert-review survey pass on 2026-09-05.
+Each was reproduced by running the code, not by reading it; the reproduction
+is recorded with the item so it can be turned into a regression test first.
+
+- BLOCKER. `tests/leak-check.sh` reports a clean scan when the scan failed.
+  `added_lines` detects a `git log` failure and calls `exit 2` (line 115),
+  but it is only ever invoked inside a command substitution
+  (`staged=$(echo "$scan_paths" | added_lines)`, line 132). The exit kills
+  the subshell, the parent captures an empty string, and the next line
+  (`[ -z "$staged" ] && exit 0`) reports success. `changed_paths` has the
+  same shape at line 96.
+  Reproduced with a standalone script: parent survives, capture empty,
+  final exit 0.
+  Consequence: `tests/pre-push:96` has a branch for exit status 2 ("could
+  not scan, push blocked") that this path can never reach. The script
+  prints the correct diagnostic and then does the opposite.
+  Fix direction: capture the status explicitly
+  (`scan_paths=$(changed_paths) || exit 2`) or write a sentinel file the
+  parent checks. A subshell cannot propagate an exit to its parent.
+
+- BLOCKER. `tests/leak-check.sh` layer 2 fails open when the pattern file
+  is absent. When `~/.claude/local/leak-patterns.conf` is unreadable
+  (line 167), the guard prints "term rules INACTIVE" to stderr and
+  continues. The generic credential rules still run, so a credential-shaped
+  string is still caught. What deactivates is the employer and project term
+  layer, which is the layer that exists because this repo is public.
+  Reproduced by differential test on identical content: pattern file
+  present exits 1 (blocked), pattern file absent exits 0 (allowed).
+  The file is untracked on purpose, so it is absent by default on every
+  fresh machine. That is the same moment a new machine is committing its
+  setup work.
+  Fix direction: exit non-zero when the file is missing, with an explicit
+  opt-out variable for a machine that genuinely has no terms to defend.
+  Compare `tests/pre-push:86`, which hard-fails when leak-check.sh itself
+  is missing.
+
+- BLOCKER. `tests/leak-check.sh` can be blinded by one `.gitattributes`
+  line. A path marked `-diff` produces "Binary files ... differ" with no
+  `+` lines, so the content rules see nothing.
+  Reproduced: a file holding a credential-shaped string is blocked
+  normally (exit 1) and passes (exit 0) once `cred.txt -diff` is
+  committed. This is distinct from the known binary-file gap below,
+  because it lets an ordinary text file be marked unscannable and the
+  marking is an innocuous-looking one-line commit.
+  Fix direction: after computing `scan_paths`, assert every path produced
+  at least one hunk, and block on any path that produced none. That one
+  mechanism also closes the binary-file and newline-path gaps recorded
+  below.
+
+- BLOCKER. A test suite that runs zero assertions reports PASS.
+  `tests/lib.sh:264` ends `finish` with `[ "$failed" -eq 0 ]`, which is
+  true when nothing ran. Under `run-all.sh -q`, which is what the
+  pre-push hook shows, that is byte-identical to a real pass.
+  Reproduced: a suite whose body is only `finish` prints
+  "0 passed, 0 failed" and exits 0.
+  The sharpest live instance is `tests/githooks-installed.test.sh:26-30`,
+  which uses a bare `printf` rather than `skip`, then `finish; exit 0`,
+  when there is no `.cfg` directory. Reproduced under an isolated
+  DOTFILES_ROOT: "0 passed, 0 failed", exit 0. `.github/workflows/test-suite.yml:139`
+  sets DOTFILES_ROOT to the checkout workspace, which has `.git` and not
+  `.cfg`, and the container has no `.cfg` either. So all 7 assertions in
+  the suite that exists to catch "the hooks are not installed" run on one
+  machine only: this one.
+  Fix direction: make `finish` fail, or report a distinct verdict, when
+  passed + failed + skipped is 0. `run-all.sh:117` already parses the
+  summary line and can carry the marker up to the verdict.
+
+- Six suites skip with a bare `printf` instead of `skip`, so the skipped
+  assertions never reach the summary line or the runner's verdict.
+  Confirmed by grep: `githooks-installed`, `alacritty-platform-split`,
+  `workflow-labels`, `zshrc-node-startup`, `zshrc-python-startup`,
+  `zshrc-platform-split`. (`skip-reporting.test.sh` also matches, but its
+  hits are its own fixtures.)
+  The measured cost, per an /expert-review agent that ran the suite on the
+  host and in the container and diffed the counts:
+  `config-manifest-lifecycle` drops 7 of 16 assertions in the container
+  with no skip recorded, including the assertion that a binary built
+  without the stamp variable reports `unstamped`. That assertion is the
+  guard against the pre-push stamp gate comparing an empty string against
+  a real tree id.
+  `.claude/rules/dotfiles-tests.md` already states the rule this breaks:
+  do not printf the skip yourself and do not silently return.
+  `tests/setup.test.sh:422` is the model to copy.
+
+- `tests/pre-push` TRIGGER_PATHS omits paths that suites read, so editing
+  them pushes without running the suite that tests them. This is the same
+  class as the `.config/nvim` gap already fixed once; the class was never
+  swept.
+  Verified against the regex at line 38:
+    - every file in `.scripts/config/` except `usage.sh`. The alternative
+      `^\.scripts/.*\.sh$` requires a `.sh` suffix, and the dispatcher and
+      all 11 `config-*` subcommands are extensionless. Eight suites read
+      that tree.
+    - `.zshrc`, `.zshrc-mac`, `.zshrc-linux` (six zshrc-*.test.sh suites)
+    - `setup.sh` (setup.test.sh, bootstrap-harness.test.sh)
+    - `.profile` (profile-path.test.sh)
+    - `.config/alacritty/` (alacritty-platform-split, platform)
+    - `.scripts/deps/*.conf` and `.scripts/deps/docker/Dockerfile.*`
+  Every one of these is already COPYed into the test image because the
+  suites need it, so the Dockerfile and the trigger regex disagree about
+  what counts as test input.
+  Worth fixing structurally rather than by adding alternatives:
+  `tests/container.test.sh:227-263` already derives referenced root files
+  mechanically by grepping the suites. Extending that derivation to all
+  referenced paths, then asserting each matches TRIGGER_PATHS, would have
+  caught every entry above and would catch the next one.
+
+- `config help` cannot describe a compiled subcommand, so the first
+  `config-*` script ported to Rust will silently list as "(undocumented)".
+  `.scripts/config/config-help:38` reads the description with
+  `sed -n 's/^# help: //p'` over the file's source text. Verified against
+  the installed `config-manifest` binary: the sed yields nothing.
+  The dispatcher's execution contract (`.scripts/config/config:27-32`) is
+  already binary-compatible. It is only the introspection contract that is
+  source-text-only, so the two contracts share one name and the port
+  breaks the second one.
+  Fix direction: add a `--describe` execution contract with the existing
+  `sed` read as the fallback, so shell subcommands need no change and the
+  migration stays incremental. Do this BEFORE porting any subcommand.
+
+- `tests/lib.sh:229` reports the wrong exit code on every `assert_succeeds`
+  failure. `failed=$((failed + 1))` runs before the `printf` reads `$?`,
+  so the arithmetic's status is what gets printed.
+  Reproduced: a command exiting 42 reports "(exited 0)".
+  `assert_succeeds` is used 170+ times, and the failures that matter most
+  are the ones from a container run that cannot be reproduced
+  interactively.
+  Fix: capture the status into a local before the branch.
+
+- `tests/zshrc-startup-budget.test.sh` has no floor asserting it measured
+  anything, so the repo's only performance gate can pass while measuring
+  nothing. The file's own comment at lines 76-79 documents the failure
+  mode: without the `zmodload`, `$EPOCHREALTIME` is empty, every
+  difference computes as zero, and the budget assertion passes. Line 118
+  clamps negatives to zero, which hides it further.
+  Fix: assert the harness measured a non-zero elapsed time before
+  asserting the budget. One line.
+
+- `.scripts/deps/test-bootstrap.sh` runs a guaranteed-failing `docker
+  build` on every invocation. `$workdir/empty-context` is created only at
+  line 121, inside the failure branch of the build at line 119, and the
+  first attempt's stderr is discarded by `2>/dev/null`. Confirmed that
+  `docker build` errors on a missing context path ("unable to prepare
+  context: path not found"). Line 153 (the bare build) has no retry and
+  works only because line 121 already ran, which is the tell that the
+  try/retry shape was never intentional.
+  Fix: `mkdir -p` beside the other mkdirs near line 55, then one
+  unconditional build. About 15 lines become 6.
+
+- `.scripts/alacritty-platform.sh:49` writes the pointer file
+  non-atomically (`printf '%s' "$new" > "$pointer"`), and `.zshrc:178`
+  backgrounds the script in every shell. The content-equality guard at
+  line 44 suppresses the steady state, but on the first startup after a
+  variant edit every pane races to truncate the same file, and Alacritty
+  watches it. The script's own comment at line 42 names the 107-pane
+  scenario.
+  Fix: write to a temp path and `mv -f`, which is atomic within a
+  filesystem.
+
+- `.scripts/config/config-install-hooks:34` uses `find "$dir" -maxdepth 0`
+  without `-L`, so it stats the symlink rather than its target. A
+  world-writable directory reached through a symlink passes the
+  trust-boundary check the file's header (lines 13-18) says these four
+  directories are. `$HOME/.local/bin` and `$HOME/tests` are both plausible
+  symlinks on a synced home.
+  Fix: `find -L`, or resolve with `readlink -f` first (already done at
+  line 21 for `$0`).
+
+- `SKIP_LEAK_CHECK` skips on any non-empty value, so `SKIP_LEAK_CHECK=0`
+  and `SKIP_LEAK_CHECK=false` both disable the guard.
+  `tests/leak-check.sh:60` tests `[ -n "$SKIP_LEAK_CHECK" ]`. Reproduced
+  for `1`, `0` and `false`. This is the sanctioned bypass of the repo's
+  primary control, so its semantics should not surprise.
+  Fix: match `1`, `true`, `yes` explicitly.
+
+- `.scripts/tmux-start.sh:26` decides a session exists with
+  `[ "$(tmux ls | rg $SESSION_NAME)" = "" ]`, which substring-matches and
+  treats the name as a regex. `s dev` finds an existing `dev-tool`
+  session, skips creation, then `tmux attach -t $SESSION_NAME` at line 38
+  fails because `dev` does not exist. `$SESSION_NAME` is also unquoted, so
+  a name starting with `-` makes ripgrep error.
+  Fix: `tmux has-session -t`, which `.scripts/tmux-setup.sh:20` already
+  uses correctly.
+
+- `.zshrc:198` sets `plugin=(git)`, which does nothing. oh-my-zsh is never
+  sourced anywhere in `.zshrc`, `.zshrc-mac`, `.zshrc-linux` or `.profile`
+  (verified by grep; `.zshrc-linux:7` reaches into its custom plugins
+  directory by path precisely because the framework is not loaded), and
+  the variable oh-my-zsh reads is `plugins`, plural. Delete the assignment
+  and its two comment lines.
+
+- Latent, no live trigger today: several path-handling gaps share one
+  cause, that git quotes unusual paths and the quoted form matches no
+  pathspec when fed back. No tracked path currently contains a space or a
+  non-ASCII byte (verified), so none of these fire now. They matter as
+  evasion surface on a public-repo gate.
+    - `tests/leak-check.sh:111` misses EVERY non-ASCII path, not only the
+      newline case already recorded below. Reproduced: git emits
+      `"caf\303\251/note.md"`, feeding it back matches nothing, and a
+      credential there scans zero lines and exits 0. Fix with `-z` and
+      NUL-delimited reads, or `-c core.quotePath=false` plus
+      `--literal-pathspecs`.
+    - `setup.sh:410` iterates `for path in $(cfg ls-tree -r --name-only
+      "$branch")`, which word-splits on whitespace. A tracked path with a
+      space is never moved aside, and `cfg checkout` at line 425 then
+      fails under `set -e`, aborting the bootstrap. That is the exact
+      failure the comment at lines 396-402 says the loop prevents.
+
+- `crates/config-manifest`: an orphan `!` rule silently disables drift
+  checking for the paths it names. `manifest.rs:186-204` returns
+  `Classification::Excluded` for any path matching an `Excluded` pattern
+  whether or not an enclosing `Shared` rule exists, and `check.rs:47`
+  drops excluded paths from comparison. A typo (`!doc/private.md` against
+  a `docs/` rule), or deleting a shared rule and leaving its exclusions,
+  turns the guard off with no signal.
+  Two fixes were proposed. The structural one makes exclusions children of
+  the rule they modify (`SharedRule { pattern, exceptions }`), so an
+  orphan is unrepresentable and precedence stops being ordering logic;
+  cost is reassembling the flat file into a tree at parse time and
+  re-flattening it on print. The cheap one keeps the flat `Vec<Rule>` and
+  rejects, at parse time, any `Excluded` pattern not nested under some
+  `Shared` directory pattern.
+  Decide which before porting more scripts, because the next crate will
+  copy this one's shape.
+
+- `crates/config-manifest`: exit codes are bare `u8` literals returned
+  from nine sites, and status 1 currently means drift, unmatched paths,
+  malformed manifest, unreadable manifest, git subprocess failure,
+  non-UTF-8 tree entry, refused sync, and post-sync coverage gap. The
+  `Err` arm at `main.rs:86` flattens every structured error the crate
+  built into the same status. `check.rs:75` documents that pre-push,
+  branch-drift.yml and deps-harness grep the message TEXT, which is the
+  structure being reconstructed from strings.
+  Fix direction: one `Outcome` sum with a single exhaustive
+  `exit_code()` match. The numbers stay as they are today, so nothing
+  downstream breaks, but they become derived from a named meaning in one
+  place. Worth doing before the shape is copied.
+
+- Fossil branches are reachable from the bootstrap path. `home`,
+  `home-mac` and `work` last moved 2 to 3 years ago and each differs from
+  `mac` in about 360 of 354 tracked files, while `mac` and `linux` differ
+  in 8 (6 of which are unsynced planning docs). `setup.sh --branch work`
+  will check out a 2023 tree onto a fresh machine, where `config init`
+  then runs against a `.scripts/` layout predating every current
+  convention. `setup.sh:317` asserts these are "real branches" and
+  `setup.sh:26` advertises them.
+  Either archive them under a name that reads as archived and correct
+  those two comments, or delete them.
+
+- `.scripts:q/` is a stray untracked directory from a mistyped vim `:q`.
+  Three of its files are byte-identical to their `.scripts/` counterparts.
+  Delete it.
+
 - Migrate the rest of the `config ...` scripts to Rust
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so
@@ -61,6 +314,44 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       idea one level down.
 
 # QUESTIONS (leave until queried)
+
+- Should the mac/linux two-branch model collapse to one branch?
+  Raised by an /expert-review agent on 2026-09-05, and REJECTED after
+  checking the branches it had not read. Recorded so it is not re-proposed
+  without the counter-evidence.
+  The agent's measurement is correct: the model costs roughly 3,100 lines
+  (the crate, config-check, config-sync, config-push-all, branch-drift.yml,
+  the drift tests, the stamp machinery) and `mac` and `linux` differ in
+  only 8 files, 6 of which are unsynced planning documents. The genuinely
+  platform-exclusive content is 2 files, and `.scripts/platform.sh` already
+  implements runtime variant selection, which `.sync-manifest:17-22`
+  explicitly argues is the preferred convention.
+  The conclusion does not follow, for a reason the agent flagged it had
+  not checked (its own stated confidence was 65 because it had not read
+  `work` or `home`). Those branches, plus `home-mac`, differ from `mac` in
+  about 360 of 354 tracked files and last moved 2 to 3 years ago. They are
+  fossils, not a live content-visibility mechanism. So the live system IS
+  the two branches the drift check governs, and collapsing them would not
+  remove branching from the repo. It would delete the only automated
+  consistency gate over the two active public branches.
+  Given four confirmed blockers whose common shape is a gate that passes
+  silently, removing a gate that works is the wrong direction. The part of
+  the finding worth acting on is the fossil-branch item in TODOS.
+
+- Should GitHub secret scanning push protection be enabled?
+  Free for public repos. It would be a second, higher-quality net for
+  layer 1 of the leak guard (the credential-shape rules), covering every
+  prefix hardcoded at `tests/leak-check.sh:152` plus many more, with fewer
+  false positives. Verified that no secret scanner (gitleaks, trufflehog)
+  is installed, configured, or listed in deps.conf, so there is no
+  half-installed path to lean on.
+  It does NOT replace layer 2: the project term rules read patterns from
+  outside the repo precisely so the terms are not published, and no hosted
+  scanner can do that. It also fires at the remote, not at pre-commit, so
+  it does not serve the "a leak should never even land in a local commit"
+  goal stated at `tests/pre-commit:11-12`.
+  Check current state with:
+    gh api repos/austintheriot/dotfiles --jq '.security_and_analysis'
 
 - Are our git hooks currently configured to run the leak check on commit and then the test suite on push? If not, they should.
   ANSWERED 2026-09-05, read from tests/pre-commit and tests/pre-push. Yes,

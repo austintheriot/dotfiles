@@ -63,7 +63,37 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 # QUESTIONS (leave until queried)
 
 - Are our git hooks currently configured to run the leak check on commit and then the test suite on push? If not, they should.
+  ANSWERED 2026-09-05, read from tests/pre-commit and tests/pre-push. Yes,
+  both, and both are installed: ~/.cfg/hooks/pre-commit and
+  ~/.cfg/hooks/pre-push are symlinks to the tracked scripts in ~/tests/.
+  pre-commit runs tests/leak-check.sh on the staged content and blocks the
+  commit on a finding.
+  pre-push does more than the question assumed, in this order:
+    1. leak-check --range on every pushed range, blocking on a finding and
+       also on exit 2, which is "could not scan" rather than "clean".
+    2. when mac or linux is being pushed: the config-manifest binary's
+       stamp must match the pushed crate, then a mac-vs-linux drift check.
+    3. the full suite, in Docker, but ONLY when a pushed path matches
+       TRIGGER_PATHS (.scripts/*.sh, .claude/scripts/*.py,
+       .claude/hooks/*.sh, tests/, .sync-manifest, .github/workflows/,
+       crates/). A push touching nothing else skips the suite and says so.
+  Worth knowing about that last one: a change to a file outside those
+  paths does not run the suite locally. .config/nvim/ is outside them, so
+  the nvim work in this session pushed without the suite until a tests/
+  file rode along with it.
+
 - Are we using the Docker container for the pre-push test suite? Should we be?
+  ANSWERED 2026-09-05. Yes. pre-push calls tests/run-in-docker.sh, with
+  DOTFILES_TEST_REF pinned to the ref being pushed, so the container tests
+  the committed content rather than the working tree.
+  It should stay that way, and the DEFERRED entry on tmux isolation is the
+  evidence: tmux-update-window-names.test.sh fails about 25% of the time on
+  the host live tmux server and 0/12 in the container, because the container
+  is a pristine server with no client, no windows, and no hooks.
+  One thing to keep in mind rather than change: the container image COPYs
+  per-path, so a suite that reads a path the image does not carry passes on
+  the host and fails only at pre-push. That happened this session with
+  .config/nvim/ and is why it now has its own COPY line.
 
 # DEFERRED TODOS
 

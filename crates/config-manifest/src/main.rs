@@ -1,11 +1,11 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
 use config_manifest::plan::{TargetSnapshot, plan_sync};
-use config_manifest::{check, git, manifest};
+use config_manifest::{check, git, manifest, stamp};
 
 const SYNC_BRANCHES: [&str; 2] = ["mac", "linux"];
 
@@ -38,6 +38,21 @@ enum Command {
     Check(CheckArgs),
     /// Copy the shared paths from the current branch onto the other branch.
     Sync(SyncArgs),
+    /// Compare installed binary stamps against the stamps pushed on a ref.
+    ///
+    /// Reads `<crate> <stamp>` lines on stdin, as `config-stamp --ref`
+    /// prints them. pre-push pipes that output in; this subcommand never
+    /// re-derives the workspace member list, since config-stamp already
+    /// owns it.
+    VerifyStamps(VerifyStampsArgs),
+}
+
+#[derive(Args)]
+struct VerifyStampsArgs {
+    /// The ref the pushed stamps on stdin were read from. Used only in
+    /// messages; the comparison itself only needs the two stamp lists.
+    #[arg(long = "ref", value_name = "ref")]
+    reference: String,
 }
 
 #[derive(Args)]
@@ -95,6 +110,13 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
+        Some(Command::VerifyStamps(args)) => match run_verify_stamps(&args, cli.root.as_ref()) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("config-manifest verify-stamps: {error:#}");
+                ExitCode::from(1)
+            }
+        },
         None => {
             // A bare invocation is a usage error, so the help goes to stderr
             // and the exit code stays 2, matching every other usage error.
@@ -147,6 +169,76 @@ fn run_check(args: &CheckArgs, root: Option<&PathBuf>) -> anyhow::Result<u8> {
     );
     std::io::stdout().write_all(rendered.stdout.as_bytes())?;
     std::io::stderr().write_all(rendered.stderr.as_bytes())?;
+    Ok(rendered.exit_code)
+}
+
+/// Reads pushed stamps from stdin as `config-stamp --ref` prints them: one
+/// `<crate> <stamp>` line per crate, where the stamp itself contains colons.
+///
+/// Splits each line on the first space only and treats the remainder as one
+/// opaque string. Splitting on `:` (or taking the second whitespace token)
+/// would shred `<crate-tree>:<lock-blob>:<workspace-blob>` into three fields
+/// and compare none of them correctly, which is the one way this subcommand
+/// can misread every stamp.
+fn read_pushed_stamps<R: Read>(mut input: R) -> anyhow::Result<Vec<(String, String)>> {
+    let mut text = String::new();
+    input.read_to_string(&mut text).context("reading pushed stamps from stdin")?;
+    Ok(text.lines().filter_map(stamp::parse_stamp_line).collect())
+}
+
+/// Whether a workspace crate has an installed binary to gate at all.
+///
+/// A crate with no `src/main.rs` is a library: it has no `--stamp` to
+/// report and nothing pre-push can execute. Its content is already covered
+/// by the stamp of whichever binary crate depends on it, the same
+/// reasoning pre-push used in shell before this subcommand existed. Such a
+/// crate must not enter `verify()` on either side, since entering it only
+/// on the pushed side would render it `NotBuilt` for a crate no binary was
+/// ever going to report.
+fn has_installed_binary(root: &PathBuf, crate_name: &str) -> bool {
+    root.join("crates").join(crate_name).join("src/main.rs").is_file()
+}
+
+/// Probes the installed binary for one crate's build-time stamp.
+fn built_stamp_for(root: &PathBuf, crate_name: &str) -> Option<String> {
+    let bin_dir = std::env::var_os("CONFIG_BIN_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join(".local/bin"));
+    let binary = bin_dir.join(crate_name);
+    let output = std::process::Command::new(&binary).arg("--stamp").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stamp = String::from_utf8(output.stdout).ok()?;
+    let trimmed = stamp.trim();
+    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+}
+
+fn run_verify_stamps(args: &VerifyStampsArgs, root: Option<&PathBuf>) -> anyhow::Result<u8> {
+    let root = dotfiles_root(root)?;
+    let all_pushed = read_pushed_stamps(std::io::stdin())?;
+
+    // The crate list comes from the pushed side, which came from
+    // config-stamp, not from a list re-derived here. Library crates are
+    // dropped from both sides before comparison, since neither side has a
+    // stamp verdict to offer for a crate with no installed binary.
+    let pushed: Vec<(String, String)> = all_pushed
+        .into_iter()
+        .filter(|(crate_name, _)| has_installed_binary(&root, crate_name))
+        .collect();
+    let built: Vec<(String, String)> = pushed
+        .iter()
+        .filter_map(|(crate_name, _)| {
+            built_stamp_for(&root, crate_name).map(|built_stamp| (crate_name.clone(), built_stamp))
+        })
+        .collect();
+
+    let rendered = stamp::render(&stamp::verify(&built, &pushed));
+    std::io::stdout().write_all(rendered.stdout.as_bytes())?;
+    std::io::stderr().write_all(rendered.stderr.as_bytes())?;
+    if rendered.exit_code != 0 {
+        eprintln!("config-manifest verify-stamps: refusing push of {}", args.reference);
+    }
     Ok(rendered.exit_code)
 }
 

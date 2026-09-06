@@ -77,10 +77,12 @@ branches so the drift check covers them:
 
 ### Repo utilities
 
-`config help` prints the list. It is generated from each script's own
-`# help:` line, so it cannot fall behind the scripts:
+`config help` prints the list, generated from each script's own `# help:`
+line, so that output cannot fall behind the scripts. The summaries below are
+hand-written and can, so `config help` wins on any disagreement:
 
-- `config build` builds the Rust crate and installs the stamped binary.
+- `config build` builds every workspace crate and installs each stamped
+  binary.
 - `config check` reports drift between the mac and linux branches.
 - `config doctor` reports installed binaries that no longer match their
   source. Silent when everything is current.
@@ -90,7 +92,7 @@ branches so the drift check covers them:
 - `config install-hooks` links the git hooks and puts `config` on PATH.
 - `config push-all` pushes mac and linux together in one atomic push.
 - `config reload` reloads the tmux config.
-- `config stamp` prints the tree id of the crate in the worktree.
+- `config stamp` prints the build stamp of each workspace crate.
 - `config sync` copies the shared paths onto the other branch.
 - `config test` runs the test suite.
 

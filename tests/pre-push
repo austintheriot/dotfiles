@@ -42,7 +42,7 @@ empty_tree='4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 # `config-build` ran zero tests while config.test.sh and
 # config-manifest-lifecycle.test.sh read them both. `setup.sh` and `.zshrc`
 # were missing for the same reason, and zshrc-*.test.sh reads the latter.
-TRIGGER_PATHS='^\.scripts/|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/|^\.sync-manifest$|^\.github/workflows/|^crates/|^\.config/nvim/|^\.config/tmux/|^setup\.sh$|^\.zshrc'
+TRIGGER_PATHS='^\.scripts/|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/|^\.github/workflows/|^crates/|^\.config/nvim/|^\.config/tmux/|^setup\.sh$|^\.zshrc'
 
 pushing_synced_branch=0
 changed_paths=''
@@ -118,38 +118,29 @@ else
     printf 'pre-push: leak scan passed for %d range(s)\n' "$range_count"
 fi
 
-# --- branch-drift check -------------------------------------------------
+# --- stamp gate -----------------------------------------------------------
 #
-# Only runs when mac or linux is among the pushed refs, so pushing an
-# unrelated branch (home, a feature branch) is never blocked by drift
-# between two branches it has nothing to do with.
+# Only runs when mac or linux is among the pushed refs. pre-push compares and
+# refuses; it does not compute.
 #
-# Compares the local mac and linux branches, not their origin/* counterparts,
-# so drift is caught from what is about to be pushed rather than from
-# whatever either branch looked like at its last fetch. The branch-drift
-# GitHub Action re-checks origin/mac against origin/linux after the push, so
-# a stale local ref here is a fast pre-flight, not the only gate.
+# config-stamp --ref owns the committed side, config-manifest verify-stamps
+# owns the comparison policy, and neither copy of the workspace member list
+# lives here: config-stamp's own output supplies the crate names, and
+# verify-stamps reads them from that output. This hook used to spell the
+# comparison itself, member by member, with a second copy of "library crates
+# have nothing to gate" and "a differing stamp is stale" baked into shell case
+# statements.
+#
+# config-stamp and config-manifest are the copies that ship beside this hook,
+# resolved from the hook's own location rather than $HOME: the two coincide in
+# production (this hook is installed at $HOME/.cfg/hooks, a symlink into the
+# tracked tree), but a test drives the hook against a throwaway fixture repo
+# while $HOME points at a fake home with none of the real tooling under it.
+# DOTFILES_ROOT is pinned to $PWD for the same reason: git invokes this hook
+# with the pushed repo as the working directory, which is $HOME in production
+# and the fixture repo under test.
 
 if [ "$pushing_synced_branch" -eq 1 ]; then
-    # The stamp gate. pre-push compares and refuses; it does not compute.
-    #
-    # config-stamp --ref owns the committed side, config-manifest
-    # verify-stamps owns the comparison policy, and neither copy of the
-    # workspace member list lives here: config-stamp's own output supplies
-    # the crate names, and verify-stamps reads them from that output. This
-    # hook used to spell the comparison itself, member by member, with a
-    # second copy of "library crates have nothing to gate" and "a differing
-    # stamp is stale" baked into shell case statements.
-    #
-    # config-stamp and config-manifest are the copies that ship beside this
-    # hook, resolved from the hook's own location rather than $HOME: the two
-    # coincide in production (this hook is installed at $HOME/.cfg/hooks, a
-    # symlink into the tracked tree), but a test drives the hook against a
-    # throwaway fixture repo while $HOME points at a fake home with none of
-    # the real tooling under it. DOTFILES_ROOT is pinned to $PWD for the same
-    # reason: git invokes this hook with the pushed repo as the working
-    # directory, which is $HOME in production and the fixture repo under
-    # test.
     hook_dir=$(dirname "$(readlink -f "$0")")
     stamp_cmd="$hook_dir/../.scripts/config/config-stamp"
     BIN_DIR=${CONFIG_BIN_DIR:-$HOME/.local/bin}
@@ -177,14 +168,7 @@ if [ "$pushing_synced_branch" -eq 1 ]; then
         fi
     done
 
-    if ! config-manifest check mac linux; then
-        printf '\npre-push: mac and linux have diverged on a shared path, push blocked.\n' >&2
-        printf 'Fix the drift, or run `git push --no-verify` only if you have a\n' >&2
-        printf 'genuine reason to bypass the gate.\n' >&2
-        exit 1
-    fi
-
-    printf 'pre-push: branch-drift check passed\n'
+    printf 'pre-push: stamp gate passed\n'
 fi
 
 # --- dotfiles test suite -------------------------------------------------

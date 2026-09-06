@@ -107,6 +107,25 @@ impl CommitId {
     }
 }
 
+/// A git tree id.
+///
+/// Distinct from `BlobId` so a tree and a blob cannot be passed
+/// interchangeably. The stamp folds one tree id and two blob ids, and a
+/// transposition there would produce a well-formed stamp that gates pushes
+/// wrongly.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TreeId(String);
+
+impl TreeId {
+    pub fn parse(raw: &str) -> Result<Self, IdError> {
+        parse_object_id(raw).map(TreeId)
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,6 +166,7 @@ mod tests {
         assert!(BlobId::parse(sha1).is_ok());
         assert!(BlobId::parse(&sha256).is_ok());
         assert!(CommitId::parse(sha1).is_ok());
+        assert!(TreeId::parse(sha1).is_ok());
         assert_eq!(BlobId::parse("abc"), Err(IdError::Length(3)));
         assert_eq!(
             BlobId::parse(&"G".repeat(40)),

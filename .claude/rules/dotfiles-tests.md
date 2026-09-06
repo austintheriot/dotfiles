@@ -73,6 +73,24 @@ positive, use `SKIP_LEAK_CHECK=1 config commit ...`.
 Never pass `--no-verify` to get around any of these gates. It skips every hook
 at that stage, so bypassing one gate would silently take the others with it.
 
+## Rebuild after editing a crate
+
+Editing a crate under `crates/` does not change what the installed binary
+does. Run `config build` after any crate edit; it builds every workspace
+member and re-stamps each one.
+
+`config doctor` reports which installed binaries no longer match their source
+and names the fix. It is silent when everything is current, so it is safe to
+run habitually.
+
+There is deliberately no runtime freshness check. Two were measured and
+rejected: a binary that verifies its own stamp on startup costs about 124ms
+per invocation, on a path that runs before every shell prompt, and a rebuild
+triggered from a prompt hook serializes every pane behind cargo's build lock
+(a no-op release build measures 0.7 to 1.5 seconds). The guarantee is at
+pre-push, which refuses a push when any binary is stale for the ref being
+pushed, and `config doctor` is how you ask before then.
+
 ## Where tests live
 
 Integration tests live in `~/tests/` as `<script-name>.test.sh`. They source

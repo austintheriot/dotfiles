@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp install-hooks init check sync push-all install test reload help'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks init check sync push-all install test reload help doctor'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"
@@ -400,5 +400,37 @@ source ~/.zshrc" "$actual"
 
 assert_equals 'the per-shell tmux source is gone from .zshrc' '' \
     "$(grep -n 'tmux source' "$DOTFILES_ROOT/.zshrc" || true)"
+
+# --- doctor ------------------------------------------------------------
+
+DOCTOR="$CONFIG_DIR/config-doctor"
+
+assert_succeeds 'config doctor exists and is executable' test -x "$DOCTOR"
+assert_equals 'doctor does not shadow a git verb' '' \
+    "$(git --list-cmds=main,others 2>/dev/null | grep -x doctor || true)"
+
+# Status asserted separately from output. A silent failure (the binary not on
+# PATH, a crash before writing) would otherwise read as "silent because
+# everything is current".
+"$DOTFILES_ROOT/.scripts/config/config-build" >/dev/null 2>&1
+doctor_out=$("$DOCTOR" 2>&1)
+doctor_status=$?
+assert_equals 'doctor exits 0 when every binary is current' '0' "$doctor_status"
+assert_equals 'doctor is silent when every binary is current' '' "$doctor_out"
+
+# The behavior doctor exists for, asserted rather than checked by hand.
+probe="$DOTFILES_ROOT/crates/config-manifest/src/doctor.rs"
+cp "$probe" "$FIXTURES/doctor.rs.orig"
+printf '\n// staleness probe\n' >> "$probe"
+
+doctor_out=$("$DOCTOR" 2>&1 || true)
+doctor_status=0
+"$DOCTOR" >/dev/null 2>&1 || doctor_status=$?
+assert_equals 'doctor exits 1 when a binary is stale' '1' "$doctor_status"
+assert_contains 'doctor names the stale crate' 'config-manifest' "$doctor_out"
+assert_contains 'doctor names the fix' 'config build' "$doctor_out"
+
+cp "$FIXTURES/doctor.rs.orig" "$probe"
+"$DOTFILES_ROOT/.scripts/config/config-build" >/dev/null 2>&1
 
 finish

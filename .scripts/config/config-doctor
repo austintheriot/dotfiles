@@ -1,0 +1,26 @@
+#!/bin/sh
+# help: Report installed binaries that do not match their source
+#
+# Reports which workspace binaries were built from source that has since
+# changed, and names the command that fixes it. Silent when everything is
+# current, so it is safe to run habitually.
+#
+# There is no runtime freshness check anywhere else, by measurement: a binary
+# verifying its own stamp costs about 124ms per invocation and the hot path
+# runs before every shell prompt, while a rebuild triggered from a prompt hook
+# serializes every pane behind cargo's build lock. The guarantee is at
+# pre-push, and this command is how you ask earlier.
+#
+# usage: config doctor
+#
+# Takes no options.
+#
+# Environment:
+#   DOTFILES_ROOT   Repo root. Default $HOME.
+
+set -eu
+
+. "$(dirname "$(readlink -f "$0")")/usage.sh"
+usage_if_requested "${1:-}"
+
+exec config-manifest doctor "$@"

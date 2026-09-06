@@ -82,6 +82,8 @@ branches so the drift check covers them:
 
 - `config build` builds the Rust crate and installs the stamped binary.
 - `config check` reports drift between the mac and linux branches.
+- `config doctor` reports installed binaries that no longer match their
+  source. Silent when everything is current.
 - `config init` finishes a fresh clone: git config, hooks, dependencies,
   binary. The post-clone half of the bootstrap; `setup.sh` is the other half.
 - `config install` installs any missing tracked dependencies.

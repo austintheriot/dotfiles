@@ -5,7 +5,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 use clap::{Args, Parser, Subcommand};
 use config_manifest::plan::{TargetSnapshot, plan_sync};
-use config_manifest::{check, git, manifest, stamp};
+use config_manifest::{check, doctor, git, manifest, stamp};
 
 const SYNC_BRANCHES: [&str; 2] = ["mac", "linux"];
 
@@ -45,6 +45,13 @@ enum Command {
     /// re-derives the workspace member list, since config-stamp already
     /// owns it.
     VerifyStamps(VerifyStampsArgs),
+    /// Report installed binaries that do not match their source.
+    ///
+    /// Silent when every binary is current. Unlike `verify-stamps`, this
+    /// subcommand owns its whole gather: it reads the expected stamps out
+    /// of the worktree itself and probes each installed binary's `--stamp`,
+    /// rather than being handed both sides on stdin.
+    Doctor,
 }
 
 #[derive(Args)]
@@ -114,6 +121,13 @@ fn main() -> ExitCode {
             Ok(code) => ExitCode::from(code),
             Err(error) => {
                 eprintln!("config-manifest verify-stamps: {error:#}");
+                ExitCode::from(1)
+            }
+        },
+        Some(Command::Doctor) => match run_doctor(cli.root.as_ref()) {
+            Ok(code) => ExitCode::from(code),
+            Err(error) => {
+                eprintln!("config doctor: {error:#}");
                 ExitCode::from(1)
             }
         },
@@ -240,6 +254,44 @@ fn run_verify_stamps(args: &VerifyStampsArgs, root: Option<&PathBuf>) -> anyhow:
         eprintln!("config-manifest verify-stamps: refusing push of {}", args.reference);
     }
     Ok(rendered.exit_code)
+}
+
+/// Gathers both sides and renders `doctor`'s report.
+///
+/// `doctor` owns its whole gather rather than shelling out to
+/// `config-stamp`: `git::workspace_stamps` reads the expected side directly
+/// out of the worktree, and this function probes each installed binary
+/// itself. A crate with no `src/main.rs` is a library with no `--stamp` to
+/// report, so it is dropped from the expected side before diagnosing;
+/// otherwise every push would report the library-only crate `NotInstalled`,
+/// which is not a defect since nothing was ever going to install it.
+fn run_doctor(root: Option<&PathBuf>) -> anyhow::Result<u8> {
+    let root = dotfiles_root(root)?;
+    let repo = git::Git::discover(&root);
+    let all_expected = repo.workspace_stamps()?;
+
+    let expected: std::collections::BTreeMap<doctor::CrateName, doctor::Stamp> = all_expected
+        .into_iter()
+        .filter(|(crate_name, _)| has_installed_binary(&root, crate_name.as_str()))
+        .collect();
+
+    let installed: std::collections::BTreeMap<doctor::CrateName, doctor::Stamp> = expected
+        .keys()
+        .filter_map(|crate_name| {
+            let stamp_text = built_stamp_for(&root, crate_name.as_str())?;
+            let stamp = doctor::Stamp::parse(&stamp_text).ok()?;
+            Some((crate_name.clone(), stamp))
+        })
+        .collect();
+
+    let findings = doctor::diagnose(&installed, &expected);
+    match doctor::render(&findings) {
+        Some(report) => {
+            eprint!("{report}");
+            Ok(1)
+        }
+        None => Ok(0),
+    }
 }
 
 fn run_sync(parsed: &SyncArgs, root: Option<&PathBuf>) -> anyhow::Result<u8> {

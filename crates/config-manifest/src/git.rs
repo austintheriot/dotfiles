@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, bail};
 
+use crate::doctor::{CrateName, Stamp};
 use crate::path::{CommitId, RelPath};
 use crate::plan::{SyncPlan, TreeEdit};
 use crate::tree::{TreeListing, parse_ls_tree};
@@ -273,6 +275,80 @@ impl Git {
         )?;
         Ok(commit)
     }
+
+    /// The expected stamp for every workspace member, read out of the
+    /// worktree through a temp index.
+    ///
+    /// The IO edge for `doctor`. Everything above it is pure. Mirrors
+    /// `.scripts/config/config-stamp`'s worktree gather (a temp index, one
+    /// `add -- crates`, one `write-tree`), so the two never read the
+    /// workspace two different ways; `doctor` is a second consumer of the
+    /// same worktree state, not a second definition of what a stamp is.
+    pub fn workspace_stamps(&self) -> anyhow::Result<BTreeMap<CrateName, Stamp>> {
+        const WORKSPACE: &str = "crates";
+
+        let index = TempIndex::create()?;
+        let index_path: &Path = &index.path;
+        self.run_checked(&["read-tree", "--empty"], Some(index_path))?;
+        self.run_checked(&["add", "--", WORKSPACE], Some(index_path))?;
+        let root_tree = self.run_checked(&["write-tree"], Some(index_path))?;
+        let root_tree = root_tree.trim();
+
+        let object_at = |relative: &str| -> anyhow::Result<String> {
+            let spec = format!("{root_tree}:{WORKSPACE}/{relative}");
+            let text = self.output_text(&["rev-parse", "--verify", "--quiet", &spec])?;
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                bail!("{WORKSPACE}/{relative} is not in the stamped tree");
+            }
+            Ok(trimmed.to_string())
+        };
+
+        let lock_blob = object_at("Cargo.lock")?;
+        let workspace_blob = object_at("Cargo.toml")?;
+
+        let manifest_spec = format!("{root_tree}:{WORKSPACE}/Cargo.toml");
+        let manifest_text = self.output_text(&["show", &manifest_spec])?;
+        let members = parse_workspace_members(&manifest_text);
+        if members.is_empty() {
+            bail!("no workspace members found in {WORKSPACE}/Cargo.toml");
+        }
+
+        let mut stamps = BTreeMap::new();
+        for member in members {
+            let crate_name = CrateName::parse(&member)
+                .map_err(|error| anyhow::anyhow!("invalid workspace member name {member}: {error:?}"))?;
+            let crate_tree = object_at(&member)?;
+            let stamp = Stamp::parse(&format!("{crate_tree}:{lock_blob}:{workspace_blob}"))
+                .map_err(|error| anyhow::anyhow!("workspace_stamps produced a malformed stamp: {error:?}"))?;
+            stamps.insert(crate_name, stamp);
+        }
+        Ok(stamps)
+    }
+}
+
+/// Parses the single-line `members = [...]` array out of a workspace
+/// `Cargo.toml`, the same shape `.scripts/config/config-stamp` parses with
+/// `sed`. Kept here rather than shared with the shell script because the two
+/// have no common runtime to share it through; both must agree the array is
+/// single-line, which the shell script's own comment already documents as a
+/// requirement on the manifest, not an assumption unique to one reader.
+fn parse_workspace_members(manifest_text: &str) -> Vec<String> {
+    manifest_text
+        .lines()
+        .find_map(|line| {
+            let line = line.trim();
+            let inner = line.strip_prefix("members = [")?.strip_suffix(']')?;
+            Some(
+                inner
+                    .split(',')
+                    .map(|entry| entry.trim().trim_matches('"'))
+                    .filter(|entry| !entry.is_empty())
+                    .map(str::to_string)
+                    .collect(),
+            )
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 pub mod check;
+pub mod doctor;
 pub mod git;
 pub mod manifest;
 pub mod path;

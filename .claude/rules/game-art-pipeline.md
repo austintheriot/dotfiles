@@ -197,4 +197,6 @@ Repository status verified 2026-09-05. Maintenance status is the fastest-rotting
 
 ## Changelog
 
+**Source research**: `~/.claude/local/research-notes/direct-research-notes.md` (primary-source verification notes). Read it before a refresh -- it records what was verified against a primary source, what was not, and which sites blocked automated fetching, so a refresh pass need not re-derive any of that.
+
 - **2026-09-05** -- Initial version. Verified by primary fetch and by reading source: Unreal 5.8 Nanite scope including full skeletal support, Interchange FBX still experimental, the DDC 5.3-to-5.4 default change, bone influence and index limits with the practical 12 cap and 75-bone mobile section limit, lightmap auto-generation repacking without splitting, Unity AssetDatabase v2 and Model Prefab semantics, Godot MD5-based reimport and the ufbx switch, FBX export non-determinism read from `export_fbx_bin.py`, BC and ASTC ratios and hardware support, the Inria 3DGS licence lineage, Epic's August 2026 divestiture of ArtStation and Sketchfab, and repository health across the open-source tool set. Practitioner-forum sources (Polycount, Blender Artists, Reddit) were unreachable during research, so convention claims sourced to community practice are weaker than the vendor-documented ones.

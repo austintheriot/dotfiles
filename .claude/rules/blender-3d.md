@@ -203,4 +203,6 @@ These are live disagreements among competent people. Both sides are recorded at 
 
 ## Changelog
 
+**Source research**: `~/.claude/local/research-notes/direct-research-notes.md` (primary-source verification notes). Read it before a refresh -- it records what was verified against a primary source, what was not, and which sites blocked automated fetching, so a refresh pass need not re-derive any of that.
+
 - **2026-09-05** -- Initial version. Verified against primary sources: Blender 5.2 as current LTS, the 4.1 auto-smooth removal, the `bpy` wheel's one-CPython-per-release pinning (cp311 through 5.0, cp313 from 5.1, no cp312), mikktspace's stated rationale, Unity `skinWeights` semantics, Unreal's 12-influence practical cap and 75-bone mobile section limit, *Flow*'s production facts, and the Foundation's funding scale. Blender's own domains returned 403 throughout research, so Blender-side USD and MaterialX parity claims, headless EEVEE and baking behavior, and Blender Studio's production file structure are **unverified**. OpenPBR's README does not list Blender among implementations, so Blender OpenPBR adoption is unconfirmed in both directions.

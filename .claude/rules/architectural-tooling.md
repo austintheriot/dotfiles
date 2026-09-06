@@ -142,6 +142,8 @@ The defensible uses are early, disposable, and internal -- mood, atmosphere, mas
 
 ## Changelog
 
+**Source research**: `~/.claude/local/research-notes/architecture-research.md` (the tooling material is in the summary layer rather than the written parts). Read it before a refresh -- it records what was verified against a primary source, what was not, and which sites blocked automated fetching, so a refresh pass need not re-derive any of that.
+
 - **2026-09-05** -- Initial version. ISO 19650's 2018 publication versus January 2019 UK launch verified (the apparent contradiction in circulating sources describes two different events). SketchUp's @Last Software founding date corrected to 1999 with the product shipping in 2000. RealityCapture's acquisition by Epic verified as **March 2021**, with the frequently-cited 2024 date being the pricing change rather than the acquisition.
 
   **Known gaps requiring verification before use**: current Revit pricing (Autodesk's site blocks automated fetching), Fab and Megascans licensing terms, and Poliigon and Textures.com terms entirely. Software prices and licence models are the fastest-rotting material in this file and none should be quoted without checking. The openBIM round-trip loss characterization is a directional summary of practitioner experience rather than a measured study.

@@ -42,6 +42,12 @@ Tell the researcher to prioritize the non-obvious -- things a general model woul
 
 Run these concurrently. If you hit the concurrent-subagent cap, queue and dispatch as slots free.
 
+**Preserve the research.** Have each researcher write its findings to a file as it goes, and when the pass is done copy those files to `~/.claude/local/research-notes/`. A session scratchpad is temporary, and the notes hold more than any rules file uses: the fuller reasoning, the corrections in detail, and -- most valuable at refresh time -- the record of what was verified against a primary source, what was not, and which sites blocked automated fetching. Add a **Source research** line above each rules file's changelog pointing at its notes file, so a refresh pass finds it without being told.
+
+Keep these out of version control unless the repo is private. They are machine-local working material, often long, and they duplicate content that belongs in the rules file.
+
+Note also that a researcher's final summary usually arrives complete before its file is finished. The summary is what you write from; the file is durability. Do not block on the file.
+
 ### Step 3 -- Write the rules file
 
 `~/.claude/rules/<agent-name>.md`. This is the deep reference; length is expected (existing files run 15k-40k words for broad domains).

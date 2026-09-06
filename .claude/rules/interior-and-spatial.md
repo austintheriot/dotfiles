@@ -143,6 +143,8 @@ Signage carries accessibility requirements with specific dimensional rules: **ta
 
 ## Changelog
 
+**Source research**: `~/.claude/local/research-notes/architecture-research.md` (the interiors material is in the summary layer rather than the written parts). Read it before a refresh -- it records what was verified against a primary source, what was not, and which sites blocked automated fetching, so a refresh pass need not re-derive any of that.
+
 - **2026-09-05** -- Initial version. NCIDQ's replacement of PRAC with IDIX and the Red List's move to 19 class-based categories verified. The UK Architects Act title exceptions, including the golf-course carve-out, verified. ADA signage dimensions (tactile stroke 10-30% of character height, character spacing 10% with a 1/16 in minimum, line spacing 135-170%, and the 70% contrast minimum being in the standard rather than advisory) verified and correct several commonly-misstated figures.
 
   **Known gaps requiring verification before use**: ISO 3382-1 acoustic parameter definitions, noise-criteria targets by room type, and specific illuminance targets by task were not verified in this pass and are deliberately stated as "read the standard" rather than given as numbers. Passivhaus comfort and overheating criteria are likewise unverified. The biophilia and circadian evidence characterizations are directional summaries of a contested literature rather than a systematic review.

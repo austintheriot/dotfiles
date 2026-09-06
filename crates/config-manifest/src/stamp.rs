@@ -8,7 +8,18 @@
 
 use std::collections::BTreeMap;
 
-use crate::check::Rendered;
+/// Two output streams and an exit code, the shape every subcommand in this
+/// crate renders to before main writes it out.
+///
+/// Used to live in `check.rs` alongside the branch-drift renderer that first
+/// needed it; that renderer is gone, but the shape itself was never
+/// drift-specific, and `stamp::render` is its remaining producer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rendered {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: u8,
+}
 
 /// The freshness of one crate's installed binary against a pushed ref.
 #[derive(Debug, Clone, PartialEq, Eq)]

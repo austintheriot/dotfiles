@@ -5,9 +5,6 @@ use std::process::Command;
 use anyhow::{Context, bail};
 
 use crate::doctor::{CrateName, Stamp};
-use crate::path::{CommitId, RelPath};
-use crate::plan::{SyncPlan, TreeEdit};
-use crate::tree::{TreeListing, parse_ls_tree};
 
 /// Both shapes this repo comes in: the real dotfiles repo is bare at
 /// `<root>/.cfg` with `<root>` as the worktree, and every test fixture is a
@@ -15,7 +12,6 @@ use crate::tree::{TreeListing, parse_ls_tree};
 #[derive(Debug, Clone)]
 pub struct Git {
     prefix: Vec<String>,
-    env: Vec<(String, String)>,
 }
 
 /// Removes the temp index on every exit path, so a failed apply leaves no
@@ -58,37 +54,16 @@ impl Git {
         } else {
             vec!["-C".to_string(), root.display().to_string()]
         };
-        Git {
-            prefix,
-            env: Vec::new(),
-        }
-    }
-
-    pub fn with_env(&self, key: &str, value: &str) -> Git {
-        let mut env = self.env.clone();
-        env.push((key.to_string(), value.to_string()));
-        Git {
-            prefix: self.prefix.clone(),
-            env,
-        }
+        Git { prefix }
     }
 
     fn command(&self, args: &[&str], index: Option<&Path>) -> Command {
         let mut command = Command::new("git");
         command.args(&self.prefix).args(args);
-        for (key, value) in &self.env {
-            command.env(key, value);
-        }
         if let Some(index) = index {
             command.env("GIT_INDEX_FILE", index);
         }
         command
-    }
-
-    fn output(&self, args: &[&str]) -> anyhow::Result<std::process::Output> {
-        self.command(args, None)
-            .output()
-            .with_context(|| format!("failed to spawn git {}", args.join(" ")))
     }
 
     fn run_checked(&self, args: &[&str], index: Option<&Path>) -> anyhow::Result<String> {
@@ -109,171 +84,6 @@ impl Git {
 
     pub(crate) fn output_text(&self, args: &[&str]) -> anyhow::Result<String> {
         self.run_checked(args, None)
-    }
-
-    pub fn show_manifest(&self, rev: &str) -> anyhow::Result<Option<String>> {
-        let spec = format!("{rev}:.sync-manifest");
-        let output = self.output(&["show", &spec])?;
-        if !output.status.success() {
-            return Ok(None);
-        }
-        Ok(Some(
-            String::from_utf8(output.stdout).context(".sync-manifest is not UTF-8")?,
-        ))
-    }
-
-    pub fn output_short(&self, rev: &str) -> anyhow::Result<String> {
-        Ok(self
-            .run_checked(&["rev-parse", "--short", rev], None)?
-            .trim()
-            .to_string())
-    }
-
-    pub fn ls_tree(&self, rev: &str) -> anyhow::Result<TreeListing> {
-        let output = self.output(&["ls-tree", "-r", "-z", rev])?;
-        if !output.status.success() {
-            bail!(
-                "git ls-tree {rev} failed: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            );
-        }
-        parse_ls_tree(&output.stdout).with_context(|| format!("parsing ls-tree output for {rev}"))
-    }
-
-    pub fn rev_parse(&self, rev: &str) -> anyhow::Result<CommitId> {
-        let spec = format!("{rev}^{{commit}}");
-        let text = self.output_text(&["rev-parse", "--verify", "--quiet", &spec])?;
-        CommitId::parse(text.trim()).with_context(|| format!("rev-parse {rev} returned a non-id"))
-    }
-
-    pub fn current_branch(&self) -> anyhow::Result<Option<String>> {
-        let output = self.output(&["symbolic-ref", "--quiet", "--short", "HEAD"])?;
-        if !output.status.success() {
-            return Ok(None);
-        }
-        Ok(Some(
-            String::from_utf8(output.stdout)
-                .context("branch name is not UTF-8")?
-                .trim()
-                .to_string(),
-        ))
-    }
-
-    pub fn has_remote(&self, remote: &str) -> anyhow::Result<bool> {
-        Ok(self
-            .output(&["remote", "get-url", remote])?
-            .status
-            .success())
-    }
-
-    /// True when `ancestor` is reachable from `descendant`, so `descendant`
-    /// already contains every commit `ancestor` has.
-    ///
-    /// `git merge-base --is-ancestor` answers with an exit code: 0 for yes, 1
-    /// for no. Any other code is a real failure (a missing ref, a broken
-    /// repository) and must not be read as "no", because treating a broken
-    /// repository as a clean answer is how a guard silently stops guarding.
-    pub fn is_ancestor(&self, ancestor: &str, descendant: &str) -> anyhow::Result<bool> {
-        let output = self.output(&["merge-base", "--is-ancestor", ancestor, descendant])?;
-        match output.status.code() {
-            Some(0) => Ok(true),
-            Some(1) => Ok(false),
-            _ => bail!(
-                "git merge-base --is-ancestor {ancestor} {descendant} failed: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            ),
-        }
-    }
-
-    pub fn fetch(&self, remote: &str) -> anyhow::Result<()> {
-        self.output_text(&["fetch", "--quiet", remote]).map(|_| ())
-    }
-
-    pub fn checked_out_branches(&self) -> anyhow::Result<Vec<String>> {
-        let text = self.run_checked(&["worktree", "list", "--porcelain"], None)?;
-        Ok(text
-            .lines()
-            .filter_map(|line| line.strip_prefix("branch refs/heads/"))
-            .map(str::to_string)
-            .collect())
-    }
-
-    pub fn dirty_paths(&self) -> anyhow::Result<Vec<RelPath>> {
-        let text = self.output_text(&["status", "--porcelain", "-z", "--untracked-files=no"])?;
-        let mut records = text.split('\0').filter(|record| !record.is_empty());
-        let mut paths = Vec::new();
-        while let Some(record) = records.next() {
-            let status = record.get(0..2);
-            let Some(path_text) = record.get(3..) else {
-                continue;
-            };
-            paths.push(
-                RelPath::parse(path_text).with_context(|| format!("status path {path_text}"))?,
-            );
-            let is_rename_or_copy =
-                status.is_some_and(|code| code.contains('R') || code.contains('C'));
-            if is_rename_or_copy {
-                records.next();
-            }
-        }
-        Ok(paths)
-    }
-
-    /// The only writer in the crate. Everything before update-ref creates
-    /// unreferenced objects only; update-ref is a compare-and-swap against
-    /// the commit the plan was computed from, so a moved branch fails here
-    /// and nothing observable has changed.
-    pub fn commit_plan(
-        &self,
-        plan: &SyncPlan,
-        target_branch: &str,
-        message: &str,
-    ) -> anyhow::Result<CommitId> {
-        let index = TempIndex::create()?;
-        let index_path: &Path = &index.path;
-        let expected = plan.planned_against().as_str();
-
-        self.run_checked(&["read-tree", expected], Some(index_path))?;
-        for edit in plan.edits() {
-            match edit {
-                TreeEdit::Set(set) => {
-                    let info = format!(
-                        "{},{},{}",
-                        set.mode().as_git_mode(),
-                        set.blob().as_str(),
-                        set.path().as_str()
-                    );
-                    self.run_checked(
-                        &["update-index", "--add", "--cacheinfo", &info],
-                        Some(index_path),
-                    )?;
-                }
-                TreeEdit::Remove(remove) => {
-                    self.run_checked(
-                        &[
-                            "update-index",
-                            "--force-remove",
-                            "--",
-                            remove.path().as_str(),
-                        ],
-                        Some(index_path),
-                    )?;
-                }
-            }
-        }
-        let tree = self.run_checked(&["write-tree"], Some(index_path))?;
-        let commit_text = self.run_checked(
-            &["commit-tree", tree.trim(), "-p", expected, "-m", message],
-            None,
-        )?;
-        let commit =
-            CommitId::parse(commit_text.trim()).context("commit-tree returned a non-id")?;
-        let target_ref = format!("refs/heads/{target_branch}");
-        self.run_checked(
-            &["update-ref", &target_ref, commit.as_str(), expected],
-            None,
-        )?;
-        Ok(commit)
     }
 
     /// The expected stamp for every workspace member, read out of the
@@ -354,8 +164,6 @@ fn parse_workspace_members(manifest_text: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::path::RelPath;
-    use crate::tree::FileMode;
 
     fn run(dir: &Path, args: &[&str]) {
         let status = Command::new("git")
@@ -366,32 +174,6 @@ mod tests {
             .status()
             .expect("git runs");
         assert!(status.success(), "git {args:?} failed");
-    }
-
-    #[test]
-    fn lists_a_normal_repo_and_reads_its_manifest() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        run(dir.path(), &["init", "-q", "-b", "main"]);
-        std::fs::write(
-            dir.path().join(".sync-manifest"),
-            ".sync-manifest\nrun.sh\n",
-        )
-        .expect("write");
-        std::fs::write(dir.path().join("run.sh"), "#!/bin/sh\n").expect("write");
-        run(dir.path(), &["add", "."]);
-        run(dir.path(), &["update-index", "--chmod=+x", "run.sh"]);
-        run(dir.path(), &["commit", "-q", "-m", "init"]);
-
-        let git = Git::discover(dir.path());
-        let manifest = git
-            .show_manifest("main")
-            .expect("git works")
-            .expect("manifest present");
-        assert_eq!(manifest, ".sync-manifest\nrun.sh\n");
-        let listing = git.ls_tree("main").expect("git works");
-        let exec = RelPath::parse("run.sh").expect("valid");
-        assert_eq!(listing.get(&exec).expect("present").0, FileMode::Executable);
-        assert_eq!(git.show_manifest("no-such-ref").expect("git ran"), None);
     }
 
     #[test]
@@ -415,245 +197,40 @@ mod tests {
                 .expect("git runs");
             assert!(status.success(), "git {args:?} failed");
         };
-        std::fs::write(dir.path().join(".sync-manifest"), ".sync-manifest\n").expect("write");
-        bare(&["add", ".sync-manifest"]);
+        std::fs::write(dir.path().join("marker.txt"), "hello\n").expect("write");
+        bare(&["add", "marker.txt"]);
         bare(&["commit", "-q", "-m", "init"]);
 
         let git = Git::discover(dir.path());
-        let listing = git.ls_tree("main").expect("git works");
-        assert_eq!(listing.paths().count(), 1);
+        let text = git.output_text(&["show", "main:marker.txt"]).expect("git works");
+        assert_eq!(text, "hello\n");
     }
 
-    use crate::manifest;
-    use crate::plan::{TargetSnapshot, plan_sync};
-
-    /// linux checked out; mac has a changed shared.txt and a new shared file;
-    /// linux has a shared file mac lacks.
-    fn sync_fixture() -> tempfile::TempDir {
+    #[test]
+    fn workspace_stamps_reads_crate_tree_and_shared_blobs_out_of_the_worktree() {
         let dir = tempfile::tempdir().expect("tempdir");
-        run(dir.path(), &["init", "-q", "-b", "linux"]);
+        run(dir.path(), &["init", "-q", "-b", "main"]);
+        std::fs::create_dir_all(dir.path().join("crates/one/src")).expect("mkdir");
         std::fs::write(
-            dir.path().join(".sync-manifest"),
-            ".sync-manifest\nshared.txt\ndir/\n~local.txt\n",
+            dir.path().join("crates/Cargo.toml"),
+            "[workspace]\nmembers = [\"one\"]\n",
         )
         .expect("write");
-        std::fs::write(dir.path().join("shared.txt"), "same\n").expect("write");
-        std::fs::create_dir_all(dir.path().join("dir")).expect("mkdir");
-        std::fs::write(dir.path().join("dir/gone.txt"), "only on linux\n").expect("write");
-        std::fs::write(dir.path().join("local.txt"), "linux local\n").expect("write");
-        run(dir.path(), &["add", "."]);
-        run(dir.path(), &["commit", "-q", "-m", "base"]);
-        run(dir.path(), &["checkout", "-q", "-b", "mac"]);
-        std::fs::write(dir.path().join("shared.txt"), "changed on mac\n").expect("write");
-        std::fs::write(dir.path().join("dir/new.txt"), "new on mac\n").expect("write");
-        std::fs::remove_file(dir.path().join("dir/gone.txt")).expect("rm");
-        std::fs::write(dir.path().join("local.txt"), "mac local\n").expect("write");
-        run(dir.path(), &["add", "-A"]);
-        run(dir.path(), &["commit", "-q", "-m", "mac changes"]);
-        dir
-    }
-
-    fn plan_for(git: &Git, source: &str, target: &str) -> crate::plan::SyncPlan {
-        let manifest_text = git.show_manifest(source).expect("git").expect("manifest");
-        let manifest = manifest::parse(&manifest_text).expect("valid");
-        let source_listing = git.ls_tree(source).expect("git");
-        let target_listing = git.ls_tree(target).expect("git");
-        let union: Vec<&RelPath> = source_listing
-            .paths()
-            .chain(target_listing.paths())
-            .collect();
-        let shared = manifest.partition(union.into_iter()).shared;
-        let target_head = git.rev_parse(target).expect("git");
-        plan_sync(
-            &shared,
-            &source_listing,
-            &TargetSnapshot::new(target_listing, target_head),
+        std::fs::write(dir.path().join("crates/Cargo.lock"), "lock\n").expect("write");
+        std::fs::write(
+            dir.path().join("crates/one/Cargo.toml"),
+            "[package]\nname = \"one\"\n",
         )
-    }
-
-    fn with_identity(git: &Git) -> Git {
-        git.with_env("GIT_AUTHOR_NAME", "t")
-            .with_env("GIT_AUTHOR_EMAIL", "t@t")
-            .with_env("GIT_COMMITTER_NAME", "t")
-            .with_env("GIT_COMMITTER_EMAIL", "t@t")
-    }
-
-    #[test]
-    fn rev_parse_current_branch_and_remote_queries() {
-        let dir = sync_fixture();
-        let git = Git::discover(dir.path());
-        let head = git.rev_parse("mac").expect("git");
-        assert_eq!(head.as_str().len(), 40);
-        assert_eq!(git.current_branch().expect("git"), Some("mac".to_string()));
-        assert!(!git.has_remote("origin").expect("git"));
-        assert!(git.rev_parse("no-such-ref").is_err());
-        run(dir.path(), &["checkout", "-q", "--detach"]);
-        assert_eq!(git.current_branch().expect("git"), None);
-    }
-
-    #[test]
-    fn output_short_returns_a_short_hex_commit_id() {
-        let dir = sync_fixture();
-        let git = Git::discover(dir.path());
-        let short = git.output_short("mac").expect("git");
-        assert!(short.len() >= 7, "{short}");
-        assert!(
-            short.chars().all(|character| character.is_ascii_hexdigit()),
-            "{short}"
-        );
-    }
-
-    #[test]
-    fn dirty_paths_lists_worktree_and_index_changes() {
-        let dir = sync_fixture();
-        let git = Git::discover(dir.path());
-        assert!(git.dirty_paths().expect("git").is_empty());
-        std::fs::write(dir.path().join("shared.txt"), "edited\n").expect("write");
-        std::fs::write(dir.path().join("untracked.txt"), "x\n").expect("write");
-        run(dir.path(), &["add", "untracked.txt"]);
-        let mut dirty: Vec<String> = git
-            .dirty_paths()
-            .expect("git")
-            .iter()
-            .map(|path| path.as_str().to_string())
-            .collect();
-        dirty.sort();
-        assert_eq!(dirty, vec!["shared.txt", "untracked.txt"]);
-    }
-
-    #[test]
-    fn dirty_paths_handles_paths_with_spaces() {
-        let dir = sync_fixture();
-        std::fs::write(dir.path().join("dir/has space.txt"), "original\n").expect("write");
-        run(dir.path(), &["add", "dir/has space.txt"]);
-        run(dir.path(), &["commit", "-q", "-m", "add spaced file"]);
-        std::fs::write(dir.path().join("dir/has space.txt"), "edited\n").expect("write");
+        .expect("write");
+        std::fs::write(dir.path().join("crates/one/src/main.rs"), "fn main() {}\n")
+            .expect("write");
+        run(dir.path(), &["add", "."]);
+        run(dir.path(), &["commit", "-q", "-m", "init"]);
 
         let git = Git::discover(dir.path());
-        let dirty: Vec<String> = git
-            .dirty_paths()
-            .expect("git")
-            .iter()
-            .map(|path| path.as_str().to_string())
-            .collect();
-        assert_eq!(dirty, vec!["dir/has space.txt"]);
-    }
-
-    #[test]
-    fn dirty_paths_reports_the_new_name_of_a_staged_rename() {
-        let dir = sync_fixture();
-        run(dir.path(), &["mv", "shared.txt", "renamed.txt"]);
-
-        let git = Git::discover(dir.path());
-        let dirty: Vec<String> = git
-            .dirty_paths()
-            .expect("git")
-            .iter()
-            .map(|path| path.as_str().to_string())
-            .collect();
-        assert_eq!(dirty, vec!["renamed.txt"]);
-    }
-
-    #[test]
-    fn commit_plan_lands_on_the_target_without_touching_the_worktree() {
-        let dir = sync_fixture();
-        let git = with_identity(&Git::discover(dir.path()));
-        let before = git.rev_parse("linux").expect("git");
-        let plan = plan_for(&git, "mac", "linux");
-        assert!(!plan.is_empty());
-
-        let commit = git
-            .commit_plan(&plan, "linux", "Sync shared paths from mac (test)")
-            .expect("apply");
-
-        assert_eq!(git.rev_parse("linux").expect("git"), commit);
-        let parent = git.output_text(&["rev-parse", "linux^"]).expect("git");
-        assert_eq!(parent.trim(), before.as_str());
-        let synced = git.ls_tree("linux").expect("git");
-        let source = git.ls_tree("mac").expect("git");
-        assert_eq!(
-            synced.get(&RelPath::parse("shared.txt").expect("valid")),
-            source.get(&RelPath::parse("shared.txt").expect("valid"))
-        );
-        assert_eq!(
-            synced.get(&RelPath::parse("dir/gone.txt").expect("valid")),
-            None
-        );
-        assert!(
-            synced
-                .get(&RelPath::parse("dir/new.txt").expect("valid"))
-                .is_some()
-        );
-        assert_eq!(
-            synced
-                .get(&RelPath::parse("local.txt").expect("valid"))
-                .map(|(_, blob)| blob.as_str()),
-            git.ls_tree(before.as_str())
-                .expect("git")
-                .get(&RelPath::parse("local.txt").expect("valid"))
-                .map(|(_, blob)| blob.as_str()),
-            "per-branch file untouched"
-        );
-        assert_eq!(git.current_branch().expect("git"), Some("mac".to_string()));
-        assert!(
-            git.dirty_paths().expect("git").is_empty(),
-            "worktree untouched"
-        );
-        assert!(
-            git.output_text(&["status", "--porcelain"])
-                .expect("git")
-                .is_empty()
-        );
-    }
-
-    #[test]
-    fn commit_plan_refuses_when_the_target_moved_and_leaves_the_ref_alone() {
-        let dir = sync_fixture();
-        let git = with_identity(&Git::discover(dir.path()));
-        let plan = plan_for(&git, "mac", "linux");
-        run(dir.path(), &["checkout", "-q", "linux"]);
-        std::fs::write(dir.path().join("dir/late.txt"), "landed after planning\n").expect("write");
-        run(dir.path(), &["add", "dir/late.txt"]);
-        run(dir.path(), &["commit", "-q", "-m", "moved"]);
-        run(dir.path(), &["checkout", "-q", "mac"]);
-        let moved_to = git.rev_parse("linux").expect("git");
-
-        let error = git
-            .commit_plan(&plan, "linux", "stale plan")
-            .expect_err("must refuse");
-        assert!(format!("{error:#}").contains("update-ref"), "{error:#}");
-        assert_eq!(
-            git.rev_parse("linux").expect("git"),
-            moved_to,
-            "ref not moved"
-        );
-        assert!(
-            git.output_text(&["status", "--porcelain"])
-                .expect("git")
-                .is_empty()
-        );
-    }
-
-    #[test]
-    fn checked_out_branches_lists_the_main_and_every_linked_worktree() {
-        let dir = sync_fixture();
-        let git = Git::discover(dir.path());
-        assert_eq!(git.checked_out_branches().expect("git"), vec!["mac"]);
-
-        let worktree = tempfile::tempdir().expect("tempdir");
-        run(
-            dir.path(),
-            &[
-                "worktree",
-                "add",
-                "-q",
-                worktree.path().to_str().expect("path"),
-                "linux",
-            ],
-        );
-        let mut branches = git.checked_out_branches().expect("git");
-        branches.sort();
-        assert_eq!(branches, vec!["linux", "mac"]);
+        let stamps = git.workspace_stamps().expect("git works");
+        let one = CrateName::parse("one").expect("valid");
+        assert!(stamps.contains_key(&one));
     }
 
     #[test]

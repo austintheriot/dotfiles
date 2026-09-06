@@ -21,36 +21,34 @@ fn stderr_of(assert: &assert_cmd::assert::Assert) -> String {
 fn help_lists_every_subcommand_with_a_description() {
     let assert = run(&["--help"]).success();
     let help = stdout_of(&assert);
-    for entry in ["check", "sync", "--stamp"] {
+    for entry in ["verify-stamps", "doctor", "--stamp"] {
         assert!(help.contains(entry), "--help omits {entry}: {help}");
     }
     assert!(
-        help.contains("drift"),
-        "--help does not describe what check does: {help}"
+        help.contains("stamp"),
+        "--help does not describe what verify-stamps does: {help}"
     );
     assert!(
-        help.contains("shared"),
-        "--help does not describe what sync does: {help}"
+        help.contains("source"),
+        "--help does not describe what doctor does: {help}"
     );
 }
 
 #[test]
 fn each_subcommand_has_its_own_help() {
-    let check = run(&["check", "--help"]).success();
-    let check_help = stdout_of(&check);
+    let verify_stamps = run(&["verify-stamps", "--help"]).success();
+    let verify_stamps_help = stdout_of(&verify_stamps);
     assert!(
-        check_help.contains("origin/mac"),
-        "check --help does not name the default refs: {check_help}"
+        verify_stamps_help.contains("--ref"),
+        "verify-stamps --help omits --ref: {verify_stamps_help}"
     );
 
-    let sync = run(&["sync", "--help"]).success();
-    let sync_help = stdout_of(&sync);
-    for flag in ["--dry-run", "--to"] {
-        assert!(
-            sync_help.contains(flag),
-            "sync --help omits {flag}: {sync_help}"
-        );
-    }
+    let doctor = run(&["doctor", "--help"]).success();
+    let doctor_help = stdout_of(&doctor);
+    assert!(
+        doctor_help.contains("doctor"),
+        "doctor --help does not describe the subcommand: {doctor_help}"
+    );
 }
 
 #[test]
@@ -75,7 +73,7 @@ fn no_arguments_is_a_usage_error_that_names_the_subcommands() {
     let assert = run(&[]).code(2);
     let message = stderr_of(&assert);
     assert!(
-        message.contains("check") && message.contains("sync"),
+        message.contains("verify-stamps") && message.contains("doctor"),
         "bare invocation does not point at the subcommands: {message}"
     );
 }
@@ -92,7 +90,7 @@ fn an_unknown_subcommand_is_a_usage_error_naming_the_offender() {
 
 #[test]
 fn an_unknown_flag_names_the_offending_flag() {
-    let assert = run(&["sync", "--bogus"]).code(2);
+    let assert = run(&["verify-stamps", "--bogus"]).code(2);
     let message = stderr_of(&assert);
     assert!(
         message.contains("--bogus"),
@@ -101,8 +99,8 @@ fn an_unknown_flag_names_the_offending_flag() {
 }
 
 #[test]
-fn to_without_a_value_is_a_usage_error() {
-    run(&["sync", "--to"]).code(2);
+fn ref_without_a_value_is_a_usage_error() {
+    run(&["verify-stamps", "--ref"]).code(2);
 }
 
 #[test]
@@ -139,7 +137,7 @@ fn an_explicit_root_flag_overrides_the_environment_variable() {
         .expect("binary built")
         .env("DOTFILES_ROOT", elsewhere.path())
         .args(["--root".as_ref(), dir.path().as_os_str()])
-        .args(["check", "mac", "linux"])
+        .args(["doctor"])
         .assert()
         .failure();
     let message = stderr_of(&assert);

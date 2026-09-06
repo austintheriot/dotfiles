@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- Add tests for neovim setup after running setup.sh. When I tested just now, lots of deps failed to install--make sure setup is clean after runnign nvim for the first time on a fresh bootstrap session. Example: "eslint-lsp: failed to install
+- [CLAIMED] Add tests for neovim setup after running setup.sh. When I tested just now, lots of deps failed to install--make sure setup is clean after runnign nvim for the first time on a fresh bootstrap session. Example: "eslint-lsp: failed to install
 css-variables-language-server: failed to install
 Press ENTER or type command to continue
 typescript-language-server: failed to install

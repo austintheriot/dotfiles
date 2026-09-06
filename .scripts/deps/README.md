@@ -42,6 +42,14 @@ present. Most are `command -v <binary>`. A few dependencies are not binaries
 on `PATH`, so they check for a directory or a file instead. `tpm` checks for
 a cloned directory. `nvm` checks for a sourceable script.
 
+`node` checks both `PATH` and nvm's version directory. A non-interactive
+shell does not run `.zshrc`, so an nvm-managed node is not on its `PATH`, and
+a `command -v node` alone would report a machine that has node as missing it.
+The entry is separate from `nvm` on purpose: nvm's check passes as soon as
+its own sourceable script exists, which says nothing about whether a node
+version was ever installed through it. Mason installs several language servers from npm, so
+nvm-without-node fails all of them on the first `nvim` launch.
+
 ### A check_command must never contain a pipe
 
 `read_entries` in `check-deps.sh` splits each line with
@@ -101,6 +109,13 @@ dependency alone:
   dependency as manual-only instead.
 
 Leave a case empty to declare that a dependency has no safe automated
+`node` installs through nvm rather than the package manager, so the version
+this shell selects is the one nvm manages. Its command sources nvm's own
+script first, because `nvm` is a shell function rather than a binary and is
+not on `PATH` for a non-interactive shell. The case is empty when nvm is absent:
+installing node has no meaning before its version manager exists, and the
+`nvm` entry already reports that gap on its own line.
+
 install. `nvm` is the one such case today, because its own documentation
 publishes only version-pinned install URLs. An empty case still gets checked
 and reported. It never gets installed, and it never fails the exit code of

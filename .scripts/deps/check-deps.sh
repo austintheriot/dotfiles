@@ -372,6 +372,22 @@ install_cmd_for() {
             # version-pinned install URLs, so a hardcoded one here would go
             # stale. Manual only -- see the docs_url column.
             ;;
+        node)
+            # Installed through nvm rather than the package manager, so the
+            # version this shell selects is the one nvm manages. A brew or apt
+            # node would sit on PATH beside nvm's and the two would shadow each
+            # other in whichever order the shell resolved them.
+            #
+            # nvm is a shell function, not a binary, so it has to be sourced
+            # first: `nvm` is not on PATH for a non-interactive shell.
+            #
+            # Empty when nvm is absent. Installing node has no meaning before
+            # its version manager exists, and the nvm entry above already
+            # reports that gap on its own line.
+            if [ -s "$HOME/.nvm/nvm.sh" ]; then
+                printf '%s' '. "$HOME/.nvm/nvm.sh" && nvm install --lts'
+            fi
+            ;;
         pyyaml)
             # A pip package, not a system package, so the default
             # `<manager> install pyyaml` case produces a command that fails

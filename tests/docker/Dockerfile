@@ -87,6 +87,10 @@ COPY .config/tmux /root/.config/tmux
 # to check the import wiring. No Alacritty binary is needed -- the assertions
 # are about which file imports which.
 COPY .config/alacritty /root/.config/alacritty
+# nvim-mason-runtimes.test.sh reads the Mason ensure_installed list and the
+# health module. No nvim binary is needed -- the assertions are about which
+# runtimes the config asks for and whether the health module is discoverable.
+COPY .config/nvim /root/.config/nvim
 COPY .sync-manifest /root/.sync-manifest
 # deps-harness.test.sh asserts on the workflow's triggers, permissions, and
 # job definitions by parsing this file.

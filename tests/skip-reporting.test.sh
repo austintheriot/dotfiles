@@ -176,4 +176,17 @@ summary=$(printf '%s\n' "$output" | grep -F 'suite(s) passed')
 assert_equals 'a summary with no skips does not mention them' '' \
     "$(printf '%s' "$summary" | grep -o 'skipped' || true)"
 
+# --- assert_succeeds reports the real exit code -------------------------
+#
+# failed=$((failed + 1)) ran before the printf read $?, so the arithmetic's
+# own exit status (always 0) was what got printed. Every failure across
+# 170+ call sites reported "exited 0", losing the one diagnostic a
+# container-only failure depends on.
+
+rc_suite="$FIXTURES/rc.test.sh"
+write_suite "$rc_suite" "assert_succeeds 'a command that exits 42' sh -c 'exit 42'"
+
+output=$(bash "$rc_suite" 2>&1 || true)
+assert_contains 'assert_succeeds reports the real exit code' 'exited 42' "$output"
+
 finish

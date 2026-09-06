@@ -223,12 +223,17 @@ assert_contains() {
 
 assert_succeeds() {
     local description=$1; shift
-    if "$@" >/dev/null 2>&1; then
+    local status=0
+    "$@" >/dev/null 2>&1 || status=$?
+    if [ "$status" -eq 0 ]; then
         passed=$((passed + 1))
         printf 'ok: %s\n' "$description"
     else
+        # Captured before anything else runs: the counter increment reset $?,
+        # so reading it afterwards reported the increment's status and every
+        # failure in the suite claimed "exited 0".
         failed=$((failed + 1))
-        printf 'FAIL: %s (exited %d)\n' "$description" "$?"
+        printf 'FAIL: %s (exited %d)\n' "$description" "$status"
     fi
 }
 

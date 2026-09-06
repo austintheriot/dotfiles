@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- Readme cleanup:
+- [CLAIMED] Readme cleanup:
   - "Welcome! Here is my rather unpolished .dotfile configuration. Below are some setup notes to my future self, for when I inevitably completely forget what I did or how I did it." remove this. This dotfiles repo is now quite polished.
     - Also cut down the README.md down to the most basic need-to-known eli5 details (install script, use `config` to init the repo & stage files, etc.)
 - Add a perf test to ensure against regressions to shell startup speed moving forward

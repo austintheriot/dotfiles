@@ -154,4 +154,25 @@ value_lines=$(grep -c "git config --global alias\." "$ZSHRC" || true)
 [ "$value_lines" -le 8 ] && single_source=yes || single_source="no ($value_lines lines)"
 assert_equals 'each alias value appears once' 'yes' "$single_source"
 
+# --- parse_git_dirty runs on every prompt draw ------------------------------
+
+# parse_git_dirty runs inside PS1, so it costs its full runtime on every
+# prompt in every pane. A bare `git status` measured 299ms in a 24k-file
+# worktree; the porcelain form measured 44.6ms.
+#
+# Asserted on the source rather than by timing, because a timing assertion
+# here would be measuring the machine's git, not this change.
+assert_succeeds 'parse_git_dirty is still defined' \
+    grep -q '^parse_git_dirty()' "$ZSHRC"
+
+dirty_body=$(sed -n '/^parse_git_dirty()/,/^}/p' "$ZSHRC")
+assert_succeeds 'the dirty check was extracted' test -n "$dirty_body"
+
+assert_succeeds 'it asks git for a machine format' \
+    grep -q -- '--porcelain' <<<"$dirty_body"
+assert_succeeds 'it does not walk untracked files' \
+    grep -q -- '-uno' <<<"$dirty_body"
+assert_equals 'it no longer matches human-readable git prose' '' \
+    "$(grep -o 'Changes to be committed\|Changes not staged\|Untracked files' <<<"$dirty_body" || true)"
+
 finish

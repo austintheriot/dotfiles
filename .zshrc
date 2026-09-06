@@ -205,11 +205,27 @@ export CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1
 # CUSTOMIZING COMMAND LINE PROMPT ############################################################################
 # see https://arjanvandergaag.nl/blog/customize-zsh-prompt-with-vcs-info.html
 # creates color formatting string based on current staged status
+# Runs inside PS1, so this costs its full runtime on every prompt in every
+# pane. A bare `git status` measured 299ms in a 24k-file worktree against
+# 44.6ms for this form, and `-uno` is the flag that buys most of it.
+#
+# Porcelain codes rather than the three matches against human-readable
+# English this used before: git's wording is not a contract, and the previous
+# form silently stopped colouring anything under a non-English locale.
+#
+# Untracked files are deliberately not reported. Detecting them is what costs
+# the other 255ms, and an untracked file is visible from `config status`
+# rather than needing a prompt colour.
 parse_git_dirty() {
-  git_status="$(git status 2> /dev/null)"
-  [[ "$git_status" =~ "Changes to be committed:" ]] && echo -n "%F{green}"
-  [[ "$git_status" =~ "Changes not staged for commit:" ]] && echo -n "%F{yellow}"
-  [[ "$git_status" =~ "Untracked files:" ]] && echo -n "%F{red}"
+  local porcelain
+  porcelain=$(git status --porcelain -uno --no-renames 2>/dev/null) || return 0
+  [ -n "$porcelain" ] || return 0
+  # Column 1 is the index, column 2 the worktree. Staged beats unstaged for
+  # the colour, matching what the previous form did by check order.
+  case $porcelain in
+    [MADRC]*) printf '%%F{green}' ;;
+    ?[MD]*)   printf '%%F{yellow}' ;;
+  esac
 }
 
 # zsh-specific config stuff

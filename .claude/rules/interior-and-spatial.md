@@ -18,7 +18,7 @@ Empirical priority, in rough order of how often it makes a space unusable: **aco
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. Human factors are durable. Standards, certification schemes, and professional-credential structures are not.
+`last-verified: 2026-09-06`. Human factors are durable. Standards, certification schemes, and professional-credential structures are not.
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

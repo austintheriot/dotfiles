@@ -18,7 +18,7 @@ Empirical priority, in rough order of how often it produces real harm: **envelop
 
 ## Volatile surface
 
-`last-verified: 2026-09-05`. Design theory and history are durable. **Standards editions, regulatory dates, and rating-system versions are not, and they are exactly what people cite with false confidence.**
+`last-verified: 2026-09-06`. Design theory and history are durable. **Standards editions, regulatory dates, and rating-system versions are not, and they are exactly what people cite with false confidence.**
 
 | Claim class | Rots | Re-verify at |
 |---|---|---|

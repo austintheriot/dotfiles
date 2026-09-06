@@ -54,7 +54,9 @@ Note also that a researcher's final summary usually arrives complete before its 
 2. Fetch the specific URL from that list rather than constructing one.
 3. When a PDF returns as unreadable binary, the fetch tool saves it locally and names the path. `pdftotext -layout <path> -` extracts it, and then it greps like any text.
 4. Wikipedia category and list pages substitute for search when checking whether an article exists at all -- several expected articles simply do not.
-5. **A search engine's results page is itself fetchable.** `https://search.brave.com/search?q=...` returns usable titles, URLs, and snippets through the fetch tool, which restores discovery after the search budget is gone. It rate-limits above roughly one query every 20-30 seconds. Other engines tested worse: one served unrelated content, one a CAPTCHA, two refused outright.
+5. **A headless browser beats the fetch tool on 403s.** Vendor and standards-body sites that refuse plain fetching (buildingsmart.org, iso.org, astm.org, fab.com were all confirmed cases) frequently serve full content to Playwright. This is the highest-leverage technique available and it is consistently under-used -- try it before recording an UNVERIFIED on any 403.
+6. **`gh api` is decisive for anything open-source** -- licences, release tags, dates. Some organisations version-control their own website content, so the repository is more current than the rendered site.
+7. **A search engine's results page is itself fetchable.** `https://search.brave.com/search?q=...` returns usable titles, URLs, and snippets through the fetch tool, which restores discovery after the search budget is gone. It rate-limits above roughly one query every 20-30 seconds. Other engines tested worse: one served unrelated content, one a CAPTCHA, two refused outright.
 
 An honest `UNVERIFIED` naming the route attempted is worth more than a filled-in guess, and a specific gaps list is a quality signal rather than a failure. Say so in the dispatch prompt; researchers comply with it when asked.
 

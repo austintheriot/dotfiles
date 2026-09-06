@@ -57,7 +57,7 @@ EXECUTED_SCRIPTS='deps/check-deps.sh deps/test-local.sh
 alacritty-platform.sh
 tmux-update-window-names.sh tmux-worktree-config.sh
 config/config-stamp config/config-build config/config
-config/config-install-hooks config/config-check config/config-sync
+config/config-install-hooks
 config/config-install config/config-test config/config-reload'
 
 SOURCED_SCRIPTS='tmux-close.sh tmux-setup.sh tmux-split.sh tmux-start.sh
@@ -112,7 +112,7 @@ assert_equals 'no sourced script is marked executable' '' "$wrongly_executable"
 SEARCH_ROOTS='.agents .config .github tests docs
 .claude/agents .claude/data .claude/hooks .claude/rules
 .claude/scripts .claude/skills .claude/CLAUDE.md
-.sync-manifest .zshrc .zshrc-mac .zshrc-linux
+.zshrc .zshrc-mac .zshrc-linux
 DOTFILES.md README.md README-MAC.md README-LINUX.md TODO-AGENTS.md'
 
 present_roots=''
@@ -195,8 +195,8 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
 
     # An exact count rather than "more than zero": a partial add is the
     # failure that actually happened, and it leaves some files staged.
-    assert_equals 'all 41 scripts are committed, not only on disk' \
-        '41' "$committed_count"
+    assert_equals 'all 38 scripts are committed, not only on disk' \
+        '38' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine
@@ -206,15 +206,12 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
     expected_exec=$(printf '%s\n' \
         "$NEW_NAME/config/config" \
         "$NEW_NAME/config/config-build" \
-        "$NEW_NAME/config/config-check" \
         "$NEW_NAME/config/config-doctor" \
         "$NEW_NAME/config/config-help" \
         "$NEW_NAME/config/config-install" \
         "$NEW_NAME/config/config-install-hooks" \
         "$NEW_NAME/config/config-reload" \
         "$NEW_NAME/config/config-stamp" \
-        "$NEW_NAME/config/config-sync" \
-        "$NEW_NAME/config/config-push-all" \
         "$NEW_NAME/config/config-test" \
         "$NEW_NAME/config/config-init" \
         "$NEW_NAME/alacritty-platform.sh" \
@@ -257,22 +254,5 @@ fi
 assert_succeeds 'the CI path filter watches .scripts' \
     grep -qF "'.scripts/deps/**'" \
     "$DOTFILES_ROOT/.github/workflows/deps-check.yml"
-
-# --- .sync-manifest still accounts for the directory --------------------
-#
-# The manifest is exhaustive: every tracked file must match a rule. Renaming
-# the directory without renaming its rule would leave 15 files unlabeled and
-# fail the branch-drift gate on the next push.
-
-manifest="$DOTFILES_ROOT/.sync-manifest"
-assert_succeeds 'the manifest shares the .scripts directory' \
-    grep -qxF "$NEW_NAME/" "$manifest"
-
-# The directory is shared with no exclusions carved out of it. deps-local.conf
-# used to be one; the deps-mac.conf / deps-linux.conf pair replaced it so that
-# both platforms' dependency lists sit inside the drift check rather than
-# outside it. A new exclusion under here would take files back out.
-assert_equals 'no path under .scripts is excluded from the manifest' \
-    '' "$(grep -nE "^!$NEW_NAME/" "$manifest")"
 
 finish

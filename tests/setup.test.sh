@@ -412,8 +412,7 @@ if [ -d "$DOTFILES_ROOT/.cfg" ]; then
         git --git-dir="$DOTFILES_ROOT/.cfg" cat-file -e "$readme_branch:setup.sh"
 
     # setup.sh must be identical on both branches, or the single URL silently
-    # serves one platform a different script. .sync-manifest is what enforces
-    # it; this asserts the outcome rather than the rule.
+    # serves one platform a different script.
     mac_blob=$(git --git-dir="$DOTFILES_ROOT/.cfg" rev-parse "mac:setup.sh" 2>/dev/null || true)
     linux_blob=$(git --git-dir="$DOTFILES_ROOT/.cfg" rev-parse "linux:setup.sh" 2>/dev/null || true)
     if [ -n "$mac_blob" ] && [ -n "$linux_blob" ]; then

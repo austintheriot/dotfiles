@@ -157,19 +157,17 @@ assert_contains 'the hook passes the pushed ref to the runner' \
 assert_equals 'the hook does not invoke run-all.sh directly' \
     '0' "$(printf '%s' "$hook_text" | grep -c 'tests/run-all\.sh')"
 
-# --- TRIGGER_PATHS covers every path a routine sync-manifest edit touches -
+# --- TRIGGER_PATHS covers every path a suite reads -----------------------
 #
-# Five suites reference .sync-manifest (check-branch-drift, deps-docs,
-# deps-harness, depcheck-hook, tmux-conf-split) and two assert on workflow
-# files (deps-harness, workflow-labels). Exhaustiveness now requires a
-# .sync-manifest edit for every new top-level path, which is exactly the
-# routine edit that skipped the suite before these two patterns were added:
-# a push touching only .sync-manifest or .github/workflows/ ran no tests at
+# Several suites assert on workflow files (deps-harness, workflow-labels,
+# readme-badges). Exhaustiveness requires a .github/workflows/ edit to run
+# the suite, which is exactly the routine edit that skipped it before this
+# pattern was added: a push touching only .github/workflows/ ran no tests at
 # all.
 #
 # The pattern is matched against real example paths with `grep -E`, not
 # read as a substring of the hook text, so the assertion fails if the regex
-# stops matching even though the literal text `.sync-manifest` still
+# stops matching even though the literal text `.github/workflows` still
 # appears somewhere in TRIGGER_PATHS.
 
 trigger_paths=$(printf '%s\n' "$hook_text" | sed -n "s/^TRIGGER_PATHS='\(.*\)'$/\1/p")
@@ -179,10 +177,8 @@ path_matches_trigger() {
     printf '%s\n' "$1" | grep -Eq "$trigger_paths"
 }
 
-assert_succeeds 'TRIGGER_PATHS matches a .sync-manifest edit' \
-    path_matches_trigger '.sync-manifest'
 assert_succeeds 'TRIGGER_PATHS matches a workflow file edit' \
-    path_matches_trigger '.github/workflows/branch-drift.yml'
+    path_matches_trigger '.github/workflows/test-suite.yml'
 
 # Config trees a suite asserts on belong here for the same reason. Without
 # the pattern, a push that edits only that config runs no tests, and the
@@ -295,7 +291,7 @@ overlay_list=$(sed -n 's/^ *for file in \(.*\); do$/\1/p' "$RUNNER")
 assert_succeeds 'the overlay file list is still parseable' test -n "$overlay_list"
 
 missing_from_overlay=''
-for root_file in setup.sh README.md .sync-manifest; do
+for root_file in setup.sh README.md; do
     [ -f "$DOTFILES_ROOT/$root_file" ] || continue
     printf '%s\n' "$overlay_list" | tr ' ' '\n' | grep -qxF "$root_file" \
         || missing_from_overlay="$missing_from_overlay $root_file"

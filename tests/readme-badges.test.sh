@@ -13,9 +13,6 @@
 # pushes, and that workflow runs on that branch. The network is never touched,
 # so this suite passes offline and in the container.
 #
-# README.md is per-branch (see .sync-manifest), so this runs against whichever
-# branch's README is checked out and both copies must carry badges.
-#
 # Usage: ~/tests/readme-badges.test.sh
 
 . "$(dirname "$0")/lib.sh"
@@ -59,7 +56,7 @@ assert_equals 'every badge pins an explicit branch' '' "$unpinned"
 # The branch a badge queries must be one this repo actually pushes, and the
 # workflow must be triggered on it. A badge for a branch the workflow ignores
 # renders as "no status" forever.
-BRANCHES='mac linux'
+BRANCHES='main'
 bad_branch=''
 not_triggered=''
 while IFS= read -r badge; do
@@ -83,16 +80,6 @@ EOF
 assert_equals 'every badge names a branch this repo pushes' '' "$bad_branch"
 assert_equals 'every badge workflow is triggered on the branch it reports' '' \
     "$not_triggered"
-
-# Both branches this repo maintains should be visible, not just the one whose
-# README is checked out. The point of the badges is a side-by-side comparison.
-missing_branch=''
-for branch in $BRANCHES; do
-    printf '%s\n' "$badges" | grep -q "branch=$branch" \
-        || missing_branch="$missing_branch $branch"
-done
-assert_equals 'both mac and linux are represented in the badges' '' \
-    "$missing_branch"
 
 # The badge block belongs above the first section heading, where a reader sees
 # it before anything else.

@@ -137,23 +137,21 @@ assert_contains 'defines the depcheck alias' 'check-deps.sh --fix' "$output"
 
 # --- the hook is portable to a POSIX shell --------------------------------
 #
-# .scripts/ is shared between the mac and linux branches, so the hook must
-# not depend on a zsh-only construct.
+# check-deps.sh, which this hook drives, runs under `sh` from other callers
+# (the pre-push hook, CI), so this hook must not depend on a zsh-only
+# construct either.
 
 assert_succeeds 'parses as POSIX sh' sh -n "$HOOK"
 assert_succeeds 'parses as zsh' zsh -n "$HOOK"
 
-# --- the hook is actually wired into this branch's .zshrc -----------------
+# --- the hook is actually wired into .zshrc --------------------------------
 #
-# The hook file being correct is not the same as it running. .zshrc is
-# per-branch (it is absent from .sync-manifest), so porting .scripts/
-# between branches carries the hook without carrying the line that sources
-# it -- which is exactly what happened when the deps work moved to linux.
-# Without this, every other assertion in this file passes on a machine where
-# the nag never fires.
+# The hook file being correct is not the same as it running. Without this,
+# every other assertion in this file passes on a machine where the nag
+# never fires because nothing sources the hook.
 
 zshrc="$DOTFILES_ROOT/.zshrc"
-assert_succeeds 'this branch has a .zshrc' test -f "$zshrc"
+assert_succeeds 'this machine has a .zshrc' test -f "$zshrc"
 assert_succeeds 'the .zshrc sources depcheck-hook.sh' \
     grep -qE '^[^#]*depcheck-hook\.sh' "$zshrc"
 

@@ -22,7 +22,6 @@ DEPS_README="$DEPS_DIR/README.md"
 HOME_README="$DOTFILES_ROOT/README.md"
 CHECK_SCRIPT="$DEPS_DIR/check-deps.sh"
 HOOK="$DEPS_DIR/depcheck-hook.sh"
-MANIFEST="$DOTFILES_ROOT/.sync-manifest"
 
 # --- both documents exist ----------------------------------------------
 
@@ -186,17 +185,14 @@ oh_my_zsh_shared=$(printf '%s\n' "$conf_names" | grep -cx 'oh-my-zsh')
 assert_equals 'oh-my-zsh is absent from deps.conf, as documented' \
     '0' "$oh_my_zsh_shared"
 
-# --- the platform variants are shared, not excluded ---------------------
+# --- the platform variants both ship ------------------------------------
 #
-# deps-local.conf used to be excluded from .sync-manifest so each branch
-# could carry its own. The variants replaced it precisely to end that: both
-# ship on both branches, so both are inside the drift check. An exclusion
-# reappearing would silently take them back out of it.
+# deps-local.conf used to hold one branch's own list. The deps-mac.conf /
+# deps-linux.conf pair replaced it precisely so both variants ship together
+# and the platform check at runtime decides which one gets read.
 for platform in mac linux; do
     assert_succeeds "deps-$platform.conf ships here" \
         test -f "$DEPS_DIR/deps-$platform.conf"
-    assert_equals "the manifest does not exclude deps-$platform.conf" \
-        '' "$(grep -nxF "!.scripts/deps/deps-$platform.conf" "$MANIFEST")"
 done
 
 assert_equals 'the retired deps-local.conf is gone' \

@@ -93,7 +93,10 @@ for range in $ranges; do
     range_count=$((range_count + 1))
     "$HOME/tests/leak-check.sh" --range "$range"
     leak_status=$?
-    if [ "$leak_status" -eq 2 ]; then
+    if [ "$leak_status" -eq 3 ]; then
+        printf '\npre-push: leak check is misconfigured, push blocked.\n' >&2
+        exit 1
+    elif [ "$leak_status" -eq 2 ]; then
         printf '\npre-push: leak check could not scan %s, push blocked.\n' "$range" >&2
         exit 1
     elif [ "$leak_status" -ne 0 ]; then

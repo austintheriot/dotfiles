@@ -57,10 +57,21 @@ else
   blocked='COMMIT BLOCKED: this repo is PUBLIC and the staged content looks internal.'
 fi
 
-if [ -n "$SKIP_LEAK_CHECK" ]; then
-  echo "$hook: leak check SKIPPED via SKIP_LEAK_CHECK" >&2
-  exit 0
-fi
+# Matched against true values rather than tested for non-emptiness: `[ -n ]`
+# is true for the string "0", so SKIP_LEAK_CHECK=0 disabled the guard for
+# anyone who meant the opposite. An unrecognized value is announced rather
+# than silently declining, because the person who set it believes the guard is
+# off and would not understand the block.
+case "${SKIP_LEAK_CHECK:-}" in
+  '') ;;
+  1|true|TRUE|True|yes|YES|Yes)
+    echo "$hook: leak check SKIPPED via SKIP_LEAK_CHECK" >&2
+    exit 0
+    ;;
+  *)
+    echo "$hook: SKIP_LEAK_CHECK=$SKIP_LEAK_CHECK is not a recognized true value, scanning anyway" >&2
+    ;;
+esac
 
 if [ "$mode" = push ]; then
   if ! git rev-list --count "$range" >/dev/null 2>&1; then
@@ -227,11 +238,29 @@ report "bare UUID (possible token)" \
 # --- Layer 2: project term rules, loaded from outside this repo -------------
 
 if [ ! -r "$PATTERN_FILE" ]; then
-  echo "" >&2
-  echo "  $hook: term rules INACTIVE, no readable pattern file" >&2
-  echo "  Generic credential rules still ran. Restore the file to re-enable" >&2
-  echo "  the project term rules; see ~/DOTFILES-GL.md." >&2
-  echo "" >&2
+  if [ "${LEAK_ALLOW_NO_PATTERNS:-}" = 1 ]; then
+    echo "" >&2
+    echo "  $hook: term rules INACTIVE, permitted by LEAK_ALLOW_NO_PATTERNS" >&2
+    echo "  Generic credential rules still ran." >&2
+    echo "" >&2
+  else
+    # Layer 1 matches credential SHAPES. Layer 2 is the only thing defending
+    # employer and project terms, which is why this repo needs a guard at all.
+    # The pattern file is untracked on purpose, so "absent" is the default
+    # state of a fresh machine rather than an exotic failure, and that is
+    # precisely when setup work is being committed. Warning and continuing
+    # published the content it exists to stop.
+    #
+    # Status 3, not 2: pre-push reports 2 as "could not scan this range",
+    # which is a different problem with a different fix.
+    echo "" >&2
+    echo "  $hook: BLOCKED, no readable pattern file at $PATTERN_FILE" >&2
+    echo "  The project term rules cannot run, so this scan is incomplete." >&2
+    echo "  Restore the file (see ~/DOTFILES-GL.md), or set" >&2
+    echo "  LEAK_ALLOW_NO_PATTERNS=1 for a machine with no terms to defend." >&2
+    echo "" >&2
+    exit 3
+  fi
 else
   # Some tracked files legitimately contain project terms (documented
   # conventions, local directory paths in shell and tmux config). Those were

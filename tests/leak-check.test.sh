@@ -405,4 +405,45 @@ out=$(run_pre_push_combined "$clean_tip" "$base")
 assert_contains 'pre-push: a clean push announces the scanned range count' \
     'leak scan passed for 1 range(s)' "$out"
 
+# Layer 2 is the only layer defending employer and project terms, and the
+# pattern file it reads is untracked on purpose, so it is absent by default on
+# every fresh machine. A missing file must block rather than silently reduce
+# the guard to its credential rules.
+printf 'internal note about %s\n' "$FAKE_TERM" > "$repo/term-only.txt"
+git -C "$repo" add term-only.txt
+
+status=0
+(cd "$repo" && LEAK_PATTERN_FILE="$FIXTURES/no-such-patterns.conf" \
+    "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
+assert_equals 'a missing pattern file is a configuration error' '3' "$status"
+
+status=0
+(cd "$repo" && LEAK_PATTERN_FILE="$FIXTURES/no-such-patterns.conf" \
+    LEAK_ALLOW_NO_PATTERNS=1 \
+    "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
+assert_equals 'the explicit opt-out permits a run with no pattern file' '0' "$status"
+
+git -C "$repo" reset -q HEAD term-only.txt
+rm -f "$repo/term-only.txt"
+
+# The sanctioned bypass of the repo's primary control should not fire on a
+# value that reads as "do not skip", and an unrecognized value should say so
+# rather than silently declining to skip.
+printf 'token = ghp_%s\n' "$(printf 'C%.0s' $(seq 1 24))" > "$repo/skip-probe.txt"
+git -C "$repo" add skip-probe.txt
+
+status=0
+(cd "$repo" && SKIP_LEAK_CHECK=1 "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
+assert_equals 'SKIP_LEAK_CHECK=1 skips' '0' "$status"
+
+status=0
+(cd "$repo" && SKIP_LEAK_CHECK=0 "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
+assert_equals 'SKIP_LEAK_CHECK=0 does not skip' '1' "$status"
+
+output=$(cd "$repo" && SKIP_LEAK_CHECK=maybe "$LEAK_CHECK" 2>&1 || true)
+assert_contains 'an unrecognized skip value is announced' 'not a recognized' "$output"
+
+git -C "$repo" reset -q HEAD skip-probe.txt
+rm -f "$repo/skip-probe.txt"
+
 finish

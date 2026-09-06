@@ -216,3 +216,134 @@ jobs:
       # have caught the hardcoded sudo.
       - name: Run and verify the bare bootstrap
         run: docker run --rm -v /tmp/seed-bare:/seed:ro dotfiles-bootstrap-bare
+
+  bootstrap-curl:
+    name: Full bootstrap / documented one-liner, fetched and piped
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The same bare image as the job above, varying a fourth axis none of
+      # the other legs touch: how setup.sh ARRIVES.
+      #
+      # bootstrap-bare-entrypoint.sh copies setup.sh out of the seed and runs
+      # it as a local file, and says so in its own comment. So the local-file
+      # path is covered and the documented path -- `curl -fsSL ... | sh` --
+      # is not. Three of its properties exist only when it is genuinely
+      # fetched and piped: stdin is the pipe rather than a terminal (so
+      # setup.sh must infer unattended by itself, with no --yes and no
+      # `< /dev/null` written by a harness author), flags arrive through
+      # `sh -s --`, and the clone source is a URL rather than a filesystem
+      # path, which takes a different branch in setup.sh's host pre-check.
+      #
+      # Found on its first run that one --fix pass does not converge:
+      # zsh-autosuggestions was reported unautomatable 925 lines before
+      # oh-my-zsh installed the directory it needs, and a second pass
+      # installs it. See docs/superpowers/specs for the fixpoint that fixes
+      # this.
+      - name: Build the curl-pipe bootstrap image
+        run: |
+          mkdir -p /tmp/empty-context
+          docker build \
+            -f .scripts/deps/docker/Dockerfile.bootstrap-curl \
+            -t dotfiles-bootstrap-curl \
+            /tmp/empty-context
+
+      - name: Build the seed repository
+        run: |
+          ref="${GITHUB_REF_NAME:-mac}"
+          mkdir -p /tmp/seed-curl
+          git config --global user.email ci@example.com
+          git config --global user.name CI
+          git init -q -b "$ref" /tmp/staging-curl
+          tar -c --exclude=.git . | tar -x -C /tmp/staging-curl
+          git -C /tmp/staging-curl add -A
+          git -C /tmp/staging-curl commit -q -m "curl-pipe bootstrap test tree"
+
+          # Both platform branches, for the reason the jobs above document:
+          # the container is Linux and setup.sh detects `linux`, so a seed
+          # built only on the pushed ref fails whenever this runs from mac.
+          for platform_branch in mac linux; do
+            if [ "$platform_branch" != "$ref" ]; then
+              git -C /tmp/staging-curl branch -q "$platform_branch"
+            fi
+          done
+
+          git clone -q --bare /tmp/staging-curl /tmp/seed-curl/repo.git
+          git --git-dir=/tmp/seed-curl/repo.git symbolic-ref HEAD "refs/heads/$ref"
+          cp .scripts/deps/docker/bootstrap-curl-entrypoint.sh /tmp/seed-curl/
+
+          # Served over HTTP by the container, not read from the mount. The
+          # copy is what the entrypoint publishes; setup.sh must arrive by
+          # curl or this leg is testing nothing the bare leg does not.
+          cp setup.sh /tmp/seed-curl/setup.sh
+
+      # The container starts its own HTTP server on 127.0.0.1, so this needs
+      # no host networking and behaves identically on a laptop and here.
+      # Verified to fail correctly: sabotaging setup.sh's `config init`
+      # handoff produces 6 failures and exit 1.
+      - name: Run and verify the curl-pipe bootstrap
+        run: docker run --rm -v /tmp/seed-curl:/seed:ro dotfiles-bootstrap-curl
+
+  bootstrap-curl-arch:
+    name: Full bootstrap / one-liner on bare Arch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The same one-liner as the job above, on pacman instead of apt. This
+      # is the only leg that reaches pacman through the FULL bootstrap:
+      # Dockerfile.arch also targets pacman but preinstalls sudo and git and
+      # only runs check-deps.sh, so it cannot reach setup.sh's git-bootstrap
+      # path or the escalation logic on a machine with no sudo.
+      #
+      # What is only covered here: `pacman -Sy --noconfirm <pkg>` as the
+      # privileged install shape, and the three dependencies whose pacman
+      # package name differs from the default (`gh` is `github-cli`, `cc` is
+      # `base-devel`, `pyyaml` is `python-yaml`). A regression in any of
+      # those spellings is invisible to every other leg.
+      #
+      # amd64 explicitly: upstream publishes no arm64 archlinux image. The
+      # runner is amd64 so this is a no-op here, and it is what lets the same
+      # command work under emulation on an Apple Silicon laptop.
+      - name: Build the Arch curl-pipe bootstrap image
+        run: |
+          mkdir -p /tmp/empty-context
+          docker build --platform linux/amd64 \
+            -f .scripts/deps/docker/Dockerfile.bootstrap-curl-arch \
+            -t dotfiles-bootstrap-curl-arch \
+            /tmp/empty-context
+
+      - name: Build the seed repository
+        run: |
+          ref="${GITHUB_REF_NAME:-mac}"
+          mkdir -p /tmp/seed-curl-arch
+          git config --global user.email ci@example.com
+          git config --global user.name CI
+          git init -q -b "$ref" /tmp/staging-curl-arch
+          tar -c --exclude=.git . | tar -x -C /tmp/staging-curl-arch
+          git -C /tmp/staging-curl-arch add -A
+          git -C /tmp/staging-curl-arch commit -q -m "arch curl-pipe bootstrap test tree"
+
+          for platform_branch in mac linux; do
+            if [ "$platform_branch" != "$ref" ]; then
+              git -C /tmp/staging-curl-arch branch -q "$platform_branch"
+            fi
+          done
+
+          git clone -q --bare /tmp/staging-curl-arch /tmp/seed-curl-arch/repo.git
+          git --git-dir=/tmp/seed-curl-arch/repo.git symbolic-ref HEAD "refs/heads/$ref"
+          cp .scripts/deps/docker/bootstrap-curl-entrypoint.sh /tmp/seed-curl-arch/
+          cp setup.sh /tmp/seed-curl-arch/setup.sh
+
+      - name: Run and verify the Arch curl-pipe bootstrap
+        run: |
+          docker run --rm --platform linux/amd64 \
+            -v /tmp/seed-curl-arch:/seed:ro \
+            dotfiles-bootstrap-curl-arch

@@ -274,4 +274,72 @@ else
 fi
 
 
+# --- the curl-pipe legs -----------------------------------------------------
+#
+# A fourth axis the images above do not vary: how setup.sh ARRIVES.
+# bootstrap-bare-entrypoint.sh copies it out of the seed and runs it as a
+# local file, and says so in its own comment, so the documented
+# `curl -fsSL ... | sh` shape was untested until these legs existed.
+
+CURL_DOCKERFILE="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.bootstrap-curl"
+CURL_ARCH_DOCKERFILE="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.bootstrap-curl-arch"
+CURL_ENTRYPOINT="$DOTFILES_ROOT/.scripts/deps/docker/bootstrap-curl-entrypoint.sh"
+
+assert_succeeds 'the curl-pipe Dockerfile exists' test -f "$CURL_DOCKERFILE"
+assert_succeeds 'the Arch curl-pipe Dockerfile exists' test -f "$CURL_ARCH_DOCKERFILE"
+assert_succeeds 'the curl-pipe entrypoint is executable' test -x "$CURL_ENTRYPOINT"
+
+curl_entry_text=$(cat "$CURL_ENTRYPOINT")
+
+# The one property that distinguishes this harness from the bare one. If the
+# entrypoint ever reads setup.sh off the mount, this leg has silently become
+# a duplicate of bootstrap-bare and the coverage is gone.
+assert_succeeds 'the curl-pipe run actually pipes from curl' \
+    grep -qE 'curl -fsSL "\$BASE/setup.sh" \| sh' "$CURL_ENTRYPOINT"
+assert_equals 'the curl-pipe run never copies setup.sh out of the seed' '' \
+    "$(printf '%s\n' "$curl_entry_text" | grep -E 'cp .*/seed/setup\.sh .*(/tmp/setup|setup)\.sh$' | grep -v SERVE || true)"
+
+# No --yes. The pipe alone must be enough for setup.sh to infer unattended,
+# and passing --yes would hide a regression in that inference.
+assert_equals 'the curl-pipe run passes no --yes' '' \
+    "$(printf '%s\n' "$curl_entry_text" | grep -E 'sh -s -- .*--yes' || true)"
+
+# The fetch is checked separately from the pipe. A pipeline reports only its
+# last command's status, so `curl` failing and `sh` reading an empty script
+# exits 0 -- measured. Without a standalone fetch check, "the piped run exits
+# 0" passes when setup.sh was never fetched.
+assert_succeeds 'the fetch status is checked apart from the pipeline' \
+    grep -q 'fetch_status' "$CURL_ENTRYPOINT"
+
+# Both images stay bare on the three axes the bare leg established.
+for curl_dockerfile in "$CURL_DOCKERFILE" "$CURL_ARCH_DOCKERFILE"; do
+    curl_image_name=${curl_dockerfile##*/}
+    assert_equals "$curl_image_name installs no sudo" '' \
+        "$(grep -E '^RUN (apt-get|pacman)' "$curl_dockerfile" | grep -w 'sudo' || true)"
+    assert_equals "$curl_image_name installs no git" '' \
+        "$(grep -E '^RUN (apt-get|pacman)' "$curl_dockerfile" | grep -w 'git' || true)"
+    assert_succeeds "$curl_image_name runs as root" \
+        grep -qE '^USER +root' "$curl_dockerfile"
+    # Both share one entrypoint on purpose: the assertions are about the
+    # bootstrap contract, not the distribution, and a per-image copy is how
+    # one leg quietly stops checking what the other still does.
+    assert_succeeds "$curl_image_name uses the shared curl-pipe entrypoint" \
+        grep -q 'bootstrap-curl-entrypoint.sh' "$curl_dockerfile"
+done
+
+# The Arch leg is the only one that reaches pacman through the full
+# bootstrap, so it must actually target Arch.
+assert_succeeds 'the Arch curl-pipe image is Arch' \
+    grep -qE '^FROM archlinux' "$CURL_ARCH_DOCKERFILE"
+
+if [ -n "$PYTHON_BIN" ]; then
+    assert_contains 'the workflow declares the curl-pipe bootstrap job' \
+        'bootstrap-curl' "$ci_jobs"
+    assert_contains 'the workflow declares the Arch curl-pipe bootstrap job' \
+        'bootstrap-curl-arch' "$ci_jobs"
+else
+    skip 'the workflow declares the curl-pipe bootstrap jobs' 'no python3'
+fi
+
+
 finish

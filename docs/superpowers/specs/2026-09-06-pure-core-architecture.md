@@ -1246,6 +1246,89 @@ the first draft listed: the zoxide, oh-my-zsh and rustup `curl | sh` pipes,
 the tpm and zsh-autosuggestions clones, and the gh apt keyring fetch. Folding
 this workflow into `cargo test` would delete the gate.
 
+### 7.5a The bootstrap gate
+
+**Added after the revision, at the owner's request, and it is a release
+gate rather than a unit test:** the rewrite is not done until a bare image
+fully initializes through the documented one-liner.
+
+    curl -fsSL <base>/setup.sh | sh -s -- --repo <base>/repo.git
+
+Two legs, both bare (no sudo, no git, no dependencies, running as root, with
+a pre-existing `.zshrc` to force the checkout collision):
+
+| Leg | Image | What only it covers |
+|---|---|---|
+| `bootstrap-curl` | debian bookworm-slim, digest-pinned | apt privileged installs |
+| `bootstrap-curl-arch` | archlinux:base, amd64 | `pacman -Sy` installs, and the three per-manager package names (`github-cli`, `base-devel`, `python-yaml`) |
+
+`Dockerfile.bootstrap-bare` already tested a bare image, but its entrypoint
+does `cp /seed/setup.sh /tmp/setup.sh` and clones from a filesystem path,
+with a comment admitting it: "setup.sh normally arrives by curl. Here it
+comes out of the seed." So these legs vary a fourth axis none of the others
+touch, which is **how `setup.sh` arrives**. Three properties exist only when
+it is genuinely fetched and piped: stdin is the pipe rather than a terminal,
+so `setup.sh` must infer unattended with no `--yes` and no harness-authored
+`< /dev/null`; flags arrive through `sh -s --`; and the clone source is a URL,
+which takes a different branch in `setup.sh`'s own host pre-check.
+
+The seed is served over HTTP **from inside the container**, so the test needs
+no host networking and behaves the same on a laptop and a CI runner.
+
+Verified working, 21 checks green on Debian and 20 on Arch, ending in an
+interactive `zsh` that reaches the end of `.zshrc`. Verified to **fail**
+correctly: sabotaging `setup.sh`'s `config init` handoff produces 6 failures
+and exit 1.
+
+**This gate immediately earned its place by finding two defects this spec
+predicts, on real hardware rather than from source.**
+
+*The fixpoint blocker (3.3, section 4), observed live.* In one run,
+`no automated install for zsh-autosuggestions` appears at line 312 and
+`installed oh-my-zsh` at line 1237 -- 925 lines later. `zsh-autosuggestions`
+clones into `~/.oh-my-zsh/custom/plugins/`, and that clone is emitted only if
+the directory already exists, so it was evaluated before its prerequisite was
+installed. Proved by re-running `--fix` in the same container: the second pass
+clones it successfully. **One `--fix` pass does not converge.** Section 4's
+fixpoint is the fix, and this is the evidence that it is not a theoretical
+concern.
+
+*Exit 0 on an incomplete machine (5.4).* The run ends
+`check-deps: no unresolved failures (16 of 18 were already missing)` and exits
+**0** with three dependencies still absent: `zsh-autosuggestions` (the
+ordering defect above), `nvm` (genuinely manual-only), and `node` (blocked
+behind nvm). So `config init` reports done on a machine that is not ready --
+verbatim the defect 5.4 names.
+
+**A fail-open bug in the gate's own first draft, worth recording because it
+is this repo's recurring shape.** The harness checked
+`curl ... | sh` and asserted the pipeline exited 0. A pipeline reports only
+its last command's status, so a failed fetch writes nothing, `sh` reads an
+empty script, and **the pipeline exits 0**. Measured: a 404 piped into `sh`
+gives exit 0, and the assertion "the piped run exits 0" passed while
+`setup.sh` was never fetched. Fixed by checking the fetch separately before
+the pipe. Same class as `deps-docs.test.sh` treating exit 127 as "not 2"
+(7.4 step 3) and `config-docs.test.sh`'s zero-iteration loop (7.5): an oracle
+that cannot see the failure it exists to catch.
+
+**Consequence for the port.** These containers have no Rust toolchain, so
+after step 3 they cannot build the replacement. That is the same blocker 7.4
+step 3 records for the deps images, and the same decision applies: the images
+gain a build stage. **The gate must be re-run after step 3 and after step 6**,
+because passing today only validates the shell implementation, which is the
+pre-rewrite baseline.
+
+**Out of scope: Windows.** The README advertises WSL, and `platform.sh` maps
+WSL to `linux` because `uname -s` reports `Linux` there, with
+`README-LINUX.md` confirming nothing WSL-specific is needed beyond clipboard
+bridging that WSLg handles. A genuine Windows or WSL container test is not
+possible: Windows containers require a Windows Docker host, and WSL2 needs
+host-kernel virtualization so it cannot run nested in a container on any
+host. A `wget` variant was also considered and rejected as a documented entry
+point: `wget` is **absent** from a bare Debian image, so it would need a
+prerequisite install step that `curl` does not, and `curl` is what the README
+documents.
+
 ### 7.6 The branch collapse
 
 Decided after the first draft, which does not mention it. The `mac` and
@@ -1496,6 +1579,22 @@ in 5.4. `main.rs:63` already returns `ExitCode`. `color-eyre` was evaluated
 and rejected: it writes ANSI escapes into a pipe, and grepping 0.6.5 for
 `is_terminal`, `supports_color`, and `Stream` returns zero matches, so no TTY
 detection exists in the crate.
+
+### 10.4a The bootstrap gate, added after the revision
+
+The owner required that the rewrite not be considered done until a bare image
+fully initializes through the documented `curl ... | sh` one-liner. Built as
+two permanent CI legs (Debian and Arch); see 7.5a.
+
+It found two of this spec's own blockers on real hardware within its first
+run -- the fixpoint non-convergence (3.3) and exit 0 on an incomplete machine
+(5.4) -- which is the strongest available evidence that both are real rather
+than argued. Its own first draft also shipped a fail-open bug of exactly the
+kind this spec keeps cataloguing: a failed fetch piped into `sh` exits 0, so
+the assertion that the run succeeded passed while nothing had been fetched.
+
+Windows and WSL are out of scope, and `wget` was rejected as an entry point;
+7.5a records why for both.
 
 ### 10.5 What the review did not change
 

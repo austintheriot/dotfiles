@@ -1,0 +1,61 @@
+# The documented one-liner, fetched over HTTP and piped, on a bare image.
+#
+# Dockerfile.bootstrap-bare beside this one already varies the three axes
+# that matter for privilege and prerequisites: root, no sudo, no git. This
+# image varies a fourth that none of the others touch -- how setup.sh
+# ARRIVES.
+#
+# bootstrap-bare-entrypoint.sh does this, and says so in its own comment
+# ("setup.sh normally arrives by curl. Here it comes out of the seed"):
+#
+#     cp /seed/setup.sh /tmp/setup.sh
+#     sh /tmp/setup.sh --repo "$SEED" < /dev/null
+#
+# So the local-file path is well covered and the documented path is not. The
+# README's one-liner is `curl -fsSL ... | sh`, and three of its properties
+# exist only when it is genuinely fetched and piped:
+#
+#   - stdin is the pipe, not a terminal, so setup.sh must infer unattended on
+#     its own. `< /dev/null` simulates that, but only because someone
+#     remembered to write it; a regression that made setup.sh depend on argv
+#     for this would pass the seeded harness.
+#   - `sh -s --` argument forwarding through a pipe is its own shape, and it
+#     is how every documented invocation passes flags.
+#   - the clone comes from a URL rather than a filesystem path, which is a
+#     different code path in setup.sh's own host pre-check.
+#
+# Python serves the seed from inside the container rather than from the host,
+# so the test needs no host networking and no `host.docker.internal`, which
+# is Docker-Desktop-specific and absent on the CI runner.
+#
+# Digest-pinned for the same reason as the others: a republished tag must not
+# change a passing test underneath us.
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+
+# Deliberately NOT installed: sudo, git, and every dependency, exactly as in
+# Dockerfile.bootstrap-bare.
+#
+# curl and ca-certificates ARE installed, and that is not a concession: the
+# documented entry point is `curl -fsSL ... | sh`, so a machine without curl
+# cannot reach setup.sh at all. Two dependencies also install through
+# `curl | sh` (rustup and oh-my-zsh), and an image without curl reports those
+# as failures no real user of the one-liner can hit.
+#
+# python3 is the one addition over the bare image, and it is harness
+# machinery rather than a dependency under test: it serves the seed over
+# HTTP. It is not in deps.conf, so its presence cannot mask a missing
+# dependency. A dedicated web server would be a second thing to pin.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# A pre-existing dotfile, as on any real machine, so the checkout collision is
+# exercised here too.
+RUN printf '# the user own zshrc, predating the bootstrap\n' > /root/.zshrc
+
+USER root
+WORKDIR /root
+ENV HOME=/root
+
+ENTRYPOINT ["/bin/sh", "/seed/bootstrap-curl-entrypoint.sh"]
+CMD []

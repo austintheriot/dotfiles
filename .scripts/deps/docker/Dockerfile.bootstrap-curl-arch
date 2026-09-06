@@ -1,0 +1,75 @@
+# The documented one-liner on a bare Arch image.
+#
+# Dockerfile.bootstrap-curl beside this one does the same on Debian. This
+# leg exists because the privileged-install path is per-manager, and Arch is
+# the only `pacman` shape in the repo:
+#
+#   - apt installs run `apt-get update -qq && apt-get install -y <pkg>`;
+#     pacman runs `pacman -Sy --noconfirm <pkg>`. Different commands,
+#     different failure text, and the escalation prefix is applied to both by
+#     the same code.
+#   - three dependencies carry a per-manager package NAME rather than the
+#     default (`gh` is `github-cli`, `cc` is `base-devel`, `pyyaml` is
+#     `python-yaml`), and the pacman spellings are only exercised here.
+#   - `dash` has no brew formula and no apt special case, so its pacman arm
+#     is reachable on this image alone.
+#
+# Dockerfile.arch also targets pacman, but it PREINSTALLS sudo and git and
+# only ever runs check-deps.sh. It cannot reach setup.sh's git-bootstrap path
+# or the escalation logic on a machine with no sudo, which is the pair of
+# bugs the bare Debian leg was written for.
+#
+# NOT digest-pinned, matching Dockerfile.arch and for its stated reason:
+# archlinux:base is rolling, an old digest's package database goes stale
+# against current mirrors, and a stale database makes every pacman install
+# fail with 404s. The tag is the stable reference here and the digest is not.
+#
+# amd64 only: upstream publishes no arm64 archlinux image, so both the CI job
+# and the local harness pass an explicit --platform. It runs under emulation
+# on Apple Silicon, which is what the two sandbox workarounds below are for.
+FROM archlinux:base
+
+# Deliberately NOT installed: sudo, git, and every dependency, matching
+# Dockerfile.bootstrap-curl. Those are the axes under test.
+#
+# curl and ca-certificates are prerequisites of the one-liner rather than
+# things the bootstrap installs. python is harness machinery: it serves the
+# seed over HTTP. On Arch the package is `python`, not `python3`, though the
+# `python3` binary name exists as a symlink, so the entrypoint is shared
+# unchanged between this image and the Debian one.
+#
+# `-Syu` rather than `-Sy`: on a rolling-release base, installing against a
+# refreshed database without upgrading the installed packages is the
+# partial-upgrade failure mode Arch warns about.
+#
+# --disable-sandbox is required to build under qemu emulation on an arm64
+# host. pacman 7 drops to an unprivileged `alpm` user and installs a seccomp
+# syscall filter for downloads; under emulation that call returns EINVAL and
+# pacman aborts with "error restricting syscalls via seccomp: 22!". The flag
+# costs nothing in a single-purpose throwaway container already running
+# everything as root.
+RUN pacman -Syu --noconfirm --disable-sandbox curl ca-certificates python \
+    && pacman -Scc --noconfirm
+
+# The same seccomp problem hits the pacman commands check-deps.sh itself
+# runs, and those live in shared cross-platform code where a
+# container-emulation workaround does not belong. Disabling it image-wide
+# keeps the engine's unmodified `pacman -Sy ...` working here. Without this
+# line every pacman install fails under emulation and the harness reports a
+# dozen false failures on an Apple Silicon machine.
+RUN printf 'DisableSandbox\n' >> /etc/pacman.conf
+
+# A pre-existing dotfile, as on any real machine, so the checkout collision is
+# exercised here too.
+RUN printf '# the user own zshrc, predating the bootstrap\n' > /root/.zshrc
+
+USER root
+WORKDIR /root
+ENV HOME=/root
+
+# The same entrypoint as the Debian leg. Sharing it is deliberate: the
+# assertions are about the bootstrap's contract, not about the distribution,
+# and a divergent copy per image is how one leg quietly stops checking
+# something the other still does.
+ENTRYPOINT ["/bin/sh", "/seed/bootstrap-curl-entrypoint.sh"]
+CMD []

@@ -107,6 +107,24 @@ assert_contains 'staged: the term is labelled a project term' \
     '[project term]' "$out"
 unstage_all
 
+# Regression for the term-scope filter matching nothing once more than one
+# file is staged. term_headers is a multi-line list of "+++ b/<path>" lines;
+# feeding it to awk through -v silently produces an empty lookup table
+# (awk -v does not accept a value containing a newline), so with a SECOND
+# staged file the term rule never sees any hunk as in scope and a leaked term
+# passes clean. A single staged file happened to still work, because the
+# lookup table being empty and the file's own header both failing to match
+# looked the same as "not in scope" either way; two files is the shape that
+# tells them apart.
+stage_file first.txt "$(clean_text)"
+stage_file second.txt "$(plant_term)"
+out=$(run_leak_check)
+assert_equals 'staged: a term in the second of two staged files is blocked' \
+    '1' "$(exit_of "$out")"
+assert_contains 'staged: the term is named even when it is not the first file' \
+    "$FAKE_TERM" "$out"
+unstage_all
+
 # The allow list applies to term rules only.
 stage_file docs/allowed.md "$(plant_term)"
 out=$(run_leak_check)

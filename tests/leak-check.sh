@@ -283,14 +283,19 @@ else
     # line names its path right after "+++ b/", so restricting to hunks whose
     # header path is in term_scope reuses the diff already captured above.
     term_headers=$(printf '%s\n' "$term_scope" | sed 's|^|+++ b/|')
-    term_staged=$(awk -v headers="$term_headers" '
-      BEGIN {
-        split(headers, lines, "\n")
-        for (i in lines) want[lines[i]] = 1
-      }
+    # The header list is read as awk's FIRST input file (via process
+    # substitution), not passed through -v: -v does not accept a value
+    # containing newlines, and term_headers is a multi-line list. Passing it
+    # through -v silently produced an empty `want` array (awk printed
+    # "newline in string" and moved on), so the term scope matched nothing
+    # for any diff with more than one file. NR==FNR is true only while awk is
+    # still reading that first file, which is the idiomatic way to build a
+    # lookup table before scanning the real input.
+    term_staged=$(awk '
+      NR == FNR { want[$0] = 1; next }
       /^\+\+\+ / { in_scope = ($0 in want); next }
       in_scope && /^\+/ && !/^\+\+\+/ { print }
-    ' <<< "$diff_text")
+    ' <(printf '%s\n' "$term_headers") <(printf '%s\n' "$diff_text"))
 
     while IFS= read -r pattern; do
       case "$pattern" in

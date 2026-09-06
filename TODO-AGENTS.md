@@ -6,6 +6,57 @@ Items marked BLOCKER came from an /expert-review survey pass on 2026-09-05.
 Each was reproduced by running the code, not by reading it; the reproduction
 is recorded with the item so it can be turned into a regression test first.
 
+The two PROMPT LATENCY items came from a research pass on 2026-09-06
+(docs/research/rust-external-tool-boundaries.md). Both are shell fixes, and
+between them they are worth more than the Rust migration they were found
+while investigating. Every number below was measured twice, once by the
+research agent and once independently.
+
+- PROMPT LATENCY. `parse_git_dirty` runs a full `git status` on every prompt
+  render, and costs 299ms in a large worktree.
+  `.zshrc:208-213` defines it and `.zshrc:224` calls it from inside `PS1`, so
+  it runs every time a prompt is drawn, in every pane.
+  Measured in a 24,453-file worktree:
+    git status (what it does now)            299.2 ms
+    git -c core.untrackedCache=true status   133.4 ms
+    git status --porcelain -uno --no-renames  44.6 ms
+  In `$HOME` it is only 12ms, because `.cfg/config` sets
+  `status.showUntrackedFiles=no`. The cost is paid in the real project
+  worktrees, which is where most prompts are drawn.
+  Two options, and they compose:
+    - Set `core.untrackedCache=true` (and consider `core.fsmonitor`). Both
+      are currently unset, verified. No code change, no behavior change.
+    - Switch to `--porcelain -uno --no-renames` and match on the porcelain
+      codes rather than three `[[ =~ ]]` tests against human-readable
+      English. That is also a correctness improvement: the current form
+      breaks if git ever rewords its output, and it depends on the user's
+      locale. It drops untracked-file colouring, so that part is a
+      deliberate behavior decision rather than a free win.
+  For scale: the tmux naming script this repo has spent much more effort on
+  costs 17.8ms on the same path.
+
+- PROMPT LATENCY. `.scripts/tmux-update-window-names.sh --all` costs 1473ms,
+  and roughly a third of that is spawns for directories that are not
+  repositories.
+  Measured: `--all` at 1473ms against 17.8ms for the default single-window
+  path, so the `-a` path is about 80x the per-prompt cost. It is reached from
+  `re` (the alias at .zshrc:85) and by anything that renames every window.
+  Two causes, both fixable in shell:
+    - The `--path-format` fallback at lines 105-113 fires whenever `$info` is
+      empty, which is every non-repo directory, not only git older than 2.31.
+      Git here is 2.50.0, so the fallback can never be needed for its stated
+      reason. Measured 24.27ms of wasted spawns per non-repo directory,
+      against 0.0033ms for a `test -e "$dir/.git"` guard.
+    - The per-window `git rev-parse` can be a direct read of `.git`,
+      `<gitdir>/commondir` and `<gitdir>/HEAD`. I verified agreement with
+      `git branch --show-current` across all 21 live window directories:
+      21 of 21 agree, including the linked worktrees whose `.git` is a file
+      pointing into a `worktrees/` directory.
+  Keep a `git rev-parse` fallback for the shapes a file read does not cover
+  (`gitdir:` chains, `core.worktree`, unusual ref backends), which is the
+  library-first-with-escape-hatch design starship uses. Build the equivalence
+  harness first: 21 live directories is evidence, not proof.
+
 - BLOCKER. `tests/leak-check.sh` reports a clean scan when the scan failed.
   `added_lines` detects a `git log` failure and calls `exit 2` (line 115),
   but it is only ever invoked inside a command substitution

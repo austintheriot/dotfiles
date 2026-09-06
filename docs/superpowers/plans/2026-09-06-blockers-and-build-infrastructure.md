@@ -6,11 +6,14 @@
 harness, then build the workspace and per-crate stamp infrastructure the Rust
 migration needs, without adding any migrated logic yet.
 
-**Architecture:** Two halves. Tasks 1-4 fix gates that currently pass silently;
-each separates the IO from the decision it was fused to, which is both the fix
-and what makes it testable. Tasks 5-8 convert `crates/` into a cargo workspace
-with per-crate stamps, pin the toolchain, and add `config doctor`. No migrated
-domain logic lands here.
+**Architecture:** Three groups. Tasks 1-4 fix gates that currently pass
+silently; each separates the IO from the decision it was fused to, which is
+both the fix and what makes it testable. Tasks 5-7 convert `crates/` into a
+cargo workspace with per-crate stamps, pin the toolchain, and add
+`config doctor`. Tasks 8-9 cut two measured prompt-latency costs that a
+research pass found while investigating the Rust question, and that are worth
+more than the migration they were found under. No migrated domain logic lands
+here.
 
 **Tech Stack:** zsh (`tests/leak-check.sh`), bash (test harness), POSIX sh
 (`.scripts/`), Rust 2024 with clap + anyhow (`crates/`), git plumbing
@@ -2244,6 +2247,336 @@ freshness check."
 
 ---
 
+## Task 8: The prompt stops running a full `git status`
+
+Found by a research pass while investigating the Rust question, and worth more
+than the migration it was found under. `.zshrc:208-213` defines
+`parse_git_dirty` and `.zshrc:224` calls it from inside `PS1`, so it runs a
+full `git status` every time a prompt is drawn, in every pane.
+
+Measured twice, once by the research agent and once independently, in a
+24,453-file worktree:
+
+| Form | Cost |
+|---|---|
+| `git status` (what it does now) | **299.2 ms** |
+| `git -c core.untrackedCache=true status` | 133.4 ms |
+| `git status --porcelain -uno --no-renames` | **44.6 ms** |
+
+In `$HOME` it costs only 12ms, because `.cfg/config` sets
+`status.showUntrackedFiles=no`. The cost is paid in the project worktrees,
+which is where most prompts are drawn. For scale, the tmux naming script this
+plan spends two tasks on costs 17.8ms on the same path.
+
+The porcelain form is also a correctness improvement. The current code matches
+three `[[ =~ ]]` patterns against human-readable English (`"Changes to be
+committed:"`), which depends on git's wording and on the user's locale.
+Porcelain codes are a stable machine format.
+
+It drops untracked-file colouring, which is a deliberate behavior decision
+rather than a free win. `-uno` is what makes it fast; keeping untracked
+detection means keeping most of the cost.
+
+**Files:**
+- Modify: `.zshrc:208-213`
+- Test: `tests/zshrc-git-aliases.test.sh`
+
+**Interfaces:**
+- Produces: `parse_git_dirty` keeps its name, its call site, and its output
+  contract (zero or more `%F{colour}` escapes on stdout). Only the mechanism
+  and the untracked case change.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `tests/zshrc-git-aliases.test.sh`, before its `finish`:
+
+```bash
+# parse_git_dirty runs inside PS1, so it costs its full runtime on every
+# prompt in every pane. A bare `git status` measured 299ms in a 24k-file
+# worktree; the porcelain form measured 44.6ms.
+#
+# Asserted on the source rather than by timing, because a timing assertion
+# here would be measuring the machine's git, not this change.
+ZSHRC="$DOTFILES_ROOT/.zshrc"
+
+assert_succeeds 'parse_git_dirty is still defined' \
+    grep -q '^parse_git_dirty()' "$ZSHRC"
+
+dirty_body=$(sed -n '/^parse_git_dirty()/,/^}/p' "$ZSHRC")
+assert_succeeds 'the dirty check was extracted' test -n "$dirty_body"
+
+assert_succeeds 'it asks git for a machine format' \
+    grep -q -- '--porcelain' <<<"$dirty_body"
+assert_succeeds 'it does not walk untracked files' \
+    grep -q -- '-uno' <<<"$dirty_body"
+assert_equals 'it no longer matches human-readable git prose' '' \
+    "$(grep -o 'Changes to be committed\|Changes not staged\|Untracked files' <<<"$dirty_body" || true)"
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `~/tests/zshrc-git-aliases.test.sh`
+Expected: FAIL on `it asks git for a machine format` and on
+`it no longer matches human-readable git prose`.
+
+- [ ] **Step 3: Write the implementation**
+
+Replace `parse_git_dirty` in `.zshrc`:
+
+```zsh
+# Runs inside PS1, so this costs its full runtime on every prompt in every
+# pane. A bare `git status` measured 299ms in a 24k-file worktree against
+# 44.6ms for this form, and `-uno` is the flag that buys most of it.
+#
+# Porcelain codes rather than the three matches against human-readable
+# English this used before: git's wording is not a contract, and the previous
+# form silently stopped colouring anything under a non-English locale.
+#
+# Untracked files are deliberately not reported. Detecting them is what costs
+# the other 255ms, and an untracked file is visible from `config status`
+# rather than needing a prompt colour.
+parse_git_dirty() {
+  local porcelain
+  porcelain=$(git status --porcelain -uno --no-renames 2>/dev/null) || return 0
+  [ -n "$porcelain" ] || return 0
+  # Column 1 is the index, column 2 the worktree. Staged beats unstaged for
+  # the colour, matching what the previous form did by check order.
+  case $porcelain in
+    [MADRC]*) printf '%%F{green}' ;;
+    ?[MD]*)   printf '%%F{yellow}' ;;
+  esac
+}
+```
+
+Note the doubled `%%` in `printf`: `%F{green}` is a zsh prompt escape and
+`printf` would otherwise consume the `%F`.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `~/tests/zshrc-git-aliases.test.sh`
+Expected: PASS.
+
+Then confirm the prompt still colours correctly, by hand in a real repo:
+
+```bash
+cd ~/Documents/code/*/1 2>/dev/null || cd ~
+# stage something, confirm green; modify without staging, confirm yellow
+```
+
+Run: `~/tests/run-all.sh`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+Note `.zshrc` does **not** match `TRIGGER_PATHS` in `tests/pre-push:38`, so
+pushing this file alone runs none of the six `zshrc-*` suites that test it.
+That gap is recorded in `TODO-AGENTS.md`. Run the suite locally before
+committing; do not rely on the hook here.
+
+```bash
+~/tests/run-all.sh
+config add .zshrc tests/zshrc-git-aliases.test.sh
+config commit -m "Stop running a full git status on every prompt
+
+parse_git_dirty is called from inside PS1, so it ran a full \`git status\`
+every time a prompt was drawn, in every pane. Measured twice in a
+24,453-file worktree: 299ms for the old form, 44.6ms for this one. In \$HOME
+it was only 12ms because .cfg/config sets status.showUntrackedFiles=no, so
+the cost was paid in the project worktrees where most prompts are drawn.
+
+For scale, the tmux window-naming script costs 17.8ms on the same path.
+
+Also a correctness fix. The old form matched three patterns against
+human-readable English, so it depended on git's wording and on the user's
+locale. Porcelain codes are a stable machine format.
+
+Untracked files are no longer coloured. Detecting them is what costs the
+other 255ms, and \`config status\` reports them without a prompt colour."
+```
+
+---
+
+## Task 9: The `--all` naming path stops spawning git per window
+
+`.scripts/tmux-update-window-names.sh --all` measures **1473 ms**, against
+17.8 ms for the default single-window path, so the `-a` path is roughly 80x
+the per-prompt cost. It is reached from the `re` alias (`.zshrc:85`) and by
+anything renaming every window.
+
+Two causes, both fixable in shell, both measured:
+
+1. **The `--path-format` fallback fires on every non-repo directory.** Lines
+   105-113 exist for git older than 2.31, and the comment says so. But the
+   condition is `[ -z "$info" ]`, and `$info` is empty for any directory that
+   is not a repository, so the fallback runs a *second* wasted `git rev-parse`
+   there. Git here is 2.50.0, so the fallback can never fire for its stated
+   reason. Measured: 24.27 ms of wasted spawns per non-repo directory, against
+   0.0033 ms for a `test -e` guard.
+2. **The per-window `git rev-parse` can be a file read.** Verified against
+   `git branch --show-current` across all 21 live window directories: 21 of 21
+   agree, including the linked worktrees whose `.git` is a file pointing into
+   a `worktrees/` directory.
+
+Keep a `git rev-parse` fallback for shapes a file read does not cover
+(`gitdir:` chains, `core.worktree`, unusual ref backends). That is the
+library-first-with-escape-hatch design starship uses, and 21 live directories
+is evidence rather than proof.
+
+**Files:**
+- Modify: `.scripts/tmux-update-window-names.sh` (the repo/branch derivation)
+- Test: `tests/tmux-update-window-names.test.sh`
+
+**Interfaces:**
+- Produces: the derivation keeps its current output contract, a repo name and
+  a revision. Only the mechanism changes. The `git rev-parse` path remains as
+  the fallback, so a shape the file read cannot handle still resolves.
+
+- [ ] **Step 1: Write the failing equivalence test**
+
+This is the harness the research note asks for. Append to
+`tests/tmux-update-window-names.test.sh`:
+
+```bash
+# The file-read derivation must agree with git on every shape this repo
+# actually produces, including linked worktrees, before it can replace the
+# spawn. 21 live window directories agreed when this was measured, which is
+# evidence rather than proof, so the fixtures below pin the shapes.
+eq_repo=$(make_repo eqmain main)
+printf 'x\n' > "$eq_repo/file.txt"
+git -C "$eq_repo" -c user.email=t@t -c user.name=t add -A
+git -C "$eq_repo" -c user.email=t@t -c user.name=t commit -q -m add
+
+eq_wt="$FIXTURES/eqwork"
+git -C "$eq_repo" worktree add -q -b feature/branch "$eq_wt"
+
+not_repo="$FIXTURES/eqplain"
+mkdir -p "$not_repo"
+
+# Compare the script's derivation against git, per shape.
+for probe in "$eq_repo" "$eq_wt" "$not_repo"; do
+    expected=$(git -C "$probe" branch --show-current 2>/dev/null || true)
+    actual=$("$SCRIPT" --print-revision "$probe" 2>/dev/null || true)
+    assert_equals "the derivation matches git for $(basename "$probe")" \
+        "$expected" "$actual"
+done
+
+# Non-repo directories must cost no git spawns at all.
+assert_equals 'a non-repo directory yields no revision' '' \
+    "$("$SCRIPT" --print-revision "$not_repo" 2>/dev/null || true)"
+```
+
+`--print-revision` is a new debug-only flag whose sole purpose is making the
+derivation testable without driving a tmux server. Add it in Step 3.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `~/tests/tmux-update-window-names.test.sh`
+Expected: FAIL, because `--print-revision` does not exist yet, so every
+`actual` is empty while `expected` names a branch.
+
+- [ ] **Step 3: Write the implementation**
+
+In `.scripts/tmux-update-window-names.sh`:
+
+First add the `--print-revision <dir>` flag to the argument parser, printing
+the derived revision for one directory and exiting. It exists so the
+derivation is testable without a tmux server, which is the reason the current
+equivalence claim rests on live windows rather than fixtures.
+
+Then guard the whole derivation, so a non-repo directory costs zero spawns:
+
+```sh
+# A directory that is not a repository costs 24.27ms in wasted git spawns
+# without this guard, measured, and most windows in a large session are not
+# repositories.
+[ -e "$directory/.git" ] || return 0
+```
+
+Then read the refs directly, keeping `git rev-parse` as the fallback:
+
+```sh
+# Read HEAD directly rather than spawning git. Verified to agree with
+# `git branch --show-current` on all 21 live window directories, including
+# linked worktrees whose .git is a file.
+#
+# The rev-parse fallback stays for shapes this does not model: a `gitdir:`
+# chain more than one level deep, core.worktree, or a ref backend that does
+# not store a readable HEAD. Library first, escape hatch behind it.
+git_dir=''
+if [ -d "$directory/.git" ]; then
+    git_dir="$directory/.git"
+elif [ -f "$directory/.git" ]; then
+    git_dir=$(sed -n 's/^gitdir: //p' "$directory/.git")
+    case $git_dir in
+        ''|/*) ;;
+        *) git_dir="$directory/$git_dir" ;;
+    esac
+fi
+
+revision=''
+if [ -n "$git_dir" ] && [ -f "$git_dir/HEAD" ]; then
+    revision=$(sed -n 's|^ref: refs/heads/||p' "$git_dir/HEAD")
+fi
+
+# Fall back to git only when the file read did not resolve a branch.
+if [ -z "$revision" ]; then
+    revision=$(git -C "$directory" branch --show-current 2>/dev/null)
+fi
+```
+
+Delete the `--path-format` fallback block at lines 105-113. Its stated reason
+is git older than 2.31, git here is 2.50.0, and its real effect is a second
+wasted spawn on every non-repo directory.
+
+- [ ] **Step 4: Run tests, then measure**
+
+Run: `~/tests/tmux-update-window-names.test.sh`
+Expected: PASS.
+
+Measure the path this task exists to fix:
+
+```bash
+zsh -c 'zmodload zsh/datetime; s=$EPOCHREALTIME
+  ~/.scripts/tmux-update-window-names.sh --all >/dev/null 2>&1
+  e=$EPOCHREALTIME; printf "--all: %.0f ms\n" $(( (e-s)*1000 ))'
+```
+Expected: well under the 1473 ms baseline. The research pass measured 32 ms
+for the equivalent POSIX sh implementation.
+
+Run: `~/tests/run-all.sh`
+Expected: PASS. Note `tmux-update-window-names.test.sh` is the suite with the
+known 25% flake on the live tmux server (recorded in `TODO-AGENTS.md`), so a
+single failure there is worth a rerun before treating it as a regression.
+
+- [ ] **Step 5: Commit**
+
+```bash
+config add .scripts/tmux-update-window-names.sh \
+    tests/tmux-update-window-names.test.sh
+config commit -m "Derive repo and branch by reading refs, not by spawning git
+
+--all measured 1473ms against 17.8ms for the single-window path, so the -a
+path was roughly 80x the per-prompt cost. Two causes, both measured.
+
+The --path-format fallback fired on every non-repo directory, not only on git
+older than 2.31: its condition is an empty \$info, and \$info is empty
+whenever the directory is not a repository. Git here is 2.50.0, so it could
+never fire for its stated reason, and it cost a second wasted spawn each
+time. Measured 24.27ms per non-repo directory against 0.0033ms for a test -e
+guard.
+
+The per-window rev-parse is now a direct read of .git, commondir and HEAD.
+Verified against git branch --show-current on all 21 live window
+directories: 21 of 21 agree, including linked worktrees whose .git is a file.
+
+git rev-parse remains as the fallback for shapes the file read does not
+model, so an unusual layout still resolves. Adds --print-revision so the
+derivation is testable against fixtures rather than against whatever windows
+happen to be open."
+```
+
+---
+
 ## Self-Review
 
 **Spec coverage.** Every spec item for steps 0 through 2:
@@ -2266,6 +2599,8 @@ freshness check."
 | `config doctor` (spec 8.2) | 7 |
 | Documentation (spec 8.3) | 7 |
 | False-refusal regression test (spec 9.4) | 6 |
+| `parse_git_dirty` prompt cost (not in spec; research 2026-09-06) | 8 |
+| `--all` naming path cost (not in spec; research 2026-09-06) | 9 |
 
 Not covered, deliberately: `--describe` on the dispatcher (spec step 1) is a
 prerequisite for *porting*, and this plan ports nothing, so it moves to the

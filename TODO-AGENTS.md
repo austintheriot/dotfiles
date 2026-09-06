@@ -2,9 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- [CLAIMED] Readme cleanup:
-  - "Welcome! Here is my rather unpolished .dotfile configuration. Below are some setup notes to my future self, for when I inevitably completely forget what I did or how I did it." remove this. This dotfiles repo is now quite polished.
-    - Also cut down the README.md down to the most basic need-to-known eli5 details (install script, use `config` to init the repo & stage files, etc.)
 - Add a perf test to ensure against regressions to shell startup speed moving forward
 - Add tests for neovim setup after running setup.sh. When I tested just now, lots of deps failed to install--make sure setup is clean after runnign nvim for the first time on a fresh bootstrap session. Example: "eslint-lsp: failed to install
 css-variables-language-server: failed to install

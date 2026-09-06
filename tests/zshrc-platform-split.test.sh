@@ -110,7 +110,10 @@ if command -v zsh >/dev/null 2>&1; then
             '' "$(printf '%s' "$output" | grep -o "loaded-$other")"
     done
 else
-    printf 'zshrc-platform-split: skipped shell assertions, zsh not installed\n'
+    skip 'zsh not installed: a mac shell loads the mac variant'
+    skip 'zsh not installed: a mac shell does not load the linux variant'
+    skip 'zsh not installed: a linux shell loads the linux variant'
+    skip 'zsh not installed: a linux shell does not load the mac variant'
 fi
 
 # --- no setting is made twice ------------------------------------------------

@@ -47,9 +47,19 @@ export PYTHON_BIN
 FIXTURES=$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-test-XXXXXX")
 TEST_NAME=$(basename "${BASH_SOURCE[1]:-$0}" .test.sh)
 
-passed=0
-failed=0
-skipped=0
+# One line per assertion outcome: "pass", "fail" or "skip".
+#
+# A file rather than three counters because assertions run inside command
+# substitutions in several suites, and a subshell cannot increment its
+# parent's variable, so those outcomes vanished silently. This is the same
+# reason SESSION_LIST is a file, and the same failure it prevents: a count
+# that quietly stops rising.
+TALLY="$FIXTURES/.tally"
+: > "$TALLY"
+
+record_outcome() {
+    printf '%s\n' "$1" >> "$TALLY"
+}
 
 # Tracked in a file, not an array: `new_test_session` is normally called inside
 # a command substitution, and a subshell cannot append to the parent's array.
@@ -195,10 +205,10 @@ make_worktree() {
 assert_equals() {
     local description=$1 expected=$2 actual=$3
     if [ "$expected" = "$actual" ]; then
-        passed=$((passed + 1))
+        record_outcome pass
         printf 'ok: %s\n' "$description"
     else
-        failed=$((failed + 1))
+        record_outcome fail
         printf 'FAIL: %s\n' "$description"
         printf '      expected: [%s]\n' "$expected"
         printf '      actual:   [%s]\n' "$actual"
@@ -209,11 +219,11 @@ assert_contains() {
     local description=$1 needle=$2 haystack=$3
     case $haystack in
         *"$needle"*)
-            passed=$((passed + 1))
+            record_outcome pass
             printf 'ok: %s\n' "$description"
             ;;
         *)
-            failed=$((failed + 1))
+            record_outcome fail
             printf 'FAIL: %s\n' "$description"
             printf '      expected to contain: [%s]\n' "$needle"
             printf '      actual:              [%s]\n' "$haystack"
@@ -226,13 +236,13 @@ assert_succeeds() {
     local status=0
     "$@" >/dev/null 2>&1 || status=$?
     if [ "$status" -eq 0 ]; then
-        passed=$((passed + 1))
+        record_outcome pass
         printf 'ok: %s\n' "$description"
     else
         # Captured before anything else runs: the counter increment reset $?,
         # so reading it afterwards reported the increment's status and every
         # failure in the suite claimed "exited 0".
-        failed=$((failed + 1))
+        record_outcome fail
         printf 'FAIL: %s (exited %d)\n' "$description" "$status"
     fi
 }
@@ -254,17 +264,84 @@ assert_succeeds() {
 # line a reader cannot act on, and acting on it is the whole point.
 skip() {
     local reason=$1
-    skipped=$((skipped + 1))
+    record_outcome skip
     printf 'skip: %s\n' "$reason"
 }
 
+# The verdict for a tally, as a value on stdout. Reads no globals, performs no
+# IO, and is callable directly from a test.
+#
+# A string rather than an exit status on purpose. A status-returning verdict
+# would reintroduce the bug assert_succeeds had for years: $? is destroyed by
+# any intervening command, so one line inserted between the call and the read
+# would silently turn "empty" into "pass". A string cannot be clobbered.
+#
+# "empty" is a distinct verdict rather than a kind of pass, because a suite
+# that ran nothing is not a suite that passed. `skip` already fixed the
+# within-suite case; this is the whole-suite case.
+verdict_for() {
+    local pass_count=$1 fail_count=$2 skip_count=$3
+    if [ $((pass_count + fail_count + skip_count)) -eq 0 ]; then
+        printf 'empty'
+    elif [ "$fail_count" -gt 0 ]; then
+        printf 'fail'
+    else
+        printf 'pass'
+    fi
+}
+
+# The summary line for a tally, as a value.
+#
+# The single owner of the format run-all.sh parses with a regex. A test
+# asserts that regex against this output, so the two cannot drift apart
+# silently.
+#
 # The skip count is appended only when there is one. A trailing "0 skipped" on
-# every clean suite is noise, and noise is what a reader learns to scan past --
-# which is the habit this whole mechanism exists to interrupt.
+# every clean suite is noise, and noise is what a reader learns to scan past,
+# which is the habit this mechanism exists to interrupt.
+summary_for() {
+    local name=$1 pass_count=$2 fail_count=$3 skip_count=$4
+    local line
+    line=$(printf '%s: %d passed, %d failed' "$name" "$pass_count" "$fail_count")
+    [ "$skip_count" -eq 0 ] || line="$line, $skip_count skipped"
+    printf '%s' "$line"
+}
+
+# Reads the tally, prints the summary, returns the exit status. The IO edge,
+# and the only function here that touches state.
+#
+# Read-only: several suites call finish more than once, in an early-skip
+# branch and again at the end, and run-all.sh reads the last summary line. So
+# the tally is truncated exactly once, at source time, and finish never
+# truncates it. Calling finish twice prints growing cumulative totals, which
+# is the existing behavior and what run-all.sh's `tail -n1` expects.
+#
+# No `|| printf '0'` on the counts: grep -c prints 0 and exits 1 when there
+# are no matches, so the fallback would append a second 0 and break the
+# arithmetic. The file always exists after the truncate above.
 finish() {
-    local summary
-    summary=$(printf '%s: %d passed, %d failed' "$TEST_NAME" "$passed" "$failed")
-    [ "$skipped" -eq 0 ] || summary="$summary, $skipped skipped"
+    local pass_count fail_count skip_count summary outcome
+    pass_count=$(grep -c '^pass$' "$TALLY")
+    fail_count=$(grep -c '^fail$' "$TALLY")
+    skip_count=$(grep -c '^skip$' "$TALLY")
+
+    summary=$(summary_for "$TEST_NAME" "$pass_count" "$fail_count" "$skip_count")
     printf '\n%s\n' "$summary"
-    [ "$failed" -eq 0 ]
+
+    outcome=$(verdict_for "$pass_count" "$fail_count" "$skip_count")
+    case $outcome in
+        pass) return 0 ;;
+        fail) return 1 ;;
+        empty)
+            printf '%s: no assertions ran\n' "$TEST_NAME" >&2
+            return 1
+            ;;
+        # Shell has no exhaustiveness check, so without this arm a typo in
+        # verdict_for falls through and finish returns 0, which is the
+        # fail-open shape this change exists to close.
+        *)
+            printf '%s: lib.sh bug, unknown verdict: %s\n' "$TEST_NAME" "$outcome" >&2
+            return 2
+            ;;
+    esac
 }

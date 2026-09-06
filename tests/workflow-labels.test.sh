@@ -22,7 +22,24 @@ assert_succeeds 'the workflow directory exists' test -d "$WORKFLOW_DIR"
 # $PYTHON_BIN comes from lib.sh, which resolves the real interpreter once,
 # past the pyenv shim: 750ms per start against 40ms. Three starts happen below.
 if [ -z "${PYTHON_BIN:-}" ]; then
-    printf '      skipped: no python interpreter\n'
+    skip 'no python interpreter: found at least one workflow'
+    skip 'no python interpreter: every workflow has a name'
+    skip 'no python interpreter: no workflow name merely restates its filename'
+    skip 'no python interpreter: every job has a name'
+    skip 'no python interpreter: a workflow runs the test suite'
+    skip 'no python interpreter: the suite workflow runs on push'
+    skip 'no python interpreter: the suite workflow runs run-all.sh'
+    skip 'no python interpreter: the matrix includes a linux runner'
+    skip 'no python interpreter: the matrix includes a macos runner'
+    skip 'no python interpreter: the matrix does not fail fast'
+    skip 'no python interpreter: the branch-drift workflow exists'
+    skip 'no python interpreter: the drift workflow checks for diverged paths'
+    skip 'no python interpreter: the drift workflow checks for unlabeled files'
+    skip 'no python interpreter: a step-summary branch tests for both failure markers together'
+    skip 'no python interpreter: the combined branch has its own heading'
+    skip 'no python interpreter: the combined branch has a parseable heading'
+    skip 'no python interpreter: the combined heading differs from "Unlabeled files"'
+    skip 'no python interpreter: the combined heading differs from "Branch drift"'
     finish
     exit 0
 fi

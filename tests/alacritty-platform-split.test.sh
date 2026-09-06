@@ -123,7 +123,7 @@ if git --git-dir="$DOTFILES_ROOT/.cfg" --work-tree="$DOTFILES_ROOT" \
         ls-files ".config/alacritty/alacritty-platform.toml")
     assert_equals 'the generated pointer is not tracked' '' "$tracked"
 else
-    printf 'alacritty-platform-split: skipped tracking check, no repo\n'
+    skip 'no repository here, so the generated pointer cannot be checked against it'
 fi
 
 finish

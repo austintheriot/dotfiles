@@ -35,11 +35,35 @@ ZSHRC="$DOTFILES_ROOT/.zshrc"
 PYENV_DIR="$HOME/.pyenv"
 
 if [ "$HOME" != "$DOTFILES_ROOT" ] || [ ! -f "$ZSHRC" ]; then
-    printf 'zshrc-python-startup: skipped, HOME is not the repo\n'
+    skip 'HOME is not the repo: startup does not eval `pyenv init`'
+    skip 'HOME is not the repo: startup does not run `pyenv rehash`'
+    skip 'HOME is not the repo: python3 resolves through the pyenv shims'
+    skip 'HOME is not the repo: pip3 resolves through the pyenv shims'
+    skip 'HOME is not the repo: PYENV_SHELL is exported at startup'
+    skip 'HOME is not the repo: PYENV_ROOT is exported at startup'
+    skip 'HOME is not the repo: pyenv is defined but not yet loaded'
+    skip 'HOME is not the repo: the expected version was resolved'
+    skip 'HOME is not the repo: the first pyenv call returns the right version'
+    skip 'HOME is not the repo: pyenv is loaded for real after the first call'
+    skip 'HOME is not the repo: a second pyenv call still works'
+    skip 'HOME is not the repo: the shims directory appears on PATH exactly once after loading'
+    finish
     exit 0
 fi
 if [ ! -d "$PYENV_DIR" ]; then
-    printf 'zshrc-python-startup: skipped, no pyenv at %s\n' "$PYENV_DIR"
+    skip "no pyenv at $PYENV_DIR: startup does not eval \`pyenv init\`"
+    skip "no pyenv at $PYENV_DIR: startup does not run \`pyenv rehash\`"
+    skip "no pyenv at $PYENV_DIR: python3 resolves through the pyenv shims"
+    skip "no pyenv at $PYENV_DIR: pip3 resolves through the pyenv shims"
+    skip "no pyenv at $PYENV_DIR: PYENV_SHELL is exported at startup"
+    skip "no pyenv at $PYENV_DIR: PYENV_ROOT is exported at startup"
+    skip "no pyenv at $PYENV_DIR: pyenv is defined but not yet loaded"
+    skip "no pyenv at $PYENV_DIR: the expected version was resolved"
+    skip "no pyenv at $PYENV_DIR: the first pyenv call returns the right version"
+    skip "no pyenv at $PYENV_DIR: pyenv is loaded for real after the first call"
+    skip "no pyenv at $PYENV_DIR: a second pyenv call still works"
+    skip "no pyenv at $PYENV_DIR: the shims directory appears on PATH exactly once after loading"
+    finish
     exit 0
 fi
 

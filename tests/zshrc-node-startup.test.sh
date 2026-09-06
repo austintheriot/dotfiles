@@ -37,11 +37,27 @@ NVM_NODE_DIR="$HOME/.nvm/versions/node"
 # .zshrc-mac is absent whenever the linux branch runs on macOS, so the
 # assertions would measure the runner's shell, not this repo. Skip there.
 if [ "$(uname -s)" != "Darwin" ]; then
-    printf 'zshrc-node-startup: skipped, .zshrc-mac is macOS-only\n'
+    skip '.zshrc-mac is macOS-only: startup does not source nvm.sh'
+    skip '.zshrc-mac is macOS-only: startup does not run `nvm use`'
+    skip '.zshrc-mac is macOS-only: startup does not run `nvm ls`'
+    skip '.zshrc-mac is macOS-only: node resolves to the newest installed v24'
+    skip '.zshrc-mac is macOS-only: npm resolves to the newest installed v24'
+    skip '.zshrc-mac is macOS-only: npx resolves to the newest installed v24'
+    skip '.zshrc-mac is macOS-only: node reports the newest installed v24'
+    skip '.zshrc-mac is macOS-only: nvm is defined but not yet loaded'
+    finish
     exit 0
 fi
 if [ "$HOME" != "$DOTFILES_ROOT" ] || [ ! -f "$ZSHRC_MAC" ]; then
-    printf 'zshrc-node-startup: skipped, HOME is not the repo or .zshrc-mac is absent\n'
+    skip 'HOME is not the repo or .zshrc-mac is absent: startup does not source nvm.sh'
+    skip 'HOME is not the repo or .zshrc-mac is absent: startup does not run `nvm use`'
+    skip 'HOME is not the repo or .zshrc-mac is absent: startup does not run `nvm ls`'
+    skip 'HOME is not the repo or .zshrc-mac is absent: node resolves to the newest installed v24'
+    skip 'HOME is not the repo or .zshrc-mac is absent: npm resolves to the newest installed v24'
+    skip 'HOME is not the repo or .zshrc-mac is absent: npx resolves to the newest installed v24'
+    skip 'HOME is not the repo or .zshrc-mac is absent: node reports the newest installed v24'
+    skip 'HOME is not the repo or .zshrc-mac is absent: nvm is defined but not yet loaded'
+    finish
     exit 0
 fi
 
@@ -63,7 +79,12 @@ assert_equals 'startup does not run `nvm ls`' \
 newest_v24=$(ls -d "$NVM_NODE_DIR"/v24.* 2>/dev/null | sort -V | tail -1)
 
 if [ -z "$newest_v24" ]; then
-    printf 'zshrc-node-startup: skipped, no v24 installed under %s\n' "$NVM_NODE_DIR"
+    skip "no v24 installed under $NVM_NODE_DIR: node resolves to the newest installed v24"
+    skip "no v24 installed under $NVM_NODE_DIR: npm resolves to the newest installed v24"
+    skip "no v24 installed under $NVM_NODE_DIR: npx resolves to the newest installed v24"
+    skip "no v24 installed under $NVM_NODE_DIR: node reports the newest installed v24"
+    skip "no v24 installed under $NVM_NODE_DIR: nvm is defined but not yet loaded"
+    finish
     exit 0
 fi
 

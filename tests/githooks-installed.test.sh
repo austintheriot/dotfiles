@@ -24,7 +24,18 @@ CFG_DIR="$DOTFILES_ROOT/.cfg"
 # `finish` reports the tally and returns a status; it does not exit. An early
 # skip has to exit explicitly, or every assertion below still runs.
 if [ ! -d "$CFG_DIR" ]; then
-    printf '      skipped: no .cfg repository at %s\n' "$CFG_DIR"
+    # One skip per assertion the block below would have run, so the count on
+    # the summary line matches what was lost. A bare printf here reported
+    # "0 passed, 0 failed" and run-all.sh printed PASS, which is how this
+    # suite removed itself from the container and from CI, where
+    # DOTFILES_ROOT is a checkout with .git and no .cfg.
+    skip "no .cfg repository at $CFG_DIR: core.hooksPath is unset"
+    skip "no .cfg repository at $CFG_DIR: pre-commit is a symlink"
+    skip "no .cfg repository at $CFG_DIR: pre-commit is executable"
+    skip "no .cfg repository at $CFG_DIR: pre-commit points at tests/pre-commit"
+    skip "no .cfg repository at $CFG_DIR: pre-push is a symlink"
+    skip "no .cfg repository at $CFG_DIR: pre-push is executable"
+    skip "no .cfg repository at $CFG_DIR: pre-push points at tests/pre-push"
     finish
     exit 0
 fi

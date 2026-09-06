@@ -189,4 +189,41 @@ write_suite "$rc_suite" "assert_succeeds 'a command that exits 42' sh -c 'exit 4
 output=$(bash "$rc_suite" 2>&1 || true)
 assert_contains 'assert_succeeds reports the real exit code' 'exited 42' "$output"
 
+# --- verdict_for is a pure function of three counts ----------------------
+#
+# The verdict is now a pure function of three counts, so these are table tests
+# with no subprocess and no fixture. That is the thing the module-global
+# counters made impossible.
+assert_equals 'a passing tally is pass'        'pass'  "$(verdict_for 1 0 0)"
+assert_equals 'any failure is fail'            'fail'  "$(verdict_for 3 1 0)"
+assert_equals 'a skip-only tally still passes' 'pass'  "$(verdict_for 0 0 1)"
+assert_equals 'nothing at all is empty'        'empty' "$(verdict_for 0 0 0)"
+
+# The format run-all.sh parses lives in one function. Asserted through the
+# exact expression run-all.sh uses, so the two cannot drift apart silently.
+summary=$(summary_for 'probe' 1 2 3)
+assert_equals 'the summary names all three counts' \
+    'probe: 1 passed, 2 failed, 3 skipped' "$summary"
+assert_equals 'run-all.sh can extract the skip count from it' '3' \
+    "$(printf '%s\n' "$summary" \
+        | sed -n 's/^[^:]*: [0-9]* passed, [0-9]* failed, \([0-9]*\) skipped$/\1/p')"
+assert_equals 'a clean summary omits the skip count' \
+    'probe: 1 passed, 0 failed' "$(summary_for 'probe' 1 0 0)"
+
+# A suite that runs no assertions is not a passing suite.
+empty_suite="$FIXTURES/empty.test.sh"
+write_suite "$empty_suite" ''
+output=$(bash "$empty_suite" 2>&1)
+status=$?
+assert_equals 'a zero-assertion suite exits non-zero' '1' "$status"
+assert_contains 'the verdict says no assertions ran' 'no assertions ran' "$output"
+
+# An assertion inside a command substitution must still count. This is the
+# latent bug the tally file fixes: a subshell cannot increment its parent's
+# variable, so these vanished silently.
+sub_suite="$FIXTURES/subshell.test.sh"
+write_suite "$sub_suite" 'result=$(assert_equals "inside a substitution" a a)'
+output=$(bash "$sub_suite" 2>&1)
+assert_contains 'a subshell assertion reaches the tally' '1 passed' "$output"
+
 finish

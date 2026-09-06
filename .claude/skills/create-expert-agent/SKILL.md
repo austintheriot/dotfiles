@@ -48,6 +48,8 @@ Keep these out of version control unless the repo is private. They are machine-l
 
 Note also that a researcher's final summary usually arrives complete before its file is finished. The summary is what you write from; the file is durability. Do not block on the file.
 
+**Sweep for stragglers when the pass ends.** A researcher that reports complete may still have live sub-agents, and they keep burning tokens after their output has already been merged into the parent's report. Run `ListAgents` once the writing is done and stop anything still running -- a completed parent is not evidence that its children exited. The same check catches an agent stuck emitting duplicate no-op completion notifications, which is the other way this shows up.
+
 **When fetching is blocked.** The `WebSearch` budget is session-wide and runs out, often mid-pass, and the failure is not obvious -- a researcher that loses search starts guessing URLs from memory, and guessed URLs 404. Tell researchers the budget state, and give them the fallback chain that works without search:
 
 1. Fetch the publisher's index or landing page, and ask for the **verbatim href URLs** of what it links. This substitutes for search on any site with a document index.

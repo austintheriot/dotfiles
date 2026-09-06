@@ -106,4 +106,62 @@ callers=$(grep -rln 'check-branch-drift\.sh' \
 assert_equals 'no script, workflow, or rule outside the two drift test files still names check-branch-drift.sh' \
     '' "$callers"
 
+# --- toolchain pin, workspace, and untracked seed ----------------------------
+#
+# The runtime container image is deliberately Rust-free (the binary is copied
+# in from a builder stage) and does not COPY crates/, so these checks skip
+# there the same way the config-build assertions above skip on no cargo.
+
+TOOLCHAIN_FILE="$DOTFILES_ROOT/crates/rust-toolchain.toml"
+if [ -f "$TOOLCHAIN_FILE" ] && command -v rustc >/dev/null 2>&1; then
+    # The stamp covers source, not compiler. edition = "2024" is not a pin:
+    # every toolchain from 1.85 onward compiles it, so mac and linux could
+    # produce matching stamps from different compilers with the gate seeing
+    # no difference.
+    assert_succeeds 'the pin names an exact version, not a channel' \
+        grep -qE '^channel = "1\.[0-9]+\.[0-9]+"' "$TOOLCHAIN_FILE"
+
+    pinned=$(sed -n 's/^channel = "\(.*\)"/\1/p' "$TOOLCHAIN_FILE")
+    installed=$(rustc --version | awk '{print $2}')
+    assert_equals 'the pinned toolchain is the one installed' "$pinned" "$installed"
+else
+    skip 'the toolchain is pinned (crates/ or rustc not present here)'
+    skip 'the pin names an exact version, not a channel (crates/ or rustc not present here)'
+    skip 'the pinned toolchain is the one installed (crates/ or rustc not present here)'
+fi
+
+# One workspace, one lockfile, one resolution. The members list is also what
+# the stamp enumerates, so it is the single place that says which crates exist.
+WORKSPACE_MANIFEST="$DOTFILES_ROOT/crates/Cargo.toml"
+if [ -f "$WORKSPACE_MANIFEST" ]; then
+    assert_succeeds 'the workspace declares members' \
+        grep -q '^members = \[' "$WORKSPACE_MANIFEST"
+    assert_succeeds 'the shared lockfile is at the workspace root' \
+        test -f "$DOTFILES_ROOT/crates/Cargo.lock"
+else
+    skip 'a workspace root exists (crates/ not present here)'
+    skip 'the workspace declares members (crates/ not present here)'
+    skip 'the shared lockfile is at the workspace root (crates/ not present here)'
+fi
+
+if [ -d "$DOTFILES_ROOT/.cfg" ]; then
+    cfg_git() {
+        git --git-dir="$DOTFILES_ROOT/.cfg" --work-tree="$DOTFILES_ROOT" "$@"
+    }
+
+    # Positive control first. An empty-expected assertion passes when its
+    # pipeline breaks for an unrelated reason, so prove the pipeline reaches
+    # the repo before asserting the narrow property.
+    assert_succeeds 'ls-files reaches the crates tree' \
+        test -n "$(cfg_git ls-files 'crates/*')"
+    assert_equals 'no per-crate lockfile remains' '' \
+        "$(cfg_git ls-files 'crates/*/Cargo.lock')"
+    assert_equals 'no proptest regressions file is tracked' '' \
+        "$(cfg_git ls-files 'crates/*/proptest-regressions/*')"
+else
+    skip 'ls-files reaches the crates tree (no repository here)'
+    skip 'no per-crate lockfile remains (no repository here)'
+    skip 'no proptest regressions file is tracked (no repository here)'
+fi
+
 finish

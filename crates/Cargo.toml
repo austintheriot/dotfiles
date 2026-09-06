@@ -1,0 +1,21 @@
+# Workspace root for the dotfiles crates.
+#
+# One lockfile and one resolution, so a dependency exists at one version
+# across every binary. The members list is also what `config stamp` and
+# `config build` enumerate, which makes this the single place that says which
+# crates exist.
+#
+# Keep members on one line. `.scripts/config/config-stamp` reads this list
+# with sed, because it must work before any binary exists, and a multi-line
+# array would silently yield no members. config-stamp aborts on an empty list
+# rather than iterating zero crates.
+[workspace]
+resolver = "3"
+members = ["config-manifest"]
+
+[workspace.dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive", "env"] }
+assert_cmd = "2.2.2"
+proptest = "1.11.0"
+tempfile = "3.27.0"

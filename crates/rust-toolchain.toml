@@ -1,0 +1,13 @@
+# An exact pin, not a channel.
+#
+# The build stamp is a git tree id over the crate source, so it says nothing
+# about which compiler produced the binary, and `edition = "2024"` is not a
+# pin either: every toolchain from 1.85 onward compiles it. Without this file
+# mac and linux can push matching stamps from different compilers, and the
+# pre-push gate cannot see the difference.
+#
+# Lives inside crates/ so the stamp's `git add -- crates` covers it and a pin
+# change invalidates every binary, which is the intended behavior.
+[toolchain]
+channel = "1.94.0"
+components = ["rustfmt", "clippy"]

@@ -1,1 +1,7 @@
 target/
+
+# Proptest writes a failure seed here when a property fails. That is an output
+# of running the tests, not an input to the build, and this directory sits
+# inside the tree the build stamp covers: a tracked seed moved the stamp and
+# forced a rebuild whose output is byte-identical.
+proptest-regressions/

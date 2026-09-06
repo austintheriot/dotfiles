@@ -48,6 +48,15 @@ Keep these out of version control unless the repo is private. They are machine-l
 
 Note also that a researcher's final summary usually arrives complete before its file is finished. The summary is what you write from; the file is durability. Do not block on the file.
 
+**When fetching is blocked.** The `WebSearch` budget is session-wide and runs out, often mid-pass, and the failure is not obvious -- a researcher that loses search starts guessing URLs from memory, and guessed URLs 404. Tell researchers the budget state, and give them the fallback chain that works without search:
+
+1. Fetch the publisher's index or landing page, and ask for the **verbatim href URLs** of what it links. This substitutes for search on any site with a document index.
+2. Fetch the specific URL from that list rather than constructing one.
+3. When a PDF returns as unreadable binary, the fetch tool saves it locally and names the path. `pdftotext -layout <path> -` extracts it, and then it greps like any text.
+4. Wikipedia category and list pages substitute for search when checking whether an article exists at all -- several expected articles simply do not.
+
+An honest `UNVERIFIED` naming the route attempted is worth more than a filled-in guess, and a specific gaps list is a quality signal rather than a failure. Say so in the dispatch prompt; researchers comply with it when asked.
+
 ### Step 3 -- Write the rules file
 
 `~/.claude/rules/<agent-name>.md`. This is the deep reference; length is expected (existing files run 15k-40k words for broad domains).

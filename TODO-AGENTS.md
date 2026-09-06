@@ -18,7 +18,23 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   clear a 40ms bar. `-C` would save nothing meaningful and removes the
   compaudit security check.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
-- Shell startup is currently verrryy slow, and this compounds for large setup tasks like the `se` alias. When I last ran it, it took minutes before Alacritty was responsive again. Let's consider/debug/profile what may be slowing things down here. Let's also take a bigger picture step back to see if there are other options to get the same results as the `se` alias that would run more quickly
+- `se` is slow, but shell startup is no longer the cause. Re-measured
+  2026-09-05, after the lazy nvm and pyenv work landed.
+  Interactive zsh startup is 170-176ms against a ~7ms bare shell, and
+  tests/zshrc-startup-budget.test.sh now holds it under 400ms.
+  The full layout is 21 windows x 5 panes = 105 panes. Measured three
+  times on an isolated tmux server: build 6.1-7.8s, then 0.6-1.9s until
+  every pane reaches its prompt, 6.6-9.7s total. Not minutes.
+  The cost is tmux creating panes, NOT shell startup multiplied by 105:
+  split-window returns once the pane exists, so the 105 shells start in
+  parallel and cost 0.6s together rather than 105 x 176ms serially.
+  So shaving shell startup further buys almost nothing here. What is
+  left to consider, and why this is not closed:
+    - whether 105 panes is the right layout at all, given 15 worktrees
+    - whether windows can be created lazily, on first selection
+    - whether the earlier "minutes" was a cold cache, a since-fixed
+      eager init, or contention from something else on the machine.
+      No measurement from that period survives, so this is unresolved.
 - Renaming tmux windows seems to lag a bit on git branch change. Let's look to see if there are some "smarter" hooks we can hook into to update the window name on git branch change, new branch, checkout, etc.
 
 # QUESTIONS (leave until queried)

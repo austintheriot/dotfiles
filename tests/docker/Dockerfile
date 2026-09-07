@@ -92,6 +92,12 @@ RUN apt-get update \
 
 # The suite's shell tests call config-manifest by name, as pre-push and CI do.
 COPY --from=builder /build/crates/target/release/config-manifest /usr/local/bin/config-manifest
+# tmux-update-window-names.sh is now a shim that execs this binary, so the
+# suite fails with "exec: tmux-tools: not found" without it. The builder
+# already compiles every workspace member; only the binaries the suite calls
+# by name need to reach the runtime stage, which is what keeps this image
+# Rust-free while still exercising ported code.
+COPY --from=builder /build/crates/target/release/tmux-tools /usr/local/bin/tmux-tools
 
 # A UTF-8 locale is load-bearing, not cosmetic. With no LANG set, tmux treats
 # a tab as non-printable and substitutes "_" in display-message output.

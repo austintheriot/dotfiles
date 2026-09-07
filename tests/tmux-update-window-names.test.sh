@@ -125,21 +125,36 @@ tmux set -w -t "$win_prefixed_label" @wname_label 'Side'
 assert_equals 'label sits in front of repo/branch' 'Side - repo-feature/feature/login' \
     "$(window_name "$win_prefixed_label")"
 
-# --- work repos are named by branch alone ---
+# --- bare repos are named by branch alone ---
+#
+# The patterns are set per window rather than relied on as a built-in
+# default. The binary carries no compiled-in list: the employer and product
+# names it used to hold now live in an untracked config file, because this
+# repository is public. So a test that asserted the default behavior would
+# either name them here or pass only on a machine holding that file.
+#
+# Setting the option is also the honest test: it exercises the same code
+# path a real user's config reaches, and it works identically in the
+# container, which has no such file.
 
-for work_repo in Notability notability-dev-tool gingerlabs-claude-plugins; do
+BARE_PATTERNS='work-app*|work-tool-*|vendor-*'
+
+for work_repo in work-app work-tool-cli vendor-plugins; do
     work_path=$(make_repo "$work_repo" work-branch)
     win_work=$(new_window "$work_path")
+    tmux set -w -t "$win_work" @wname_bare_repos "$BARE_PATTERNS"
     "$SCRIPT" -w "$win_work"
     assert_equals "$work_repo is named by branch alone" 'work-branch' "$(window_name "$win_work")"
 done
 
-work_worktree=$(make_worktree "$FIXTURES/Notability" wt-branch Notability-2)
+work_worktree=$(make_worktree "$FIXTURES/work-app" wt-branch work-app-2)
 win_work_wt=$(new_window "$work_worktree")
+tmux set -w -t "$win_work_wt" @wname_bare_repos "$BARE_PATTERNS"
 "$SCRIPT" -w "$win_work_wt"
 assert_equals 'work worktree is named by branch alone' 'wt-branch' "$(window_name "$win_work_wt")"
 
-win_work_label=$(new_window "$FIXTURES/Notability")
+win_work_label=$(new_window "$FIXTURES/work-app")
+tmux set -w -t "$win_work_label" @wname_bare_repos "$BARE_PATTERNS"
 tmux set -w -t "$win_work_label" @wname_label 'Reviews'
 "$SCRIPT" -w "$win_work_label"
 assert_equals 'work repo with a label stays short' 'Reviews - work-branch' "$(window_name "$win_work_label")"
@@ -152,10 +167,10 @@ tmux set -w -t "$win_configurable" @wname_bare_repos 'repo-*'
 assert_equals '@wname_bare_repos drops the prefix for a matching repo' 'feature/login' \
     "$(window_name "$win_configurable")"
 
-win_unmatched=$(new_window "$FIXTURES/Notability")
+win_unmatched=$(new_window "$FIXTURES/work-app")
 tmux set -w -t "$win_unmatched" @wname_bare_repos 'nothing-*'
 "$SCRIPT" -w "$win_unmatched"
-assert_equals '@wname_bare_repos adds the prefix back when nothing matches' 'Notability/work-branch' \
+assert_equals '@wname_bare_repos adds the prefix back when nothing matches' 'work-app/work-branch' \
     "$(window_name "$win_unmatched")"
 
 # --- an explicitly named window counts as manual ---

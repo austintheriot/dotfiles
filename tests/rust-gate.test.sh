@@ -47,4 +47,12 @@ skip_status=$?
 assert_equals "an absent cargo must not block the push" "0" "$skip_status"
 assert_contains "an absent cargo must print SKIP, not pass silently" "SKIP" "$skip_output"
 
+# Counted, not a bare command: an uncounted check does not appear in the
+# suite total, so its absence is invisible in the summary line.
+runner_text=$(cat "$DOTFILES_ROOT/tests/run-all.sh")
+assert_contains "run-all.sh must run clippy, or the invariant has no gate in CI" \
+    "cargo clippy" "$runner_text"
+assert_contains "the clippy leg must go through run_suite so it is counted and timed" \
+    'run_suite "cargo clippy in crates/"' "$runner_text"
+
 finish

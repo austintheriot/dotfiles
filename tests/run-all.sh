@@ -198,7 +198,9 @@ cargo_dir="$DOTFILES_ROOT/crates"
 cargo_manifest="$cargo_dir/Cargo.toml"
 cargo_count=0
 if [ -z "$only" ] && command -v cargo >/dev/null 2>&1 && [ -f "$cargo_manifest" ]; then
-    cargo_count=1
+    # Two legs: test and clippy. Counted separately because run_suite counts
+    # per call and the summary line must match what actually ran.
+    cargo_count=2
 fi
 
 total_suites=$((integration_count + python_count + cargo_count))
@@ -230,7 +232,7 @@ fi
 # Skipped, and said so, where cargo is absent: the Docker runtime image is
 # Rust-free by design and gets the binary from a builder stage instead.
 
-if [ "$cargo_count" -eq 1 ]; then
+if [ "$cargo_count" -eq 2 ]; then
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/config-manifest/target}"
     # Run from inside crates/ rather than with --manifest-path, because rustup
     # only honours crates/rust-toolchain.toml when the working directory is
@@ -238,11 +240,26 @@ if [ "$cargo_count" -eq 1 ]; then
     # not applied, which is the same defect that once failed CI.
     run_suite "cargo test in crates/" \
         sh -c 'cd "$1" && cargo test --locked --quiet' _ "$cargo_dir"
+
+    # -D warnings here is the enforcement of the policy crates/Cargo.toml
+    # declares, not the policy itself. Task 4 moves the lint set into the
+    # manifest so an IDE and a bare `cargo clippy` agree with this gate.
+    #
+    # Duplicated against rust-checks.sh, which also runs clippy, on purpose:
+    # that leg checks what is being pushed (a git archive of the ref), this
+    # leg checks what is on disk, and CI runs only this one. Both need their
+    # own gate because they can disagree (uncommitted changes on disk).
+    #
+    # From inside crates/ for the same reason as the test leg: rustup honours
+    # crates/rust-toolchain.toml only when the working directory is under
+    # crates/.
+    run_suite "cargo clippy in crates/" \
+        sh -c 'cd "$1" && cargo clippy --locked --all-targets -- -D warnings' _ "$cargo_dir"
 elif [ -n "$only" ]; then
     : # a named suite is an integration suite; saying "cargo not found" here
       # would be false, and cargo has its own filter.
 else
-    printf 'SKIP  cargo test (cargo not found)\n'
+    printf 'SKIP  cargo test and cargo clippy (cargo not found)\n'
 fi
 
 # --- summary -----------------------------------------------------------

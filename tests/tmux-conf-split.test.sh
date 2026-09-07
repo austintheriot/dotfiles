@@ -39,7 +39,11 @@ assert_equals 'the split config parses with no errors' '' "$parse_errors"
 # PageUp, not an arrow key: Claude Code binds Up/Down to prompt history, so
 # an arrow translation cycles prompts instead of scrolling. Assert the page
 # key so a revert to arrows fails here rather than in a live pane.
-assert_contains 'wheel-scroll forwarding survives the split' 'PageUp' \
+# S-Up, not PageUp. tmux.conf:92-95 states the reason: a page key moves a
+# half screen per notch, so the wheel is bound to Shift+Up and Shift+Down as
+# scroll-by-one-line. This assertion named PageUp and went stale when that
+# changed, failing against a config that was behaving as designed.
+assert_contains 'wheel-scroll forwarding survives the split' 'S-Up' \
     "$(tmux_t list-keys -T root)"
 
 assert_contains 'the window-naming after-new-window hook survives the split' \

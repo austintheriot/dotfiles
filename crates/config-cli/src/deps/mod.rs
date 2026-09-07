@@ -72,6 +72,7 @@ pub(crate) fn run(verb: DepsVerb) -> ExitCode {
     }
 }
 
+
 /// Assemble the run and produce its two streams and its exit code.
 ///
 /// `Err` is a caller error and nothing else: every failure the run itself

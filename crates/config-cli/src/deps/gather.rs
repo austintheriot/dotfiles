@@ -139,14 +139,44 @@ fn glob_matches(pattern: &str, name: &str) -> bool {
     }
 }
 
-/// `command -v <name>`: present if `name` resolves on `PATH`.
+/// The directories a `command -v` check searches, widest first.
 ///
-/// `PATH` itself is not a `PathRoot`, so this probe has no root to fail to
+/// `PATH`, preceded by `~/.local/bin` and `~/.cargo/bin`.
+///
+/// Those two are prepended because two dependencies install into them and a
+/// default non-login `PATH` carries neither: rustup writes `~/.cargo/bin`,
+/// and zoxide's own installer writes `~/.local/bin` where no package for it
+/// exists. Without them the check fails on the line right after its own
+/// install succeeded, so the fixpoint reports a failure for an install that
+/// worked.
+///
+/// Found by the container gate rather than by any unit test. On a bare image
+/// rustup installed cleanly into `~/.cargo/bin` and was then reported
+/// `failed`. An interactive shell exports both directories already, which is
+/// what hides this on a machine already in use -- and is why the retired
+/// shell carried the same prepend, and why the deps README documents it.
+///
+/// Returned rather than written back into this process's `PATH`: the crate
+/// forbids `unsafe`, `set_var` needs it, and a search path that is a value
+/// can be handed to the child environment as well as to this probe.
+pub(crate) fn search_path() -> Vec<PathBuf> {
+    let mut directories = Vec::new();
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        directories.push(home.join(".local").join("bin"));
+        directories.push(home.join(".cargo").join("bin"));
+    }
+    if let Some(existing) = std::env::var_os("PATH") {
+        directories.extend(std::env::split_paths(&existing));
+    }
+    directories
+}
+
+/// `command -v <name>`: present if `name` resolves on the search path.
+///
+/// The search path is not a `PathRoot`, so this probe has no root to fail to
 /// resolve; an absent command is always `Absent`, never `Unresolvable`.
 fn probe_command(name: &str) -> Observation {
-    let found = std::env::var_os("PATH").is_some_and(|path_var| {
-        std::env::split_paths(&path_var).any(|directory| directory.join(name).is_file())
-    });
+    let found = search_path().iter().any(|directory| directory.join(name).is_file());
     to_observation(found)
 }
 
@@ -179,6 +209,49 @@ mod tests {
     use super::*;
     use deps_core::{Manifest, Observations, parse_manifest};
     use dotfiles_path::CheckRelPath;
+
+    /// The search path leads with the two curl-installer directories.
+    ///
+    /// This is the assertion the container gate had to find for want of a
+    /// test: rustup installs into `~/.cargo/bin` and zoxide's own installer
+    /// into `~/.local/bin`, neither of which a default non-login `PATH`
+    /// carries, so a check that reads `PATH` alone reports a failure for an
+    /// install that succeeded.
+    ///
+    /// Order is asserted, not just membership. A dependency this run just
+    /// installed must be found ahead of an older copy earlier on `PATH`.
+    #[test]
+    fn the_search_path_leads_with_the_curl_installer_directories() {
+        let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+            // No HOME is a real state, and `search_path` returns PATH alone
+            // there rather than joining onto nothing.
+            return;
+        };
+
+        let directories = search_path();
+
+        assert_eq!(
+            directories.first(),
+            Some(&home.join(".local").join("bin")),
+            "~/.local/bin leads: {directories:?}"
+        );
+        assert_eq!(
+            directories.get(1),
+            Some(&home.join(".cargo").join("bin")),
+            "~/.cargo/bin comes second: {directories:?}"
+        );
+
+        // The positive control: the real PATH still follows, so this widened
+        // the search rather than replacing it.
+        if let Some(existing) = std::env::var_os("PATH") {
+            for entry in std::env::split_paths(&existing) {
+                assert!(
+                    directories.contains(&entry),
+                    "PATH entry {entry:?} survived the widening"
+                );
+            }
+        }
+    }
 
     /// A resolver that resolves every real root to a real directory.
     ///

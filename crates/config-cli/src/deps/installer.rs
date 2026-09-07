@@ -255,17 +255,62 @@ pub fn argv_for(
     argv_sequence_for(action, manager, privilege).pop().unwrap_or_default()
 }
 
+/// Where a fetched installer script is written before it is run.
+///
+/// One path per installer, so two installers in the same run cannot overwrite
+/// each other's script.
+fn script_path(installer: ScriptInstaller) -> OsString {
+    let name = match installer {
+        ScriptInstaller::Rustup => "rustup-init.sh",
+        ScriptInstaller::OhMyZsh => "oh-my-zsh-install.sh",
+        ScriptInstaller::Zoxide => "zoxide-install.sh",
+    };
+    let mut path = std::env::temp_dir();
+    path.push(name);
+    path.into_os_string()
+}
+
 /// The fetch-and-run pair one installer script needs.
+///
+/// The fetch writes the script to a FILE with `curl -o`, and the run executes
+/// that file. It does not pipe.
+///
+/// The retired shell wrote `curl ... | sh`, and the first port of it kept the
+/// two commands but dropped the pipe, because this module's whole design is
+/// that an effect is argv and never a shell string -- and a pipe is not
+/// expressible as argv. The result ran `curl` with its output discarded and
+/// then `sh -s --` with nothing on stdin, which exits 0 having installed
+/// nothing. The check then failed, and the run reported an install failure
+/// whose real cause was that no install had been attempted.
+///
+/// Found by the container gate: rustup, zoxide and oh-my-zsh all failed on a
+/// bare image while every unit test passed, because the tests assert the
+/// planned argv and the argv was individually correct.
+///
+/// A file is what lets this stay argv. `AptSource` already took the same
+/// route for the same reason: the shell wrote the keyring with
+/// `wget -O- | sudo tee`, and this module writes it with `curl -o` instead.
 fn script_argv(installer: ScriptInstaller) -> Vec<Vec<OsString>> {
-    let fetch = words(["curl", "--proto", "=https", "--tlsv1.2", "-sSf", script_url(installer)]);
+    let path = script_path(installer);
+
+    let mut fetch = words(["curl", "--proto", "=https", "--tlsv1.2", "-sSf", "-o"]);
+    fetch.push(path.clone());
+    fetch.push(OsString::from(script_url(installer)));
+
     // Each installer's own flags, from `retired-check-deps:308`, `:324` and
     // `:367`. oh-my-zsh takes `--keep-zshrc` because its installer otherwise
     // overwrites `~/.zshrc` with its template and moves the real one aside.
-    let run = match installer {
-        ScriptInstaller::Rustup => words(["sh", "-s", "--", "-y"]),
-        ScriptInstaller::OhMyZsh => words(["sh", "-s", "--", "--unattended", "--keep-zshrc"]),
-        ScriptInstaller::Zoxide => words(["sh"]),
-    };
+    //
+    // `sh <path> --` rather than `sh -s --`: `-s` reads the script from
+    // stdin, which is exactly what no longer arrives.
+    let mut run = words(["sh"]);
+    run.push(path);
+    match installer {
+        ScriptInstaller::Rustup => run.extend(words(["-y"])),
+        ScriptInstaller::OhMyZsh => run.extend(words(["--unattended", "--keep-zshrc"])),
+        ScriptInstaller::Zoxide => {}
+    }
+
     vec![fetch, run]
 }
 
@@ -518,6 +563,15 @@ fn run_one(argv: &[OsString], environment: &BTreeMap<OsString, OsString>) -> Opt
     let (program, arguments) = argv.split_first()?;
     let mut command = Command::new(program);
     command.args(arguments);
+
+    // The same widened search path the checks use, so a step that calls a
+    // tool an earlier step just installed can find it. `nvm` installs node
+    // through a script that expects nvm's own directory to be reachable, and
+    // the fixpoint's later waves run after the installs of earlier ones.
+    if let Ok(joined) = std::env::join_paths(super::gather::search_path()) {
+        command.env("PATH", joined);
+    }
+
     for (key, value) in environment {
         command.env(key, value);
     }
@@ -818,6 +872,53 @@ mod tests {
 
         assert!(!plain.is_empty(), "the control builds real argv");
         assert!(!plain.iter().any(|word| word == "sudo"), "no elevation, no word: {plain:?}");
+    }
+
+    /// A fetched installer script is written to a file and then run from it.
+    ///
+    /// The defect this pins: the retired shell wrote `curl ... | sh`, and the
+    /// port kept both commands but dropped the pipe, because an effect here
+    /// is argv and a pipe is not expressible as argv. `curl` then wrote to a
+    /// discarded stdout and `sh -s --` read an empty stdin, so the step exited
+    /// 0 having installed nothing and the check failed afterwards.
+    ///
+    /// Every existing test asserted the planned argv, and each argv was
+    /// individually correct, so none of them could see it. This one asserts
+    /// the two argvs are CONNECTED: the path curl writes is the path sh runs.
+    #[test]
+    fn a_fetched_installer_is_written_to_a_file_and_run_from_it() {
+        for installer in
+            [ScriptInstaller::Rustup, ScriptInstaller::OhMyZsh, ScriptInstaller::Zoxide]
+        {
+            let sequence = script_argv(installer);
+            assert_eq!(sequence.len(), 2, "a fetch and a run: {sequence:?}");
+
+            let fetch = &sequence[0];
+            let run = &sequence[1];
+
+            // The fetch names an output file rather than writing to stdout.
+            let output_flag = fetch
+                .iter()
+                .position(|word| word == "-o")
+                .unwrap_or_else(|| panic!("the fetch writes to a file: {fetch:?}"));
+            let written = fetch
+                .get(output_flag + 1)
+                .unwrap_or_else(|| panic!("-o takes a path: {fetch:?}"));
+
+            // The run executes that same file. This is the connection the
+            // dropped pipe severed.
+            assert_eq!(
+                run.get(1),
+                Some(written),
+                "sh runs the file curl wrote: {run:?} against {fetch:?}"
+            );
+
+            // And it must not ask for stdin, which is what no longer arrives.
+            assert!(
+                !run.iter().any(|word| word == "-s"),
+                "no -s, which reads the script from stdin: {run:?}"
+            );
+        }
     }
 
     /// Every write into `/etc` in the gh apt pipeline carries the privilege.

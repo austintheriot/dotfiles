@@ -1,6 +1,7 @@
 #!/bin/sh
 #
-# Runs the leak scan, the stamp gate, and the dotfiles test suite before a push.
+# Runs the leak scan, the stamp gate, the Rust checks, and the dotfiles test
+# suite before a push.
 #
 # Installed for the bare dotfiles repo at ~/.cfg. Git finds it through the
 # symlink at ~/.cfg/hooks/pre-push; core.hooksPath is not set. See the
@@ -9,12 +10,15 @@
 # The leak guard runs twice: at pre-commit on staged content, and here in
 # range mode over every commit being pushed. The push-time scan exists
 # because `git commit-tree` and `--no-verify` never invoke pre-commit, so a
-# commit can exist locally that no scan has seen. The stamp gate and the
-# full suite run here only, so their cost is paid once per push, not once
-# per commit.
+# commit can exist locally that no scan has seen. The stamp gate, the Rust
+# checks, and the full suite run here only, so their cost is paid once per
+# push, not once per commit.
 #
-# The suite runs in Docker (tests/run-in-docker.sh), against the ref being
-# pushed rather than the working tree. Requires a running Docker daemon.
+# The Rust checks (tests/rust-checks.sh) run on the host, ahead of the
+# Docker handoff, because they take seconds and the container suite takes
+# minutes. The dotfiles test suite itself runs in a container, against the
+# ref being pushed rather than the working tree. Requires a running Docker
+# daemon.
 #
 # Reads git's pre-push stdin protocol: one line per ref being pushed,
 # "<local ref> <local sha> <remote ref> <remote sha>".
@@ -198,6 +202,40 @@ if [ "$pushing_branch" -eq 1 ]; then
 
     printf 'pre-push: stamp gate passed\n'
 fi
+
+# --- Rust checks -----------------------------------------------------------
+#
+# Runs on the HOST, before the Docker handoff below, and this is deliberate.
+#
+# The container leg cannot run these: tests/docker/Dockerfile's runtime
+# stage is Rust-free by design, so `command -v cargo` is correctly false
+# inside it and run-all.sh skips the Rust leg. That is how a push once
+# printed "SKIP cargo test (cargo not found)" and passed.
+#
+# This is NOT the host fallback the suite block below rejects. A fallback
+# silently substitutes a weaker check when the daemon is down; this always
+# runs and never replaces the container leg. The distinction matters because
+# the reason the shell suites need the container -- they mutate $HOME, spawn
+# tmux sessions, write fixture repos -- does not apply to cargo test. Those
+# crates are pure or test against their own temporary directories, verified
+# by running the workspace with HOME pointed at an empty directory and
+# finding it still empty afterwards.
+#
+# Before the Docker block because these take seconds and that takes minutes.
+
+if [ ! -x "$HOME/tests/rust-checks.sh" ]; then
+    printf 'pre-push: ~/tests/rust-checks.sh is missing or not executable\n' >&2
+    exit 1
+fi
+
+for ref in $push_refs; do
+    if ! "$HOME/tests/rust-checks.sh" "$ref"; then
+        printf '\npre-push: Rust checks failed for %s, push blocked.\n' "$ref" >&2
+        exit 1
+    fi
+done
+
+printf 'pre-push: Rust checks passed\n'
 
 # --- dotfiles test suite -------------------------------------------------
 #

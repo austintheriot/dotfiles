@@ -110,12 +110,22 @@ jobs:
       # HOME, which on a runner is not the checkout, so without this it looks
       # in /home/runner/.scripts/deps, finds nothing, parses an empty
       # manifest, and rejects every --only name as unknown.
+      #
+      # zsh-autosuggestions is deliberately absent. No test needs it
+      # installed: deps-manifest.test.sh builds its own fixture homes and
+      # reads the check command out of the conf file, and the brew branch
+      # guards on `command -v brew` rather than on the install. Naming it
+      # here only stalled the Linux leg, because on Linux it requires
+      # oh-my-zsh, which lives in deps-linux.conf and so cannot be named on
+      # a list this macOS leg also reads. The real install of that pair,
+      # prerequisite ordering included, is covered unsubsetted by
+      # deps-check.yml.
       - name: Install the suite's dependencies (from deps.conf)
         env:
           DOTFILES_ROOT: ${{ github.workspace }}
         run: |
           config-cli deps install --yes \
-            --only tmux,zsh,git,fzf,ripgrep,shellcheck,zsh-autosuggestions
+            --only tmux,zsh,git,fzf,ripgrep,shellcheck
 
       - name: Install the suite's harness dependencies (from deps-ci.conf)
         env:

@@ -85,6 +85,18 @@ pub enum StepOutcome {
         /// The dependency this step waits on.
         on: DependencyName,
     },
+    /// In the manifest, absent from the machine, and blocked on a
+    /// prerequisite this run excluded from the selection.
+    ///
+    /// Distinct from `Blocked`, which claims a later wave can unblock it.
+    /// Nothing unblocks this one: the selection is fixed before the first
+    /// wave plans, so the prerequisite named here is never installed by
+    /// this run. Keeping the two apart is what stops a permanently
+    /// unsatisfiable step from rendering as `waiting`.
+    Unsatisfiable {
+        /// The deselected prerequisite this step can never get.
+        on: DependencyName,
+    },
     /// In the manifest, absent from the machine, and never considered by
     /// this run.
     ///
@@ -298,6 +310,30 @@ mod tests {
             CheckStatus::NotReady,
             "a manual-only dependency must count toward not-ready"
         );
+    }
+
+    // An unsatisfiable row is a definite non-success, so the check must not
+    // report ready. `summarize_check` allowlists the ready outcomes rather
+    // than matching exhaustively, so a new variant defaults to not-ready and
+    // no compiler error would have caught the opposite. This test is what
+    // holds that.
+    #[test]
+    fn an_unsatisfiable_dependency_makes_the_check_not_ready() {
+        let outcomes = [StepOutcome::Unsatisfiable {
+            on: DependencyName::parse("oh-my-zsh").expect("oh-my-zsh is a name"),
+        }];
+        assert_eq!(summarize_check(&outcomes), CheckStatus::NotReady);
+    }
+
+    // An unsatisfiable step was never handed to an installer, so no attempt
+    // failed. The run is not ready and no install was tried, which is a
+    // different fact from a failure and must not be reported as one.
+    #[test]
+    fn an_unsatisfiable_dependency_is_not_an_attempt_failure() {
+        let outcomes = [StepOutcome::Unsatisfiable {
+            on: DependencyName::parse("oh-my-zsh").expect("oh-my-zsh is a name"),
+        }];
+        assert_eq!(summarize_install(&outcomes), InstallStatus::AllSucceeded);
     }
 
     #[test]

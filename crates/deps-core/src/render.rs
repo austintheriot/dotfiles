@@ -50,6 +50,22 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
         // A failed row writes to both streams: stdout keeps the per-row
         // listing complete so its count matches the summary line, and
         // stderr is what a caller greps for.
+        // An unsatisfiable row is terminal at plan time, so it reaches
+        // stderr the way a failure does. It is not a failure -- nothing was
+        // attempted -- so it carries its own word rather than FAILED.
+        if let StepOutcome::Unsatisfiable { on } = &row.outcome {
+            let _ = writeln!(stderr, "  BLOCKED   {}", row.dependency.as_str());
+            let _ = writeln!(
+                stderr,
+                "              needs {}, which this run excluded from the selection",
+                on.as_str()
+            );
+            let _ = writeln!(
+                stderr,
+                "              no later wave can install it; name it in --only or drop the filter"
+            );
+        }
+
         if matches!(
             row.outcome,
             StepOutcome::InstallFailed { .. } | StepOutcome::InstalledButCheckStillFails { .. }
@@ -77,6 +93,11 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
             StepOutcome::Blocked { on } => {
                 format!("  waiting   {} (needs {})\n", row.dependency.as_str(), on.as_str())
             }
+            StepOutcome::Unsatisfiable { on } => format!(
+                "  blocked   {} (needs {}, which this run excluded)\n",
+                row.dependency.as_str(),
+                on.as_str()
+            ),
             StepOutcome::NotAutomatable { reason } => {
                 format!("  manual    {} ({reason:?})\n", row.dependency.as_str())
             }

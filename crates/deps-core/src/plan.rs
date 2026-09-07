@@ -356,7 +356,7 @@ pub fn plan(
             Observation::Absent => {}
         }
 
-        if let Some(blocker) = first_unsatisfied_prerequisite(
+        if let Some(block) = first_unsatisfied_prerequisite(
             name,
             requirements,
             selection,
@@ -364,12 +364,13 @@ pub fn plan(
             &satisfied,
             &mut events,
         ) {
-            events.push(Event::StepBlocked { dependency: name.clone(), on: blocker.clone() });
+            events.push(Event::StepBlocked {
+                dependency: name.clone(),
+                on: block.prerequisite().clone(),
+            });
             steps.push(Step {
                 dependency: name.clone(),
-                action: InstallAction::NotAutomatable {
-                    reason: NoInstallReason::PrerequisiteNotYetInstalled { dependency: blocker },
-                },
+                action: InstallAction::NotAutomatable { reason: block.into_reason() },
                 privilege: PrivilegeRequirement::None,
             });
             continue;
@@ -460,15 +461,56 @@ fn action_for(
     (action, privilege)
 }
 
-/// The first prerequisite that is selected, in the manifest, and not yet
-/// present.
+/// Why a step cannot proceed in this wave, and whether that can change.
+///
+/// The two cases produce the same blocked step but not the same claim about
+/// time, and collapsing them into one `DependencyName` is what let a
+/// permanently unsatisfiable step render as `waiting`. Keeping them apart
+/// here is what forces every downstream match to say which one it means.
+enum PrerequisiteBlock {
+    /// Selected and in the manifest, so a later wave installs it.
+    NotYetInstalled {
+        /// The prerequisite this wave is still waiting on.
+        dependency: DependencyName,
+    },
+    /// Excluded from the selection, so no wave of this run installs it.
+    Deselected {
+        /// The prerequisite the selection excluded.
+        dependency: DependencyName,
+    },
+}
+
+impl PrerequisiteBlock {
+    /// The prerequisite named, whichever case this is.
+    fn prerequisite(&self) -> &DependencyName {
+        match self {
+            PrerequisiteBlock::NotYetInstalled { dependency }
+            | PrerequisiteBlock::Deselected { dependency } => dependency,
+        }
+    }
+
+    /// The reason a step carries, preserving the distinction.
+    fn into_reason(self) -> NoInstallReason {
+        match self {
+            PrerequisiteBlock::NotYetInstalled { dependency } => {
+                NoInstallReason::PrerequisiteNotYetInstalled { dependency }
+            }
+            PrerequisiteBlock::Deselected { dependency } => {
+                NoInstallReason::PrerequisiteDeselected { dependency }
+            }
+        }
+    }
+}
+
+/// The first prerequisite that blocks this step, and why.
 ///
 /// A prerequisite outside the platform manifest records
 /// [`Event::PrerequisiteNotInManifest`] and does not block, because it is a
 /// legitimate platform difference rather than a missing install. A
 /// prerequisite the manifest has but the run deselected records
-/// [`Event::PrerequisiteDeselected`] and does block, because the machine has
-/// it and the run chose not to satisfy it.
+/// [`Event::PrerequisiteDeselected`] and blocks permanently, because no wave
+/// of this run installs it. One the run selected but has not reached yet
+/// blocks only until a later wave does.
 fn first_unsatisfied_prerequisite(
     name: &DependencyName,
     requirements: &Requirements,
@@ -476,7 +518,7 @@ fn first_unsatisfied_prerequisite(
     manifest: &Manifest,
     satisfied: &BTreeSet<DependencyName>,
     events: &mut Vec<Event>,
-) -> Option<DependencyName> {
+) -> Option<PrerequisiteBlock> {
     for prerequisite in requirements.prerequisites(name) {
         if manifest.get(prerequisite).is_none() {
             events.push(Event::PrerequisiteNotInManifest {
@@ -494,10 +536,14 @@ fn first_unsatisfied_prerequisite(
                 dependency: name.clone(),
                 on: prerequisite.clone(),
             });
-            return Some(prerequisite.clone());
+            return Some(PrerequisiteBlock::Deselected {
+                dependency: prerequisite.clone(),
+            });
         }
         if !satisfied.contains(prerequisite) {
-            return Some(prerequisite.clone());
+            return Some(PrerequisiteBlock::NotYetInstalled {
+                dependency: prerequisite.clone(),
+            });
         }
     }
     None
@@ -1078,9 +1124,14 @@ mod tests {
             .iter()
             .find(|step| step.dependency == dependency("zsh-autosuggestions"))
             .expect("the narrowed selection plans a step for zsh-autosuggestions");
+        // PrerequisiteDeselected, not PrerequisiteNotYetInstalled. The
+        // selection is fixed before the first wave plans, so "not yet"
+        // would claim a later wave installs oh-my-zsh when no wave can.
+        // That false claim is what rendered as a `waiting` row which never
+        // resolved, and it is the distinction this test now holds.
         match &step.action {
             InstallAction::NotAutomatable {
-                reason: NoInstallReason::PrerequisiteNotYetInstalled { dependency: blocker },
+                reason: NoInstallReason::PrerequisiteDeselected { dependency: blocker },
             } => {
                 assert_eq!(
                     *blocker,
@@ -1089,7 +1140,7 @@ mod tests {
                 );
             }
             other => panic!(
-                "a deselected prerequisite must block with PrerequisiteNotYetInstalled, got {other:?}"
+                "a deselected prerequisite must block with PrerequisiteDeselected, got {other:?}"
             ),
         }
     }

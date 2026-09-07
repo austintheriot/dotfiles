@@ -163,6 +163,18 @@ pub enum NoInstallReason {
         /// The prerequisite that is not yet present.
         dependency: DependencyName,
     },
+    /// The prerequisite is in this platform's manifest and the run excluded
+    /// it from the selection, so no wave of this run can install it.
+    ///
+    /// Distinct from `PrerequisiteNotYetInstalled`, whose whole claim is
+    /// that a later wave can change the answer. Here nothing can: the
+    /// selection is fixed before planning starts, so reporting this as
+    /// "not yet" states a falsehood about time and renders as a `waiting`
+    /// row that never resolves.
+    PrerequisiteDeselected {
+        /// The prerequisite the selection excluded.
+        dependency: DependencyName,
+    },
 }
 
 /// What it means to install a dependency.

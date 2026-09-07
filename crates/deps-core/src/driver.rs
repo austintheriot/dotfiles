@@ -172,6 +172,24 @@ pub fn perform_all(
             continue;
         }
 
+        // A step blocked on a prerequisite the selection excluded is the
+        // opposite case: no later wave changes it, so deferring it would
+        // replan the same step every wave until the no-progress break. It
+        // is attempted -- resolved, not performed -- which retires it on
+        // this wave and reports a terminal state instead of a `waiting` row
+        // that never resolves.
+        if let InstallAction::NotAutomatable {
+            reason: NoInstallReason::PrerequisiteDeselected { dependency },
+        } = &step.action
+        {
+            outcomes.push((
+                step.dependency.clone(),
+                StepOutcome::Unsatisfiable { on: dependency.clone() },
+            ));
+            attempted.insert(step.dependency.clone());
+            continue;
+        }
+
         let outcome = match step.privilege {
             PrivilegeRequirement::None => installers.ordinary.perform(&step.action),
             PrivilegeRequirement::Root => match &installers.privileged {
@@ -365,6 +383,7 @@ mod tests {
     };
     use dotfiles_path::{CheckRelPath, PackageId};
     use std::cell::RefCell;
+    use std::rc::Rc;
     use std::collections::BTreeMap;
 
     fn dependency(name: &str) -> DependencyName {
@@ -432,6 +451,31 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
     impl RecordingInstaller {
         fn new() -> Self {
             RecordingInstaller { performed: RefCell::new(Vec::new()) }
+        }
+    }
+
+    /// A recorder whose log outlives the boxed installer holding it.
+    ///
+    /// `RecordingInstaller` keeps its log in a private field, and boxing it
+    /// as `dyn Installer` puts that field out of reach, so a test cannot
+    /// assert on what was performed. This shares the log instead.
+    struct SharedRecorder {
+        performed: Rc<RefCell<Vec<InstallAction>>>,
+    }
+
+    impl Installer for SharedRecorder {
+        fn describe(&self, step: &Step) -> ActionDescription {
+            ActionDescription {
+                summary: format!("{:?}", step.action),
+                privilege: step.privilege,
+                command_preview: None,
+                changes_trust_root: matches!(step.action, InstallAction::AptSource { .. }),
+            }
+        }
+
+        fn perform(&self, action: &InstallAction) -> StepOutcome {
+            self.performed.borrow_mut().push(action.clone());
+            StepOutcome::Installed
         }
     }
 
@@ -571,6 +615,68 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
             "every attempted install worked, so no attempt failed"
         );
         assert_eq!(report.rows.len(), 2);
+    }
+
+    // The CI case. A selection that names the dependent and excludes its
+    // prerequisite can never converge, and the run must say so on the first
+    // wave rather than replanning the same step until the no-progress break.
+    //
+    // Before the Unsatisfiable split this reported `Blocked`, which claims a
+    // later wave can unblock it. No wave could: the selection is fixed
+    // before planning starts. The row rendered as `waiting` and the run
+    // failed minutes later on an aggregate code that named no cause.
+    #[test]
+    fn a_deselected_prerequisite_is_terminal_on_the_first_wave() {
+        let manifest = oh_my_zsh_manifest();
+        let selection = Selection::named(vec![dependency("zsh-autosuggestions")]);
+        let requirements = autosuggestions_needs_oh_my_zsh();
+        let catalog = packages();
+        let planning = linux_pair_planning(&manifest, &selection, &requirements, &catalog);
+        // A world that never changes: nothing installs oh-my-zsh, because
+        // nothing selected it.
+        let worlds = ScriptedWorlds::new(vec![ObservationMap::from_pairs(vec![])]);
+        // A shared record rather than recording_installers(), so the
+        // assertion below can read what actually reached an installer.
+        // Boxed as `dyn Installer` the recorder's own field is unreachable,
+        // and an assertion that cannot observe what it names proves nothing.
+        let performed = Rc::new(RefCell::new(Vec::new()));
+        let installers = Installers {
+            ordinary: Box::new(SharedRecorder { performed: Rc::clone(&performed) }),
+            privileged: Some(Box::new(SharedRecorder { performed: Rc::clone(&performed) })),
+        };
+
+        let (report, _events) = run_to_fixpoint(&planning, &installers, || worlds.next())
+            .expect("an unsatisfiable selection still produces a report");
+
+        let row = report
+            .rows
+            .iter()
+            .find(|row| row.dependency == dependency("zsh-autosuggestions"))
+            .expect("the dependent gets a row");
+        match &row.outcome {
+            StepOutcome::Unsatisfiable { on } => assert_eq!(
+                *on,
+                dependency("oh-my-zsh"),
+                "the terminal row must name the prerequisite the selection excluded"
+            ),
+            other => panic!("a deselected prerequisite must be Unsatisfiable, got {other:?}"),
+        }
+
+        assert_eq!(
+            report.check,
+            CheckStatus::NotReady,
+            "a run that cannot install what it was asked for is not ready"
+        );
+        assert_eq!(
+            report.install,
+            InstallStatus::AllSucceeded,
+            "nothing was attempted, so no attempt failed"
+        );
+        assert!(
+            performed.borrow().is_empty(),
+            "an unsatisfiable step must never reach an installer: {:?}",
+            performed.borrow()
+        );
     }
 
     // Termination. Every iteration either performs a step or breaks, and a

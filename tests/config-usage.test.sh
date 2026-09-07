@@ -227,4 +227,92 @@ run_config test -z >/dev/null 2>&1
 status=$?
 assert_equals 'config test still rejects an unknown short flag' '2' "$status"
 
+# --- the --describe contract -------------------------------------------------
+
+# config-help builds its listing by running `sed -n 's/^# help: //p'` over each
+# subcommand's source text. Pointed at a compiled binary, that sed writes
+# "RE error: illegal byte sequence" to stderr and the pipeline still exits 0,
+# because `head -1` is the last stage and supplies the status. So the
+# description silently becomes empty and a linter-style error leaks into the
+# listing. Each subcommand answering for itself removes the assumption that a
+# subcommand is readable text.
+
+for sub in $ALL_SUBCOMMANDS; do
+    described=$(run_config "$sub" --describe 2>/dev/null)
+    status=$?
+    assert_equals "config $sub --describe exits 0" '0' "$status"
+    # An empty description would make the line-count and match assertions
+    # below vacuous, so assert the string exists before asserting its shape.
+    assert_succeeds "config $sub --describe prints something" \
+        test -n "$described"
+done
+
+for sub in $ALL_SUBCOMMANDS; do
+    line_count=$(run_config "$sub" --describe 2>/dev/null | grep -c '')
+    assert_equals "config $sub --describe prints exactly one line" \
+        '1' "$line_count"
+done
+
+# config-help formats the value with `printf '  %-14s %s\n'`, so a trailing
+# blank line or a second line breaks the column the listing is read in.
+for sub in $ALL_SUBCOMMANDS; do
+    described=$(run_config "$sub" --describe 2>/dev/null | sed -n '1p')
+    assert_equals "config $sub --describe has no leading whitespace" \
+        "$described" "$(printf '%s' "$described" | sed 's/^[[:space:]]*//')"
+done
+
+# The `# help:` comment stays the single home of the string. A subcommand that
+# grew a second, hand-written copy would be free to disagree with the comment
+# that config.test.sh and the README both point contributors at.
+for sub in $ALL_SUBCOMMANDS; do
+    comment=$(sed -n 's/^# help: //p' "$CONFIG_DIR/config-$sub" | head -1)
+    described=$(run_config "$sub" --describe 2>/dev/null)
+    assert_succeeds "config-$sub has a '# help:' line to describe from" \
+        test -n "$comment"
+    assert_equals "config $sub --describe matches its own '# help:' line" \
+        "$comment" "$described"
+done
+
+# stdout carries the description; stderr carries nothing. The leaked sed error
+# on the shared terminal is the failure mode this contract exists to remove.
+for sub in $ALL_SUBCOMMANDS; do
+    noise=$(run_config "$sub" --describe 2>&1 >/dev/null)
+    assert_equals "config $sub --describe writes nothing to stderr" \
+        '' "$noise"
+done
+
+# Asking a command to describe itself must not run it, for the same reason
+# --help must not: install-hooks once linked the hooks and rewrote
+# ~/.local/bin/config before printing anything.
+rm -f "$home/.cfg/hooks/pre-commit" "$home/.cfg/hooks/pre-push" \
+    "$home/.local/bin/config"
+run_config install-hooks --describe >/dev/null 2>&1
+assert_succeeds 'config install-hooks --describe does not link pre-commit' \
+    test ! -e "$home/.cfg/hooks/pre-commit"
+assert_succeeds 'config install-hooks --describe does not link the dispatcher' \
+    test ! -e "$home/.local/bin/config"
+
+output=$(run_config test --describe 2>&1)
+assert_equals 'config test --describe does not run the suite' '' \
+    "$(printf '%s' "$output" | grep -F 'all:' || true)"
+
+output=$(run_config install --describe 2>&1)
+assert_equals 'config install --describe does not exec check-deps' '' \
+    "$(printf '%s' "$output" | grep -F 'deps:' || true)"
+
+output=$(run_config doctor --describe 2>&1)
+assert_equals 'config doctor --describe does not exec config-manifest' '' \
+    "$(printf '%s' "$output" | grep -F 'manifest:' || true)"
+
+# print_describe takes the file to describe, defaulting to $0. Without the
+# argument the only way to test it against a named file is to copy a script
+# under a new name, and a stray config-* left in the real directory changes
+# what `config help` lists for every other suite.
+describe_fixture="$FIXTURES/describe-subject"
+printf '#!/bin/sh\n# help: A description read from an argument\n' \
+    > "$describe_fixture"
+described=$(. "$CONFIG_DIR/usage.sh" && print_describe "$describe_fixture")
+assert_equals 'print_describe reads the file it is given' \
+    'A description read from an argument' "$described"
+
 finish

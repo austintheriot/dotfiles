@@ -26,6 +26,7 @@ here=$(dirname "$self")
 . "$here/usage.sh"
 case ${1:-} in
     --help|-h) print_usage; printf '\n' ;;
+    --describe) print_describe; exit 0 ;;
 esac
 
 printf 'usage: config <command> [args]\n'

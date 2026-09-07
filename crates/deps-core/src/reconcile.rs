@@ -59,9 +59,12 @@ pub fn reconcile(
             });
         }
 
-        // The last recorded outcome wins. Under the fixpoint a dependency
-        // is attempted at most once, so this is a single match today, and
-        // taking the last one keeps that true if a future wave ever retries.
+        // The LAST recorded outcome wins, and that is load-bearing rather
+        // than defensive. A dependency blocked in wave 1 and installed in
+        // wave 2 appears twice in the accumulated outcomes, so taking the
+        // first would report every deferred dependency as blocked no matter
+        // what a later wave did, which would make the fixpoint invisible in
+        // the report.
         let recorded = outcomes
             .iter()
             .rev()

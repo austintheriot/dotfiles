@@ -1,13 +1,16 @@
 //! The dependency-check core. No IO of any kind.
 //!
 //! Every function here is a function of its arguments. Parsing takes text,
-//! planning takes an observation map, and reconciling takes the world
-//! observed after the loop. The crate boundary is what makes that compiler-enforced
+//! planning takes an observation map, and the fixpoint loop takes its
+//! effects as arguments: `gather` is a closure and the installers are a
+//! parameter, so the loop's shape lives here while every capability stays
+//! at the edge. The crate boundary is what makes that compiler-enforced
 //! rather than a discipline (spec 7.1), and `config_manifest::doctor` is
 //! the in-repo precedent for the module shape.
 
 mod action;
 mod check;
+mod driver;
 mod manifest;
 mod outcome;
 mod plan;
@@ -27,6 +30,10 @@ pub use manifest::{
 pub use outcome::{
     CheckStatus, ExecFailure, ExitStatus, InstallStatus, SpawnError, StepOutcome, Verdict,
     exit_status, summarize_check, summarize_install,
+};
+pub use driver::{
+    ActionDescription, Attempted, Installer, Installers, Planning, describe, perform_all,
+    run_to_fixpoint,
 };
 pub use plan::{
     Elevation, Event, PackageCatalog, Plan, PlanError, PrivilegeRequirement, RawSelector,
@@ -51,6 +58,7 @@ mod purity {
             ("action.rs", include_str!("action.rs")),
             ("lib.rs", include_str!("lib.rs")),
             ("check.rs", include_str!("check.rs")),
+            ("driver.rs", include_str!("driver.rs")),
             ("manifest.rs", include_str!("manifest.rs")),
             ("outcome.rs", include_str!("outcome.rs")),
             ("plan.rs", include_str!("plan.rs")),
@@ -86,6 +94,7 @@ mod purity {
             include_str!("action.rs"),
             include_str!("lib.rs"),
             include_str!("check.rs"),
+            include_str!("driver.rs"),
             include_str!("manifest.rs"),
             include_str!("outcome.rs"),
             include_str!("plan.rs"),

@@ -14,6 +14,22 @@ own table column already says "Converts?".
 **Depends on:** nothing for tranche A. Tranches B and C should follow the
 subjects they test.
 
+## 0. Where this sits
+
+Five specs cover the parent spec's remaining steps. Read in this order:
+
+| # | Spec | Blocks on |
+|---|---|---|
+| 1 | `2026-09-07-deps-core-completion-design.md` | nothing |
+| 2 | `2026-09-07-config-cli-adapter-design.md` | 1 |
+| 3 | `2026-09-07-config-subcommand-ports-design.md` | 2 |
+| 4 | `2026-09-07-tmux-and-zsh-scripts-design.md` | nothing |
+| 5 | `2026-09-07-shell-test-port-design.md` | nothing for its first tranche |
+
+Specs 4 and 5 are independent of the 1-2-3 chain and of each other. Spec 5's
+first tranche is the only piece with a reproduced defect behind it and no
+prerequisite, so it can run first, alongside spec 1.
+
 ## 1. Why this is last, and why one tranche is not
 
 Parent spec 7.4: "Step 6. The test port. **Last**, because it is the safety

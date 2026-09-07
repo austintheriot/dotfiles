@@ -7,6 +7,22 @@
 **Depends on:** `2026-09-07-config-cli-adapter-design.md`. This step adds
 subcommands to the binary that step creates, so it cannot start first.
 
+## 0. Where this sits
+
+Five specs cover the parent spec's remaining steps. Read in this order:
+
+| # | Spec | Blocks on |
+|---|---|---|
+| 1 | `2026-09-07-deps-core-completion-design.md` | nothing |
+| 2 | `2026-09-07-config-cli-adapter-design.md` | 1 |
+| 3 | `2026-09-07-config-subcommand-ports-design.md` | 2 |
+| 4 | `2026-09-07-tmux-and-zsh-scripts-design.md` | nothing |
+| 5 | `2026-09-07-shell-test-port-design.md` | nothing for its first tranche |
+
+Specs 4 and 5 are independent of the 1-2-3 chain and of each other. Spec 5's
+first tranche is the only piece with a reproduced defect behind it and no
+prerequisite, so it can run first, alongside spec 1.
+
 ## 1. What is actually in scope
 
 Nine `config-*` scripts exist, 742 lines total. **Four of them are already
@@ -84,6 +100,12 @@ Three ways out, decided below:
 reasoning. The circularity is the same shape as `config-stamp`'s, which 8.1
 already resolved the same way, and a fallback path would let the gate pass
 having exercised the path being deleted.
+
+**Confirmed, not merely recommended.** The circularity is the same one
+parent 8.1 already resolved for `config-stamp`, and the adapter spec's 8.4
+rejects fallback paths on the grounds that a gate can pass having exercised
+the path being deleted. Both arguments apply here unchanged, so this is a
+decision rather than a preference.
 
 **Recorded as a future direction, not part of this step:** the third option
 (port it and have a fresh machine get its first binary from a release

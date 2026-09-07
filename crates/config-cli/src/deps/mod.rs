@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use deps_core::{
-    Elevation, Manifest, PathRoot, Planning, Rendered, Requirements, Verb, describe, reconcile,
-    render, run_to_fixpoint,
+    Elevation, Manifest, PathRoot, Planning, Rendered, Report, Requirements, Selection, Verb,
+    describe, reconcile, render, run_to_fixpoint, summarize_check, summarize_install,
 };
 
 use crate::{DepsArgs, DepsVerb};
@@ -107,7 +107,7 @@ fn execute(arguments: &DepsArgs, verb: Verb) -> Result<Rendered, String> {
         // than reaching one wired to refuse. A refusing installer would put
         // `NotAutomatable` on every missing row, which reads as "this machine
         // cannot install it" when the truth is that nobody asked.
-        Verb::Check => Ok(check(&manifest, &resolver)),
+        Verb::Check => Ok(check(&manifest, &resolver, &arguments.only, &selection)),
         Verb::DryRun => dry_run(&planning, &resolver, &manifest, manager),
         Verb::Install => {
             let approval = if arguments.yes {
@@ -119,8 +119,42 @@ fn execute(arguments: &DepsArgs, verb: Verb) -> Result<Rendered, String> {
             let (report, _events) =
                 run_to_fixpoint(&planning, &installers, || gather::gather(&manifest, &resolver))
                     .map_err(|error| describe_plan_error(&error))?;
+            let report = scoped_to_selection(report, &arguments.only, &selection);
             Ok(render(&report, Verb::Install))
         }
+    }
+}
+
+/// Scope a report's verdict to what the caller asked about.
+///
+/// `reconcile` walks the whole manifest, which is right for an unnarrowed
+/// run: an entry nobody selected is still missing from the machine, and
+/// `summarize_check` counts `NotSelected` against readiness for that reason.
+///
+/// It is wrong the moment `--only` is used. CI narrows to the seven
+/// dependencies a test run needs, and installing the rest "would add minutes
+/// and more upstream services that can fail a run about a shell script", in
+/// the workflow's own words. Reporting on entries the caller deliberately
+/// excluded made every such run exit 4, which made `--only` unusable in its
+/// primary use case.
+///
+/// So the filter lives here rather than in `summarize_check`: only the
+/// adapter knows whether the caller narrowed, and the full-run meaning of
+/// `NotSelected` is still correct and still tested.
+fn scoped_to_selection(report: Report, only: &[String], selection: &Selection) -> Report {
+    if only.is_empty() {
+        return report;
+    }
+    let rows: Vec<_> = report
+        .rows
+        .into_iter()
+        .filter(|row| selection.contains(&row.dependency))
+        .collect();
+    let outcomes: Vec<_> = rows.iter().map(|row| row.outcome.clone()).collect();
+    Report {
+        check: summarize_check(&outcomes),
+        install: summarize_install(&outcomes),
+        rows,
     }
 }
 
@@ -129,9 +163,15 @@ fn execute(arguments: &DepsArgs, verb: Verb) -> Result<Rendered, String> {
 /// One gather and a `reconcile` over no outcomes. `reconcile` covers every
 /// manifest entry rather than only the planned steps, so the report names the
 /// whole manifest even though this verb plans nothing.
-fn check(manifest: &Manifest, resolver: &HostRoots) -> Rendered {
+fn check(
+    manifest: &Manifest,
+    resolver: &HostRoots,
+    only: &[String],
+    selection: &Selection,
+) -> Rendered {
     let observations = gather::gather(manifest, resolver);
     let (report, _events) = reconcile(manifest, &[], &observations);
+    let report = scoped_to_selection(report, only, selection);
     render(&report, Verb::Check)
 }
 

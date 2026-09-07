@@ -194,3 +194,52 @@ fn only_narrows_which_steps_a_dry_run_plans() {
         "--only leaves one step planned, got {narrowed_stdout:?}"
     );
 }
+
+/// `--only` scopes the verdict to what the caller named.
+///
+/// CI narrows to the dependencies a test run needs and deliberately excludes
+/// the rest, so a verdict covering the whole manifest made every such run
+/// exit 4 on entries nobody asked about. Regression for that: the first real
+/// CI run after the port failed exactly this way.
+#[test]
+fn only_scopes_the_verdict_to_the_named_dependencies() {
+    let fixture = tempfile::tempdir().expect("tempdir");
+    let conf_dir = fixture.path().join(".scripts").join("deps");
+    std::fs::create_dir_all(&conf_dir).expect("conf dir");
+    std::fs::write(
+        conf_dir.join("deps.conf"),
+        "sh|command -v sh|https://example.invalid/sh\n         absent-tool|command -v definitely-not-a-real-binary|https://example.invalid/x\n",
+    )
+    .expect("write");
+
+    let run = |only: &[&str]| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_config-cli"));
+        command
+            .args(["deps", "check"])
+            .env("DOTFILES_ROOT", fixture.path())
+            .env("DEPS_LOCAL_CONF", "/nonexistent/deps-platform.conf");
+        if !only.is_empty() {
+            command.args(["--only", &only.join(",")]);
+        }
+        command.output().expect("the binary runs")
+    };
+
+    // Positive control: unnarrowed, the absent tool must still make the run
+    // report not-ready, or the assertion below would hold for a binary that
+    // never reports anything missing.
+    let whole = run(&[]);
+    assert_eq!(
+        whole.status.code(),
+        Some(1),
+        "an absent dependency must fail an unnarrowed check: {}",
+        String::from_utf8_lossy(&whole.stdout)
+    );
+
+    let narrowed = run(&["sh"]);
+    assert_eq!(
+        narrowed.status.code(),
+        Some(0),
+        "--only sh must not report on absent-tool, which nobody asked about: {}",
+        String::from_utf8_lossy(&narrowed.stdout)
+    );
+}

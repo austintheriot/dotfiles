@@ -7,6 +7,10 @@
 //! in. That split is what makes this crate's behavior testable without a
 //! tmux server, and it is the same split `deps-core` uses.
 
+mod naming;
+
+pub use naming::{HeadState, RepositoryFacts, WindowFacts, window_name};
+
 #[cfg(test)]
 mod purity {
     /// The crate source must name no IO capability.
@@ -18,7 +22,10 @@ mod purity {
     /// that adds the module. A module absent from this array is unchecked.
     #[test]
     fn no_module_names_an_io_capability() {
-        let sources = [("lib.rs", include_str!("lib.rs"))];
+        let sources = [
+            ("lib.rs", include_str!("lib.rs")),
+            ("naming.rs", include_str!("naming.rs")),
+        ];
         for (file_name, source) in sources {
             for forbidden in forbidden_capabilities() {
                 assert!(
@@ -42,11 +49,7 @@ mod purity {
                 "a needle the purity test relies on does not match a source that names it"
             );
         }
-        // Allowed rather than restructured: this list grows to more than one
-        // element as soon as a later task adds a module, at which point the
-        // lint stops firing on its own and the allow becomes removable.
-        #[allow(clippy::single_element_loop)]
-        for source in [include_str!("lib.rs")] {
+        for source in [include_str!("lib.rs"), include_str!("naming.rs")] {
             assert!(
                 !source.is_empty(),
                 "include_str! yielded empty text, so the purity test proves nothing"

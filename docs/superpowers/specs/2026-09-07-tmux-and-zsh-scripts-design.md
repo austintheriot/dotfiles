@@ -28,8 +28,8 @@ the surface and misattributes the difficulty.
 | `tmux-worktree-config.sh` | 8 | executed | Freely. |
 | `zsh-git-widgets.sh` | 27 | sourced at shell init | Computation only; see 3.2. |
 
-**`tmux-update-window-names.sh` is 241 of 475 tmux lines, over half, and is
-already executed rather than sourced.** It is the largest and easiest piece,
+**`tmux-update-window-names.sh` is 241 of 502 lines across the seven files
+above, and is already executed rather than sourced.** It is the largest and easiest piece,
 and the parent spec buries it behind the two blocked scripts. It should go
 first.
 

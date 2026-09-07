@@ -26,9 +26,6 @@ pub enum PathRoot {
     MacApplications,
     /// Homebrew's prefix, written `$(brew --prefix 2>/dev/null)/`.
     BrewPrefix,
-    /// oh-my-zsh's custom directory, written
-    /// `${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/`.
-    OhMyZshCustom,
 }
 
 /// A path to check: a closed root plus a validated relative remainder.
@@ -351,7 +348,7 @@ fn split_after_closing_quote(raw: &str) -> Option<(&str, &str)> {
 /// would have to expand, and an unresolvable brew is then an
 /// `Observation::Unresolvable` at gather time instead of a test against `/`.
 ///
-/// An operand whose prefix is none of the four named roots is `Unrecognized`,
+/// An operand whose prefix is none of the three named roots is `Unrecognized`,
 /// which is what keeps an arbitrary command substitution out: there is no
 /// branch that carries unexpanded text forward.
 fn parse_quoted_path(raw: &str) -> Result<CheckPath, CheckParseError> {
@@ -360,9 +357,13 @@ fn parse_quoted_path(raw: &str) -> Result<CheckPath, CheckParseError> {
         .and_then(|rest| rest.strip_suffix('"'))
         .unwrap_or(raw);
 
-    let roots: [(&str, PathRoot); 4] = [
+    let roots: [(&str, PathRoot); 3] = [
         ("$(brew --prefix 2>/dev/null)/", PathRoot::BrewPrefix),
-        ("${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/", PathRoot::OhMyZshCustom),
+        // No ZSH_CUSTOM entry. No conf file contains that variable, so the
+        // prefix matched nothing, and supporting it would let a check and an
+        // install disagree about which directory they mean: the shell's
+        // install wrote ${ZSH_CUSTOM:-...} while its check read $HOME/...,
+        // which diverge whenever the variable is set.
         ("$HOME/", PathRoot::Home),
         ("/Applications/", PathRoot::MacApplications),
     ];
@@ -547,6 +548,41 @@ mod tests {
         }
     }
 
+    /// The clone target and the check subject must be the same value.
+    ///
+    /// The shell used different roots: the check reads
+    /// $HOME/.oh-my-zsh/custom and the install writes ${ZSH_CUSTOM:-...}.
+    /// They agree only when the variable is unset, so with ZSH_CUSTOM set
+    /// the clone succeeds, the re-gather still reports absent, and Attempted
+    /// has retired the step. Making the two one value is what makes
+    /// convergence structural rather than hoped for.
+    #[test]
+    fn the_clone_target_equals_the_parsed_check_subject() {
+        let check = parse_check_expression(
+            "test -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh\"",
+            ConfKind::PlatformSelected,
+        )
+        .expect("the real deps.conf shape parses");
+
+        let subject = match &check {
+            Check::FileExists(path) => path.clone(),
+            other => panic!("expected a file test, got {other:?}"),
+        };
+
+        // Positive control: the parsed subject must be Home-rooted, or the
+        // comparison below is against a root the manifest never produces.
+        assert_eq!(subject.root, PathRoot::Home);
+
+        let clone_target = CheckPath::new(
+            PathRoot::Home,
+            CheckRelPath::parse(
+                ".oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh",
+            )
+            .expect("a valid relative path"),
+        );
+        assert_eq!(subject, clone_target);
+    }
+
     // The alacritty branch of deps.conf:24 is the only absolute path in the
     // corpus, and CheckRelPath rejects an absolute remainder, so a named
     // root is the only way it can carry a validated path at all.
@@ -632,10 +668,20 @@ mod tests {
             Err(CheckParseError::Unrecognized)
         ));
         // A command substitution inside a recognized shape is refused too,
-        // because a root that is not one of the four named ones is the only
+        // because a root that is not one of the three named ones is the only
         // way expansion could re-enter.
         assert!(matches!(
             parse_check_expression("[ -d \"$(pwd)/x\" ]", ConfKind::ExplicitOnly),
+            Err(CheckParseError::Unrecognized)
+        ));
+        // ${ZSH_CUSTOM:-...} named a deleted root (no conf file contains
+        // ZSH_CUSTOM). Pinning its rejection catches a re-add of the prefix
+        // without a manifest shape to justify it.
+        assert!(matches!(
+            parse_check_expression(
+                "[ -d \"${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/x\" ]",
+                ConfKind::ExplicitOnly
+            ),
             Err(CheckParseError::Unrecognized)
         ));
     }

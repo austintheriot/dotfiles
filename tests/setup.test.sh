@@ -121,9 +121,16 @@ assert_equals '--branch overrides the default branch' \
 # An unrecognized platform must no longer block the clone. It used to exit 1,
 # because the platform named the branch and guessing one for an unknown system
 # would check out Homebrew paths onto a machine with no Homebrew. The branch no
-# longer depends on the platform, so the clone half has nothing left to refuse:
-# variant selection is platform.sh's job, inside `config init`, which detects
-# for itself and reports its own unknown.
+# longer depends on the platform, so the clone half has nothing left to refuse.
+#
+# What happens after the clone is deliberately NOT asserted here, because
+# nothing downstream reports an unknown platform today: `config init` contains
+# zero references to DOTFILES_PLATFORM (verified), and platform.sh resolves
+# `unknown` only for a uname it cannot map, then platform_variant returns a
+# path whose variant file does not exist. So an unrecognized OS gets a
+# successful clone and a silent variant miss. That is a gap, not a guarantee,
+# and it is tracked separately rather than papered over with a comment
+# claiming a safety net that is not there.
 seed=$(make_seed unknown)
 home=$(new_home unknown)
 output=$(HOME="$home" DOTFILES_PLATFORM=unknown "$SETUP" --yes --repo "$seed" 2>&1)

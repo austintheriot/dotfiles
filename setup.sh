@@ -321,8 +321,12 @@ fi
 # Linux as `linux`. Both branches became frozen history in the 2026-09-06
 # collapse to `main`, so that mapping bootstrapped every new machine onto a
 # stale tree. Detection is not deleted, it moved to where it is actually
-# consumed: platform.sh detects for itself, and `config init` reports its own
-# unknown platform.
+# consumed: platform.sh detects for itself when a variant is selected.
+#
+# One consequence, recorded because it is a real gap: this script used to be
+# the only thing that refused an OS it could not name. Nothing downstream
+# replaces that refusal, so an unrecognized system now clones successfully
+# and misses its variant files silently.
 [ -n "$branch" ] || branch=main
 
 run() {

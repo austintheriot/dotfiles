@@ -18,74 +18,15 @@
 #                  which would rebuild the image on every keystroke.
 #
 # Exits 2 on a usage error, otherwise the exit status of the suite.
+#
+# A shim, deliberately. Every decision lives in config-cli, and this file
+# exists so `config test` resolves through the dispatcher rather than
+# falling through to git, which would silently become `git test` (not a
+# git verb, so it errors, but a differently-named subcommand could silently
+# do something else).
 set -eu
 
 . "$(dirname "$(readlink -f "$0")")/usage.sh"
 usage_if_requested "${1:-}"
 
-usage='usage: config test [-q|--quiet] [-d|--docker] [-w|--watch] [suite]'
-quiet=''
-docker=''
-watch=''
-suite=''
-
-for arg in "$@"; do
-    case $arg in
-        -q|--quiet) quiet=-q ;;
-        -d|--docker) docker=yes ;;
-        -w|--watch) watch=yes ;;
-        -*) printf '%s\n' "$usage" >&2; exit 2 ;;
-        *) [ -z "$suite" ] || { printf '%s\n' "$usage" >&2; exit 2; }; suite=$arg ;;
-    esac
-done
-
-# -q is only honored by run-all.sh, and a watch loop would rebuild the docker
-# image on every change, so both combinations are usage errors rather than a
-# flag that silently does nothing.
-if [ -n "$quiet" ] && { [ -n "$docker" ] || [ -n "$suite" ]; }; then
-    printf '%s\n' "$usage" >&2
-    exit 2
-fi
-if [ -n "$watch" ] && [ -n "$docker" ]; then
-    printf '%s\n' "$usage" >&2
-    exit 2
-fi
-
-run_suite() {
-    if [ -n "$docker" ]; then
-        "$HOME/tests/run-in-docker.sh" ${suite:+"$suite"}
-    elif [ -n "$suite" ]; then
-        "$HOME/tests/$suite.test.sh"
-    else
-        "$HOME/tests/run-all.sh" ${quiet:+"$quiet"}
-    fi
-}
-
-# A cksum over every tracked file's content, tracked only: the worktree is
-# the whole home directory, so `ls-files --others` walks all of it and takes
-# minutes. Polling is dependency-free on both machines; a real watcher would
-# be a platform split.
-fingerprint() {
-    git --git-dir="$HOME/.cfg" --work-tree="$HOME" ls-files -z --cached \
-        | (cd "$HOME" && xargs -0 cksum 2>/dev/null) | cksum
-}
-
-if [ -z "$watch" ]; then
-    exec_status=0
-    run_suite || exec_status=$?
-    exit "$exec_status"
-fi
-
-# sh runs a trap only after the current command (the sleep) returns, so teardown can take up to one poll interval
-trap 'command -v pkill >/dev/null 2>&1 && { pkill -P $$ 2>/dev/null || true; }; exit 143' TERM INT
-
-last=$(fingerprint)
-run_suite || true
-while :; do
-    sleep 1
-    current=$(fingerprint)
-    if [ "$current" != "$last" ]; then
-        last=$current
-        run_suite || true
-    fi
-done
+exec config-cli test "$@"

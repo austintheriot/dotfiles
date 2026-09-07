@@ -223,12 +223,14 @@ assert_equals 'config test --docker <suite> passes the suite name' 'docker:deps-
 output=$(HOME="$home" "$CONFIG" test --bogus 2>&1)
 status=$?
 assert_equals 'config test rejects an unknown flag with exit 2' '2' "$status"
-assert_contains 'the rejection prints usage' 'usage: config test' "$output"
+# clap prints its own usage line, capitalized ("Usage:"), rather than the
+# lowercase "usage:" the retired shell script's hand-written line used.
+assert_contains 'the rejection prints usage' 'Usage: config test' "$output"
 
 output=$(HOME="$home" "$CONFIG" test a b 2>&1)
 status=$?
 assert_equals 'config test rejects a second positional argument with exit 2' '2' "$status"
-assert_contains 'the second-positional-argument rejection prints usage' 'usage: config test' "$output"
+assert_contains 'the second-positional-argument rejection prints usage' 'Usage: config test' "$output"
 
 HOME="$home" "$CONFIG" test -q --docker >/dev/null 2>&1
 status=$?

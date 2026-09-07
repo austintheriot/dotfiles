@@ -53,14 +53,11 @@ shim_dir="$FIXTURES/shims"
 mkdir -p "$shim_dir"
 printf '#!/bin/sh\nprintf "manifest:%%s\\n" "$@"\n' > "$shim_dir/config-manifest"
 chmod 755 "$shim_dir/config-manifest"
-# The deps engine, which `config deps` and `config install` both exec. On PATH
-# rather than under $HOME: the wrappers resolve it by name.
+# The binary every thin wrapper execs: `config deps`, `config install`, and
+# now `config test` all resolve it by name on PATH rather than under $HOME.
 printf '#!/bin/sh\nprintf "deps:%%s\\n" "$@"\n' > "$shim_dir/config-cli"
 chmod 755 "$shim_dir/config-cli"
 mkdir -p "$home/.scripts/deps" "$home/tests"
-printf '#!/bin/sh\nprintf "all:%%s\\n" "$@"\n' > "$home/tests/run-all.sh"
-printf '#!/bin/sh\nprintf "docker:%%s\\n" "$@"\n' > "$home/tests/run-in-docker.sh"
-chmod 755 "$home/tests/run-all.sh" "$home/tests/run-in-docker.sh"
 
 run_config() {
     HOME="$home" PATH="$shim_dir:$PATH" "$CONFIG" "$@"
@@ -196,42 +193,34 @@ done
 
 # --- short and long spellings -----------------------------------------------
 
-# `config test` took -q with no long spelling and --docker/--watch with no
-# short one, so a reader had to remember which form each flag came in. Both
-# spellings work for all three.
+# `config test` is a shim now: it execs `config-cli test "$@"` unparsed, and
+# config-cli owns both spellings of every flag. The fixture's config-cli stub
+# prints "deps:<arg>" per argument, on its own line, so these assertions
+# check what reaches the binary rather than what a shell case statement used
+# to do with it.
 actual=$(run_config test -q)
-assert_equals 'config test -q passes -q through' 'all:-q' "$actual"
+assert_equals 'config test -q passes -q through' \
+    "$(printf 'deps:test\ndeps:-q')" "$actual"
 
 actual=$(run_config test --quiet)
-assert_equals 'config test --quiet is the long spelling of -q' 'all:-q' "$actual"
+assert_equals 'config test --quiet is the long spelling of -q' \
+    "$(printf 'deps:test\ndeps:--quiet')" "$actual"
 
 actual=$(run_config test --docker)
-assert_equals 'config test --docker runs the docker suite' 'docker:' "$actual"
+assert_equals 'config test --docker runs the docker suite' \
+    "$(printf 'deps:test\ndeps:--docker')" "$actual"
 
 actual=$(run_config test -d)
-assert_equals 'config test -d is the short spelling of --docker' 'docker:' "$actual"
+assert_equals 'config test -d is the short spelling of --docker' \
+    "$(printf 'deps:test\ndeps:-d')" "$actual"
 
-printf 'run\n' > "$home/tests/run-all.sh"
-printf '#!/bin/sh\nprintf "all:%%s\\n" "$@"\n' > "$home/tests/run-all.sh"
-chmod 755 "$home/tests/run-all.sh"
-
-# -w/--watch starts a loop, so it is checked for acceptance rather than run:
-# pairing it with --docker is a usage error either way, and the error proves
-# the flag was recognised rather than falling into the unknown-flag branch.
-output=$(run_config test -w --docker 2>&1)
-status=$?
-assert_equals 'config test -w is the short spelling of --watch' '2' "$status"
-assert_contains 'the -w rejection is the watch/docker conflict, not unknown-flag' \
-    'usage: config test' "$output"
-
-# An unknown flag still fails, so the aliases did not open the parser up.
-run_config test --bogus >/dev/null 2>&1
-status=$?
-assert_equals 'config test still rejects an unknown flag' '2' "$status"
-
-run_config test -z >/dev/null 2>&1
-status=$?
-assert_equals 'config test still rejects an unknown short flag' '2' "$status"
+# -w/--watch and an unrecognized flag are both left to config-cli now: the
+# shim no longer validates anything, so there is nothing left for this suite
+# to probe about flag combinations or unknown flags. config-cli's own
+# argv-surface tests (config-cli/tests/test_runner_behavior.rs) cover those.
+actual=$(run_config test -w --docker)
+assert_equals 'config test -w reaches config-cli alongside --docker' \
+    "$(printf 'deps:test\ndeps:-w\ndeps:--docker')" "$actual"
 
 # --- the --describe contract -------------------------------------------------
 

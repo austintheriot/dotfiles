@@ -16,6 +16,7 @@ use clap::{Parser, Subcommand};
 
 mod deps;
 mod reload;
+mod test_runner;
 
 /// The `config-cli` command line: one subcommand, `deps`.
 #[derive(Parser)]
@@ -47,6 +48,9 @@ enum Command {
     /// Re-source the tmux config and print the line to re-source zsh.
     #[command(name = "reload")]
     Reload(reload::ReloadArgs),
+    /// Run the test suite, optionally in Docker or in a watch loop.
+    #[command(name = "test")]
+    Test(test_runner::TestArgs),
 }
 
 /// A `deps` verb: whether to change anything.
@@ -93,6 +97,7 @@ fn main() -> ExitCode {
     match cli.command {
         Some(Command::Deps { verb }) => deps::run(verb),
         Some(Command::Reload(arguments)) => reload::run(arguments),
+        Some(Command::Test(arguments)) => test_runner::run(arguments),
         None => {
             // A bare invocation is a usage error, so the help goes to
             // stderr and the exit code stays 2, matching every other usage

@@ -3,7 +3,12 @@
 **Date:** 2026-09-07
 **Status:** design, not yet planned
 **Parent spec:** `docs/superpowers/specs/2026-09-06-pure-core-architecture.md`
-(step 5 of section 7.4; corrects 3.7 and 7.2)
+(step 5 of section 7.4). This document corrects the parent's 3.7 and 7.2.
+**Depends on:** nothing. Both blockers are resolved in section 3, so this
+step can run at any point.
+**Resolves:** the corrections raised in
+`2026-09-07-config-cli-adapter-design.md` sections 7.1 and 7.2, which defer
+`zsh-git-widgets.sh` and `tmux-split.sh` to this document.
 
 ## 1. Why this was blocked
 
@@ -61,7 +66,7 @@ mention, and it is load-bearing rather than incidental:
 > splits."
 
 So the inheritance is doing two jobs: passing an argument, and using
-"unrecognised layout" as a silent no-op for the common case where the session
+"unrecognized layout" as a silent no-op for the common case where the session
 name is not a layout.
 
 **Decision: `tmux-start.sh` calls `tmux-split "$1"` explicitly, and the
@@ -91,13 +96,13 @@ Measured: the widget spawns **six** processes (`git`, `rg`, `sed`, `sed`,
 `fzf`, `cut`), and the branch-listing half of that pipeline, excluding the
 interactive picker, takes **35 ms**.
 
-**Decision: a binary lists and formats the branches; the zsh widget keeps the
+**Decision: a binary lists and formats the branches. The zsh widget keeps the
 `LBUFFER=` assignment and the `fzf` picker.**
 
 Three reasons, in order:
 
 1. It is a **latency improvement**, not a cost. Five spawned processes plus
-   four pipe stages become one spawn, against a ~7 ms floor measured in 3.2.
+   four pipe stages become one spawn, against the ~7 ms spawn floor the parent spec measures in its 7.2.
 2. It is **not a keystroke path**. The widget blocks on an interactive `fzf`
    picker, so a human is reading the screen while it runs. The parent spec's
    spawn-cost objection applies to `.zshrc` startup and the prompt, not here.
@@ -106,8 +111,15 @@ Three reasons, in order:
    shape that section 7.5 identifies as this repo's verified bug class.
 
 The `LBUFFER=` line, `zle -N`, and the three `bindkey` calls stay shell.
-Update 7.2's table to say "registers a ZLE widget and assigns `LBUFFER`"
-rather than implying the whole file is shell-bound.
+
+**The correction to parent 7.2 is its second sentence, not its first.**
+An earlier draft of this section asked for wording that parent
+`2026-09-06-pure-core-architecture.md:1003` already contains verbatim
+("Registers a ZLE widget and assigns `LBUFFER`."), which would have been a
+no-op edit, or worse, would have read as already applied. The sentence that
+needs to change is the one after it: "Structurally impossible from another
+process." That is true of the assignment and false of the computation, and it
+is the overreach this section corrects.
 
 ## 4. Order
 

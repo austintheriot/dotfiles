@@ -25,9 +25,12 @@ of those is a shim.
 | `config-reload` | 30 | Ports. | |
 | `config-doctor` | 26 | Already a shim to `config-manifest doctor`. Delete it; see 3.3. | |
 
-**So this step is 259 lines across four scripts, not 742 across nine.** The
-parent spec's "the remaining `config-*` subcommands" phrasing implies a much
-larger surface than exists once its own decisions are applied.
+**So this step is 259 lines across four scripts, not 742 across nine** before
+section 3.2's decision, and **113 lines across three scripts plus a 26-line
+deletion** after it, because 3.2 keeps `config-build` shell. The second
+figure is the one to size the work by. The first is what the parent spec's
+"the remaining `config-*` subcommands" phrasing implies, which is 6.5x the
+real surface once the parent's own decisions are applied.
 
 ## 2. The one hard rule
 

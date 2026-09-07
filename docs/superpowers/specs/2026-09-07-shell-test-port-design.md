@@ -1,4 +1,11 @@
-# Porting the shell test suites to Rust
+# Converting the shell test suites to Rust
+
+**A note on vocabulary.** This document says **convert** rather than
+**port** for moving a suite to Rust, because `port` is load-bearing
+architectural vocabulary in the parent spec: an effect boundary, as in
+"`Installer` is the only port". Two of this set's filenames use the migration
+sense, which is why the distinction is worth stating once. The tmux spec's
+own table column already says "Converts?".
 
 **Date:** 2026-09-07
 **Status:** design, not yet planned
@@ -44,7 +51,18 @@ by which suites read which format:
 | Markdown | `config-docs`, `doc-links`, `deps-docs`, `readme-badges`, `setup`, `container`, `deps-harness`, `leak-check`, `pre-push-multi-ref`, `scripts-dir-name` |
 | TOML | `alacritty-platform-split`, `config-manifest-lifecycle`, `container`, `doc-links`, `platform`, `pre-push-multi-ref`, `run-all-filter` |
 
-Overlaps are real: `container.test.sh` parses all three.
+**The three tranches OVERLAP. They are not a partition, and an earlier
+draft implied they were.** The table above names 17 distinct suites, and
+17 + 7 + 26 = 50 against a total of 41. The excess is real overlap rather
+than an error in the totals: a suite can both parse a structured format
+(tranche A) and need `assert_cmd` fixtures (tranche C), and
+`container.test.sh` parses all three formats by itself.
+
+So read the tranches as **work streams, not buckets**. The partition that
+does sum is the one in section 6: 7 suites keep shell as their subject, 34
+become Rust. Tranche A names where a real parser is the payoff. Tranche C
+names where the harness is the only change. A suite in both gets its parser
+work in A and its fixture work in C.
 
 **The bug class this closes is verified, not theoretical.** Parent spec 7.5's
 example, reproduced by execution: `config-docs.test.sh:47-53` extracts

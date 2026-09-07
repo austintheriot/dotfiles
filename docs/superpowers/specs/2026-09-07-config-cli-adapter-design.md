@@ -2,9 +2,15 @@
 
 **Date:** 2026-09-07
 **Status:** design, not yet planned
-**Parent spec:** `docs/superpowers/specs/2026-09-06-pure-core-architecture.md`
-(this document is step 3b of that spec's section 7.4, and revises 3.7 and 7.2
-where noted)
+**Parent spec:** `docs/superpowers/specs/2026-09-06-pure-core-architecture.md`.
+This document specifies the **adapter half of that spec's Step 3**, and
+revises its 3.7 and 7.2 where noted.
+
+**On the label "step 3b":** the parent's 7.4 has Step 0 through Step 6 with
+no sub-lettering. "3b" is a subdivision this document introduces, because
+Step 3 bundles two separable pieces: the `deps-core` crate, which is done,
+and the adapter, which is this. Where other documents in this set write
+"step 3b" they mean this one.
 
 ## 1. Why this exists
 
@@ -186,15 +192,16 @@ and it is the reason this section exists:
 > quietly compensating for a gap in the engine, so the engine looked correct
 > everywhere it was tested and failed on a real machine."
 
-That is this project's dominant bug class, found eleven times during the
-previous plan's execution. So:
+That is this project's dominant bug class. The parent spec's 10.6
+tabulates four confirmed instances, and the previous plan's execution found
+more that are recorded in its ledger rather than in the spec. So:
 
 **The apt installer sets `DEBIAN_FRONTEND=noninteractive` in the child
 environment itself, and a test asserts it does so with the ambient variable
 UNSET.** A test that inherits the variable from its own environment proves
 nothing, which is the whole lesson of the incident.
 
-The same rule generalises: every non-interactivity flag the engine depends on
+The same rule generalizes: every non-interactivity flag the engine depends on
 (`--noconfirm` for pacman, `-y` for apt) belongs in the argv the engine
 builds, and its test must run with the environment stripped rather than
 prepared.
@@ -308,8 +315,8 @@ they can actually fail:
 
 **7.1 `zsh-git-widgets.sh` is not wholly shell-bound.** Sections 3.7 and 7.2
 both list it as permanently shell because assigning `LBUFFER` is
-"structurally impossible from another process". The assignment is; the
-computation is not. The widget currently spawns **six** processes (`git`,
+"structurally impossible from another process". The assignment is
+impossible. The computation is not. The widget currently spawns **six** processes (`git`,
 `rg`, `sed`, `sed`, `fzf`, `cut`) and the branch-listing half measures
 **35 ms**. Replacing five of them with one binary leaves the `LBUFFER=`
 assignment in the widget and is a latency improvement, not a cost. It is also
@@ -347,7 +354,7 @@ the run exists to exercise**.
 
 That is the `DEBIAN_FRONTEND` shape from section 4.3 exactly: the environment
 compensating for the engine, the gate green, the real machine broken. Adding
-a build stage would not mitigate this project's dominant bug class; it would
+a build stage would not mitigate this project's dominant bug class. It would
 be a new instance of it.
 
 It is worse for the bare legs. `Dockerfile.bootstrap-curl` and
@@ -436,7 +443,7 @@ the script's:
    clone only if the directory already exists. Observed in a container run:
    "no automated install for zsh-autosuggestions" at line 312, "installed
    oh-my-zsh" at line 1237, 925 lines apart. `deps-core`'s fixpoint loop is
-   the fix and is already implemented and tested; this step must not
+   the fix and is already implemented and tested. This step must not
    reintroduce a single-pass driver.
 2. **Exit 0 on an incomplete machine.** The same run ended "no unresolved
    failures (16 of 18 were already missing)" and exited **0** with three
@@ -530,7 +537,7 @@ silent:
   dependencies absent.
 - **`Unresolvable` is not blocking.** `plan.rs:300-303` records
   `Event::CheckUnanswerable` and falls through to plan an install. That may
-  be right; it is a policy decision nobody wrote down.
+  be right. It is a policy decision nobody wrote down.
 - **Roots must be re-resolved at the instant of use.** Parent spec 5.2 says
   so, because `oh-my-zsh`'s install creates the directory
   `OhMyZshCustom` names, so a root resolved at gather time is stale by
@@ -588,7 +595,7 @@ platform condition.** Verified in `plan.rs:395-401`:
 `first_unsatisfied_prerequisite` treats a prerequisite that is absent from
 the manifest as **not an error**, and its comment names this exact case:
 `oh-my-zsh` lives in `deps-linux.conf:12` and is legitimately absent on
-macOS. So on macOS the edge is simply not blocking, with no condition
+macOS. So on macOS the edge is not blocking, with no condition
 anywhere.
 
 Encoding the platform a second time in the graph would be a redundant
@@ -608,7 +615,7 @@ Three reasons, in order:
 1. **The graph is not manifest data.** It is knowledge about install
    mechanics that already lives in code, beside the install-command table.
    `check-deps.sh:346-352` decides zsh-autosuggestions' install shape per
-   manager and `:383-386` decides node's per nvm presence; the prerequisite
+   manager and `:383-386` decides node's per nvm presence. The prerequisite
    is the same fact those branches already encode. A separate file splits one
    fact across two artifacts that can drift, with nothing to catch it, which
    is the failure `deps-ci.conf:8-12` documents about a duplicated list.
@@ -688,7 +695,7 @@ resolved value and every consumer would re-read the environment. That is a
 hidden effect in a type whose stated purpose (`check.rs:11-15`) is to delete
 all shell expansion from the check field.
 
-### 10.4 Two gaps at the `Requirements` boundary
+### 10.2a Two gaps at the `Requirements` boundary
 
 Both found in review, both real, both cheap.
 
@@ -699,7 +706,7 @@ is constructed only from `Selection` (`plan.rs:289`, `:442`); nothing walks
 successfully, emits `PrerequisiteNotSelected { on: "oh-my-zhs" }`, orders
 nothing, and exits 0. **The typo is indistinguishable from a correct macOS
 run.** Section 10.1's "a new edge needs a code change is a feature" assumed
-that code change gets reviewed; it gives the type system nothing to check.
+that code change gets reviewed. It gives the type system nothing to check.
 
 Fix: a validating constructor, `Requirements::validated(pairs, known)`,
 where `known` is the union of every shipped conf file. `from_pairs` stays for

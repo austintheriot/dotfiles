@@ -99,6 +99,12 @@ pub trait Installer {
     fn describe(&self, step: &Step) -> ActionDescription;
 
     /// Perform `action` and report what happened.
+    ///
+    /// Returns only `Installed`, `InstallFailed`, `NotAutomatable` or
+    /// `Declined`. `AlreadyPresent` and `InstalledButCheckStillFails` are
+    /// `reconcile`'s to produce from the post-loop world, so an installer
+    /// returning either would bypass the re-check that catches an install
+    /// which reported success and changed nothing.
     fn perform(&self, action: &InstallAction) -> StepOutcome;
 }
 
@@ -700,6 +706,9 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
             fn describe(&self, _step: &Step) -> ActionDescription {
                 ActionDescription {
                     summary: String::new(),
+                    // This stub exists only to record call order, and this
+                    // ActionDescription is never read. A test that starts
+                    // asserting on it must read step.privilege instead.
                     privilege: PrivilegeRequirement::None,
                     command_preview: None,
                     changes_trust_root: false,

@@ -95,6 +95,14 @@ pub enum StepOutcome {
     /// itself, which is not a state that exists, and a caller rendering the
     /// `on` field would print it.
     NotSelected,
+    /// The step had an automated install and the user declined it.
+    ///
+    /// Distinct from every neighbour: `NotAutomatable` claims no automated
+    /// install exists, `Blocked` claims a later wave can unblock it, and
+    /// `InstallFailed` claims an attempt failed. All three are false here,
+    /// and reporting a decline as any of them is the kind of false statement
+    /// parent 6.2 rejected `DescribeOnly` for.
+    Declined,
 }
 
 /// The result of `deps check`.
@@ -516,6 +524,47 @@ mod tests {
         assert_eq!(
             exit_status(Ok(Verdict::Install(InstallStatus::AllSucceeded, CheckStatus::Ready)))
                 .code(),
+            0
+        );
+    }
+
+    /// A declined step leaves the machine not ready, and is not a failure.
+    ///
+    /// There was no outcome for "the user said no". NotAutomatable is false,
+    /// because an automated install exists. Blocked is false, because
+    /// nothing unblocks it. InstallFailed is false, because nothing failed.
+    /// Reporting a decline as any of the three is a false statement, which
+    /// is the argument parent 6.2 used to reject DescribeOnly.
+    #[test]
+    fn a_declined_step_is_not_ready_and_not_a_failure() {
+        let declined = [StepOutcome::Declined];
+
+        // Positive control: the same summaries must call an installed step
+        // ready and unfailed, or the assertions below hold for any input.
+        assert_eq!(summarize_check(&[StepOutcome::Installed]), CheckStatus::Ready);
+        assert_eq!(
+            summarize_install(&[StepOutcome::Installed]),
+            InstallStatus::AllSucceeded
+        );
+
+        assert_eq!(
+            summarize_check(&declined),
+            CheckStatus::NotReady,
+            "the machine is missing a dependency the user chose not to install"
+        );
+        assert_eq!(
+            summarize_install(&declined),
+            InstallStatus::AllSucceeded,
+            "nothing was attempted, so no attempt failed"
+        );
+
+        // And the two together must not exit 0, which is Task 3's table.
+        assert_ne!(
+            exit_status(Ok(Verdict::Install(
+                summarize_install(&declined),
+                summarize_check(&declined),
+            )))
+            .code(),
             0
         );
     }

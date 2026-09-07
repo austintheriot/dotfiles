@@ -68,6 +68,7 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
             StepOutcome::InstallFailed { .. } | StepOutcome::InstalledButCheckStillFails { .. } => {
                 format!("  failed    {} (see stderr)\n", row.dependency.as_str())
             }
+            StepOutcome::Declined => format!("  declined  {}\n", row.dependency.as_str()),
         };
         stdout.push_str(&line);
     }

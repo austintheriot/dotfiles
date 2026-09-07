@@ -111,6 +111,29 @@ pub enum Observation {
 /// small struct without enumerating every leaf, and so the core never holds
 /// the capability that produced the answers. The gather step implements this
 /// at the edge; nothing in this crate does.
+///
+/// A gathered world.
+///
+/// The core reads observations as a value and never probes, per parent 3.3.
+/// Four rules the gather at the edge must satisfy, none of which this trait
+/// can enforce:
+///
+/// 1. **Enumerate every leaf.** `ObservationMap::observe` returns `Absent`
+///    for a key it does not hold, so a gather that records only top-level
+///    checks silently reports every `AnyOf` dependency missing. Recurse into
+///    `AnyOf`'s `first` and `rest`.
+/// 2. **A failed probe is `Unresolvable`, not `Absent`.** A root that cannot
+///    be resolved, or a check whose interpreter is missing, is a different
+///    fact from "the dependency is not installed" and has a different
+///    remedy. The shell collapsed both and this crate exists partly to stop
+///    that.
+/// 3. **`Unresolvable` does not block.** `plan` records
+///    `Event::CheckUnanswerable` and plans the install anyway, because an
+///    unresolvable root is usually a missing manager rather than a satisfied
+///    dependency.
+/// 4. **Resolve roots at the instant of use, not once at gather time.**
+///    Installing `oh-my-zsh` creates the directory a later check reads, so a
+///    root resolved before the first wave is stale by the second.
 pub trait Observations {
     /// The observation recorded for `check`.
     fn observe(&self, check: &Check) -> Observation;

@@ -73,6 +73,8 @@ hand-written and can, so `config help` wins on any disagreement:
 
 - `config build` builds every workspace crate and installs each stamped
   binary.
+- `config deps check` checks the tracked dependencies against the manifest;
+  `config deps install` installs what is missing.
 - `config doctor` reports installed binaries that no longer match their
   source. Silent when everything is current.
 - `config init` finishes a fresh clone: git config, hooks, dependencies,

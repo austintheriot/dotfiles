@@ -3,10 +3,11 @@ usage: config <command> [args]
 
 Commands:
   build          Build every workspace crate and install its stamped binary
+  deps           Check or install the dependencies the manifest names
   doctor         Report installed binaries that do not match their source
   help           List the config subcommands and what each one does
   init           Finish a fresh clone: git config, hooks, dependencies, binary
-  install        Check the tracked CLI dependencies and install what is missing
+  install        Install the dependencies the manifest names
   install-hooks  Link the git hooks and put the dispatcher on PATH
   reload         Reload the tmux config and print the line to re-source zsh
   stamp          Print the build stamp of each workspace crate

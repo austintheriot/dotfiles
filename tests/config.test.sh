@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp install-hooks init install test reload help doctor'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks init install test reload help doctor deps'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"
@@ -196,16 +196,17 @@ mkdir -p "$shim_dir"
 
 home=$(make_fixture_home wrappers)
 mkdir -p "$home/.scripts/deps" "$home/tests"
-printf '#!/bin/sh\nprintf "deps:%%s\\n" "$@"\n' > "$home/.scripts/deps/check-deps.sh"
+printf '#!/bin/sh\nprintf "cli:%%s\\n" "$@"\n' > "$shim_dir/config-cli"
 printf '#!/bin/sh\n[ "$#" -eq 0 ] && printf "all:(none)\\n" || printf "all:%%s\\n" "$@"\n' > "$home/tests/run-all.sh"
 printf '#!/bin/sh\n[ "$#" -eq 0 ] && printf "docker:(none)\\n" || printf "docker:%%s\\n" "$@"\n' > "$home/tests/run-in-docker.sh"
-chmod 755 "$home/.scripts/deps/check-deps.sh" "$home/tests/run-all.sh" "$home/tests/run-in-docker.sh"
+chmod 755 "$shim_dir/config-cli" "$home/tests/run-all.sh" "$home/tests/run-in-docker.sh"
 
-actual=$(HOME="$home" "$CONFIG" install --yes --dry-run)
-assert_equals 'config install wraps check-deps --fix and passes flags through' \
-    'deps:--fix
-deps:--yes
-deps:--dry-run' "$actual"
+actual=$(HOME="$home" PATH="$shim_dir:$PATH" "$CONFIG" install --yes --dry-run)
+assert_equals 'config install delegates to config-cli deps install and passes flags through' \
+    'cli:deps
+cli:install
+cli:--yes
+cli:--dry-run' "$actual"
 
 actual=$(HOME="$home" "$CONFIG" test)
 assert_equals 'config test runs the host suite' 'all:(none)' "$actual"

@@ -508,4 +508,21 @@ else
         'no config-manifest on PATH, or no shim'
 fi
 
+# --- config deps resolves through the dispatcher -----------------------------
+#
+# Written before config-deps existed: at that point `config deps` fell
+# through to `git deps`, which failed with git's own "not a git command"
+# message and exit 1. That fallthrough is the hazard a missing shim creates,
+# and this section is the regression guard against it coming back.
+
+assert_contains 'config help lists deps, or the subcommand is invisible' \
+    'deps' "$(HOME="$home" "$CONFIG" help 2>&1)"
+
+bad_flag_output=$(HOME="$home" "$CONFIG" deps --not-a-real-flag 2>&1)
+bad_flag_status=$?
+assert_equals 'config deps rejects an unrecognized flag with exit 2, the repo-wide convention' \
+    '2' "$bad_flag_status"
+assert_equals 'the rejection does not fall through to git' '' \
+    "$(printf '%s' "$bad_flag_output" | grep -F 'is not a git command' || true)"
+
 finish

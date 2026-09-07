@@ -1,0 +1,18 @@
+#!/bin/sh
+# help: Check or install the dependencies the manifest names
+#
+# usage: config deps <check|install> [--dry-run] [--yes] [--only a,b]
+#
+# Reads the dependency manifest and either reports what is missing (check)
+# or installs it (install). Run `config deps check --help` or
+# `config deps install --help` for the flags each verb takes.
+#
+# A shim, deliberately. Every decision lives in config-cli, and this file
+# exists so `config deps` resolves through the dispatcher rather than
+# falling through to git.
+set -eu
+
+. "$(dirname "$(readlink -f "$0")")/usage.sh"
+usage_if_requested "${1:-}"
+
+exec config-cli deps "$@"

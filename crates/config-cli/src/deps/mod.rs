@@ -5,6 +5,8 @@ use std::process::ExitCode;
 use crate::DepsVerb;
 
 pub mod catalog;
+pub mod elevation;
+pub mod gather;
 pub mod selection;
 
 /// Run one `deps` verb.

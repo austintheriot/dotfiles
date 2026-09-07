@@ -9,3 +9,6 @@ publish = false
 # git module into a crate that never calls it (spec 7.1).
 [dependencies]
 dotfiles-path = { path = "../dotfiles-path" }
+
+[lints]
+workspace = true

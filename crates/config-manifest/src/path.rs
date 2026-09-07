@@ -1,8 +1,20 @@
 use std::fmt;
 
+/// Why a string was rejected as a git object id.
+///
+/// Two variants rather than one opaque message because the two failures have
+/// different causes: a length mismatch is usually an abbreviated id or a
+/// truncated field, while non-hex text is usually a different kind of value
+/// entirely.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdError {
+    /// The character count is neither 40 (SHA-1) nor 64 (SHA-256). Carries
+    /// the count found, since that is what distinguishes an abbreviated id
+    /// from an unrelated string.
     Length(usize),
+    /// The length was right but the text is not lowercase hex, so it cannot
+    /// be an id git would produce. Carries the input, because the caller
+    /// needs to see which field of a composite stamp went wrong.
     NonHex(String),
 }
 
@@ -44,10 +56,23 @@ fn parse_object_id(raw: &str) -> Result<String, IdError> {
 pub struct TreeId(String);
 
 impl TreeId {
+    /// Accepts text as a git object id.
+    ///
+    /// The only constructor, which is what makes "a `TreeId` is well formed"
+    /// an invariant rather than a convention. Both SHA-1 and SHA-256 widths
+    /// are accepted, since the repository's hash algorithm is not this
+    /// crate's decision.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdError::Length`] when the input is neither 40 nor 64
+    /// characters, and [`IdError::NonHex`] when it contains anything outside
+    /// `0-9a-f`.
     pub fn parse(raw: &str) -> Result<Self, IdError> {
         parse_object_id(raw).map(TreeId)
     }
 
+    /// Borrows the id as text, for embedding in a stamp or a report.
     pub fn as_str(&self) -> &str {
         &self.0
     }

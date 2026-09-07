@@ -7,6 +7,7 @@
 //! lists and produces a refusal or a pass, which is plan-shaped.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 /// Two output streams and an exit code, the shape every subcommand in this
 /// crate renders to before main writes it out.
@@ -16,20 +17,49 @@ use std::collections::BTreeMap;
 /// drift-specific, and `stamp::render` is its remaining producer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rendered {
+    /// What the caller prints on success. Empty for a subcommand whose
+    /// success is silence, which is why it is a `String` rather than an
+    /// `Option`: "nothing to say" and "say this" are the same stream.
     pub stdout: String,
+    /// What the caller prints when something is wrong. Non-empty here is the
+    /// signal a non-zero `exit_code` explains, so the two always agree.
     pub stderr: String,
+    /// The process exit status. `u8` rather than `i32` because the shell
+    /// truncates anything wider, so a wider type would let a value be
+    /// constructed that no caller can observe.
     pub exit_code: u8,
 }
 
 /// The freshness of one crate's installed binary against a pushed ref.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StampVerdict {
+    /// The installed binary was built from the sources on the pushed ref, so
+    /// anyone who checks out that ref gets the behaviour observed locally.
     Fresh,
-    Stale { crate_name: String, built: String, pushed: String },
+    /// The binary and the ref disagree, which is the case the gate exists to
+    /// catch: the local command answers from code the push does not carry.
+    Stale {
+        /// Which member disagrees, so a multi-crate workspace names the one
+        /// crate to rebuild rather than all of them.
+        crate_name: String,
+        /// The stamp compiled into the binary now on this machine.
+        built: String,
+        /// The stamp the pushed ref's sources produce. Reported alongside
+        /// `built` so the reader can see the mismatch without recomputing it.
+        pushed: String,
+    },
     /// The installed binary reported no stamp for this crate.
-    NotBuilt { crate_name: String },
+    NotBuilt {
+        /// The member with no local stamp, which is what a member added to
+        /// the manifest but never built looks like.
+        crate_name: String,
+    },
     /// The build knows this crate and the pushed ref does not.
-    Unknown { crate_name: String },
+    Unknown {
+        /// The member present locally and absent from the ref, which is what
+        /// pushing a new crate without its sources looks like.
+        crate_name: String,
+    },
 }
 
 /// Compares built stamps against the stamps committed on a ref.
@@ -95,23 +125,33 @@ pub fn render(verdicts: &[StampVerdict]) -> Rendered {
     for verdict in verdicts {
         match verdict {
             StampVerdict::Fresh => {}
-            StampVerdict::Stale { crate_name, built, pushed } => stderr.push_str(&format!(
-                "pre-push: {crate_name} is stale (built {built}, pushed {pushed}); run `config build`\n"
-            )),
-            StampVerdict::NotBuilt { crate_name } => stderr.push_str(&format!(
-                "pre-push: {crate_name} reported no stamp; run `config build`\n"
-            )),
-            StampVerdict::Unknown { crate_name } => stderr.push_str(&format!(
-                "pre-push: {crate_name} is built here but absent from the pushed ref\n"
-            )),
+            // Written rather than push_str(&format!(..)): formatting straight
+            // into the buffer skips the intermediate String, and `Write for
+            // String` is infallible so the discarded Err does not exist.
+            StampVerdict::Stale { crate_name, built, pushed } => {
+                let _ = writeln!(
+                    stderr,
+                    "pre-push: {crate_name} is stale (built {built}, pushed {pushed}); run `config build`"
+                );
+            }
+            StampVerdict::NotBuilt { crate_name } => {
+                let _ = writeln!(stderr, "pre-push: {crate_name} reported no stamp; run `config build`");
+            }
+            StampVerdict::Unknown { crate_name } => {
+                let _ = writeln!(
+                    stderr,
+                    "pre-push: {crate_name} is built here but absent from the pushed ref"
+                );
+            }
         }
     }
 
     if stderr.is_empty() {
-        stdout.push_str(&format!(
-            "pre-push: every stamp matches the pushed ref ({} crate(s))\n",
+        let _ = writeln!(
+            stdout,
+            "pre-push: every stamp matches the pushed ref ({} crate(s))",
             verdicts.len()
-        ));
+        );
         return Rendered { stdout, stderr, exit_code: 0 };
     }
     Rendered { stdout, stderr, exit_code: 1 }

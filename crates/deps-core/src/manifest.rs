@@ -66,7 +66,14 @@ impl std::fmt::Display for DependencyName {
 /// `DEPS_CONF`; nothing enforced it before.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfKind {
+    /// Chosen by looking at the host, so nothing in the environment decided
+    /// to load it. A check that spawns an interpreter is a parse error in
+    /// such a file, which is what keeps that check off the shell-startup
+    /// path.
     PlatformSelected,
+    /// Named outright through `DEPS_CONF`, so a person chose this file for
+    /// this run. That deliberate act is what permits the checks a
+    /// platform-selected file may not carry.
     ExplicitOnly,
 }
 
@@ -76,8 +83,16 @@ pub enum ConfKind {
 /// already lives in the manifest and a second home is a drift shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ManifestEntry {
+    /// How the dependency is referred to everywhere else: in a report, in
+    /// the observation map, and in another entry's install plan. Unique
+    /// across a manifest as a parse invariant.
     pub name: DependencyName,
+    /// What counts as "present". A closed enum rather than a shell string,
+    /// so a manifest edit cannot introduce a new command to run.
     pub check: Check,
+    /// Where a reader goes when the check fails and no installer applies.
+    /// Held on the entry rather than on the failure, because the manifest
+    /// already carries it and a second home is a place for the two to drift.
     pub docs: DocsUrl,
 }
 
@@ -110,11 +125,50 @@ impl Manifest {
 /// 45-line conf file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
-    WrongFieldCount { line: usize, found: usize },
-    BadName { line: usize, cause: NameError },
-    BadCheck { line: usize, cause: CheckParseError },
-    BadDocs { line: usize, cause: NameError },
-    DuplicateName { line: usize, name: DependencyName },
+    /// The line did not split into the field count an entry needs, which is
+    /// what a missing field or an unescaped separator looks like.
+    WrongFieldCount {
+        /// The 1-based line number, so the reader can open the file at it.
+        line: usize,
+        /// How many fields were actually found, which distinguishes a
+        /// truncated line from one carrying an extra separator.
+        found: usize,
+    },
+    /// The name field is not a usable dependency name.
+    BadName {
+        /// The 1-based line number, so the reader can open the file at it.
+        line: usize,
+        /// Which naming rule the field broke, so the report names the rule
+        /// rather than saying only that the name is unusable.
+        cause: NameError,
+    },
+    /// The check field does not describe a check this crate can perform.
+    BadCheck {
+        /// The 1-based line number, so the reader can open the file at it.
+        line: usize,
+        /// Whether the check kind was unknown or its argument was unusable,
+        /// which are different edits to make.
+        cause: CheckParseError,
+    },
+    /// The docs field is not a usable documentation URL.
+    BadDocs {
+        /// The 1-based line number, so the reader can open the file at it.
+        line: usize,
+        /// Which URL rule the field broke. Shares [`NameError`] with
+        /// `BadName` because both fields are validated text, and the variant
+        /// around it is what says which field is meant.
+        cause: NameError,
+    },
+    /// Two entries claim one name. Rejected at parse rather than resolved by
+    /// precedence, so no lookup can silently see one of two entries.
+    DuplicateName {
+        /// The 1-based line number of the *second* occurrence, which is the
+        /// one to delete.
+        line: usize,
+        /// The repeated name, so the reader can find the first occurrence
+        /// without rereading the file.
+        name: DependencyName,
+    },
 }
 
 /// Parse manifest text into typed entries.

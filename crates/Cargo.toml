@@ -13,6 +13,28 @@
 resolver = "3"
 members = ["config-manifest", "deps-core", "dotfiles-path"]
 
+# Lint policy lives here rather than in a command line, because a command
+# line binds one invocation: an IDE, a bare `cargo clippy`, and CI would all
+# disagree with the gate. The gates' `-D warnings` enforces this policy; it
+# is not the policy.
+#
+# Measured before adopting. clippy::pedantic wholesale produced 41
+# must_use_candidate warnings on builders already used positionally, which is
+# noise, so pedantic is not enabled as a group.
+[workspace.lints.rust]
+# forbid, not deny: forbid cannot be lifted by a local #[allow]. Nothing in
+# these crates needs unsafe, and deps-core's whole design argument is that it
+# holds no capabilities.
+unsafe_code = "forbid"
+missing_docs = "warn"
+unused_qualifications = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+missing_errors_doc = "warn"
+format_push_string = "warn"
+
 [workspace.dependencies]
 anyhow = "1.0.104"
 clap = { version = "4.6.6", features = ["derive", "env"] }

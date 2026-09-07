@@ -1,3 +1,4 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 //! The dependency-check core. No IO of any kind.
 //!
 //! Every function here is a function of its arguments. Parsing takes text,

@@ -1,3 +1,6 @@
+//! Checks that the binary's help output is reachable and names its
+//! subcommands, which is the one behaviour only a spawned process can show.
+
 use std::process::Command;
 
 use assert_cmd::prelude::*;

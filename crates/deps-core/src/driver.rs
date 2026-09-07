@@ -639,7 +639,7 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
     #[test]
     fn perform_all_reports_what_it_attempted() {
         let manifest = oh_my_zsh_manifest();
-        let (built, _) = crate::plan(
+        let (built, _) = plan(
             &manifest,
             PackageManager::Apt,
             &Selection::all(&manifest),

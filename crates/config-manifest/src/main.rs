@@ -1,3 +1,11 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+//! The `config-manifest` binary: the git-sync and stamp subcommands the
+//! `config` shell command dispatches to.
+//!
+//! Argument parsing and stream writing live here; every decision the
+//! subcommands make lives in the library, so the interesting behaviour is
+//! testable without spawning this binary.
+
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;

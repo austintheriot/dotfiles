@@ -18,13 +18,40 @@ const MAX_URL_LEN: usize = 512;
 /// existing variant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NameError {
+    /// Nothing was supplied. An empty name reaches a process spawn or an
+    /// `import` statement as a syntax error at the far end rather than as a
+    /// rejection here.
     Empty,
-    TooLong { len: usize, max: usize },
+    /// The name is longer than this crate accepts. Checked before any
+    /// per-character rule, so text arriving from a file that skipped
+    /// pre-commit cannot force an unbounded scan.
+    TooLong {
+        /// The rejected length in bytes, so the caller sees how far over the
+        /// bound the input was rather than only that it was over.
+        len: usize,
+        /// The bound in force. Names and URLs have different bounds, so the
+        /// message carries the one that actually applied.
+        max: usize,
+    },
+    /// A control byte appears. These names are reported to a terminal, so a
+    /// control byte would become an escape sequence inside the very message
+    /// meant to reject it.
     ControlByte,
+    /// A separator appears in a command name. Such a name bypasses PATH
+    /// lookup entirely and reaches a specific file, which turns a conf-file
+    /// edit into a choice of which binary runs.
     PathSeparator,
+    /// A command name begins with `-`, so the spawned program's argument
+    /// parser reads it as an option rather than as the command.
     LeadingDash,
+    /// A module name is not a bare identifier, so placing it after `import`
+    /// would either fail to parse or import something other than the name.
     NotAnIdentifier,
+    /// A byte outside the printable ASCII range appears. Such a name renders
+    /// differently in a report than it resolves on disk.
     NotPrintable,
+    /// A documentation URL carries no `http://` or `https://` scheme, so it
+    /// is a bare string a browser would resolve against nothing.
     NoScheme,
 }
 

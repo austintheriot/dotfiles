@@ -228,18 +228,18 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
         // Positive control: the same summary must call a present dependency
         // ready, or the assertion below would hold for the wrong reason.
         assert_eq!(
-            crate::summarize_check(&[StepOutcome::AlreadyPresent]),
+            summarize_check(&[StepOutcome::AlreadyPresent]),
             crate::CheckStatus::Ready
         );
 
         assert_eq!(
-            crate::summarize_check(&[StepOutcome::NotSelected]),
+            summarize_check(&[StepOutcome::NotSelected]),
             crate::CheckStatus::NotReady
         );
 
         // And it is not an attempt failure: nothing was attempted.
         assert_eq!(
-            crate::summarize_install(&[StepOutcome::NotSelected]),
+            summarize_install(&[StepOutcome::NotSelected]),
             crate::InstallStatus::AllSucceeded
         );
     }

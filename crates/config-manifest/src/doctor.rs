@@ -17,13 +17,33 @@ use crate::path::{IdError, TreeId};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CrateName(String);
 
+/// Why a string was rejected as a crate name.
 #[derive(Debug, PartialEq, Eq)]
 pub enum NameError {
+    /// The manifest listed a member with nothing between the quotes, which
+    /// would resolve to the workspace directory itself rather than a crate.
     Empty,
-    NotAName { raw: String },
+    /// The name carries a character that cannot appear in a path component or
+    /// a binary basename, so accepting it would let a manifest edit decide
+    /// which file the installer writes.
+    NotAName {
+        /// The rejected text, kept verbatim so the error names what the
+        /// manifest actually said rather than a sanitized version of it.
+        raw: String,
+    },
 }
 
 impl CrateName {
+    /// Accepts a manifest member entry as a crate name.
+    ///
+    /// This is the only way to obtain a `CrateName`, so every downstream use
+    /// of one as a path component or binary basename is already checked.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`NameError::Empty`] for the empty string and
+    /// [`NameError::NotAName`] when any character falls outside ASCII
+    /// alphanumerics, `-`, and `_`.
     pub fn parse(raw: &str) -> Result<Self, NameError> {
         if raw.is_empty() {
             return Err(NameError::Empty);
@@ -37,6 +57,7 @@ impl CrateName {
         Ok(CrateName(raw.to_string()))
     }
 
+    /// Borrows the name for use as a path component or a binary basename.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -54,13 +75,34 @@ pub struct Stamp {
     workspace_blob: TreeId,
 }
 
+/// Why a colon-separated string was rejected as a build stamp.
 #[derive(Debug, PartialEq, Eq)]
 pub enum StampError {
-    WrongFieldCount { found: usize },
+    /// The string did not split into exactly the three ids a stamp carries,
+    /// which is what a stamp from an older or newer format looks like.
+    WrongFieldCount {
+        /// How many colon-separated fields were actually present, so the
+        /// error distinguishes a truncated stamp from a concatenated one.
+        found: usize,
+    },
+    /// The shape was right but one of the three fields is not a git object
+    /// id, so comparing it against a freshly computed stamp would compare
+    /// arbitrary text.
     BadId(IdError),
 }
 
 impl Stamp {
+    /// Accepts the colon-separated form a binary carries as a build stamp.
+    ///
+    /// Checked at this boundary rather than compared as text, because the
+    /// value reaches the binary through the build environment and an
+    /// unparseable stamp must read as an error rather than as "stale".
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StampError::WrongFieldCount`] unless the input splits into
+    /// exactly three colon-separated fields, and [`StampError::BadId`] when
+    /// any field is not a git object id.
     pub fn parse(raw: &str) -> Result<Self, StampError> {
         let fields: Vec<&str> = raw.split(':').collect();
         let [crate_tree, lock_blob, workspace_blob] = fields.as_slice() else {
@@ -73,6 +115,8 @@ impl Stamp {
         })
     }
 
+    /// Renders the stamp back into the colon-separated form the build
+    /// embeds, so a report shows the same text a rebuild would produce.
     pub fn as_display(&self) -> String {
         format!(
             "{}:{}:{}",
@@ -90,9 +134,36 @@ impl Stamp {
 /// one.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Finding {
-    NotInstalled { crate_name: CrateName, expected: Stamp },
-    Stale { crate_name: CrateName, installed: Stamp, expected: Stamp },
-    Orphaned { crate_name: CrateName, installed: Stamp },
+    /// The crate is a workspace member but has no installed binary at all,
+    /// so a caller invoking it would reach an older name or nothing.
+    NotInstalled {
+        /// The member that has no binary on disk.
+        crate_name: CrateName,
+        /// What a build from the current sources would stamp the binary with,
+        /// carried so the report can name the target rather than only the gap.
+        expected: Stamp,
+    },
+    /// A binary exists but was built from different sources, which is the
+    /// case the gate exists to catch: the command runs and answers from code
+    /// that is no longer in the tree.
+    Stale {
+        /// The member whose binary is behind its sources.
+        crate_name: CrateName,
+        /// The stamp compiled into the binary that is actually installed.
+        installed: Stamp,
+        /// The stamp the current sources would produce, so the two sides of
+        /// the mismatch appear together and neither has to be recomputed.
+        expected: Stamp,
+    },
+    /// A binary is installed for a crate the manifest no longer lists, so it
+    /// is unreachable from any source in the tree and will never be rebuilt.
+    Orphaned {
+        /// The name the leftover binary was installed under.
+        crate_name: CrateName,
+        /// The stamp it carries, which identifies the commit it came from and
+        /// is therefore the only remaining record of where it originated.
+        installed: Stamp,
+    },
 }
 
 /// The crates whose installed binary does not match the expected stamp.
@@ -150,26 +221,25 @@ pub fn render(findings: &[Finding]) -> Option<String> {
     for finding in findings {
         match finding {
             Finding::NotInstalled { crate_name, .. } => {
-                writeln!(report, "  {}: not installed", crate_name.as_str())
-                    .expect("writing to a String cannot fail");
+                // Discarded rather than expect()-ed: `Write for String` is
+                // infallible, so the only Err this could produce does not exist.
+                let _ = writeln!(report, "  {}: not installed", crate_name.as_str());
             }
             Finding::Stale { crate_name, installed, expected } => {
-                writeln!(
+                let _ = writeln!(
                     report,
                     "  {}: installed {}, source {}",
                     crate_name.as_str(),
                     installed.as_display(),
                     expected.as_display()
-                )
-                .expect("writing to a String cannot fail");
+                );
             }
             Finding::Orphaned { crate_name, .. } => {
-                writeln!(
+                let _ = writeln!(
                     report,
                     "  {}: installed but no longer a workspace member",
                     crate_name.as_str()
-                )
-                .expect("writing to a String cannot fail");
+                );
             }
         }
     }

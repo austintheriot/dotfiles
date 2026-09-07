@@ -14,14 +14,41 @@ const MAX_LEN: usize = 4096;
 /// variant without a diff that names it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathError {
+    /// Nothing was supplied. Joining an empty path onto a root yields the
+    /// root itself, so accepting it would silently widen every operation
+    /// from one file to the whole tree.
     Empty,
+    /// The path begins at the filesystem root, so joining it onto a root
+    /// discards that root entirely and reaches outside the tree.
     Absolute,
+    /// A `..` segment appears. Resolution happens after the join, so such a
+    /// segment climbs above the root no matter how deep the rest of the path
+    /// descends.
     ParentTraversal,
+    /// A backslash appears. It is an ordinary filename byte here and a
+    /// separator on Windows, so a path carrying one means two different
+    /// things depending on where it is read.
     Backslash,
+    /// A control byte appears. These paths are reported to a terminal, and a
+    /// control byte in a filename becomes an escape sequence in the report.
     ControlByte,
+    /// The path begins with `~`. Nothing in this crate expands it, so the
+    /// path would resolve to a literal `~` directory rather than the home
+    /// directory the author meant.
     HomePrefix,
+    /// The path begins with a Windows drive letter. That is absolute without
+    /// a leading slash, so [`PathError::Absolute`] does not catch it.
     DrivePrefix,
-    TooLong { len: usize, max: usize },
+    /// The path is longer than this crate accepts, checked before any
+    /// per-character rule so untrusted input cannot force a long scan.
+    TooLong {
+        /// The rejected length in bytes, so the caller sees how far over the
+        /// bound the input was rather than only that it was over.
+        len: usize,
+        /// The bound in force, reported alongside `len` so the message stays
+        /// correct if the constant changes.
+        max: usize,
+    },
 }
 
 impl fmt::Display for PathError {
@@ -67,6 +94,17 @@ impl std::error::Error for PathError {}
 pub struct CheckRelPath(String);
 
 impl CheckRelPath {
+    /// Accepts text as a path safe to join onto a resolved root.
+    ///
+    /// The only constructor, so possessing a `CheckRelPath` is proof the
+    /// rules held. Rules are checked in an order chosen so the message is
+    /// trustworthy: length first, then control bytes, then shape.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`PathError`] variant naming the first rule the input
+    /// broke. One variant per rule, so the caller reports the cause rather
+    /// than "invalid path".
     pub fn parse(raw: &str) -> Result<Self, PathError> {
         if raw.is_empty() {
             return Err(PathError::Empty);
@@ -103,6 +141,7 @@ impl CheckRelPath {
         Ok(CheckRelPath(raw.to_string()))
     }
 
+    /// Borrows the path for joining onto a root or for display.
     pub fn as_str(&self) -> &str {
         &self.0
     }

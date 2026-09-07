@@ -44,6 +44,12 @@ impl Drop for TempIndex {
 }
 
 impl Git {
+    /// Works out which of the two layouts `root` is and records the argument
+    /// prefix that reaches it.
+    ///
+    /// Infallible on purpose. A root with no repository at all still yields a
+    /// usable value whose commands fail with git's own message, which is more
+    /// informative than a discovery error raised before any command ran.
     pub fn discover(root: &Path) -> Git {
         let cfg: PathBuf = root.join(".cfg");
         let prefix = if cfg.is_dir() {
@@ -94,6 +100,12 @@ impl Git {
     /// `add -- crates`, one `write-tree`), so the two never read the
     /// workspace two different ways; `doctor` is a second consumer of the
     /// same worktree state, not a second definition of what a stamp is.
+    /// # Errors
+    ///
+    /// Returns an error when a git invocation fails, when the temp index
+    /// cannot be created, or when a workspace file the stamp folds in is
+    /// absent from the written tree. Every case means the expected stamps are
+    /// unknown, so the caller must refuse rather than report "current".
     pub fn workspace_stamps(&self) -> anyhow::Result<BTreeMap<CrateName, Stamp>> {
         const WORKSPACE: &str = "crates";
 

@@ -8,3 +8,6 @@ publish = false
 # config-manifest can share validated newtypes without one depending on the
 # other, and a dependency here would be inherited by both.
 [dependencies]
+
+[lints]
+workspace = true

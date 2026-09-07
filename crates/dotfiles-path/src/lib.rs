@@ -1,3 +1,4 @@
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 //! Validated path and name primitives shared between the dotfiles crates.
 //!
 //! This crate has no dependencies and performs no IO. It exists so that

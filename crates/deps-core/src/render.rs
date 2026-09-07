@@ -4,6 +4,8 @@
 //! spec cites as precedent: returning output as a value rather than writing
 //! it makes the whole reporting path testable without capturing streams.
 
+use std::fmt::Write as _;
+
 use crate::{Report, StepOutcome};
 
 /// Which verb produced a report.
@@ -52,7 +54,10 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
             row.outcome,
             StepOutcome::InstallFailed { .. } | StepOutcome::InstalledButCheckStillFails { .. }
         ) {
-            stderr.push_str(&format!("  FAILED    {}\n", row.dependency.as_str()));
+            // Written rather than push_str(&format!(..)): formatting straight
+            // into the buffer skips the intermediate String, and `Write for
+            // String` is infallible so the discarded Err does not exist.
+            let _ = writeln!(stderr, "  FAILED    {}", row.dependency.as_str());
         }
 
         let line = match &row.outcome {

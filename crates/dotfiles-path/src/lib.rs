@@ -6,8 +6,10 @@
 //! happens to live in `config-manifest`, but a validated relative path is not
 //! a git-sync concept.
 
+mod bounded;
 mod name;
 mod rel;
 
+pub use bounded::BoundedText;
 pub use name::{CommandName, DocsUrl, GlobPattern, ModuleName, NameError, PackageId};
 pub use rel::{CheckRelPath, PathError};

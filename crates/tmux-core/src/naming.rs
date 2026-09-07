@@ -16,6 +16,7 @@
 ///
 /// The caller (the `tmux-tools` binary) gathers these from tmux and git,
 /// since reading either is IO and this crate performs none.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WindowFacts {
     /// The basename of the active pane's current working directory.
     ///
@@ -52,6 +53,7 @@ pub struct WindowFacts {
 }
 
 /// The repository facts for a window whose directory is a git repository.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepositoryFacts {
     /// The name of the main repository, even inside a linked worktree.
     ///
@@ -65,6 +67,7 @@ pub struct RepositoryFacts {
 }
 
 /// The state of a repository's HEAD.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HeadState {
     /// HEAD points at a branch, named here.
     Branch(String),

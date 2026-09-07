@@ -5,6 +5,8 @@
 //! which decides. Exit 2 is every usage error, matching the repo-wide
 //! convention `check-deps.sh` and `config-manifest` already use.
 
+mod repo;
+
 use std::process::ExitCode;
 
 fn main() -> ExitCode {

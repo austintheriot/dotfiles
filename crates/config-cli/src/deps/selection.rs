@@ -8,16 +8,6 @@
 //! carries the platform condition, so the requirement graph needs none.
 //! That argument holds only if this module gets the four sites right.
 
-// Nothing in this binary calls the resolver yet: `mod.rs` wiring the real
-// environment into `Environment` and dispatching a verb through
-// `selection_from` lands in a separate commit. `expect` rather than
-// `allow`, so the lint fires again the moment a caller lands and this
-// attribute has to be deleted rather than quietly outliving its reason.
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "mod.rs wires this module in in a later commit")
-)]
-
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -248,10 +238,6 @@ fn read_if_present(path: &Path) -> Result<Option<String>, LoadError> {
 /// state like `PATH` to exercise a branch. `mod.rs` is the edge that calls
 /// this against the machine's real `PATH`; a fake `PATH` built from a
 /// per-test temporary directory belongs in that integration test, not here.
-#[expect(
-    dead_code,
-    reason = "mod.rs calls this in a later commit; untestable without mutating PATH"
-)]
 pub fn resolve_manager() -> deps_core::PackageManager {
     if command_exists("pacman") {
         deps_core::PackageManager::Pacman

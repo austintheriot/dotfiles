@@ -10,15 +10,6 @@
 //! `include_str!`, which reads at compile time, so the tests below need no
 //! filesystem and the module holds no capability.
 
-// Nothing in this binary calls the catalog yet: the selection, gather and
-// installer modules that consume it are separate commits. `expect` rather
-// than `allow`, so the lint fires again the moment a caller lands and this
-// attribute has to be deleted rather than quietly outliving its reason.
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the modules that consume the catalog land in later commits")
-)]
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use deps_core::{

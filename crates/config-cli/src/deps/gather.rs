@@ -16,15 +16,6 @@
 //!    resolved root across leaves or across calls, so a caller that invokes
 //!    [`gather`] once per fixpoint wave sees a fresh resolution each wave.
 
-// `mod.rs` wires `gather` into a `run_to_fixpoint` call in a later commit.
-// `expect` rather than `allow`, so the lint fires again the moment a caller
-// lands and this attribute has to be deleted rather than quietly outliving
-// its reason.
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "mod.rs wires gather into run_to_fixpoint in a later commit")
-)]
-
 use std::path::{Path, PathBuf};
 
 use deps_core::{Check, CheckPath, Manifest, Observation, ObservationMap, PathRoot};

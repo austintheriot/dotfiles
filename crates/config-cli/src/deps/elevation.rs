@@ -19,13 +19,6 @@
 //! "run directly" and the core's `PrivilegeRequirement` never asks which
 //! kind of root the process is.
 
-// `mod.rs` wires `resolve` into a plan call in a later commit. `expect`
-// rather than `allow`, so the lint fires again the moment a caller lands.
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "mod.rs wires resolve into a plan call in a later commit")
-)]
-
 use deps_core::Elevation;
 
 /// Resolve this process's elevation, once, by the same rule `check-deps.sh`

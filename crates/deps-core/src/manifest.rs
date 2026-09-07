@@ -2,6 +2,8 @@ use std::collections::BTreeSet;
 
 use dotfiles_path::{CommandName, DocsUrl, NameError};
 
+use crate::check::{Check, CheckPath, PathRoot};
+
 /// The maximum byte length of a parsed dependency name.
 ///
 /// Matches the bound `dotfiles-path` applies to its own names, for the same
@@ -52,16 +54,6 @@ impl std::fmt::Display for DependencyName {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "{}", self.0)
     }
-}
-
-/// A presence check.
-///
-/// Task 8 extends this to the full seven-variant enum of spec 5.2. The two
-/// variants here are what Task 7's manifest tests exercise.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Check {
-    Command(CommandName),
-    DirExists(dotfiles_path::CheckRelPath),
 }
 
 /// Why a check expression was refused.
@@ -198,7 +190,7 @@ fn parse_check(raw: &str, kind: ConfKind, line: usize) -> Result<Check, ParseErr
         let path = dotfiles_path::CheckRelPath::parse(rest).map_err(|cause| {
             ParseError::BadCheck { line, cause: CheckParseError::BadPath(cause) }
         })?;
-        return Ok(Check::DirExists(path));
+        return Ok(Check::DirExists(CheckPath::new(PathRoot::Home, path)));
     }
     Err(ParseError::BadCheck { line, cause: CheckParseError::Unrecognized })
 }

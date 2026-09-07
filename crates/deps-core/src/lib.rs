@@ -6,10 +6,14 @@
 //! than a discipline (spec 7.1), and `config_manifest::doctor` is the
 //! in-repo precedent for the module shape.
 
+mod check;
 mod manifest;
 
+pub use check::{
+    Check, CheckPath, Observation, ObservationMap, Observations, PathRoot, evaluate,
+};
 pub use manifest::{
-    Check, CheckParseError, ConfKind, DependencyName, Manifest, ManifestEntry, ParseError,
+    CheckParseError, ConfKind, DependencyName, Manifest, ManifestEntry, ParseError,
     parse_manifest,
 };
 
@@ -28,6 +32,7 @@ mod purity {
     fn no_module_names_an_io_capability() {
         let sources = [
             ("lib.rs", include_str!("lib.rs")),
+            ("check.rs", include_str!("check.rs")),
             ("manifest.rs", include_str!("manifest.rs")),
         ];
         for (file_name, source) in sources {
@@ -56,7 +61,11 @@ mod purity {
                 "a needle the purity test relies on does not match a source that names it"
             );
         }
-        for source in [include_str!("lib.rs"), include_str!("manifest.rs")] {
+        for source in [
+            include_str!("lib.rs"),
+            include_str!("check.rs"),
+            include_str!("manifest.rs"),
+        ] {
             assert!(
                 !source.is_empty(),
                 "include_str! yielded empty text, so the purity test proves nothing"

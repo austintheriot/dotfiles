@@ -20,7 +20,11 @@
 DEPS_DIR="$DOTFILES_ROOT/.scripts/deps"
 DEPS_README="$DEPS_DIR/README.md"
 HOME_README="$DOTFILES_ROOT/README.md"
-CHECK_SCRIPT="$DEPS_DIR/check-deps.sh"
+# Overridable so the oracles below can be exercised against a program that
+# is absent. Without that seam a probe cannot prove it distinguishes "the
+# parser rejected this" from "there is no parser", which is the bug this
+# suite shipped with.
+CHECK_SCRIPT=${CHECK_SCRIPT:-$DEPS_DIR/check-deps.sh}
 HOOK="$DEPS_DIR/depcheck-hook.sh"
 
 # --- both documents exist ----------------------------------------------
@@ -102,7 +106,12 @@ flag_probe_value() {
     esac
 }
 
+# Three outcomes, not two. The oracle used to ask only whether the status
+# differed from 2, so 127 ("no such program") read as acceptance and every
+# flag passed against a program that was not there.
 rejected_flags=''
+probes_run=0
+missing_program=0
 while IFS= read -r flag; do
     [ -n "$flag" ] || continue
     value=$(flag_probe_value "$flag")
@@ -111,8 +120,20 @@ while IFS= read -r flag; do
     else
         "$CHECK_SCRIPT" "$flag" --dry-run >/dev/null 2>&1
     fi
-    [ "$?" -ne 2 ] || rejected_flags="$rejected_flags $flag"
+    probe_status=$?
+    probes_run=$((probes_run + 1))
+    if [ "$probe_status" -eq 127 ]; then
+        missing_program=1
+    elif [ "$probe_status" -eq 2 ]; then
+        rejected_flags="$rejected_flags $flag"
+    fi
 done <<< "$documented_flags"
+
+# The positive controls come first: a run that probed nothing, or probed a
+# program that does not exist, must not reach the narrow assertion and report
+# an empty list as success.
+assert_succeeds 'the flag probe ran at least once' test "$probes_run" -gt 0
+assert_equals 'the probed program exists' '0' "$missing_program"
 assert_equals 'check-deps.sh accepts every documented flag' '' "$rejected_flags"
 
 # The arity guard itself, which the probe above deliberately steps around.
@@ -123,6 +144,12 @@ assert_equals 'a value-taking flag rejects a missing value' '2' "$?"
 
 parser_flags=$(grep -oE '^ +--[a-z-]+\)' "$CHECK_SCRIPT" 2>/dev/null \
     | tr -d ' )' | sort -u)
+
+# Same blind spot as the probe above, in the other direction: an absent or
+# unreadable program harvests nothing, the loop below never runs, and the
+# empty-expected assertion passes having compared nothing.
+assert_succeeds 'the parser harvest found at least one flag' test -n "$parser_flags"
+
 undocumented_flags=''
 while IFS= read -r flag; do
     [ -n "$flag" ] || continue

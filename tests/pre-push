@@ -44,7 +44,7 @@ empty_tree='4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 # were missing for the same reason, and zshrc-*.test.sh reads the latter.
 TRIGGER_PATHS='^\.scripts/|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/|^\.github/workflows/|^crates/|^\.config/nvim/|^\.config/tmux/|^setup\.sh$|^\.zshrc'
 
-pushing_synced_branch=0
+pushing_branch=0
 changed_paths=''
 push_ref=''
 push_refs=''
@@ -53,18 +53,24 @@ ranges=''
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$local_sha" = "$zero" ] && continue
 
+    # Any branch push gates on stamps. This used to enumerate
+    # refs/heads/mac and refs/heads/linux, so the 2026-09-06 collapse to main
+    # silently disabled the whole stamp block below and no test failed: the
+    # only suite driving this path fed the hook those two literals. Keying on
+    # the ref shape rather than a name means a new branch cannot opt out by
+    # not being on a list.
     case $local_ref in
-        refs/heads/mac|refs/heads/linux) pushing_synced_branch=1 ;;
+        refs/heads/*) pushing_branch=1 ;;
     esac
 
     # The suite runs against the ref being pushed, which is not always the
     # checked-out branch. The first ref is the one the suite runs against;
-    # mac and linux can be pushed together in one call, and running the
+    # several branches can be pushed together in one call, and running the
     # whole suite once per ref would double a push's cost for branches that
     # share almost every tracked file.
     #
     # The stamp check is different and gets every ref (see push_refs below):
-    # it is a cheap `rev-parse`, and mac and linux can hold different crate
+    # it is a cheap `rev-parse`, and two pushed refs can hold different crate
     # trees, so checking one ref would let a binary that is stale for the
     # other through the gate that exists to catch exactly that.
     [ -z "$push_ref" ] && push_ref=$local_sha
@@ -133,8 +139,8 @@ fi
 
 # --- stamp gate -----------------------------------------------------------
 #
-# Only runs when mac or linux is among the pushed refs. pre-push compares and
-# refuses; it does not compute.
+# Runs whenever a branch is among the pushed refs, which is every ordinary
+# push. pre-push compares and refuses; it does not compute.
 #
 # config-stamp --ref owns the committed side, config-manifest verify-stamps
 # owns the comparison policy, and neither copy of the workspace member list
@@ -153,19 +159,28 @@ fi
 # with the pushed repo as the working directory, which is $HOME in production
 # and the fixture repo under test.
 
-if [ "$pushing_synced_branch" -eq 1 ]; then
+if [ "$pushing_branch" -eq 1 ]; then
     hook_dir=$(dirname "$(readlink -f "$0")")
     stamp_cmd="$hook_dir/../.scripts/config/config-stamp"
     BIN_DIR=${CONFIG_BIN_DIR:-$HOME/.local/bin}
     config_manifest_bin="$BIN_DIR/config-manifest"
 
-    if [ ! -x "$config_manifest_bin" ]; then
-        printf 'pre-push: config-manifest is not built; run %s\n' \
-            "$hook_dir/../.scripts/config/config-build" >&2
-        exit 1
-    fi
-
     for ref in $push_refs; do
+        # A ref with no workspace manifest carries no crates, so there is
+        # nothing to gate and no binary to require. Asked here rather than
+        # inferred from config-stamp's exit status, which is 2 both for "this
+        # ref has no crates/Cargo.toml" and for "the manifest is malformed or
+        # names zero members". The second must block the push, so the two
+        # cannot share an arm.
+        git rev-parse --verify --quiet "$ref:crates/Cargo.toml" >/dev/null \
+            || continue
+
+        if [ ! -x "$config_manifest_bin" ]; then
+            printf 'pre-push: config-manifest is not built; run %s\n' \
+                "$hook_dir/../.scripts/config/config-build" >&2
+            exit 1
+        fi
+
         pushed_stamps=$(DOTFILES_ROOT="$PWD" "$stamp_cmd" --ref "$ref" 2>/dev/null) || {
             printf 'pre-push: cannot read workspace stamps for %s\n' "$ref" >&2
             exit 1

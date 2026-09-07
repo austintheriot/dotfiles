@@ -1,19 +1,28 @@
 #!/bin/bash
 #
-# Tests that the pre-push hook gates every ref in a push, not just the first.
+# Tests two properties of the pre-push hook: it gates every ref in a push
+# rather than just the first, and its stamps are per-crate rather than one
+# workspace-wide id.
 #
-# mac and linux can be pushed together in one atomic push (`git push --atomic
-# origin mac linux`), so two refs can arrive on the hook's stdin where one
-# used to. The hook took the first ref and ran the stamp check and the suite
-# against that one, which was defended by a comment calling a second ref
-# "rare enough" that testing the first was the honest simple behavior. An
-# atomic two-branch push makes two refs a real case and retires that premise.
+# A single push can carry several refs (`git push --atomic origin main
+# feature`, or a branch and a tag together), so several lines can arrive on
+# the hook's stdin where one used to. The hook took the first ref and ran the
+# stamp check and the suite against that one, which was defended by a comment
+# calling a second ref "rare enough" that testing the first was the honest
+# simple behavior. A multi-ref push makes that a real case and retires the
+# premise.
 #
 # The gap that matters is the stamp check. It verifies the built
-# config-manifest against the crate tree in the pushed ref, and mac and
-# linux can hold different trees there. Checking only the first ref lets a
+# config-manifest against the crate tree in the pushed ref, and two pushed
+# refs can hold different trees there. Checking only the first ref lets a
 # binary that is stale for the second ref through the gate that exists to
 # catch exactly that.
+#
+# This file also holds the gate's entry condition, which is the reason the
+# 2026-09-06 branch collapse went unnoticed. The hook used to set its gate
+# flag by matching refs/heads/mac and refs/heads/linux, and this file fed it
+# exactly those two literals, so pushing main skipped the whole stamp block
+# and every suite stayed green.
 #
 # The hook is driven through its documented stdin protocol, one line per ref
 # as "<local ref> <local sha> <remote ref> <remote sha>". The costly halves
@@ -29,14 +38,18 @@ HOOK="$DOTFILES_ROOT/tests/pre-push"
 
 assert_succeeds 'the pre-push hook is executable' test -x "$HOOK"
 
-# A repository with mac and linux holding DIFFERENT crate trees. That
-# difference is the whole point: if both branches carried the same tree, a
+# A repository with main and a feature branch holding DIFFERENT crate trees.
+# That difference is the whole point: if both branches carried the same tree, a
 # hook checking either ref would pass and the bug would be invisible.
+#
+# The two branches used to be mac and linux, which is what let the collapse to
+# a single branch disable the stamp gate without failing a test. A feature
+# branch alongside main is the multi-ref push that remains.
 #
 # Carries a workspace manifest and lockfile alongside the crate, because
 # config-stamp now enumerates members from crates/Cargo.toml rather than
 # hardcoding a single crate name.
-repo=$(make_repo push-multi mac)
+repo=$(make_repo push-multi main)
 git -C "$repo" config user.email t@t
 git -C "$repo" config user.name t
 
@@ -44,26 +57,26 @@ mkdir -p "$repo/crates/config-manifest/src"
 printf '[workspace]\nmembers = ["config-manifest"]\n' > "$repo/crates/Cargo.toml"
 printf 'lock\n' > "$repo/crates/Cargo.lock"
 printf 'fn main() {}\n' > "$repo/crates/config-manifest/src/main.rs"
-printf 'mac-crate\n' > "$repo/crates/config-manifest/lib.rs"
+printf 'main-crate\n' > "$repo/crates/config-manifest/lib.rs"
 git -C "$repo" add -A
-git -C "$repo" commit -q -m 'mac crate'
-mac_sha=$(git -C "$repo" rev-parse HEAD)
-mac_tree=$(git -C "$repo" rev-parse "HEAD:crates/config-manifest")
+git -C "$repo" commit -q -m 'main crate'
+main_sha=$(git -C "$repo" rev-parse HEAD)
+main_tree=$(git -C "$repo" rev-parse "HEAD:crates/config-manifest")
 
-git -C "$repo" checkout -q -b linux
-printf 'linux-crate\n' > "$repo/crates/config-manifest/lib.rs"
+git -C "$repo" checkout -q -b feature
+printf 'feature-crate\n' > "$repo/crates/config-manifest/lib.rs"
 git -C "$repo" add -A
-git -C "$repo" commit -q -m 'linux crate'
-linux_sha=$(git -C "$repo" rev-parse HEAD)
-linux_tree=$(git -C "$repo" rev-parse "HEAD:crates/config-manifest")
-git -C "$repo" checkout -q mac
+git -C "$repo" commit -q -m 'feature crate'
+feature_sha=$(git -C "$repo" rev-parse HEAD)
+feature_tree=$(git -C "$repo" rev-parse "HEAD:crates/config-manifest")
+git -C "$repo" checkout -q main
 
 assert_succeeds 'the fixture branches hold different crate trees' \
-    test "$mac_tree" != "$linux_tree"
+    test "$main_tree" != "$feature_tree"
 
 # The stubs. config-manifest reports the tree it was "built" from, which the
 # hook compares against config-stamp's read of the pushed ref's actual tree.
-# Pointing it at the mac tree models the real situation the hook must catch: a
+# Pointing it at the main tree models the real situation the hook must catch: a
 # binary built for one branch while a push carries both.
 #
 # config-stamp itself is NOT stubbed: pre-push resolves it relative to its own
@@ -117,51 +130,134 @@ STUB
 
 # Feeds the hook a push of both refs and returns its exit status.
 run_hook_both_refs() {
-    printf 'refs/heads/mac %s refs/heads/mac %s\nrefs/heads/linux %s refs/heads/linux %s\n' \
-        "$mac_sha" "$mac_sha" "$linux_sha" "$linux_sha" \
+    printf 'refs/heads/main %s refs/heads/main %s\nrefs/heads/feature %s refs/heads/feature %s\n' \
+        "$main_sha" "$main_sha" "$feature_sha" "$feature_sha" \
         | (cd "$repo" && HOME="$FIXTURES/hookhome" PATH="$stub_dir:$PATH" \
             CONFIG_BIN_DIR="$stub_dir" \
             "$HOOK" origin "$repo" >/dev/null 2>&1)
 }
 
-# The binary reports the folded stamp for the mac tree, matching what
-# config-stamp itself would compute there: <mac-tree>:<lock-blob>:<ws-blob>.
-mac_full_stamp() {
+# Feeds the hook a push of main alone and prints everything it wrote, so an
+# assertion can read the hook's own trace rather than only its exit status.
+run_hook_main_only() {
+    printf 'refs/heads/main %s refs/heads/main %s\n' "$main_sha" "$main_sha" \
+        | (cd "$repo" && HOME="$FIXTURES/hookhome" PATH="$stub_dir:$PATH" \
+            CONFIG_BIN_DIR="$stub_dir" \
+            "$HOOK" origin "$repo" 2>&1)
+}
+
+# The binary reports the folded stamp for the main tree, matching what
+# config-stamp itself would compute there: <main-tree>:<lock-blob>:<ws-blob>.
+main_full_stamp() {
     printf '%s:%s:%s' \
-        "$mac_tree" \
+        "$main_tree" \
         "$(git -C "$repo" rev-parse HEAD:crates/Cargo.lock)" \
         "$(git -C "$repo" rev-parse HEAD:crates/Cargo.toml)"
 }
-linux_full_stamp() {
+feature_full_stamp() {
     printf '%s:%s:%s' \
-        "$linux_tree" \
-        "$(git -C "$repo" rev-parse linux:crates/Cargo.lock)" \
-        "$(git -C "$repo" rev-parse linux:crates/Cargo.toml)"
+        "$feature_tree" \
+        "$(git -C "$repo" rev-parse feature:crates/Cargo.lock)" \
+        "$(git -C "$repo" rev-parse feature:crates/Cargo.toml)"
 }
 
 # --- the stamp check must consider every pushed ref --------------------------
 
-# The binary is stamped for mac. A push of mac alone is legitimately fine.
-make_stubs "$(mac_full_stamp)"
-printf 'refs/heads/mac %s refs/heads/mac %s\n' "$mac_sha" "$mac_sha" \
+# The binary is stamped for main. A push of main alone is legitimately fine.
+make_stubs "$(main_full_stamp)"
+printf 'refs/heads/main %s refs/heads/main %s\n' "$main_sha" "$main_sha" \
     | (cd "$repo" && HOME="$FIXTURES/hookhome" PATH="$stub_dir:$PATH" \
         CONFIG_BIN_DIR="$stub_dir" \
         "$HOOK" origin "$repo" >/dev/null 2>&1)
-assert_equals 'a mac-only push passes when the binary matches mac' '0' "$?"
+assert_equals 'a main-only push passes when the binary matches main' '0' "$?"
 
-# The same binary, now pushing BOTH branches. linux carries a different
-# crate tree, so the binary is stale for linux and the push must be blocked.
-# Before the fix the hook read only the first ref, saw mac, and passed.
+# The gate must actually run for main. This is the assertion whose absence let
+# the collapse silently disable stamp verification: the old case arm matched
+# refs/heads/mac and refs/heads/linux only, so pushing main skipped the whole
+# block and no suite noticed, because this file fed the hook nothing but those
+# two literals. Exit status alone cannot catch that -- a skipped gate and a
+# passed gate both exit 0 -- so this reads the hook's own trace line.
+main_output=$(run_hook_main_only)
+
+# Positive control. Without it, a hook that dies before reaching either branch
+# produces no output, and the grep below would be the only failing assertion,
+# which reads as a missing gate rather than a broken hook.
+assert_succeeds 'the hook produced output for a main push' test -n "$main_output"
+assert_contains 'pushing main reaches the stamp gate' \
+    'stamp gate passed' "$main_output"
+
+# The same binary, now pushing BOTH branches. feature carries a different
+# crate tree, so the binary is stale for feature and the push must be blocked.
+# Before the fix the hook read only the first ref, saw main, and passed.
 run_hook_both_refs
 assert_equals 'a two-ref push fails when the binary is stale for the second ref' \
     '1' "$?"
 
-# The mirror image: stamped for linux, pushing both. Whichever ref git lists
+# The mirror image: stamped for feature, pushing both. Whichever ref git lists
 # first, the hook must not pass a binary that is stale for the other one.
-make_stubs "$(linux_full_stamp)"
+make_stubs "$(feature_full_stamp)"
 run_hook_both_refs
 assert_equals 'a two-ref push fails when the binary is stale for the first ref' \
     '1' "$?"
+
+# --- a ref with no crates is skipped, a broken workspace is not --------------
+
+# Now that the gate runs for every branch rather than two named ones, it meets
+# refs that carry no crate workspace at all. config-stamp exits 2 for those
+# AND for a manifest that is malformed or names zero members, so the hook must
+# not read the two as one condition: the first has nothing to gate, and the
+# second is the "a gate that checks nothing" failure this whole change closes.
+
+crateless=$(make_repo push-crateless main)
+printf 'notes\n' > "$crateless/README.md"
+git -C "$crateless" -c user.email=t@t -c user.name=t add -A
+git -C "$crateless" -c user.email=t@t -c user.name=t commit -q -m 'no crates'
+crateless_sha=$(git -C "$crateless" rev-parse HEAD)
+
+# CONFIG_BIN_DIR points at an empty directory on purpose. A ref with no crates
+# needs no built binary, so the hook must not demand one before it discovers
+# there is nothing to verify.
+empty_bin="$FIXTURES/no-binaries"
+mkdir -p "$empty_bin"
+
+crateless_output=$(printf 'refs/heads/main %s refs/heads/main %s\n' \
+    "$crateless_sha" "$crateless_sha" \
+    | (cd "$crateless" && HOME="$FIXTURES/hookhome" \
+        CONFIG_BIN_DIR="$empty_bin" "$HOOK" origin "$crateless" 2>&1))
+crateless_status=$?
+
+# Positive control before the narrow property: an empty output would satisfy
+# a "does not mention config-manifest" check for the wrong reason.
+assert_succeeds 'the hook produced output for a crateless push' \
+    test -n "$crateless_output"
+assert_equals 'a ref carrying no crates passes the stamp gate' \
+    '0' "$crateless_status"
+assert_contains 'a crateless push still reports the gate ran' \
+    'stamp gate passed' "$crateless_output"
+
+# The other side of the same exit code. An empty member list must still block
+# the push, so the skip above cannot be widened to "config-stamp failed".
+broken=$(make_repo push-broken main)
+mkdir -p "$broken/crates/config-manifest/src"
+printf '[workspace]\nmembers = []\n' > "$broken/crates/Cargo.toml"
+printf 'lock\n' > "$broken/crates/Cargo.lock"
+printf 'fn main() {}\n' > "$broken/crates/config-manifest/src/main.rs"
+git -C "$broken" -c user.email=t@t -c user.name=t add -A
+git -C "$broken" -c user.email=t@t -c user.name=t commit -q -m 'empty members'
+broken_sha=$(git -C "$broken" rev-parse HEAD)
+
+broken_output=$(printf 'refs/heads/main %s refs/heads/main %s\n' \
+    "$broken_sha" "$broken_sha" \
+    | (cd "$broken" && HOME="$FIXTURES/hookhome" PATH="$stub_dir:$PATH" \
+        CONFIG_BIN_DIR="$stub_dir" "$HOOK" origin "$broken" 2>&1))
+broken_status=$?
+
+assert_succeeds 'the hook produced output for a broken-workspace push' \
+    test -n "$broken_output"
+assert_equals 'a workspace naming zero members blocks the push' \
+    '1' "$broken_status"
+assert_contains 'the block names the unreadable workspace' \
+    'cannot read workspace stamps' "$broken_output"
 
 # --- stamps are per-crate, not one workspace-wide id -------------------------
 

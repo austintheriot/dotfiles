@@ -741,15 +741,31 @@ claim about this repo), everything under `docs/research/`, and
 
 - [ ] **Step 7: Verify nothing live references a frozen branch**
 
+**The obvious grep cannot hold, and demanding it would make the repo worse.**
+Verified: an exclusion list of `docs/research/`, the 2026-09 plans and
+`.claude/CLAUDE.md` still leaves eleven hits, and every one is legitimate.
+Six are in the spec itself, which documents the defect on purpose. Three are
+past-tense comments Task 1 deliberately wrote to explain what it fixed
+(`tests/pre-push:57`, `pre-push-multi-ref.test.sh:23` and `:176`). Deleting
+those to satisfy a grep would remove the only in-code explanation of why the
+gate is shaped the way it is.
+
+So assert the meaningful property instead: no **live** reference, meaning no
+reference outside documentation and outside a comment.
+
 ```sh
-cd ~ && config grep -rn -I -e 'refs/heads/mac' -e 'refs/heads/linux' \
+# Positive control first: the pipeline must be capable of matching.
+cd ~ && config grep -rn -I 'refs/heads' -- . | head -2
+
+config grep -rn -I -e 'refs/heads/mac' -e 'refs/heads/linux' \
     -e 'origin/mac' -e 'origin/linux' -- . \
-    | grep -v -e '^docs/research/' -e '^docs/superpowers/plans/2026-09-0[46]' \
-              -e '^\.claude/CLAUDE\.md'
+    | grep -v -e '^docs/' -e '^\.claude/' -e '^TODO-AGENTS\.md' \
+    | grep -vE ':[0-9]+: *#' \
+    | grep -vE ':[0-9]+: *(//|--) '
 ```
 
-Expected: no output. `.claude/CLAUDE.md:118` legitimately records that the
-frozen branches remain on the remote as history.
+Expected: the control prints two lines, the second command prints nothing.
+Verified clean after Task 3.
 
 Positive control first, so an empty result is not a broken pipeline:
 
@@ -6192,6 +6208,33 @@ correct to block, and it will block the next first-push-of-a-branch. The fix
 is to exclude commits reachable from any remote ref. Deferred by the owner
 during the previous plan; recorded here so it is not rediscovered as a
 surprise.
+
+**Found during execution: nothing reports an unrecognized platform.**
+`setup.sh` used to be the only thing that refused an OS it could not name
+(`platform=unknown` exited 1). Task 2 removed that, correctly, because the
+branch no longer depends on the platform and the clone half had nothing left
+to refuse. But nothing downstream replaced the refusal: `config init` contains
+**zero** references to `DOTFILES_PLATFORM` (verified), and `platform.sh`
+resolves `unknown` only for a uname it cannot map, after which
+`platform_variant` returns a path whose variant file does not exist. So an
+unrecognized system now clones successfully and misses every variant file
+silently. `tests/platform.test.sh:52` still asserts `unknown` is produced, so
+the detection half is intact; it is the reporting half that is missing.
+
+**Found during execution: a no-op push reaches no gate.**
+`config push --dry-run origin main` with nothing to push prints only "no
+pushed path touches tested code, skipping the suite", because the ref list is
+empty. There is no leak scan and no stamp line. So the ABSENCE of
+`pre-push: stamp gate passed` does not imply the gate is dead, which is
+precisely the ambiguity that hid the original defect for weeks. Task 1's test
+asserts on the trace rather than exit status for this reason. Recorded because
+anyone verifying a gate by pushing needs a ref that actually moves.
+
+**Sharpened during execution: the leak guard masks later gates.**
+The scan-range issue below is worse than "blocks a first push". The leak guard
+runs BEFORE the stamp gate, so a fresh branch blocks at the empty-tree scan and
+the stamp gate is never reached, making it unobservable rather than merely
+inconvenient. Verified by pushing a throwaway branch.
 
 **Not in the spec at all: `origin/HEAD`.** Still points at `origin/mac`.
 Changing a repository's default branch is a GitHub setting, not a commit, so

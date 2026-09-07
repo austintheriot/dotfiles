@@ -245,6 +245,23 @@ pub enum InstallAction {
 pub enum PackageAvailability {
     /// The manager packages it under this name.
     Named(PackageId),
+    /// A brew package that is a cask, or lives in a third-party tap, or both.
+    ///
+    /// `Named` cannot express either: `action_for` maps it to
+    /// `BrewKind::Formula` with no tap, so a cask in a third-party tap plans
+    /// as a plain `brew install <name>` and fails twice over. The shell says
+    /// so in its own words at `check-deps.sh:266-270`: "No available formula
+    /// with the name aerospace" because it is a cask, and an untapped
+    /// third-party cask is not findable even with `--cask`.
+    BrewPackage {
+        /// Whether brew installs this as a formula or a cask.
+        kind: BrewKind,
+        /// The name brew knows it by.
+        id: PackageId,
+        /// The tap to add first, when the package does not live in core.
+        /// `brew tap` is idempotent, so re-running costs a no-op.
+        tap: Option<TapName>,
+    },
     /// zoxide needs this: apt, brew and pacman all have packages, and any
     /// other manager gets the installer script (`check-deps.sh:308`).
     ViaScript(ScriptInstaller),

@@ -39,7 +39,7 @@ pub use driver::{
 };
 pub use plan::{
     Elevation, Event, PackageCatalog, Plan, PlanError, PrivilegeRequirement, RawSelector,
-    Requirements, Selection, Step, plan,
+    RequirementEdgeError, Requirements, Selection, Step, plan,
 };
 pub use reconcile::{Report, ReportRow, reconcile};
 pub use render::{Rendered, Verb, render};

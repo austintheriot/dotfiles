@@ -410,6 +410,12 @@ fn action_for(
             ),
             other => (InstallAction::Package { id: id.clone() }, other.needs_root()),
         },
+        // Carries what Named cannot: a cask, a tap, or both. Never elevated,
+        // because brew refuses to run as root and says so.
+        PackageAvailability::BrewPackage { kind, id, tap } => (
+            InstallAction::Brew { kind: *kind, id: id.clone(), tap: tap.clone() },
+            false,
+        ),
         PackageAvailability::ViaScript(installer) => {
             (InstallAction::Script { installer: *installer }, false)
         }
@@ -609,6 +615,7 @@ fn nearest_name(manifest: &Manifest, wanted: &DependencyName) -> Option<Dependen
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::action::TapName;
     use crate::action::{CloneSource, KeyringSource, SourceListEntry};
     use crate::check::CheckPath;
     use crate::{Check, ObservationMap};
@@ -1330,6 +1337,59 @@ mod tests {
             InstallAction::Pip { break_system_packages: true, .. }
         ));
         assert_eq!(built.steps[0].privilege, PrivilegeRequirement::None);
+    }
+
+    /// A cask in a third-party tap reaches `InstallAction::Brew` carrying
+    /// both facts.
+    ///
+    /// `Named` cannot express this: `action_for` maps it to
+    /// `BrewKind::Formula` with no tap, so aerospace planned as a plain
+    /// `brew install aerospace` and failed twice over, which
+    /// `check-deps.sh:266-270` documents in those words. The defect was
+    /// unreachable until a catalog existed to construct an availability.
+    #[test]
+    fn a_cask_in_a_tap_plans_a_brew_action_carrying_both() {
+        let manifest = manifest_of(&["aerospace"]);
+        let availability = PackageAvailability::BrewPackage {
+            kind: BrewKind::Cask,
+            id: PackageId::parse("aerospace").expect("a valid package id"),
+            tap: Some(TapName::parse("nikitabobko/tap").expect("a valid tap name")),
+        };
+        let mut packages = PackageCatalog::new();
+        packages.insert(dependency("aerospace"), PackageMap::new(BTreeMap::new(), availability));
+
+        let (built, _events) = plan(
+            &manifest,
+            PackageManager::Brew,
+            &Selection::all(&manifest),
+            &Requirements::none(),
+            &ObservationMap::default(),
+            Elevation::Unavailable,
+            &packages,
+        )
+        .expect("a brew-package availability plans");
+
+        // Positive control: one entry in means one step out, or the
+        // assertion below indexes an empty plan.
+        assert_eq!(built.steps.len(), 1, "the control must plan one step");
+
+        match &built.steps[0].action {
+            InstallAction::Brew { kind, id, tap } => {
+                assert_eq!(*kind, BrewKind::Cask, "a cask must not plan as a formula");
+                assert_eq!(id.as_str(), "aerospace");
+                assert_eq!(
+                    tap.as_ref().map(TapName::as_str),
+                    Some("nikitabobko/tap"),
+                    "the tap must survive, or an untapped cask is not findable"
+                );
+            }
+            other => panic!("expected a brew action, got {other:?}"),
+        }
+        assert_eq!(
+            built.steps[0].privilege,
+            PrivilegeRequirement::None,
+            "brew refuses to run as root"
+        );
     }
 
     #[test]

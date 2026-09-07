@@ -6164,6 +6164,16 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 Named explicitly so a later reader does not mistake absence for oversight.
 Each of these is a real remaining step with a real reason it is not here.
 
+**Task 12 Steps 5 to 7: the rename itself, deferred during execution.**
+Steps 1 to 4 (the exit-127 oracle fix) landed. The rename did not, because
+`crates/deps-core` is a **library**: it has no `[[bin]]` section and no
+`main.rs`, verified. Step 5 renames `check-deps.sh` to "its ported entry
+point", and the binary that would be is `config-cli`, which spec 7.4 step 3
+places outside this plan. Renaming now would point 34 files and 97
+references at a program that does not exist, `setup.sh` among them, which is
+what a fresh machine runs. The rename belongs in the plan that creates the
+binary, and the oracle fix that had to precede it is already in place.
+
 **Spec 7.4 step 4: the remaining `config-*` subcommands.** Nine subcommands
 (`build`, `doctor`, `help`, `init`, `install`, `install-hooks`, `reload`,
 `stamp`, `test`). Ports must be atomic per the dispatcher-fallthrough

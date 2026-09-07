@@ -1,0 +1,12 @@
+.cfg
+.DS_Store
+
+
+# Generated per-machine by ~/.scripts/alacritty-platform.sh
+.config/alacritty/alacritty-platform.toml
+
+# Cargo build output. Not ignored until now, so `config add crates/` would
+# stage megabytes of build artifacts: a task following that instruction
+# staged 19 source files by hand to avoid it. Ignoring it makes the safe
+# form the default one.
+crates/target

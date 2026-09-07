@@ -363,6 +363,28 @@ fn action_for(
         PackageAvailability::Unavailable(reason) => {
             (InstallAction::NotAutomatable { reason: reason.clone() }, false)
         }
+        // Adds an APT trust root, so it needs root on every manager that
+        // has apt at all. `needs_root` is asked of the manager rather than
+        // hardcoded, so a brew machine with an apt-shaped availability is
+        // not silently escalated.
+        PackageAvailability::AptWithSource { keyring, list } => (
+            InstallAction::AptSource { keyring: *keyring, list: *list },
+            manager.needs_root(),
+        ),
+        // pip installs into the user site directory, so no root.
+        PackageAvailability::PipDistribution { id, break_system_packages } => (
+            InstallAction::Pip {
+                id: id.clone(),
+                break_system_packages: *break_system_packages,
+            },
+            false,
+        ),
+        // A clone lands under $HOME, so no root.
+        PackageAvailability::Clone { source, into } => (
+            InstallAction::GitClone { source: *source, into: into.clone() },
+            false,
+        ),
+        PackageAvailability::ViaNvm => (InstallAction::NvmInstall, false),
     };
 
     if wants_root && elevation == Elevation::Unavailable {
@@ -523,6 +545,8 @@ fn nearest_name(manifest: &Manifest, wanted: &DependencyName) -> Option<Dependen
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::action::{CloneSource, KeyringSource, SourceListEntry};
+    use crate::check::CheckPath;
     use crate::{Check, ObservationMap};
     use dotfiles_path::{CommandName, PackageId};
 
@@ -1006,5 +1030,140 @@ mod tests {
             }
             other => panic!("expected UnknownDependency, got {other:?}"),
         }
+    }
+
+    /// `plan` must be able to emit a `GitClone`, which is the action
+    /// zsh-autosuggestions needs under any manager but brew.
+    ///
+    /// Before this task, `PackageAvailability` had no variant that reached
+    /// `InstallAction::GitClone`, so the action had zero construction sites
+    /// in the crate and four of the 22 dependencies could not be installed.
+    #[test]
+    fn a_clone_availability_plans_a_git_clone() {
+        let manifest = manifest_of(&["zsh-autosuggestions"]);
+        let into = CheckPath::new(
+            PathRoot::Home,
+            CheckRelPath::parse(".oh-my-zsh/custom/plugins/zsh-autosuggestions")
+                .expect("a valid relative path"),
+        );
+        let availability = PackageAvailability::Clone {
+            source: CloneSource::ZshAutosuggestions,
+            into: into.clone(),
+        };
+        let mut packages = PackageCatalog::new();
+        packages.insert(
+            dependency("zsh-autosuggestions"),
+            PackageMap::new(BTreeMap::new(), availability),
+        );
+
+        // Positive control: a catalog whose only entry is the new variant
+        // must still plan exactly one step, or an assertion about that
+        // step's action would be reasoning about an empty plan.
+        let (built, _events) = plan(
+            &manifest,
+            PackageManager::Pacman,
+            &Selection::all(&manifest),
+            &Requirements::none(),
+            &ObservationMap::default(),
+            Elevation::AlreadyRoot,
+            &packages,
+        )
+        .expect("a clone availability plans");
+        assert_eq!(built.steps.len(), 1, "the control must plan one step");
+
+        assert_eq!(
+            built.steps[0].action,
+            InstallAction::GitClone { source: CloneSource::ZshAutosuggestions, into },
+        );
+        assert_eq!(
+            built.steps[0].privilege,
+            PrivilegeRequirement::None,
+            "a clone into $HOME needs no root"
+        );
+    }
+
+    #[test]
+    fn an_apt_source_availability_needs_root_on_apt() {
+        let manifest = manifest_of(&["gh"]);
+        let availability = PackageAvailability::AptWithSource {
+            keyring: KeyringSource::GithubCli,
+            list: SourceListEntry::GithubCli,
+        };
+        let mut packages = PackageCatalog::new();
+        packages.insert(dependency("gh"), PackageMap::new(BTreeMap::new(), availability));
+
+        let (built, _events) = plan(
+            &manifest,
+            PackageManager::Apt,
+            &Selection::all(&manifest),
+            &Requirements::none(),
+            &ObservationMap::default(),
+            Elevation::AlreadyRoot,
+            &packages,
+        )
+        .expect("an apt-source availability plans");
+        assert_eq!(built.steps.len(), 1, "the control must plan one step");
+        assert!(matches!(built.steps[0].action, InstallAction::AptSource { .. }));
+        assert_eq!(
+            built.steps[0].privilege,
+            PrivilegeRequirement::Root,
+            "adding a trust root needs root"
+        );
+    }
+
+    #[test]
+    fn a_pip_availability_needs_no_root() {
+        let manifest = manifest_of(&["pyyaml"]);
+        let availability = PackageAvailability::PipDistribution {
+            id: PackageId::parse("pyyaml").expect("a valid package id"),
+            break_system_packages: true,
+        };
+        let mut packages = PackageCatalog::new();
+        packages.insert(dependency("pyyaml"), PackageMap::new(BTreeMap::new(), availability));
+
+        let (built, _events) = plan(
+            &manifest,
+            PackageManager::Brew,
+            &Selection::all(&manifest),
+            &Requirements::none(),
+            &ObservationMap::default(),
+            Elevation::Unavailable,
+            &packages,
+        )
+        .expect("a pip availability plans");
+        assert_eq!(built.steps.len(), 1, "the control must plan one step");
+        assert!(matches!(
+            built.steps[0].action,
+            InstallAction::Pip { break_system_packages: true, .. }
+        ));
+        assert_eq!(built.steps[0].privilege, PrivilegeRequirement::None);
+    }
+
+    #[test]
+    fn an_nvm_availability_plans_an_nvm_install() {
+        let manifest = manifest_of(&["node"]);
+        let mut packages = PackageCatalog::new();
+        packages.insert(
+            dependency("node"),
+            PackageMap::new(BTreeMap::new(), PackageAvailability::ViaNvm),
+        );
+
+        let (built, _events) = plan(
+            &manifest,
+            PackageManager::Apt,
+            &Selection::all(&manifest),
+            &Requirements::none(),
+            &ObservationMap::default(),
+            Elevation::Unavailable,
+            &packages,
+        )
+        .expect("an nvm availability plans");
+        assert_eq!(built.steps.len(), 1, "the control must plan one step");
+        assert_eq!(built.steps[0].action, InstallAction::NvmInstall);
+        assert_eq!(
+            built.steps[0].privilege,
+            PrivilegeRequirement::None,
+            "nvm installs into $HOME, so this must plan even with no elevation"
+        );
     }
 }

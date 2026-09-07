@@ -250,6 +250,35 @@ pub enum PackageAvailability {
     ViaScript(ScriptInstaller),
     /// The manager cannot install it, and the reason says why.
     Unavailable(NoInstallReason),
+    /// `gh` on apt. Not a package install: `check-deps.sh:236` adds a
+    /// third-party trust root before installing, so collapsing it to
+    /// `Named` would let a dry run print "install package gh" for an action
+    /// that permanently changes what the machine trusts.
+    AptWithSource {
+        /// The trust root this availability adds.
+        keyring: KeyringSource,
+        /// The source-list line it appends.
+        list: SourceListEntry,
+    },
+    /// `pyyaml` where no distribution package exists. `break_system_packages`
+    /// overrides PEP 668, so it is a named field rather than a default.
+    PipDistribution {
+        /// The distribution to install.
+        id: PackageId,
+        /// Whether to pass the PEP 668 override.
+        break_system_packages: bool,
+    },
+    /// `zsh-autosuggestions` and `tpm`, which install by cloning rather than
+    /// through any manager.
+    Clone {
+        /// The upstream to clone.
+        source: CloneSource,
+        /// Where the clone lands. The same value the check reads, so
+        /// convergence is structural rather than hoped for.
+        into: CheckPath,
+    },
+    /// `node`, which installs through nvm rather than a manager.
+    ViaNvm,
 }
 
 /// Per-manager availability with a mandatory fallback.

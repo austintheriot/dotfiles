@@ -17,5 +17,4 @@ members = ["config-manifest", "dotfiles-path"]
 anyhow = "1.0.104"
 clap = { version = "4.6.6", features = ["derive", "env"] }
 assert_cmd = "2.2.2"
-proptest = "1.11.0"
 tempfile = "3.27.0"

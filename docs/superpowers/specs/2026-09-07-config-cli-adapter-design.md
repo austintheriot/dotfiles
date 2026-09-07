@@ -50,6 +50,100 @@ kept because a reader who checks one and finds it unexplained will reopen it.
 | Effects are structured, not shell strings | 5.1 | `InstallAction`'s variants (`Package`, `Brew`, `AptSource`, `Pip`, `GitClone`, `NvmInstall`, `ViaScript`) are already data. |
 | Elevation resolves once, at the edge, before the loop | 3.5 | The core records what a step requires; the driver compares. The core never asks whether it can elevate. |
 
+## 3a. Why a new crate rather than adding `deps` to `config-manifest`
+
+A review lens argued the whole `config-cli` crate is redundant, because
+`config-manifest` already ships clap dispatch, `--describe`, `--stamp`, an
+exit-code convention, and argv subprocess spawning. It also observed that
+parent 7.1's "two binaries is how status 1 comes to mean eight things again"
+appears to argue against creating a second binary at all. The objection is
+serious and this section answers it with measurements rather than preference.
+
+### 3a.1 What the parent spec actually says
+
+Parent 7.1's crate tree is explicit:
+
+```
+config-manifest/      -> dotfiles-path.  The .sync-manifest domain.
+deps-core/            -> dotfiles-path.  No edge to config-manifest.
+config-cli/           -> all three.  Adapters, drivers, Approval, one exit code
+```
+
+`config-cli` depends on **all three**, `config-manifest` included. So the
+parent's intended end state is not two peer binaries: it is one binary
+(`config-cli`) that consumes `config-manifest` as a **library**. The "two
+binaries" warning is about the end state, and the tree it sits beside already
+describes how to avoid it.
+
+### 3a.2 The topology compiles today, verified
+
+`config-manifest` is **already both a library and a binary**: `src/lib.rs`
+exports `doctor`, `git`, `path` and `stamp`. So the arrow parent 7.1 draws
+needs no restructuring.
+
+Proved rather than assumed. I built a throwaway fourth member depending on
+all three crates and calling into two of them:
+
+```rust
+let _pure = deps_core::ConfKind::PlatformSelected;
+let _git_domain = config_manifest::stamp::Rendered { .. };
+```
+
+Result: compiles clean, binary produced, prints "all three arrows compile".
+
+### 3a.3 The two objections, measured
+
+**"A second binary means two exit-code conventions."** They already agree.
+`config-manifest/src/main.rs` returns 2 for usage errors and 1 for failures;
+`deps-core`'s `exit_status` returns 2 for every `PlanError`, 0/1 for check,
+0/3 for install. Both were written to the same repo-wide convention, so the
+divergence the parent warns about is not materializing. What a second binary
+does cost is that the convention is maintained by hand in two places rather
+than funnelled through one `ExitStatus`.
+
+**"The build stamp will churn."** Weaker than stated. The stamp is
+`<crate-tree>:<lock-blob>:<workspace-blob>`, and `config-stamp` shows
+distinct first fields per crate against shared second and third fields. So
+editing `config-cli` does not restamp `config-manifest`. The real defect is
+smaller and is a rename: `config-build:59` sets `CONFIG_MANIFEST_STAMP` for
+every member inside its per-member loop, so a second binary crate would read
+a correctly-valued variable under a misleading name.
+
+### 3a.4 Decision
+
+**Create `config-cli`, and make `config-manifest` library-only in the same
+plan that moves its subcommands.**
+
+Three reasons, in order:
+
+1. **`deps-core` must not gain an edge to `config-manifest`** (parent 7.1
+   forbids it, because it would drag a 248-line git module into the
+   dependency domain). So the adapter that consumes both cannot live inside
+   either. It has to be a third place, and `config-cli` is that place.
+2. **The alternative is a rename with a wider blast radius than it looks.**
+   Renaming `config-manifest` to `config-cli` touches the installed binary
+   name, `config-doctor`'s `exec` target, `pre-push`'s `verify-stamps` call,
+   `CONFIG_MANIFEST_STAMP`, `tests/config-manifest-lifecycle.test.sh` (which
+   asserts `config-manifest 0.1.0` by name), the test Dockerfile's builder
+   stage, and the golden help fixture. Doing that **before** the adapter
+   exists means renaming a working binary to make room for code not yet
+   written.
+3. **The binary half of `config-manifest` has exactly two consumers**:
+   `config-doctor`'s `exec` and `pre-push`'s `verify-stamps`. Both move to
+   `config-cli` subcommands in step 4, at which point `config-manifest`'s
+   `main.rs` is deleted and the crate is library-only. **That is when the
+   parent's one-binary end state is reached**, and it is reached without ever
+   renaming a binary that something depends on.
+
+**So the two-binary window is real and bounded**, lasting from this step
+until step 4 deletes `config-manifest/src/main.rs`. The first draft of this
+document did not name that window, which is what made the objection land.
+Recorded now with its exit condition: **the window closes when
+`config-manifest` has no `main.rs`.**
+
+**Rename `CONFIG_MANIFEST_STAMP` to `CONFIG_CRATE_STAMP` in this step**,
+since it is per-member already and the name is the only thing wrong with it.
+
 ## 4. The shape
 
 **Corrected after review. The first draft said "the parent spec's section 4

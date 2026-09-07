@@ -94,7 +94,36 @@ If prebuilt-binary bootstrapping is adopted there, `config-build` stops being
 load-bearing for a fresh machine and this decision is worth revisiting.
 Tracked in `TODO-AGENTS.md`.
 
-### 3.3 `config-doctor` is already a shim and should simply go
+### 3.2a This step closes the two-binary window
+
+The adapter spec's 3a records that steps 3b and 4 run with both
+`config-manifest` and `config-cli` on PATH, and names the exit condition:
+**the window closes when `config-manifest` has no `main.rs`.** This step is
+where that happens.
+
+The binary half of `config-manifest` has exactly two consumers, verified:
+
+| Consumer | Call |
+|---|---|
+| `.scripts/config/config-doctor:26` | `exec config-manifest doctor "$@"` |
+| `tests/pre-push:145` | `config-manifest verify-stamps` |
+
+Both become `config-cli` subcommands here. Then `config-manifest/src/main.rs`
+is **deleted** and the crate is library-only, which is the end state parent
+7.1's crate tree describes.
+
+Two consequences to land in the same commit:
+
+- **`config-stamp` and `config-build` must stop expecting a
+  `config-manifest` binary.** `config-build:64` skips installation for a
+  member with no `src/main.rs`, so deleting the file is sufficient there,
+  and it already prints "is a library, nothing to install".
+- **`tests/config-manifest-lifecycle.test.sh:67` asserts
+  `config-manifest 0.1.0` from `config-manifest --version`.** That assertion
+  is about a binary that will not exist. It moves to `config-cli --version`
+  or it goes.
+
+### 3.3 `config-doctor` is already a shim and should go
 
 `config-doctor` is 26 lines whose body is `exec config-manifest doctor "$@"`.
 Once `config-manifest`'s subcommands move into `config-cli`, the shim's

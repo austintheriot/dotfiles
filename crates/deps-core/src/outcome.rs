@@ -398,4 +398,43 @@ mod tests {
             assert!(code != 0 && code != 2, "the rule requires nonzero and not 2, got {code}");
         }
     }
+
+    /// An empty run is Ready, and that is deliberate rather than accidental.
+    ///
+    /// `summarize_check` folds with `all`, which is vacuously true on an
+    /// empty slice, so a run with no outcomes reports Ready and exits 0.
+    /// Reported as unpinned by the task that wrote the summaries, because the
+    /// intended answer was not stated anywhere.
+    ///
+    /// Ready is right: asking whether nothing is ready, and being told yes,
+    /// is the correct answer to the question asked. The case that must NOT
+    /// exit 0 is a selection naming something the manifest lacks, and that is
+    /// a different code path which returns `PlanError::UnknownDependency`
+    /// (mapped to exit 2), pinned by
+    /// `plan::tests::a_selected_name_the_manifest_lacks_is_an_error`.
+    ///
+    /// Without this test, someone tightening the empty case to NotReady would
+    /// make `config deps check --only ""` fail on a machine with nothing
+    /// wrong with it, and no assertion would object.
+    #[test]
+    fn an_empty_run_is_ready_and_exits_zero() {
+        let none: Vec<StepOutcome> = Vec::new();
+
+        // Positive control: the same fold must report NotReady for a real
+        // failure, or "Ready" below would prove nothing about emptiness.
+        let failing = vec![StepOutcome::NotAutomatable {
+            reason: NoInstallReason::UpstreamPublishesNoStableUrl,
+        }];
+        assert_eq!(summarize_check(&failing), CheckStatus::NotReady);
+
+        assert_eq!(summarize_check(&none), CheckStatus::Ready);
+        assert_eq!(exit_status(Ok(Verdict::Check(CheckStatus::Ready))).code(), 0);
+
+        // The install verb agrees: nothing attempted means nothing failed.
+        assert_eq!(summarize_install(&none), InstallStatus::AllSucceeded);
+        assert_eq!(
+            exit_status(Ok(Verdict::Install(InstallStatus::AllSucceeded))).code(),
+            0
+        );
+    }
 }

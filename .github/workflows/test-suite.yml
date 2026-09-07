@@ -122,6 +122,19 @@ jobs:
           cargo build --release --locked
           echo "$GITHUB_WORKSPACE/crates/target/release" >> "$GITHUB_PATH"
 
+      # The lint policy lives in crates/Cargo.toml, so this step enforces it
+      # rather than defining it. Explicit here as well as inside run-all.sh
+      # so a lint failure is legible in the Actions UI instead of buried in a
+      # suite's captured output, and so it fails before the slower suites.
+      #
+      # working-directory rather than --manifest-path, for the reason the
+      # build step above already gives: rustup honours
+      # crates/rust-toolchain.toml only when the working directory is under
+      # crates/.
+      - name: Clippy
+        working-directory: crates
+        run: cargo clippy --locked --all-targets -- -D warnings
+
       # A UTF-8 locale is load-bearing rather than cosmetic. With no LANG set,
       # tmux treats a tab as non-printable and substitutes "_" in
       # display-message output. The window-naming script uses a tab as its

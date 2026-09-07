@@ -55,4 +55,25 @@ assert_contains "run-all.sh must run clippy, or the invariant has no gate in CI"
 assert_contains "the clippy leg must go through run_suite so it is counted and timed" \
     'run_suite "cargo clippy in crates/"' "$runner_text"
 
+# Parsed rather than grepped, matching deps-harness.test.sh: a reformat of
+# the workflow must not produce a false pass or a false failure. $PYTHON_BIN
+# rather than a bare python3, for the reason deps-harness.test.sh gives:
+# lib.sh resolves the real interpreter once, and the shim on PATH costs
+# 750ms per start.
+ci_has_clippy=$("$PYTHON_BIN" - "$DOTFILES_ROOT/.github/workflows/test-suite.yml" <<'PY'
+import sys, yaml
+with open(sys.argv[1]) as handle:
+    workflow = yaml.safe_load(handle)
+steps = [
+    step
+    for job in workflow["jobs"].values()
+    for step in job.get("steps", [])
+]
+found = any("cargo clippy" in str(step.get("run", "")) for step in steps)
+print("0" if found else "1")
+PY
+)
+assert_equals "test-suite.yml must run cargo clippy, so the invariant gates before merge" \
+    "0" "$ci_has_clippy"
+
 finish

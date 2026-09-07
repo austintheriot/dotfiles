@@ -136,4 +136,43 @@ status=$?
 assert_equals 'a failing named suite exits non-zero' '1' "$status"
 assert_contains 'the summary names the failing suite' 'delta' "$output"
 
+# --- the cargo run covers the whole workspace, not one crate ----------------
+
+# run-all.sh used to point --manifest-path at crates/config-manifest/Cargo.toml,
+# which runs only that crate's tests. The workspace has had a second member
+# since dotfiles-path landed, so 12 tests were silently outside the suite, and
+# every crate added later would be too. Measured at the time: the per-crate
+# command ran 4 test binaries where the workspace ran 6.
+#
+# Asserted against the real run-all.sh rather than the fixture copy, because
+# the defect is in which path the script names, not in how it filters.
+
+# Asserted by RUNNING cargo the way run-all.sh runs it, not by grepping the
+# script's text. A text assertion here matched this comment's own explanation
+# and reported a defect that was already fixed, which is the unanchored-pattern
+# trap the plan records twice already.
+# The cargo step must name the workspace root, not one member. run-all.sh used
+# to point at crates/config-manifest/Cargo.toml, so `cargo test` ran that crate
+# alone: dotfiles-path's tests were outside the suite from the day it landed,
+# and every crate added later would have been too. Measured at the time of the
+# fix: 4 test binaries against the per-crate manifest, 6 against the workspace.
+#
+# Asserted on the literal path this script names, which is the one thing the
+# defect actually was. Three richer versions of this assertion were tried and
+# discarded, each recorded because each failed in a way worth not repeating:
+# grepping for "manifest-path" matched the fix's own explanatory comment;
+# measuring cargo inside crates/ passed against the broken script because it
+# tested cargo rather than the script; and eval-ing the extracted assignment
+# resolved DOTFILES_ROOT to empty, so the path did not exist and the guarded
+# assertion silently skipped while reporting a pass.
+
+manifest_line=$(grep -E '^cargo_manifest=' "$RUN_ALL" || true)
+
+# Positive control: the assignment must exist, or the assertion below is
+# comparing two empty strings and proves nothing.
+assert_succeeds 'run-all.sh assigns a cargo manifest path' test -n "$manifest_line"
+
+assert_equals 'the cargo manifest is the workspace root, not one crate' \
+    'cargo_manifest="$cargo_dir/Cargo.toml"' "$manifest_line"
+
 finish

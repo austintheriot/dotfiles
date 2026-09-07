@@ -182,7 +182,14 @@ if [ -n "$python_dirs" ]; then
     python_count=$(printf '%s\n' "$python_dirs" | wc -l | tr -d ' ')
 fi
 
-cargo_manifest="$DOTFILES_ROOT/crates/config-manifest/Cargo.toml"
+# The workspace root, not one member. This used to name
+# crates/config-manifest/Cargo.toml, so `cargo test --manifest-path` ran only
+# that crate: dotfiles-path's tests were outside the suite from the day it
+# landed, and every crate added later would have been too. Measured at the
+# time of the fix: 4 test binaries against the per-crate manifest, 6 against
+# the workspace.
+cargo_dir="$DOTFILES_ROOT/crates"
+cargo_manifest="$cargo_dir/Cargo.toml"
 cargo_count=0
 if [ -z "$only" ] && command -v cargo >/dev/null 2>&1 && [ -f "$cargo_manifest" ]; then
     cargo_count=1
@@ -219,8 +226,12 @@ fi
 
 if [ "$cargo_count" -eq 1 ]; then
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/config-manifest/target}"
-    run_suite "cargo test in crates/config-manifest" \
-        cargo test --locked --quiet --manifest-path "$cargo_manifest"
+    # Run from inside crates/ rather than with --manifest-path, because rustup
+    # only honours crates/rust-toolchain.toml when the working directory is
+    # under crates/. With --manifest-path from $HOME the pin is declared and
+    # not applied, which is the same defect that once failed CI.
+    run_suite "cargo test in crates/" \
+        sh -c 'cd "$1" && cargo test --locked --quiet' _ "$cargo_dir"
 elif [ -n "$only" ]; then
     : # a named suite is an integration suite; saying "cargo not found" here
       # would be false, and cargo has its own filter.

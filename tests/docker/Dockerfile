@@ -23,21 +23,25 @@ COPY crates/Cargo.toml crates/Cargo.lock ./
 # matches what cargo reports. Adding deps-core without these three lines
 # failed the build with "failed to read /build/deps-core/Cargo.toml" during a
 # push, so the guard exists to make the next crate fail in a test instead.
+COPY crates/config-cli/Cargo.toml config-cli/
 COPY crates/config-manifest/Cargo.toml config-manifest/
 COPY crates/dotfiles-path/Cargo.toml dotfiles-path/
 COPY crates/deps-core/Cargo.toml deps-core/
 COPY crates/tmux-core/Cargo.toml tmux-core/
 COPY crates/tmux-tools/Cargo.toml tmux-tools/
-RUN mkdir config-manifest/src dotfiles-path/src deps-core/src tmux-core/src tmux-tools/src \
+RUN mkdir config-cli/src config-manifest/src dotfiles-path/src deps-core/src tmux-core/src tmux-tools/src \
+    && echo 'fn main() {}' > config-cli/src/main.rs \
     && echo 'fn main() {}' > config-manifest/src/main.rs \
     && echo '' > dotfiles-path/src/lib.rs \
     && echo '' > deps-core/src/lib.rs \
     && echo '' > tmux-core/src/lib.rs \
     && echo 'fn main() {}' > tmux-tools/src/main.rs \
     && cargo build --release --locked --quiet \
-    && rm -rf config-manifest/src tmux-tools/src target/release/config-manifest \
-        target/release/tmux-tools target/release/deps/config_manifest* \
+    && rm -rf config-cli/src config-manifest/src tmux-tools/src target/release/config-cli \
+        target/release/config-manifest target/release/tmux-tools \
+        target/release/deps/config_cli* target/release/deps/config_manifest* \
         target/release/deps/tmux_tools*
+COPY crates/config-cli/src ./config-cli/src
 COPY crates/config-manifest/src ./config-manifest/src
 COPY crates/dotfiles-path/src ./dotfiles-path/src
 COPY crates/deps-core/src ./deps-core/src

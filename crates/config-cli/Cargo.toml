@@ -1,0 +1,16 @@
+[package]
+name = "config-cli"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+clap = { workspace = true }
+deps-core = { path = "../deps-core" }
+dotfiles-path = { path = "../dotfiles-path" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

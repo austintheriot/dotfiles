@@ -143,6 +143,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
+name = "config-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "deps-core",
+ "dotfiles-path",
+ "tempfile",
+]
+
+[[package]]
 name = "config-manifest"
 version = "0.1.0"
 dependencies = [
@@ -372,6 +382,7 @@ version = "0.1.0"
 name = "tmux-tools"
 version = "0.1.0"
 dependencies = [
+ "tempfile",
  "tmux-core",
 ]
 

@@ -368,7 +368,7 @@ by an explicit `DEPS_CONF`. All of that needs an owner and a test.
 |---|---|
 | `crates/config-cli/` | New. Module layout above. |
 | `crates/Cargo.toml` | New workspace member. |
-| `tests/docker/Dockerfile` | Builder stage gains the member. `tests/container.test.sh` already asserts cargo's member list matches this file, so omitting it fails a test rather than a Docker build. |
+| `tests/docker/Dockerfile` | Builder stage gains the member. `tests/container.test.sh` already asserts cargo's member list matches this file, so omitting it fails a test rather than a Docker build. The runtime stage stays Rust-free at this step; the shell-test-port spec's section 4a owns putting a toolchain there and says why that waits. |
 | `.scripts/config/config-deps` | New shell shim. Sources `usage.sh`, execs `config-cli deps "$@"`. |
 | `.scripts/config/config-install` | Becomes a 3-line shim to `config deps install` per 7.3. |
 | `.scripts/deps/check-deps.sh` | Deleted, last, in one commit with every consumer. |
@@ -587,6 +587,39 @@ regression of it. Removing the image line restores that ability.
 build, and line 296 is prose inside another job.
 
 ## 9. Testing
+
+**Two obligations this step inherits, both from work that landed before it.**
+
+First, `Requirements::validated` exists but nothing production calls it. This
+step introduces the catalog that holds the requirement table, so this step
+owns the test the `deps-core` completion spec's section 5 named and could not
+write: **the production table must validate against the union of all four
+shipped conf files** (`deps.conf`, `deps-ci.conf`, `deps-linux.conf`,
+`deps-mac.conf`). That test catches a typo neither platform's live run would,
+because a misspelled prerequisite is absent everywhere and therefore looks
+exactly like the legitimate macOS-absent case the design depends on. The
+obligation is also written on `validated`'s own doc comment, so it does not
+depend on anyone reading this spec.
+
+Second, the catalog's `PackageAvailability::Clone { into }` must be set to the
+same `CheckPath` the dependency's check reads, byte for byte. Nothing
+enforces it: `PackageCatalog` is a bare map, and neither `plan` nor
+`action_for` compares the clone target against the manifest's check. A
+catalog that points the clone at a directory while the check reads a file
+inside it produces the non-converging fixpoint described in item 1 below.
+`deps-core`'s `Clone` doc comment states this requirement; this step is where
+it becomes possible to get wrong.
+
+**One gate note.** This step adds the workspace's first binary crate beyond
+`config-manifest`, and `cargo clippy --locked --all-targets -- -D warnings`
+is enforced by no gate anywhere in this repo (verified: zero hits outside
+prose across `.github/`, `.scripts/` and `tests/`). The seven-task
+`deps-core` completion held that invariant by hand across every task. The
+shell-test-port spec's section 4a owns adding the clippy leg to
+`run-all.sh` and to `test-suite.yml`, and sequences it ahead of the suite
+conversions for this reason. If that has not landed by the time this step
+starts, hold the invariant by hand here too and say so in the plan's Global
+Constraints, as the `deps-core` plan did.
 
 The parent spec's 7.5a bootstrap gates are the acceptance test for this step:
 the rewrite is not done until a bare image fully initializes through the

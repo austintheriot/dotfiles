@@ -3,7 +3,7 @@
 #
 # The suite mutates $HOME by design: it writes fixture git repos, spawns tmux
 # sessions on the default tmux server, and -- before the install-path fix in
-# .scripts/deps/check-deps.sh -- once created a real
+# the deps engine -- once created a real
 # ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions on a machine that does not
 # use oh-my-zsh. Every one of those lands in the container instead.
 #
@@ -142,7 +142,7 @@ COPY .github /root/.github
 # fails on its own first assertion rather than on anything it means to check.
 COPY README.md /root/README.md
 # depcheck-hook.test.sh asserts the hook is sourced from .zshrc, and
-# check-deps.test.sh reads the zshrc files to decide whether this branch
+# deps-manifest.test.sh reads the zshrc files to decide whether this branch
 # needs oh-my-zsh. Both silently lose those assertions without this.
 # The glob covers both platform variants (.zshrc-mac and .zshrc-linux), which
 # both ship on the single branch and are selected at runtime.

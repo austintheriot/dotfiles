@@ -154,7 +154,7 @@ fn probe_command(name: &str) -> Observation {
 ///
 /// A missing `python3` interpreter and a missing module are the same
 /// distinction rule 2 draws for a root: the shell's `sh -c "$check"`
-/// (`check-deps.sh:523`) collapsed "no interpreter" and "no module" into one
+/// (`retired-check-deps:523`) collapsed "no interpreter" and "no module" into one
 /// exit code, and this probe keeps them apart by reporting `Unresolvable`
 /// when the interpreter itself cannot be spawned.
 fn probe_python_import(module: &str) -> Observation {
@@ -320,7 +320,7 @@ mod tests {
     ///
     /// "The interpreter is missing" and "the module is missing" are
     /// different facts with different remedies, and the shell collapsed
-    /// both (`check-deps.sh:523`). This port exists partly to stop that.
+    /// both (`retired-check-deps:523`). This port exists partly to stop that.
     #[test]
     fn a_failed_probe_is_unresolvable_rather_than_absent() {
         let check = Check::FileExists(CheckPath::new(

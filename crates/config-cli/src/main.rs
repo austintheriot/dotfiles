@@ -5,7 +5,8 @@
 //! in `deps_core`, and every capability lives in `deps/`.
 //!
 //! Exit 2 is every caller error, matching the repo-wide convention
-//! `check-deps.sh` established and `deps-docs.test.sh` uses as its oracle.
+//! the retired check-deps shell engine established, and that
+//! `deps-docs.test.sh` uses as its oracle.
 //! The verb-to-code mapping has exactly one owner, `deps_core::exit_status`,
 //! reached here through `Rendered::exit_code`.
 

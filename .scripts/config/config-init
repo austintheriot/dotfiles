@@ -76,7 +76,7 @@ git_dir="$HOME/.cfg"
 # rustup installs cargo into ~/.cargo/bin. Without this the run ended with
 # "done, except the build step -- run `config build` once cargo is on PATH" on
 # a machine where the install step had just installed rustup successfully: the
-# toolchain existed and was invisible. check-deps.sh already prepends these
+# toolchain existed and was invisible. The deps engine already prepends these
 # two directories for exactly this reason, so a `command -v` check does not
 # fail on the line after its own install succeeded; this is the same problem
 # one level up, where an install and a build happen in one process.

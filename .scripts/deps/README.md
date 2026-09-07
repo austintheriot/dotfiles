@@ -16,15 +16,20 @@ is the prose version. The manifest in this directory is the executable one.
   platform only. Same format. Both files ship together; what differs per
   machine is only which one gets read. `deps-mac.conf` holds `aerospace`;
   `deps-linux.conf` holds `oh-my-zsh` and `xclip`.
-- `check-deps.sh` -- the engine. Reads `deps.conf`, then whichever of
-  `deps-mac.conf` and `deps-linux.conf` matches this machine, if that file
-  exists. The platform comes from `~/.scripts/platform.sh`, and the
-  `DEPS_LOCAL_CONF` environment variable overrides the choice.
+- `config deps` -- the engine, a Rust binary built from `crates/`. Reads
+  `deps.conf`, then whichever of `deps-mac.conf` and `deps-linux.conf`
+  matches this machine, if that file exists. The platform is detected the
+  same way `~/.scripts/platform.sh` detects it, and the `DEPS_LOCAL_CONF`
+  environment variable overrides the choice.
 - `depcheck-hook.sh` -- sourced from `.zshrc`. Defines the `depcheck` alias
   and a startup check that runs at most once every 24 hours.
 - `docker/Dockerfile.ubuntu`, `docker/Dockerfile.arch` -- minimal images for
   exercising a bootstrap from scratch. Used by `test-local.sh` and by
-  `.github/workflows/deps-check.yml`.
+  `.github/workflows/deps-check.yml`. Neither carries a Rust toolchain, so
+  the engine arrives through a `/seed` mount that
+  `docker/deps-image-entrypoint.sh` reads. Installing a toolchain into
+  these images would pre-satisfy `rustup`, which is itself a manifest
+  entry, so the run would stop exercising the dependency it exists to test.
 - `test-local.sh` -- builds and runs both images against the current branch,
   for iterating without waiting on continuous integration.
 
@@ -47,12 +52,11 @@ nvm-without-node fails all of them on the first `nvim` launch.
 
 ### A check_command must never contain a pipe
 
-`read_entries` in `check-deps.sh` splits each line with
-`IFS='|' read -r name check docs`. A literal `|` anywhere in the check field
-therefore ends the check early and pushes the remainder into `docs_url`. The
-truncated check still runs, and it still returns an answer. The answer is
-wrong, and nothing reports an error. This is the easiest way to break the
-manifest, and the failure is silent.
+The manifest parser splits each line on `|` into exactly three fields. A
+literal `|` anywhere in the check field therefore ends the check early and
+pushes the remainder into `docs_url`. The truncated check still runs, and it
+still returns an answer. The answer is wrong, and nothing reports an error.
+This is the easiest way to break the manifest, and the failure is silent.
 
 For a check that needs an either-or, use one of these shapes instead:
 
@@ -82,7 +86,8 @@ the dependency belongs to one platform only.
 The default install command is `<package manager> install <name>`, which is
 correct while the package name matches the `name` field. When the names
 differ, or when the dependency does not come from a package manager at all,
-add a case to `install_cmd_for()` in `check-deps.sh`.
+add an entry to the install catalog in
+`crates/config-cli/src/deps/catalog.rs`.
 
 Two install commands are aware of the package manager rather than the
 dependency alone:
@@ -114,11 +119,11 @@ installing node has no meaning before its version manager exists, and the
 install. `nvm` is the one such case today, because its own documentation
 publishes only version-pinned install URLs. An empty case still gets checked
 and reported. It never gets installed, and it never fails the exit code of
-`--fix`.
+`config deps install`.
 
 ## PATH
 
-`check-deps.sh` prepends `~/.local/bin` and `~/.cargo/bin` to `PATH`.
+The engine prepends `~/.local/bin` and `~/.cargo/bin` to `PATH`.
 `rustup` installs into the second directory, and `zoxide` into the first when
 it falls back to its own installer, so without this a `command -v` check
 fails on the line right after its own install succeeded. An interactive shell
@@ -137,14 +142,14 @@ miss still calls the API.
 ## Running it
 
 ```sh
-~/.scripts/deps/check-deps.sh                  # check only
-~/.scripts/deps/check-deps.sh --fix            # check, then prompt per install
-~/.scripts/deps/check-deps.sh --fix --yes      # check, then install without prompting
-~/.scripts/deps/check-deps.sh --fix --dry-run  # print what --fix would run
-~/.scripts/deps/check-deps.sh --only tmux,fzf  # restrict the run to a subset
-depcheck                                          # alias for --fix
-~/.scripts/deps/test-local.sh                  # bootstrap fresh containers
-~/.scripts/deps/test-bootstrap.sh              # full bootstrap in a container
+config deps check                     # check only
+config deps install                   # check, then prompt per install
+config deps install --yes             # check, then install without prompting
+config deps install --dry-run         # print what install would run
+config deps check --only tmux,fzf     # restrict the run to a subset
+depcheck                              # alias for `config deps install`
+~/.scripts/deps/test-local.sh         # bootstrap fresh containers
+~/.scripts/deps/test-bootstrap.sh     # full bootstrap in a container
 ```
 
 ### `--only <names>`
@@ -171,21 +176,23 @@ report success, which is worse than a hard failure.
 `depcheck` is defined in `depcheck-hook.sh` as:
 
 ```sh
-alias depcheck='~/.scripts/deps/check-deps.sh --fix'
+alias depcheck='~/.local/bin/config deps install'
 ```
 
 An unknown argument exits 2.
 
 ### Exit codes
 
-- Without `--fix`: non-zero when anything is missing. This is informational.
-  The startup hook and a plain manual run both use it.
-- With `--fix`: non-zero only when a dependency that had an automated install
-  command still fails its check after the install ran. A dependency with no
-  automated install path is reported and does not affect the exit code, since
-  `--fix` had nothing to do differently. A declined prompt is treated the
-  same way.
-- With `--dry-run`: always 0.
+- `config deps check`: non-zero when anything is missing. This is
+  informational. The startup hook and a plain manual run both use it.
+- `config deps install`: non-zero only when a dependency that had an automated
+  install command still fails its check after the install ran. A dependency
+  with no automated install path is reported and does not affect the exit
+  code, since the install had nothing to do differently. A declined prompt is
+  treated the same way.
+- Either verb with `--dry-run`: always 0.
+- Either verb given an unknown flag, or an `--only` name that matches no
+  entry: 2.
 
 ## The startup hook
 
@@ -197,7 +204,7 @@ nothing else, so the next shell checks again.
 
 ## Continuous integration
 
-`.github/workflows/deps-check.yml` runs `check-deps.sh --fix --yes` as a real
+`.github/workflows/deps-check.yml` runs `config deps install --yes` as a real
 bootstrap on the 1st and the 15th of each month, and on demand through
 `workflow_dispatch`. It does not run on push, because every job installs
 packages over the network, and an upstream outage would then fail unrelated

@@ -27,7 +27,7 @@ pub type PackageCatalog = BTreeMap<DependencyName, PackageMap>;
 
 /// The elevation state, resolved once at the edge before `gather`.
 ///
-/// `check-deps.sh:168-187` already computes exactly this three-state value,
+/// `retired-check-deps:168-187` already computes exactly this three-state value,
 /// including a `DEPS_FORCE_ROOT` override that exists only so both branches
 /// are testable, so naming it a type deletes that environment seam.
 ///
@@ -396,7 +396,7 @@ pub fn plan(
 /// a predicate it could get wrong. `Elevation::Unavailable` never yields a
 /// `Root` step: it yields `PrivilegeUnavailable`, so the condition flows
 /// through the report and the exit code instead of surfacing at perform time
-/// (`check-deps.sh:544-546` already prints this message).
+/// (`retired-check-deps:544-546` already prints this message).
 fn action_for(
     availability: &PackageAvailability,
     manager: PackageManager,
@@ -668,7 +668,7 @@ mod tests {
 
     // Privilege is a property of the manager, not of the dependency: apt
     // needs root and brew never does (spec 3.5). It is derived here rather
-    // than sniffed out of command text, which is what check-deps.sh:545
+    // than sniffed out of command text, which is what retired-check-deps:545
     // does today.
     #[test]
     fn an_apt_package_step_is_marked_root_and_a_brew_step_is_not() {
@@ -705,7 +705,7 @@ mod tests {
 
     // Elevation::Unavailable never emits a Root step at all. The condition
     // flows through the report and the exit code instead of being
-    // discovered at perform time, and check-deps.sh:544-546 already prints
+    // discovered at perform time, and retired-check-deps:544-546 already prints
     // this message from its string sniff.
     #[test]
     fn elevation_unavailable_emits_privilege_unavailable_instead_of_a_root_step() {
@@ -810,7 +810,7 @@ mod tests {
     }
 
     // deps.conf:36 and :45. node requires nvm, and nvm's own install is
-    // manual-only (check-deps.sh:369-372), so on a machine with neither,
+    // manual-only (retired-check-deps:369-372), so on a machine with neither,
     // node is blocked rather than attempted.
     #[test]
     fn a_dependent_is_blocked_when_its_prerequisite_is_absent() {
@@ -879,7 +879,7 @@ mod tests {
         assert_eq!(order, vec!["nvm", "node"], "the graph outranks the file order");
     }
 
-    // The fixpoint evidence, as a value. check-deps.sh:339-341 emits the
+    // The fixpoint evidence, as a value. retired-check-deps:339-341 emits the
     // zsh-autosuggestions clone only when the oh-my-zsh custom directory
     // exists, so installing oh-my-zsh in wave 1 is what makes
     // zsh-autosuggestions installable in wave 2. One pass does not
@@ -1345,7 +1345,7 @@ mod tests {
     /// `Named` cannot express this: `action_for` maps it to
     /// `BrewKind::Formula` with no tap, so aerospace planned as a plain
     /// `brew install aerospace` and failed twice over, which
-    /// `check-deps.sh:266-270` documents in those words. The defect was
+    /// `retired-check-deps:266-270` documents in those words. The defect was
     /// unreachable until a catalog existed to construct an availability.
     #[test]
     fn a_cask_in_a_tap_plans_a_brew_action_carrying_both() {

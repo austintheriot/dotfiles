@@ -38,26 +38,12 @@ mkdir -p "$SERVE"
 cp "$SEED_SRC/setup.sh" "$SERVE/setup.sh"
 cp -R "$SEED_SRC/repo.git" "$SERVE/repo.git"
 
-# An optional prebuilt binary, for after the deps-core port.
-#
-# Today check-deps.sh is shell and runs on a bare image with no toolchain.
-# After spec step 3 it is a Rust binary that must exist BEFORE the dependency
-# install that places rustup, and this image cannot compile it: the build
-# context is only .scripts/deps. So the caller may hand one in.
-#
-# Optional on purpose. The shell path is what ships until step 3 lands, and a
-# required seam would break the green run this gate currently provides.
-prebuilt=${BOOTSTRAP_PREBUILT_BIN:-}
-if [ -n "$prebuilt" ]; then
-    if [ ! -x "$prebuilt" ]; then
-        printf 'FAIL: a prebuilt binary was named but does not exist: %s\n' \
-            "$prebuilt" >&2
-        exit 1
-    fi
-    mkdir -p "$HOME/.local/bin"
-    cp "$prebuilt" "$HOME/.local/bin/"
-    printf 'harness: seeded a prebuilt %s\n' "${prebuilt##*/}"
-fi
+# The prebuilt config-cli, required. See seed-prebuilt.sh for why the image
+# cannot compile it and why the variable is not optional.
+. /seed/seed-prebuilt.sh
+seed_prebuilt
+PATH="$HOME/.local/bin:$PATH"
+export PATH
 
 # Dumb HTTP transport needs this: without it `git clone` over plain HTTP
 # fails with "repository not found", because there is no smart-http CGI here

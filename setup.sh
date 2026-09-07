@@ -112,7 +112,7 @@ if ! command -v git >/dev/null 2>&1; then
     # this fires, and printing the command left the reader running two
     # commands to bootstrap one machine.
     #
-    # Escalation is decided the same way check-deps.sh decides it, because the
+    # Escalation is decided the same way the deps engine decides it, because the
     # machine that needs this is often root with no sudo, where a
     # sudo-prefixed command is one the reader cannot run.
     if [ "$(id -u 2>/dev/null || printf 1)" -eq 0 ]; then

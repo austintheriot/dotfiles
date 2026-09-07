@@ -8,6 +8,15 @@
 //! at the edge. The crate boundary is what makes that compiler-enforced
 //! rather than a discipline (spec 7.1), and `config_manifest::doctor` is
 //! the in-repo precedent for the module shape.
+//!
+//! # Reading the `retired-check-deps:NNN` citations
+//!
+//! Comments throughout this crate and `config-cli` cite line numbers in the
+//! shell engine this code replaced. That engine lived under `.scripts/deps/`
+//! and was deleted when the port completed, so its line numbers resolve
+//! through git history rather than the working tree. The citations are kept
+//! because they carry the reasoning: each one names the behaviour a decision
+//! here preserves, or the defect it deliberately does not.
 
 mod action;
 mod check;

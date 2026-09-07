@@ -1,4 +1,4 @@
-# Minimal apt environment for exercising check-deps.sh --fix --yes from
+# Minimal apt environment for exercising `config deps install --yes` from
 # scratch. Used by ../test-local.sh and mirrored by the `ubuntu` leg of
 # .github/workflows/deps-check.yml (which runs on a bare ubuntu-latest
 # runner rather than this image).
@@ -18,7 +18,7 @@
 FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
 
 # The bootstrap's own prerequisites, not dependencies under test:
-# check-deps.sh's install commands invoke sudo, curl, wget, and git, and
+# the engine's install commands invoke sudo, curl, wget, and git, and
 # ca-certificates is what makes the https fetches work at all. `git` is
 # also a deps.conf entry, so it is already satisfied here -- that is
 # deliberate. This image tests the install path of everything else, not
@@ -37,12 +37,25 @@ WORKDIR /dotfiles
 ENV HOME=/root
 # These images verify the shared, cross-platform deps.conf only.
 #
-# check-deps.sh would otherwise select deps-linux.conf here, which lists
+# The engine would otherwise select deps-linux.conf here, which lists
 # oh-my-zsh and xclip: real dependencies of the linux machine, but not of
 # this container, whose job is the shared manifest. Point DEPS_LOCAL_CONF at
 # a path that does not exist -- read_entries() skips a missing file -- so the
 # platform variant is excluded without pretending it is empty.
 ENV DEPS_LOCAL_CONF=/nonexistent/deps-platform.conf
-ENV DEBIAN_FRONTEND=noninteractive
-ENTRYPOINT ["/dotfiles/.scripts/deps/check-deps.sh"]
-CMD ["--fix", "--yes"]
+
+# The engine resolves the manifest against DOTFILES_ROOT, falling back to
+# HOME. This image COPYs the deps tree to /dotfiles while HOME is /root, so
+# without this line the engine looks for /root/.scripts/deps/deps.conf, finds
+# nothing, and reports a PASSING check of zero entries. Measured: the first
+# run after the port printed "0 entries" and the harness called it a clean
+# bootstrap.
+#
+# The retired shell resolved the manifest against its own directory, so this
+# was implicit before. It is explicit now because the binary can be anywhere.
+ENV DOTFILES_ROOT=/dotfiles
+# The wrapper, not the engine: the engine is a Rust binary this image
+# carries no toolchain for, so it arrives through the /seed mount the
+# wrapper reads. See deps-image-entrypoint.sh.
+ENTRYPOINT ["/bin/sh", "/seed/deps-image-entrypoint.sh"]
+CMD ["install", "--yes"]

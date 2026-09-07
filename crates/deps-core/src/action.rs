@@ -15,7 +15,7 @@ const MAX_TAP_LEN: usize = 128;
 
 /// The detected package manager.
 ///
-/// `Unknown` is a variant, not an error. `check-deps.sh:191-199` returns the
+/// `Unknown` is a variant, not an error. `retired-check-deps:191-199` returns the
 /// literal `unknown` and the script proceeds: every dependency reports
 /// manual-only with its docs URL. On a fresh macOS box with no brew, which
 /// is the machine `setup.sh` exists for, that list is the useful output and
@@ -37,7 +37,7 @@ impl PackageManager {
     ///
     /// A property of the manager, never of the dependency: a manifest could
     /// claim otherwise and be wrong (spec 3.5). This function is what
-    /// replaces the `${SUDO}` string sniff at `check-deps.sh:544`.
+    /// replaces the `${SUDO}` string sniff at `retired-check-deps:544`.
     pub fn needs_root(self) -> bool {
         match self {
             PackageManager::Apt | PackageManager::Pacman => true,
@@ -67,7 +67,7 @@ pub enum ScriptInstaller {
     Rustup,
     /// oh-my-zsh's own installer, run with `--keep-zshrc`.
     OhMyZsh,
-    /// zoxide's installer, the `*)` fallback at `check-deps.sh:308`.
+    /// zoxide's installer, the `*)` fallback at `retired-check-deps:308`.
     Zoxide,
 }
 
@@ -140,7 +140,7 @@ impl fmt::Display for TapName {
 /// a permanent upstream fact from a regression nobody noticed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NoInstallReason {
-    /// nvm: `check-deps.sh:369-372` records that nvm's own docs publish only
+    /// nvm: `retired-check-deps:369-372` records that nvm's own docs publish only
     /// version-pinned install URLs, so a hardcoded one would go stale.
     UpstreamPublishesNoStableUrl,
     /// cc on macOS: the install needs an interactive Xcode prompt.
@@ -172,7 +172,7 @@ pub enum NoInstallReason {
 ///
 /// `plan` returns an `InstallAction` for every missing dependency, never
 /// `Option<InstallAction>`. That totality is what fixes today's bug, where
-/// "no install" is signalled by an empty string that `check-deps.sh:569`
+/// "no install" is signalled by an empty string that `retired-check-deps:569`
 /// cannot distinguish from a missing prerequisite.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallAction {
@@ -190,7 +190,7 @@ pub enum InstallAction {
         /// A tap to add first, when the package is not in core.
         tap: Option<TapName>,
     },
-    /// `check-deps.sh:236` is not a package install. One line installs
+    /// `retired-check-deps:236` is not a package install. One line installs
     /// wget, creates `/etc/apt/keyrings` mode 755, fetches
     /// `githubcli-archive-keyring.gpg` from `cli.github.com`, tees it under
     /// sudo, appends a deb line to
@@ -204,7 +204,7 @@ pub enum InstallAction {
         /// The source-list line this action appends.
         list: SourceListEntry,
     },
-    /// `check-deps.sh:411`. `break_system_packages` is a named field rather
+    /// `retired-check-deps:411`. `break_system_packages` is a named field rather
     /// than a hidden default because it overrides PEP 668, and blast radius
     /// belongs in the type.
     Pip {
@@ -226,7 +226,7 @@ pub enum InstallAction {
         into: CheckPath,
     },
     /// No payload: there is one node entry, no conf file pins a version, and
-    /// the only value is `--lts` (`check-deps.sh:388`). A `String` payload
+    /// the only value is `--lts` (`retired-check-deps:388`). A `String` payload
     /// would reopen spec 3.6 by admitting shell-adjacent text as data.
     NvmInstall,
     /// There is no automated install, and the reason says why.
@@ -250,7 +250,7 @@ pub enum PackageAvailability {
     /// `Named` cannot express either: `action_for` maps it to
     /// `BrewKind::Formula` with no tap, so a cask in a third-party tap plans
     /// as a plain `brew install <name>` and fails twice over. The shell says
-    /// so in its own words at `check-deps.sh:266-270`: "No available formula
+    /// so in its own words at `retired-check-deps:266-270`: "No available formula
     /// with the name aerospace" because it is a cask, and an untapped
     /// third-party cask is not findable even with `--cask`.
     BrewPackage {
@@ -263,11 +263,11 @@ pub enum PackageAvailability {
         tap: Option<TapName>,
     },
     /// zoxide needs this: apt, brew and pacman all have packages, and any
-    /// other manager gets the installer script (`check-deps.sh:308`).
+    /// other manager gets the installer script (`retired-check-deps:308`).
     ViaScript(ScriptInstaller),
     /// The manager cannot install it, and the reason says why.
     Unavailable(NoInstallReason),
-    /// `gh` on apt. Not a package install: `check-deps.sh:236` adds a
+    /// `gh` on apt. Not a package install: `retired-check-deps:236` adds a
     /// third-party trust root before installing, so collapsing it to
     /// `Named` would let a dry run print "install package gh" for an action
     /// that permanently changes what the machine trusts.

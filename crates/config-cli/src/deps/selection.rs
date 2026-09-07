@@ -1,6 +1,7 @@
 //! Which conf files a run reads, and which dependencies it selects.
 //!
-//! `check-deps.sh` spread this logic across four sites: the `DEPS_CONF`
+//! The retired check-deps shell engine spread this logic across four
+//! sites: the `DEPS_CONF`
 //! default (line 37), the platform variant chosen by `platform.sh` and
 //! appended only when `DEPS_LOCAL_CONF` was not already set (lines 19-56),
 //! the concatenation of both files' entries (line 459), and `--only`
@@ -17,7 +18,8 @@ use deps_core::{
 
 /// The platform this run detected.
 ///
-/// `check-deps.sh` delegates this to `platform.sh`'s `uname -s` probe
+/// The retired check-deps shell engine delegated this to `platform.sh`'s
+/// `uname -s` probe
 /// (`Darwin` maps to mac, `Linux` to linux, anything else to a discarded
 /// `unknown`). This module never probes; the caller (Task 6's `mod.rs`)
 /// decides the variant and hands it in through [`Environment`].
@@ -58,14 +60,14 @@ impl Platform {
 pub struct Environment {
     /// The value of `DEPS_CONF`, if the caller set one.
     ///
-    /// `check-deps.sh:37` defaults this to `deps.conf` beside the script
+    /// `retired-check-deps:37` defaults this to `deps.conf` beside the script
     /// when unset. An explicit value is a deliberate choice of manifest,
     /// which is what suppresses the platform variant below and is what
     /// `deps-ci.conf:3` means by "selected only by an explicit `DEPS_CONF`".
     pub deps_conf: Option<OsString>,
     /// The value of `DEPS_LOCAL_CONF`, if the caller set one.
     ///
-    /// `check-deps.sh:48-56` computes this from the platform only when it
+    /// `retired-check-deps:48-56` computes this from the platform only when it
     /// is unset. The Docker images and the CI leg set it explicitly
     /// (including to a path that does not exist) specifically to control
     /// what gets read without touching `DEPS_CONF`.
@@ -76,8 +78,9 @@ pub struct Environment {
 
 /// The conf file paths a run will read, in read order.
 ///
-/// Order matches `check-deps.sh:459`'s concatenation: the base (or
-/// explicit) manifest first, then the local/platform file. `check-deps.sh`
+/// Order matches `retired-check-deps:459`'s concatenation: the base (or
+/// explicit) manifest first, then the local/platform file. The retired
+/// check-deps shell engine
 /// concatenates the two files' entries with no deduplication, so a name in
 /// both wins by whichever `read_entries` call ran last; [`load_manifest`]
 /// preserves that by reading in this same order and rejecting a duplicate
@@ -111,14 +114,14 @@ impl ManifestSources {
 
 /// Resolve which conf files a run reads.
 ///
-/// Mirrors `check-deps.sh:15-56`. `DEPS_CONF` defaults to `deps.conf`
+/// Mirrors `retired-check-deps:15-56`. `DEPS_CONF` defaults to `deps.conf`
 /// beside the script; this module has no script directory to resolve
 /// against, so an unset `deps_conf` resolves to the bare name `deps.conf`
 /// and the caller (`mod.rs`) is responsible for running from, or
 /// qualifying paths against, the directory that convention assumes.
 ///
 /// The platform variant is appended only when `deps_local_conf` is unset,
-/// exactly like `check-deps.sh:48-56`: an explicit `DEPS_LOCAL_CONF`
+/// exactly like `retired-check-deps:48-56`: an explicit `DEPS_LOCAL_CONF`
 /// (including one pointing at a file that does not exist) suppresses the
 /// variant rather than adding to it. This is the behavior `deps-ci.conf:3`
 /// depends on and the CI leg exercises by setting
@@ -175,11 +178,11 @@ pub enum LoadError {
 /// `DEPS_LOCAL_CONF=/nonexistent/deps-platform.conf` excludes the platform
 /// variant without pretending an empty file was found there, and it is the
 /// technique the Docker images use to run with only the shared manifest.
-/// `check-deps.sh:444`'s `read_entries` does the same thing with
+/// `retired-check-deps:444`'s `read_entries` does the same thing with
 /// `[ -f "$file" ] || return 0`.
 ///
 /// Present files' text concatenates in path order before parsing, matching
-/// `check-deps.sh:459`'s `{ read_entries "$DEPS_CONF"; read_entries
+/// `retired-check-deps:459`'s `{ read_entries "$DEPS_CONF"; read_entries
 /// "$DEPS_LOCAL_CONF"; }`, then parses as one `deps_core::parse_manifest`
 /// call: `Manifest`'s only constructor takes one `ConfKind` for the whole
 /// text, and every file in one run shares the `ConfKind`
@@ -223,13 +226,13 @@ fn read_if_present(path: &Path) -> Result<Option<String>, LoadError> {
 
 /// Detect the package manager on this machine.
 ///
-/// Probes in the order `check-deps.sh:191-196` used: `pacman`, then
+/// Probes in the order `retired-check-deps:191-196` used: `pacman`, then
 /// `apt-get`, then `brew`. A different order changes which manager a
 /// machine with two of them resolves to, so the order is load-bearing, not
 /// incidental.
 ///
 /// Never fails: no manager found resolves to
-/// [`deps_core::PackageManager::Unknown`], matching `check-deps.sh:199`'s
+/// [`deps_core::PackageManager::Unknown`], matching `retired-check-deps:199`'s
 /// `printf 'unknown'`. Every dependency then reports manual-only with its
 /// docs URL rather than the run aborting.
 ///
@@ -260,10 +263,10 @@ fn command_exists(name: &str) -> bool {
 /// Select which manifest entries a run acts on.
 ///
 /// An empty `only` means every entry, matching [`Selection::all`] and
-/// `check-deps.sh:459-478`'s behavior when `--only` was never passed. A
+/// `retired-check-deps:459-478`'s behavior when `--only` was never passed. A
 /// non-empty `only` naming an entry the manifest lacks is
 /// `PlanError::UnknownDependency`, not a silently narrowed selection:
-/// `check-deps.sh:101-107` treats a typo the same way, exiting 2 rather than
+/// `retired-check-deps:101-107` treats a typo the same way, exiting 2 rather than
 /// reporting a vacuous success for an install step that installed none of
 /// what it promised.
 ///

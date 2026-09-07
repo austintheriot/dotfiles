@@ -137,7 +137,7 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
     // The classification the post-loop world buys. An install that ran and
     // whose check still fails is caught here, and it carries the Check so
     // the report names the predicate rather than printing
-    // check-deps.sh:589's "install did not satisfy the check for %s".
+    // retired-check-deps:589's "install did not satisfy the check for %s".
     #[test]
     fn an_install_whose_check_still_fails_is_reclassified() {
         let manifest = oh_my_zsh_manifest();

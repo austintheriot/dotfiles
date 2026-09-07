@@ -38,7 +38,7 @@ const CALLER_ERROR: u8 = 2;
 
 /// Where the shipped conf files live, relative to the dotfiles root.
 ///
-/// `check-deps.sh:37` resolves `deps.conf` against its own directory.
+/// `retired-check-deps:37` resolves `deps.conf` against its own directory.
 /// `selection::conf_paths` has no script directory and yields the bare name,
 /// so this module supplies the directory that convention means. Without it a
 /// run from any working directory but `.scripts/deps` would read no manifest
@@ -245,7 +245,7 @@ fn dotfiles_root() -> Option<PathBuf> {
 /// An absolute path is used as given: `DEPS_CONF=/tmp/x/deps.conf` names one
 /// file and must not be reinterpreted. Only the bare defaults
 /// `selection::conf_paths` produces are joined onto `<root>/.scripts/deps`,
-/// which is the directory `check-deps.sh:37` resolves against.
+/// which is the directory `retired-check-deps:37` resolves against.
 fn load_manifest(
     sources: &selection::ManifestSources,
     root: Option<&Path>,
@@ -293,7 +293,7 @@ fn requirements() -> Result<Requirements, String> {
 
 /// This process's elevation, or a caller error naming why it is unknown.
 ///
-/// `check-deps.sh:175` guarded the same `id -u` call with a fallback that
+/// `retired-check-deps:175` guarded the same `id -u` call with a fallback that
 /// assumed non-root. Assuming here would wire a privileged installer that
 /// cannot elevate, so the failure is reported instead.
 fn resolve_elevation() -> Result<Elevation, String> {

@@ -2,11 +2,12 @@
 #
 # Tests for depcheck-hook.sh: the 24h-throttled shell-startup nag.
 #
-# The hook resolves check-deps.sh through ~, so every test runs it under an
-# isolated $HOME holding a stub check-deps.sh that logs each invocation. That
-# is what makes "the throttle skipped the check" observable at all -- wall
-# clock cannot distinguish it, because this machine's real shell startup is
-# dominated by nvm.
+# The hook resolves `config` through ~/.local/bin rather than through PATH,
+# because .zshrc can source it before that directory is on PATH. So every
+# test runs it under an isolated $HOME holding a stub `config` that logs
+# each invocation. That is what makes "the throttle skipped the check"
+# observable at all -- wall clock cannot distinguish it, because this
+# machine's real shell startup is dominated by nvm.
 #
 # The hook is sourced by an interactive zsh in real use, so it is sourced by
 # zsh here too: two of these cases exist because zsh's arithmetic reacts to a
@@ -18,18 +19,18 @@
 
 HOOK="$DOTFILES_ROOT/.scripts/deps/depcheck-hook.sh"
 
-# A fresh isolated HOME with a stub check-deps.sh whose exit status is fixed
-# by the caller. Prints the HOME path.
+# A fresh isolated HOME with a stub `config` whose exit status is fixed by
+# the caller. Prints the HOME path.
 make_home() {
     local exit_status=$1 home
     home=$(mktemp -d "$FIXTURES/home-XXXXXX")
-    mkdir -p "$home/.scripts/deps" "$home/.cache"
-    cat > "$home/.scripts/deps/check-deps.sh" <<EOF
+    mkdir -p "$home/.scripts/deps" "$home/.local/bin" "$home/.cache"
+    cat > "$home/.local/bin/config" <<EOF
 #!/bin/sh
 printf 'invoked\n' >> "$home/invocations.log"
 exit $exit_status
 EOF
-    chmod +x "$home/.scripts/deps/check-deps.sh"
+    chmod +x "$home/.local/bin/config"
     cp "$HOOK" "$home/.scripts/deps/depcheck-hook.sh"
     : > "$home/invocations.log"
     printf '%s' "$home"
@@ -88,20 +89,40 @@ output=$(run_hook "$home")
 assert_equals 'a passing check does not nag' '' "$output"
 assert_equals 'a passing check still ran' '1' "$(invocations "$home")"
 
+# --- an unbuilt engine says so, rather than blaming the dependencies -------
+#
+# 127 is "the engine is not on disk", which on a fresh clone is the normal
+# state until `config build` runs. Reporting it as missing dependencies sends
+# the reader to `depcheck`, which cannot run either, so the message has to
+# name the real problem.
+#
+# The nag for a genuinely missing dependency is asserted above, so the two
+# branches are distinguished rather than one being asserted alone.
+home=$(make_home 127)
+output=$(run_hook "$home")
+assert_contains 'an unbuilt engine names itself' \
+    'depcheck: the deps engine is not built' "$output"
+assert_equals 'an unbuilt engine does not blame the dependencies' '' \
+    "$(printf '%s\n' "$output" | grep 'missing dependencies' || true)"
+
 # --- the check is never asked to install ----------------------------------
 #
-# The nag path must stay non-interactive. check-deps.sh only prompts behind
-# --fix, so the hook passing any argument at all would be the defect.
+# The nag path must stay non-interactive. `config deps install` prompts per
+# dependency, so the hook reaching the install verb -- or passing --yes to
+# get past the prompt -- would be the defect. It must ask only to check.
 
 home=$(make_home 1)
-cat > "$home/.scripts/deps/check-deps.sh" <<EOF
+cat > "$home/.local/bin/config" <<EOF
 #!/bin/sh
 printf '%s\n' "\$*" >> "$home/args.log"
 exit 1
 EOF
-chmod +x "$home/.scripts/deps/check-deps.sh"
+chmod +x "$home/.local/bin/config"
 run_hook "$home" >/dev/null
-assert_equals 'the startup check passes no flags' '' "$(cat "$home/args.log")"
+startup_args=$(cat "$home/args.log")
+assert_equals 'the startup check asks only to check' 'deps check' "$startup_args"
+assert_equals 'the startup check never installs' '' \
+    "$(printf '%s\n' "$startup_args" | grep -E 'install|--yes' || true)"
 
 # --- a malformed cache never leaks an error into startup ------------------
 #
@@ -133,13 +154,13 @@ rm -f "$home/.cache"
 home=$(make_home 0)
 output=$(env HOME="$home" zsh -ic \
     ". '$home/.scripts/deps/depcheck-hook.sh'; alias depcheck" 2>/dev/null)
-assert_contains 'defines the depcheck alias' 'check-deps.sh --fix' "$output"
+assert_contains 'defines the depcheck alias' 'config deps install' "$output"
 
 # --- the hook is portable to a POSIX shell --------------------------------
 #
-# check-deps.sh, which this hook drives, runs under `sh` from other callers
-# (the pre-push hook, CI), so this hook must not depend on a zsh-only
-# construct either.
+# This hook is sourced from .zshrc, and .zshrc's own dependants read it
+# under `sh` from other callers (the pre-push hook, CI), so it must not
+# depend on a zsh-only construct.
 
 assert_succeeds 'parses as POSIX sh' sh -n "$HOOK"
 assert_succeeds 'parses as zsh' zsh -n "$HOOK"

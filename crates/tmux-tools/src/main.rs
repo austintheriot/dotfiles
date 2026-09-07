@@ -3,7 +3,7 @@
 //!
 //! Performs the tmux and git calls and hands their results to `tmux_core`,
 //! which decides. Exit 2 is every usage error, matching the repo-wide
-//! convention `check-deps.sh` and `config-manifest` already use.
+//! convention the deps engine and `config-manifest` already use.
 
 mod git_branches;
 mod repo;

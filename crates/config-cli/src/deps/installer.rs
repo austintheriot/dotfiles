@@ -1,10 +1,11 @@
 //! Every effect is argv, and the apt installer sets `DEBIAN_FRONTEND`.
 //!
-//! `check-deps.sh` built each install as a command string and ran it through
-//! `sh -c`. Three defects came with that form, and every one of them is
+//! The retired check-deps shell engine built each install as a command
+//! string and ran it through `sh -c`. Three defects came with that form,
+//! and every one of them is
 //! removed by making the effect a `Vec<OsString>` spawned with no shell:
 //!
-//! 1. `${SUDO}` was a string prefix (`check-deps.sh:164-168`). Elevation is
+//! 1. `${SUDO}` was a string prefix (`retired-check-deps:164-168`). Elevation is
 //!    data on the [`Step`], so the driver decides it, and interpolating the
 //!    decision back into command text let a caller read a command whose
 //!    privilege did not match its step. Here `sudo` is its own argv word.
@@ -16,7 +17,7 @@
 //!    vector that would be spawned.
 //!
 //! `DEBIAN_FRONTEND=noninteractive` lives in the child environment this
-//! module builds, never in an image. `check-deps.sh:66-88` records why: an
+//! module builds, never in an image. `retired-check-deps:66-88` records why: an
 //! unattended bootstrap halted at tzdata's debconf prompt, "Please select
 //! the geographic area in which you live", waiting for a keypress nobody was
 //! there to supply. Every image and CI leg passed anyway, because
@@ -127,8 +128,8 @@ fn child_environment_for(manager: PackageManager) -> BTreeMap<OsString, OsString
 /// Every argv one action runs, in order.
 ///
 /// A sequence rather than a single vector, because several real actions are
-/// several commands. `check-deps.sh:235` chains eight commands with `&&` to
-/// install `gh` on apt, and `check-deps.sh:266-270` taps before it installs
+/// several commands. `retired-check-deps:235` chains eight commands with `&&` to
+/// install `gh` on apt, and `retired-check-deps:266-270` taps before it installs
 /// a cask. Collapsing those to one vector would need a shell to hold the
 /// `&&`, which is the form this module exists to remove.
 ///
@@ -145,7 +146,7 @@ pub fn argv_sequence_for(
     match action {
         InstallAction::Package { id } => match manager {
             // `-qq` on update and `-y` on install, matching
-            // `check-deps.sh:435`. The `-y` is the argv half of the same
+            // `retired-check-deps:435`. The `-y` is the argv half of the same
             // rule DEBIAN_FRONTEND is the environment half of: a question
             // apt would otherwise ask an unattended run.
             PackageManager::Apt => vec![
@@ -153,7 +154,7 @@ pub fn argv_sequence_for(
                 elevated_with(privilege, ["apt-get", "install", "-y"], [id.as_str()]),
             ],
             // `-Sy` syncs and installs in one command, so pacman is one
-            // argv where apt is two (`check-deps.sh:437`).
+            // argv where apt is two (`retired-check-deps:437`).
             PackageManager::Pacman => {
                 vec![elevated_with(privilege, ["pacman", "-Sy", "--noconfirm"], [id.as_str()])]
             }
@@ -169,7 +170,7 @@ pub fn argv_sequence_for(
             let mut sequence = Vec::new();
             if let Some(tap_name) = tap {
                 // `brew tap` is idempotent, so re-running costs a no-op
-                // (`check-deps.sh:266-270`). Tapping is not enough on its
+                // (`retired-check-deps:266-270`). Tapping is not enough on its
                 // own: current Homebrew refuses to load a cask from an
                 // untrusted tap, and `brew trust` is a recent subcommand, so
                 // its failure is tolerated for an older Homebrew that does
@@ -183,7 +184,7 @@ pub fn argv_sequence_for(
             });
             sequence
         }
-        // `check-deps.sh:235`, as argv. The shell wrote the keyring with
+        // `retired-check-deps:235`, as argv. The shell wrote the keyring with
         // `wget -O- | sudo tee`, which needs a pipe; `curl -o <path>` under
         // the same privilege writes the same bytes to the same place with no
         // shell, and the privilege stays with the write either way.
@@ -203,7 +204,7 @@ pub fn argv_sequence_for(
         // pip installs into the user site directory, so no elevation. The
         // override is a separate word rather than part of a flag string,
         // because it overrides PEP 668 and blast radius belongs where a
-        // reader sees it (`check-deps.sh:410`).
+        // reader sees it (`retired-check-deps:410`).
         InstallAction::Pip { id, break_system_packages } => {
             let mut argv = words(["python3", "-m", "pip", "install"]);
             if *break_system_packages {
@@ -229,7 +230,7 @@ pub fn argv_sequence_for(
         // That is the one action a shell genuinely owns, and it is spawned
         // as `sh -c` over a fixed string with no interpolated data:
         // `NvmInstall` carries no payload precisely so no manifest text can
-        // reach this word (`check-deps.sh:387`).
+        // reach this word (`retired-check-deps:387`).
         InstallAction::NvmInstall => {
             vec![words(["sh", "-c", ". \"$HOME/.nvm/nvm.sh\" && nvm install --lts"])]
         }
@@ -257,7 +258,7 @@ pub fn argv_for(
 /// The fetch-and-run pair one installer script needs.
 fn script_argv(installer: ScriptInstaller) -> Vec<Vec<OsString>> {
     let fetch = words(["curl", "--proto", "=https", "--tlsv1.2", "-sSf", script_url(installer)]);
-    // Each installer's own flags, from `check-deps.sh:308`, `:324` and
+    // Each installer's own flags, from `retired-check-deps:308`, `:324` and
     // `:367`. oh-my-zsh takes `--keep-zshrc` because its installer otherwise
     // overwrites `~/.zshrc` with its template and moves the real one aside.
     let run = match installer {
@@ -302,7 +303,7 @@ fn words<const COUNT: usize>(parts: [&str; COUNT]) -> Vec<OsString> {
 ///
 /// Its own word, never glued to the program and never an uninterpolated
 /// `${SUDO}` placeholder. Elevation is data on the [`Step`], so the driver
-/// decides it; `check-deps.sh:164-168` re-encoded that decision as a string
+/// decides it; `retired-check-deps:164-168` re-encoded that decision as a string
 /// prefix carrying its own trailing space, and a caller could then read a
 /// command whose privilege did not match its step.
 fn elevated<const COUNT: usize>(
@@ -420,7 +421,7 @@ impl Spawning {
     /// Ask the user whether to install, unless `--yes` already answered.
     ///
     /// Returns false on anything but `y` or `Y`, matching
-    /// `check-deps.sh:576-580`. A closed stdin, or a stdin that is not a
+    /// `retired-check-deps:576-580`. A closed stdin, or a stdin that is not a
     /// terminal, reads end-of-file and is a refusal rather than a hang.
     fn approved(&self, summary: &str) -> bool {
         if self.approval == Approval::Assumed {
@@ -609,7 +610,7 @@ fn summarize(action: &InstallAction) -> String {
 ///
 /// `privileged` is `None` when elevation is unavailable. That `None` is what
 /// makes "this machine cannot install with root" a property of the wiring
-/// rather than a string test on command text: `check-deps.sh:544` keyed the
+/// rather than a string test on command text: `retired-check-deps:544` keyed the
 /// same decision on the command containing `${SUDO}`, and emitting a command
 /// anyway is what produced "sh: 1: sudo: not found" eleven times in a single
 /// run.
@@ -782,7 +783,7 @@ mod tests {
     /// `brew install aerospace` failed twice over: "No available formula with
     /// the name aerospace" because it is a cask, and an untapped third-party
     /// cask is not findable even with --cask
-    /// (`check-deps.sh:265-281`). `brew tap` is idempotent, so re-running
+    /// (`retired-check-deps:265-281`). `brew tap` is idempotent, so re-running
     /// costs a no-op.
     #[test]
     fn a_cask_in_a_tap_taps_before_it_installs() {
@@ -817,6 +818,79 @@ mod tests {
 
         assert!(!plain.is_empty(), "the control builds real argv");
         assert!(!plain.iter().any(|word| word == "sudo"), "no elevation, no word: {plain:?}");
+    }
+
+    /// Every write into `/etc` in the gh apt pipeline carries the privilege.
+    ///
+    /// Found by the bootstrap container, which is the first environment that
+    /// runs as a genuine non-root user with gh absent. The shell wrote the
+    /// keyring with an unprivileged redirect after an elevated `mkdir`, so
+    /// the directory was created and the write into it was refused.
+    ///
+    /// The positive control is the same pipeline at
+    /// [`PrivilegeRequirement::None`], which must carry no `sudo` at all: it
+    /// proves this assertion reads the privilege rather than a constant.
+    #[test]
+    fn every_etc_write_in_the_gh_pipeline_is_privileged() {
+        let action = InstallAction::AptSource {
+            keyring: KeyringSource::GithubCli,
+            list: SourceListEntry::GithubCli,
+        };
+
+        let elevated_argvs =
+            argv_sequence_for(&action, PackageManager::Apt, PrivilegeRequirement::Root);
+        let touches_etc: Vec<&Vec<OsString>> = elevated_argvs
+            .iter()
+            .filter(|argv| argv.iter().any(|word| word.to_string_lossy().contains("/etc/")))
+            .collect();
+
+        assert!(!touches_etc.is_empty(), "the control finds writes into /etc");
+        for argv in &touches_etc {
+            assert_eq!(
+                argv.first().map(|word| word.to_string_lossy().into_owned()),
+                Some(String::from("sudo")),
+                "an unprivileged write into /etc: {argv:?}"
+            );
+        }
+
+        let plain = argv_sequence_for(&action, PackageManager::Apt, PrivilegeRequirement::None);
+        assert!(
+            !plain.iter().any(|argv| argv.iter().any(|word| word == "sudo")),
+            "no elevation, no word: {plain:?}"
+        );
+    }
+
+    /// The oh-my-zsh installer never replaces the tracked `.zshrc`.
+    ///
+    /// Its installer overwrites `~/.zshrc` with its own template and moves
+    /// the real one aside, so a bootstrap that omits `--keep-zshrc` silently
+    /// discards the shell configuration the whole repository exists to ship.
+    /// `--unattended` is the other half: without it the installer starts an
+    /// interactive shell and a bootstrap with no terminal hangs.
+    ///
+    /// The positive control is rustup, which takes neither flag: it proves
+    /// this reads the installer rather than asserting a constant.
+    #[test]
+    fn the_oh_my_zsh_installer_keeps_the_zshrc_and_never_prompts() {
+        let oh_my_zsh = script_argv(ScriptInstaller::OhMyZsh);
+        let words: Vec<String> = oh_my_zsh
+            .iter()
+            .flatten()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+
+        assert!(words.iter().any(|word| word == "--keep-zshrc"), "{words:?}");
+        assert!(words.iter().any(|word| word == "--unattended"), "{words:?}");
+
+        let rustup: Vec<String> = script_argv(ScriptInstaller::Rustup)
+            .iter()
+            .flatten()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            !rustup.iter().any(|word| word == "--keep-zshrc"),
+            "the control carries neither flag: {rustup:?}"
+        );
     }
 
     /// An action with no automated install produces no argv and no preview.

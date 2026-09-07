@@ -4,10 +4,10 @@
 # `config init` can be iterated on without waiting on GitHub Actions.
 #
 # Sibling to test-local.sh, and deliberately separate. test-local.sh runs
-# check-deps.sh directly against two images that COPY .scripts/deps; this runs
-# the real entry point against an image that clones from a bare repo and has
-# nothing but git, curl and sudo installed. Different subject, different
-# image, different failure modes.
+# `config deps install` directly against two images that COPY .scripts/deps;
+# this runs the real entry point against an image that clones from a bare
+# repo and has nothing but git, curl and sudo installed. Different subject,
+# different image, different failure modes.
 #
 # The container clones from a bare repo built out of the current branch, so
 # what it tests is the working tree's setup.sh, not the last push. The bare
@@ -44,6 +44,55 @@ if ! docker info >/dev/null 2>&1; then
     printf 'test-bootstrap: the Docker daemon is not responding. Start Docker and run this again.\n' >&2
     exit 1
 fi
+
+# The engine is a Rust binary now, and neither image carries a toolchain:
+# rustup is itself a manifest entry, so installing one in the image under
+# test would pre-satisfy the very dependency the run exists to exercise.
+#
+# So the binary is built in a SEPARATE throwaway Rust container and handed to
+# each image through a /seed mount. A separate container is the point: the
+# toolchain never touches the image whose bootstrap is being measured.
+#
+# Built for linux, not for the host. This harness runs on macOS, where a
+# native `cargo build` produces a Mach-O binary that a Linux container
+# cannot execute at all.
+build_seed_binary() {
+    seed_dir=$1
+    seed_platform=$2
+
+    toolchain=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' "$HOME/crates/rust-toolchain.toml")
+    if [ -z "$toolchain" ]; then
+        printf 'test-bootstrap: no channel in crates/rust-toolchain.toml\n' >&2
+        return 1
+    fi
+
+    printf '=== building config-cli for the containers (rust %s) ===\n' "$toolchain"
+
+    # The repo ROOT is mounted, not just crates/. config-cli embeds the four
+    # conf files with include_str! at `../../../../.scripts/deps/`, four
+    # levels up and out of the workspace, so a crates-only context fails to
+    # compile with "couldn't read ... No such file or directory". Measured:
+    # this is what the first run of this function did, and how the coupling
+    # was found.
+    #
+    # --locked, matching every other build gate in this repo: a harness that
+    # silently updates the lockfile tests a dependency set that was never
+    # committed.
+    # shellcheck disable=SC2086
+    docker run --rm $seed_platform \
+        -v "$HOME/crates:/src/crates:ro" \
+        -v "$HOME/.scripts:/src/.scripts:ro" \
+        -v "$seed_dir:/out" \
+        -w /src/crates \
+        "rust:$toolchain" \
+        sh -c 'cargo build --release --locked \
+                --target-dir /tmp/target -p config-cli \
+            && cp /tmp/target/release/config-cli /out/config-cli' \
+        || return 1
+
+    chmod +x "$seed_dir/config-cli"
+    unset seed_dir seed_platform toolchain
+}
 
 workdir=$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-bootstrap-XXXXXX")
 trap 'rm -rf "$workdir"' EXIT INT TERM HUP
@@ -103,21 +152,32 @@ git clone -q --bare "$staging" "$seed/repo.git"
 git --git-dir="$seed/repo.git" symbolic-ref HEAD "refs/heads/$branch"
 cp "$HOME/.scripts/deps/docker/bootstrap-entrypoint.sh" "$seed/bootstrap-entrypoint.sh"
 cp "$HOME/.scripts/deps/docker/bootstrap-bare-entrypoint.sh" "$seed/bootstrap-bare-entrypoint.sh"
+# The seam both entrypoints source. The engine is a Rust binary and neither
+# image carries a toolchain, so it arrives through this mount.
+cp "$HOME/.scripts/deps/docker/seed-prebuilt.sh" "$seed/seed-prebuilt.sh"
 # The bare image has no git when setup.sh first runs, so it reads the script
 # from the seed directory rather than out of the repository.
 cp "$staging/setup.sh" "$seed/setup.sh"
+
+# Both bootstrap images are linux/amd64 here for the reason test-local.sh
+# gives: one seed binary has to be executable by every container that
+# mounts it.
+if ! build_seed_binary "$seed" '--platform=linux/amd64'; then
+    printf '\ntest-bootstrap: could not build config-cli for the containers.\n' >&2
+    exit 1
+fi
 
 printf '=== building %s ===\n' "$IMAGE"
 
 # An empty build context: the Dockerfile copies nothing, by design. Passing
 # the staging tree would quietly re-enable a COPY someone adds later.
-if ! docker build \
+if ! docker build --platform=linux/amd64 \
     -f "$HOME/.scripts/deps/docker/Dockerfile.bootstrap" \
     -t "$IMAGE" \
     "$workdir/empty-context" 2>/dev/null
 then
     mkdir -p "$workdir/empty-context"
-    if ! docker build \
+    if ! docker build --platform=linux/amd64 \
         -f "$HOME/.scripts/deps/docker/Dockerfile.bootstrap" \
         -t "$IMAGE" \
         "$workdir/empty-context"
@@ -135,7 +195,9 @@ fi
 
 status=0
 
-if ! docker run --rm -v "$seed:/seed:ro" "$IMAGE" "$@"; then
+if ! docker run --rm --platform=linux/amd64 -v "$seed:/seed:ro" \
+    -e BOOTSTRAP_PREBUILT_BIN=/seed/config-cli "$IMAGE" "$@"
+then
     printf '\n=== bootstrap: the container reported a failure ===\n' >&2
     status=1
 fi
@@ -145,7 +207,7 @@ fi
 # installs sudo and git and runs as a normal user.
 printf '\n=== building %s-bare ===\n' "$IMAGE"
 
-if ! docker build \
+if ! docker build --platform=linux/amd64 \
     -f "$HOME/.scripts/deps/docker/Dockerfile.bootstrap-bare" \
     -t "$IMAGE-bare" \
     "$workdir/empty-context"
@@ -156,7 +218,9 @@ fi
 
 printf '\n=== running the bootstrap (root, no sudo, no git) ===\n'
 
-if ! docker run --rm -v "$seed:/seed:ro" "$IMAGE-bare"; then
+if ! docker run --rm --platform=linux/amd64 -v "$seed:/seed:ro" \
+    -e BOOTSTRAP_PREBUILT_BIN=/seed/config-cli "$IMAGE-bare"
+then
     printf '\n=== bare bootstrap: the container reported a failure ===\n' >&2
     status=1
 fi

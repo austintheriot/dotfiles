@@ -17,6 +17,13 @@ set -eu
 
 SEED=/seed/repo.git
 
+# The prebuilt config-cli, required. See seed-prebuilt.sh for why the image
+# cannot compile it and why the variable is not optional.
+. /seed/seed-prebuilt.sh
+seed_prebuilt
+PATH="$HOME/.local/bin:$PATH"
+export PATH
+
 printf '=== bootstrap: cloning from %s ===\n' "$SEED"
 
 # setup.sh normally arrives by curl. Here it comes out of the seed repo with
@@ -77,7 +84,7 @@ check 'the pre-push hook is linked' test -L "$HOME/.cfg/hooks/pre-push"
 
 # A dependency that came from the bootstrap and not from the image. The image
 # installs git, curl, sudo and ca-certificates only, so tmux on PATH can have
-# arrived only through check-deps.sh.
+# arrived only through the bootstrap's dependency install.
 check 'tmux was installed by the bootstrap' command -v tmux
 
 # Idempotency, which the container is the only place to test honestly: a

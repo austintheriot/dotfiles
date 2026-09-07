@@ -101,7 +101,7 @@ Tracked dependencies live in `.scripts/deps/deps.conf`, plus
 `.scripts/deps/deps-mac.conf` and `.scripts/deps/deps-linux.conf` for the ones
 that belong to one platform.
 
-- `~/.scripts/deps/check-deps.sh` checks them and reports what is missing.
+- `config deps check` checks them and reports what is missing.
 - `depcheck` is a shell alias that checks them and offers to install anything
   missing.
 - A shell-startup hook prints one line at most once every 24 hours when

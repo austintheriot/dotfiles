@@ -104,7 +104,7 @@ assert_equals 'every job has a name' '' "$(value_of unnamed_jobs)"
 #
 # Both platforms are required. Linux alone would skip notify.test.sh (it
 # drives .claude/hooks/notify.sh) and the Darwin-gated Alacritty app-bundle
-# check in check-deps.test.sh. macOS alone would skip the container suites,
+# check in deps-manifest.test.sh. macOS alone would skip the container suites,
 # since GitHub's macOS runners ship no Docker daemon.
 
 SUITE_WORKFLOW="$WORKFLOW_DIR/test-suite.yml"

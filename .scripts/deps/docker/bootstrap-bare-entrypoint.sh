@@ -50,6 +50,13 @@ check() {
     unset check_description
 }
 
+# The prebuilt config-cli, required. See seed-prebuilt.sh for why the image
+# cannot compile it and why the variable is not optional.
+. /seed/seed-prebuilt.sh
+seed_prebuilt
+PATH="$HOME/.local/bin:$PATH"
+export PATH
+
 printf '=== phase 1: git is missing, so the run installs it ===\n'
 
 # setup.sh normally arrives by curl. Here it comes out of the seed with a

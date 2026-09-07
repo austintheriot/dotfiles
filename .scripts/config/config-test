@@ -4,7 +4,7 @@
 # usage: config test [-q|--quiet] [-d|--docker] [-w|--watch] [suite]
 #
 # Runs every suite in ~/tests by default. Name a suite to run only that one:
-# `config test check-deps` runs tests/check-deps.test.sh.
+# `config test deps-manifest` runs tests/deps-manifest.test.sh.
 #
 # Options:
 #   -q, --quiet    Print only failures and the summary, not every passing

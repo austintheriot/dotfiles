@@ -200,7 +200,7 @@ pub fn evaluate(check: &Check, observed: &impl Observations) -> Observation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckParseError {
     /// The expression is outside the grammar. This is what replaces the
-    /// `sh -c "$check"` fallthrough at `check-deps.sh:524`.
+    /// `sh -c "$check"` fallthrough at `retired-check-deps:524`.
     Unrecognized,
     /// A recognized `command -v` shape holding an invalid command name.
     BadCommandName(NameError),
@@ -221,7 +221,7 @@ pub enum CheckParseError {
 ///
 /// Recognizes exactly the shapes the four conf files contain. Anything else
 /// is `Unrecognized`, which is what replaces the `sh -c "$check"` at
-/// `check-deps.sh:524`.
+/// `retired-check-deps:524`.
 ///
 /// # Errors
 ///

@@ -15,9 +15,9 @@
 #     is reachable on this image alone.
 #
 # Dockerfile.arch also targets pacman, but it PREINSTALLS sudo and git and
-# only ever runs check-deps.sh. It cannot reach setup.sh's git-bootstrap path
-# or the escalation logic on a machine with no sudo, which is the pair of
-# bugs the bare Debian leg was written for.
+# only ever runs `config deps install`. It cannot reach setup.sh's
+# git-bootstrap path or the escalation logic on a machine with no sudo,
+# which is the pair of bugs the bare Debian leg was written for.
 #
 # NOT digest-pinned, matching Dockerfile.arch and for its stated reason:
 # archlinux:base is rolling, an old digest's package database goes stale
@@ -51,7 +51,7 @@ FROM archlinux:base
 RUN pacman -Syu --noconfirm --disable-sandbox curl ca-certificates python \
     && pacman -Scc --noconfirm
 
-# The same seccomp problem hits the pacman commands check-deps.sh itself
+# The same seccomp problem hits the pacman commands the engine itself
 # runs, and those live in shared cross-platform code where a
 # container-emulation workaround does not belong. Disabling it image-wide
 # keeps the engine's unmodified `pacman -Sy ...` working here. Without this

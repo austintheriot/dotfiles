@@ -9,7 +9,7 @@ name: Test suite (linux + macOS)
 # Both platforms are required, because each covers assertions the other
 # cannot:
 #   - macOS reaches notify.test.sh, which drives .claude/hooks/notify.sh, and
-#     the Darwin-gated Alacritty app-bundle check in check-deps.test.sh.
+#     the Darwin-gated Alacritty app-bundle check in deps-manifest.test.sh.
 #   - Linux is where the container harness (container.test.sh,
 #     run-in-docker.sh) is exercised; GitHub's macOS runners ship no Docker
 #     daemon.
@@ -62,7 +62,29 @@ jobs:
         with:
           persist-credentials: false
 
-      # Installed through check-deps.sh rather than a hand-written apt list
+      # Before the dependency installs, not after: the deps engine IS one of
+      # these binaries now, so the steps below cannot run until it is built.
+      # Rust is preinstalled on both runners.
+      #
+      # Built from inside crates/, not with --manifest-path from the repo
+      # root. Two reasons, both of which failed CI once:
+      #
+      #   - crates/ became a Cargo workspace, so the target directory is
+      #     crates/target/release, not crates/config-manifest/target/release.
+      #     The old path still existed on a developer machine as a leftover
+      #     from before the workspace, which is why this passed locally and
+      #     failed on a clean runner.
+      #   - rustup only honours crates/rust-toolchain.toml when the working
+      #     directory is inside crates/. Building from the repo root used the
+      #     runner's default toolchain (1.98.0) instead of the pinned 1.94.0,
+      #     so the pin was declared and not applied.
+      - name: Build the workspace binaries
+        working-directory: crates
+        run: |
+          cargo build --release --locked
+          echo "$GITHUB_WORKSPACE/crates/target/release" >> "$GITHUB_PATH"
+
+      # Installed through the deps engine rather than a hand-written apt list
       # and a hand-written brew list. Those two lists named tmux, zsh, git,
       # fzf, ripgrep and shellcheck -- every one already a deps.conf entry --
       # so the package names lived in two places and the YAML copy was the one
@@ -86,7 +108,7 @@ jobs:
       # server is down. See the bootstrap job in that workflow.
       - name: Install the suite's dependencies (from deps.conf)
         run: |
-          .scripts/deps/check-deps.sh --fix --yes \
+          config-cli deps install --yes \
             --only tmux,zsh,git,fzf,ripgrep,shellcheck,zsh-autosuggestions
 
       - name: Install the suite's harness dependencies (from deps-ci.conf)
@@ -99,28 +121,7 @@ jobs:
           # without pretending it is empty -- the same technique the Docker
           # images use.
           DEPS_LOCAL_CONF: /nonexistent/deps-platform.conf
-        run: .scripts/deps/check-deps.sh --fix --yes
-
-      # Rust is preinstalled on both runners. The suite's shell tests call
-      # config-manifest by name, so the release binary goes on PATH. cargo test
-      # itself runs inside run-all.sh.
-      # Built from inside crates/, not with --manifest-path from the repo
-      # root. Two reasons, both of which failed CI once:
-      #
-      #   - crates/ became a Cargo workspace, so the target directory is
-      #     crates/target/release, not crates/config-manifest/target/release.
-      #     The old path still existed on a developer machine as a leftover
-      #     from before the workspace, which is why this passed locally and
-      #     failed on a clean runner.
-      #   - rustup only honours crates/rust-toolchain.toml when the working
-      #     directory is inside crates/. Building from the repo root used the
-      #     runner's default toolchain (1.98.0) instead of the pinned 1.94.0,
-      #     so the pin was declared and not applied.
-      - name: Build config-manifest
-        working-directory: crates
-        run: |
-          cargo build --release --locked
-          echo "$GITHUB_WORKSPACE/crates/target/release" >> "$GITHUB_PATH"
+        run: config-cli deps install --yes
 
       # The lint policy lives in crates/Cargo.toml, so this step enforces it
       # rather than defining it. Explicit here as well as inside run-all.sh

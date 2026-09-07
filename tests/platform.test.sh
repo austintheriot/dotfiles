@@ -30,7 +30,7 @@ assert_succeeds 'the helper exists' test -f "$PLATFORM_SH"
 
 # Driven through `sh -c` rather than sourced into this bash process, because
 # the helper is sourced by .zshrc (zsh), tmux.conf's shell-command hooks
-# (sh), and check-deps.sh (sh). POSIX sh is the common denominator it has to
+# (sh), and setup.sh (sh). POSIX sh is the common denominator it has to
 # work in, so that is what it is tested in.
 detect_with_uname() {
     local fake_uname=$1

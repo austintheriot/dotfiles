@@ -176,7 +176,7 @@ pub enum ParseError {
 /// Takes `&str`, never a path: the caller reads the file, so this function
 /// makes no syscall and the module holds no capability. `parse_manifest` is
 /// the boundary spec 3.6 requires, replacing the `sh -c "$check"` at
-/// `check-deps.sh:524` with a closed enum that has no shell escape hatch.
+/// `retired-check-deps:524` with a closed enum that has no shell escape hatch.
 ///
 /// # Errors
 ///

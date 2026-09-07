@@ -4,7 +4,7 @@
 # prompts -- see .scripts/deps/README.md for the manual `depcheck`
 # command this also defines.
 
-alias depcheck='~/.scripts/deps/check-deps.sh --fix'
+alias depcheck='~/.local/bin/config deps install'
 
 _depcheck_cache="$HOME/.cache/depcheck-last-run"
 _depcheck_last=0
@@ -25,8 +25,18 @@ if [ $(($(date +%s) - _depcheck_last)) -ge 86400 ]; then
     # startup; it only costs the throttle, which re-checks next shell.
     mkdir -p "$HOME/.cache" 2>/dev/null
     (date +%s > "$_depcheck_cache") 2>/dev/null
-    if ! ~/.scripts/deps/check-deps.sh >/dev/null 2>&1; then
+    # 127 is "the engine is not here", which is a different problem from
+    # "a dependency is missing" and needs a different sentence. Reporting
+    # missing dependencies on a machine whose binary was never built sends
+    # the reader to `depcheck`, which cannot run either. This suite already
+    # shipped that exact conflation once, in deps-docs.test.sh.
+    ~/.local/bin/config deps check >/dev/null 2>&1
+    _depcheck_status=$?
+    if [ "$_depcheck_status" -eq 127 ]; then
+        echo "depcheck: the deps engine is not built -- run \`config build\`"
+    elif [ "$_depcheck_status" -ne 0 ]; then
         echo "depcheck: missing dependencies detected -- run \`depcheck\` for details"
     fi
+    unset _depcheck_status
 fi
 unset _depcheck_cache _depcheck_last

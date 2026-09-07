@@ -58,7 +58,7 @@ pub enum StepOutcome {
     /// The install ran and the check now passes.
     Installed,
     /// Carries the `Check` so the report names which predicate failed.
-    /// `check-deps.sh:589` prints "install did not satisfy the check for
+    /// `retired-check-deps:589` prints "install did not satisfy the check for
     /// %s" and cannot say more, because the predicate was a shell string it
     /// re-ran rather than a value it holds.
     InstalledButCheckStillFails {
@@ -237,7 +237,7 @@ fn exit_status_has_no_public_constructor() {}
 /// | `Err(_)`                                           | 2    |
 ///
 /// Exit 2 means every caller error, matching the repo-wide convention that
-/// `check-deps.sh:109` and `:116` already use and that `deps-docs.test.sh`
+/// `retired-check-deps:109` and `:116` already use and that `deps-docs.test.sh`
 /// relies on as its oracle for "the parser rejected this flag". Narrowing 2
 /// to one condition would break that oracle's semantics.
 ///
@@ -392,7 +392,7 @@ mod tests {
 
     // InstalledButCheckStillFails carries the Check so the report can name
     // which predicate failed rather than saying "the install did not
-    // satisfy the check" as check-deps.sh:589 does today.
+    // satisfy the check" as retired-check-deps:589 does today.
     #[test]
     fn installed_but_check_still_fails_names_the_predicate() {
         let outcome = StepOutcome::InstalledButCheckStillFails {
@@ -427,7 +427,7 @@ mod tests {
     }
 
     // Exit 2 keeps its repo-wide meaning: the caller made a usage error.
-    // Three misuse conditions exit 2 today (check-deps.sh:109 for --only
+    // Three misuse conditions exit 2 today (retired-check-deps:109 for --only
     // with no value, :116 for an unknown argument, and --only naming a
     // nonexistent dependency), clap exits 2 for its own usage errors
     // deliberately, and deps-docs.test.sh uses exit 2 as its oracle for
@@ -460,8 +460,8 @@ mod tests {
     }
 
     // The behavior change spec 5.4 makes deliberately.
-    // check-deps.sh:600-602 exits 0 unconditionally on --dry-run, pinned by
-    // check-deps.test.sh:130 ('dry-run always exits 0'). That is a latent
+    // retired-check-deps:600-602 exits 0 unconditionally on --dry-run, pinned by
+    // the retired suite's 'dry-run always exits 0'. That is a latent
     // hole: a CI gate on --dry-run passes on a machine with everything
     // missing. "Would install three things" means "three things are
     // missing".

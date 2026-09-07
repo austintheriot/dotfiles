@@ -1,10 +1,10 @@
-# Minimal pacman environment for exercising check-deps.sh --fix --yes from
+# Minimal pacman environment for exercising `config deps install --yes` from
 # scratch. Used by ../test-local.sh and by the `arch` leg of
 # .github/workflows/deps-check.yml.
 #
 # Deliberately NOT digest-pinned, unlike Dockerfile.ubuntu. archlinux:base
 # is a rolling-release image whose contents track the current Arch
-# repositories. A pinned digest goes stale within weeks, and check-deps.sh's
+# repositories. A pinned digest goes stale within weeks, and the engine's
 # pacman install commands then run `pacman -Sy` against current mirrors on
 # top of an old snapshot -- Arch's documented partial-upgrade breakage,
 # which fails with unresolvable library version conflicts rather than a
@@ -31,8 +31,8 @@ FROM archlinux:base
 RUN pacman -Syu --noconfirm --disable-sandbox sudo curl git wget \
     && pacman -Scc --noconfirm
 
-# The same seccomp problem hits the pacman commands check-deps.sh itself
-# runs, and those live in check-deps.sh (shared, cross-platform) where a
+# The same seccomp problem hits the pacman commands the engine itself
+# runs, and those live in shared cross-platform Rust where a
 # container-emulation workaround does not belong. Disable the sandbox
 # image-wide instead, so the engine's unmodified `pacman -Sy ...` works
 # here. Without this line every pacman install in the arch container fails
@@ -49,11 +49,25 @@ WORKDIR /dotfiles
 ENV HOME=/root
 # These images verify the shared, cross-platform deps.conf only.
 #
-# check-deps.sh would otherwise select deps-linux.conf here, which lists
+# The engine would otherwise select deps-linux.conf here, which lists
 # oh-my-zsh and xclip: real dependencies of the linux machine, but not of
 # this container, whose job is the shared manifest. Point DEPS_LOCAL_CONF at
 # a path that does not exist -- read_entries() skips a missing file -- so the
 # platform variant is excluded without pretending it is empty.
 ENV DEPS_LOCAL_CONF=/nonexistent/deps-platform.conf
-ENTRYPOINT ["/dotfiles/.scripts/deps/check-deps.sh"]
-CMD ["--fix", "--yes"]
+
+# The engine resolves the manifest against DOTFILES_ROOT, falling back to
+# HOME. This image COPYs the deps tree to /dotfiles while HOME is /root, so
+# without this line the engine looks for /root/.scripts/deps/deps.conf, finds
+# nothing, and reports a PASSING check of zero entries. Measured: the first
+# run after the port printed "0 entries" and the harness called it a clean
+# bootstrap.
+#
+# The retired shell resolved the manifest against its own directory, so this
+# was implicit before. It is explicit now because the binary can be anywhere.
+ENV DOTFILES_ROOT=/dotfiles
+# The wrapper, not the engine: the engine is a Rust binary this image
+# carries no toolchain for, so it arrives through the /seed mount the
+# wrapper reads. See deps-image-entrypoint.sh.
+ENTRYPOINT ["/bin/sh", "/seed/deps-image-entrypoint.sh"]
+CMD ["install", "--yes"]

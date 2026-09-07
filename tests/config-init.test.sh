@@ -209,7 +209,7 @@ cat > "$home/.scripts/config/config-install" <<'STUB'
 # help: stub
 # usage: config install
 printf 'install %s\n' "$*" >> "$HOME/.calls"
-printf 'check-deps: 11 automated install(s) did not satisfy their check\n' >&2
+printf 'deps: 11 automated install(s) did not satisfy their check\n' >&2
 exit 1
 STUB
 chmod +x "$home/.scripts/config/config-install"
@@ -238,7 +238,7 @@ assert_equals 'it does not report plain success' '' \
 # ~/.cargo/bin, which is not on a default non-login PATH, so config-build
 # could not see the cargo that now existed.
 #
-# check-deps.sh already solves this for itself -- it prepends ~/.local/bin and
+# The deps engine already solves this for itself -- it prepends ~/.local/bin and
 # ~/.cargo/bin so a `command -v` check does not fail on the line after its own
 # install succeeded. config init needs the same, because it is the caller that
 # runs an install and a build in one process.

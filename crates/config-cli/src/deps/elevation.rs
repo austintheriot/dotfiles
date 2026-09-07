@@ -1,6 +1,6 @@
 //! Resolve `deps_core::Elevation` once per run.
 //!
-//! Ports `check-deps.sh:172-187`'s privilege detection. The shell comment
+//! Ports `retired-check-deps:172-187`'s privilege detection. The shell comment
 //! there names four environments and three answers:
 //!
 //! ```text
@@ -21,7 +21,8 @@
 
 use deps_core::Elevation;
 
-/// Resolve this process's elevation, once, by the same rule `check-deps.sh`
+/// Resolve this process's elevation, once, by the same rule the retired
+/// check-deps shell engine
 /// used: already root wins outright, then `sudo` on `PATH`, then neither.
 ///
 /// A process already running as root has nothing to escalate to, so a
@@ -32,7 +33,7 @@ use deps_core::Elevation;
 /// # Errors
 ///
 /// Returns an error when `id -u` cannot be spawned or prints text this
-/// function cannot parse as a UID. `check-deps.sh:175` guards the same call
+/// function cannot parse as a UID. `retired-check-deps:175` guards the same call
 /// with a fallback (`id -u 2>/dev/null || printf 1`) rather than assuming
 /// it always succeeds; this port surfaces that failure instead of silently
 /// assuming non-root, so a caller can decide how to report it.
@@ -68,7 +69,7 @@ impl std::fmt::Display for ElevationError {
 
 impl std::error::Error for ElevationError {}
 
-/// `id -u`: the direct port of `check-deps.sh:175`'s effective user ID
+/// `id -u`: the direct port of `retired-check-deps:175`'s effective user ID
 /// (UID) probe. 0 is root on every platform this binary targets.
 fn is_root() -> Result<bool, ElevationError> {
     let output = std::process::Command::new("id")
@@ -87,7 +88,7 @@ fn is_root() -> Result<bool, ElevationError> {
 /// `command -v sudo`: whether `sudo` resolves on `PATH`.
 ///
 /// A plain `PATH` scan rather than a spawn, matching `probe_command` in
-/// `gather.rs`: `check-deps.sh:181` uses the same `command -v` test, and
+/// `gather.rs`: `retired-check-deps:181` uses the same `command -v` test, and
 /// this binary has no need to invoke `sudo` just to learn whether it
 /// exists.
 fn sudo_on_path() -> bool {

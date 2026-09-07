@@ -511,9 +511,13 @@ byte-for-byte assertion (`tests/check-branch-drift.test.sh:180`), a
 the offending unit *is* the line, so a span within it points at what the line
 number already identified. `deps.conf` is pipe-delimited, and its documented
 failure mode (`deps.conf:9-13`) is a literal `|` in the check field truncating
-the record. A span could highlight that character usefully. It is a shell script
-that reads that file (`.scripts/deps/check-deps.sh`), not this binary, so
-miette cannot render it without a port that is not on the table.
+the record. A span could highlight that character usefully.
+
+When this was written, a shell script read that file rather than this binary,
+so miette could not render it without a port that was not then on the table.
+The port has since landed: `config deps` reads the manifest in Rust, so the
+span is now reachable. Whether it earns its rendering cost is the same open
+question the rest of this section asks.
 
 **4. The prospective TOML case does not need miette to get a span.** If a
 `[dependency.package.aptt]`-style TOML manifest is added later,

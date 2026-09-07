@@ -257,8 +257,13 @@ assert_contains 'the local harness builds the bare image' \
 # The harness names the bare image by interpolating "$IMAGE-bare" rather than
 # spelling it out, so the assertion is on the docker run reaching it, not on a
 # literal string that never appears in the source.
+#
+# Line continuations are joined first. The invocation grew a -v mount and a -e
+# variable and now spans three lines, so a single-line grep reported the
+# harness had stopped running the bare image at all.
+harness_joined=$(sed -e ':a' -e '/\\$/{N;s/\\\n//;ba' -e '}' "$HARNESS")
 assert_succeeds 'the local harness runs the bare image' \
-    grep -qE 'docker run .*\$IMAGE-bare' "$HARNESS"
+    grep -qE 'docker run .*\$IMAGE-bare' <<<"$harness_joined"
 
 # And CI must declare it as its own job.
 if [ -n "$PYTHON_BIN" ]; then
@@ -343,22 +348,63 @@ fi
 
 # --- the toolchain seam ------------------------------------------------------
 #
-# After spec step 3, check-deps.sh IS the Rust binary, so it must exist before
-# the dependency install that places rustup. The images cannot compile it
-# themselves: the build context is only .scripts/deps and there is no
-# toolchain. A seam now means the deps-core plan points the gate at a prebuilt
-# binary rather than editing this harness under time pressure.
-assert_succeeds 'the curl-pipe entrypoint honors a prebuilt binary seam' \
-    grep -q 'BOOTSTRAP_PREBUILT_BIN' "$CURL_ENTRYPOINT"
+# The deps engine IS a Rust binary, so it must exist before the dependency
+# install that places rustup. The images cannot compile it themselves: the
+# build context is only .scripts/deps and there is no toolchain, and adding
+# one would pre-satisfy the rustup entry the run exists to exercise. So the
+# binary arrives through the /seed mount instead.
+SEED_HELPER="$DOTFILES_ROOT/.scripts/deps/docker/seed-prebuilt.sh"
 
-# The seam must be optional, or today's green run breaks: the whole point is
-# that the shell path still works until step 3 lands.
-assert_succeeds 'the prebuilt seam is optional' \
-    grep -qE 'BOOTSTRAP_PREBUILT_BIN:-' "$CURL_ENTRYPOINT"
+assert_succeeds 'the seam helper ships' test -f "$SEED_HELPER"
+assert_succeeds 'the seam helper has content' test -s "$SEED_HELPER"
 
-# And it must not silently accept a path that is not there. A gate that
-# ignores a misspelled seam tests the wrong binary and passes.
-assert_succeeds 'a set-but-missing prebuilt binary is refused' \
-    grep -q 'prebuilt binary was named but does not exist' "$CURL_ENTRYPOINT"
+# Every entrypoint sources it. A leg that skipped the seam would run against
+# whatever happened to be on PATH, which is the fail-open this replaced.
+for entrypoint in "$ENTRYPOINT" "$BARE_ENTRYPOINT" "$CURL_ENTRYPOINT"; do
+    assert_succeeds "$(basename "$entrypoint") sources the prebuilt seam" \
+        grep -q 'seed-prebuilt.sh' "$entrypoint"
+    assert_succeeds "$(basename "$entrypoint") calls it" \
+        grep -qE '^seed_prebuilt$' "$entrypoint"
+done
+
+# The seam is REQUIRED, not optional, and this assertion is the inverse of the
+# one it replaces.
+#
+# It was optional while the engine was a shell script that any image could
+# run: an unset variable skipped the copy and the run proceeded against
+# whatever was on PATH. That expired the moment the engine became a binary no
+# image can build. An optional seam is a gate that can pass having tested a
+# path that no longer ships, which is this project's dominant bug shape --
+# the same shape as the DEBIAN_FRONTEND line the images used to carry.
+#
+# Asserted on behaviour rather than on spelling. Grepping for the absence of
+# `:-` would pass against a file that dropped the variable entirely.
+seam_probe_home="$FIXTURES/seam-probe-home"
+mkdir -p "$seam_probe_home"
+
+unset_status=0
+( unset BOOTSTRAP_PREBUILT_BIN
+  HOME="$seam_probe_home" sh -c ". \"$SEED_HELPER\"; seed_prebuilt" ) \
+    >/dev/null 2>&1 || unset_status=$?
+assert_succeeds 'an unset prebuilt binary fails the run' test "$unset_status" -ne 0
+
+missing_status=0
+( HOME="$seam_probe_home" BOOTSTRAP_PREBUILT_BIN=/nonexistent/config-cli \
+    sh -c ". \"$SEED_HELPER\"; seed_prebuilt" ) >/dev/null 2>&1 || missing_status=$?
+assert_succeeds 'a set-but-missing prebuilt binary fails the run' \
+    test "$missing_status" -ne 0
+
+# The positive control. Without it both assertions above would pass against a
+# helper that refuses every input, including a correct one.
+seam_probe_bin="$FIXTURES/seam-probe-bin/config-cli"
+mkdir -p "$(dirname "$seam_probe_bin")"
+printf '#!/bin/sh\nexit 0\n' > "$seam_probe_bin"
+chmod +x "$seam_probe_bin"
+
+present_status=0
+( HOME="$seam_probe_home" BOOTSTRAP_PREBUILT_BIN="$seam_probe_bin" \
+    sh -c ". \"$SEED_HELPER\"; seed_prebuilt" ) >/dev/null 2>&1 || present_status=$?
+assert_equals 'a real prebuilt binary is accepted' '0' "$present_status"
+assert_succeeds 'and it lands on PATH' test -x "$seam_probe_home/.local/bin/config-cli"
 
 finish

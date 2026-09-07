@@ -77,12 +77,14 @@ assert_succeeds 'the test container installs shellcheck' \
 # macOS-only script regress.
 #
 # The workflow no longer carries a per-platform package list to grep: it calls
-# check-deps.sh with an --only set, and the engine resolves each name to the
+# the deps engine with an --only set, and the engine resolves each name to the
 # right package for whichever manager the runner has. So the fact to assert is
 # that shellcheck is in that set, and that the step naming it is not gated to
 # one platform -- an `if: runner.os == ...` on that step would restore exactly
 # the one-platform gap this pair of assertions exists to prevent.
-only_step=$(grep -n 'check-deps.sh --fix --yes' -A 2 "$CI_WORKFLOW" || true)
+only_step=$(grep -n 'deps install --yes' -A 2 "$CI_WORKFLOW" || true)
+assert_succeeds 'the deps install step was found in the workflow' \
+    test -n "$only_step"
 assert_contains 'CI installs shellcheck through the deps engine' 'shellcheck' "$only_step"
 
 install_step_block=$(awk '/Install the suite.s dependencies \(from deps.conf\)/{found=1} found && /^      - name:/ && ++seen>1{exit} found' "$CI_WORKFLOW")

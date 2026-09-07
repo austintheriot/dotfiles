@@ -1,6 +1,6 @@
 //! The production package catalog and requirement table.
 //!
-//! This is the install knowledge `check-deps.sh:203-441` held as shell
+//! This is the install knowledge `retired-check-deps:203-441` held as shell
 //! `case` arms, restated as data. The shell decided what to run by string
 //! matching a dependency name against a manager name; here the same 22
 //! dependencies each carry a [`PackageMap`], and `deps_core::plan` turns a
@@ -36,7 +36,7 @@ const SHIPPED_CONF_FILES: [(&str, ConfKind); 4] = [
 ///
 /// Written once because it must equal the subject of that dependency's own
 /// check byte for byte. `deps.conf:26` reads the plugin's `.zsh` FILE, while
-/// `check-deps.sh:339` clones into the plugin DIRECTORY one level above it.
+/// `retired-check-deps:339` clones into the plugin DIRECTORY one level above it.
 /// Cloning to the directory would give a non-converging fixpoint: the clone
 /// succeeds, the re-gather still reports the file absent, and the driver has
 /// already retired the step as attempted. The catalog therefore names the
@@ -47,7 +47,7 @@ const ZSH_AUTOSUGGESTIONS_CLONE_TARGET: &str =
 
 /// Where the `tpm` clone lands, relative to `$HOME`.
 ///
-/// `deps.conf:32` checks the directory and `check-deps.sh:345` clones the
+/// `deps.conf:32` checks the directory and `retired-check-deps:345` clones the
 /// directory, so this one already agreed in the shell. It is a constant here
 /// for the same reason as the plugin path above: the equality is asserted
 /// against the parsed conf file rather than against a second copy of the
@@ -65,7 +65,7 @@ pub fn packages() -> PackageCatalog {
     let mut catalog = PackageCatalog::new();
 
     // Rows whose package name is the dependency name on every manager, which
-    // is the shell's `*)` default case at `check-deps.sh:434-438`.
+    // is the shell's `*)` default case at `retired-check-deps:434-438`.
     for name in ["git", "zsh", "neovim", "fzf", "ripgrep", "tmux", "shellcheck", "xclip"] {
         insert_same_name_everywhere(&mut catalog, name);
     }
@@ -77,7 +77,7 @@ pub fn packages() -> PackageCatalog {
         &mut catalog,
         "gh",
         per_manager(vec![
-            // Not a package install. `check-deps.sh:235` adds a third-party
+            // Not a package install. `retired-check-deps:235` adds a third-party
             // APT trust root and a source-list entry before installing, and
             // collapsing that to a named package would let a dry run print
             // "install package gh" for a permanent change to what the
@@ -103,7 +103,7 @@ pub fn packages() -> PackageCatalog {
         per_manager(vec![
             (PackageManager::Apt, named("alacritty")),
             (PackageManager::Pacman, named("alacritty")),
-            // `check-deps.sh:261-263` drops the brew case deliberately:
+            // `retired-check-deps:261-263` drops the brew case deliberately:
             // Homebrew disabled the cask on 2026-09-01 for failing the
             // Gatekeeper check, and the release .dmg is adhoc-signed with no
             // Team ID, so `spctl -a` rejects it too.
@@ -134,7 +134,7 @@ pub fn packages() -> PackageCatalog {
             (PackageManager::Brew, named("zoxide")),
             (PackageManager::Pacman, named("zoxide")),
         ]),
-        // `check-deps.sh:308`. The installer resolves the latest release
+        // `retired-check-deps:308`. The installer resolves the latest release
         // through an unauthenticated api.github.com call, whose 60-per-hour
         // per-IP quota every Actions runner shares, so it is the fallback
         // rather than the first choice.
@@ -196,7 +196,7 @@ pub fn packages() -> PackageCatalog {
     // A cask in a third-party tap. `PackageAvailability::Named` resolves to
     // `InstallAction::Brew { kind: Formula, tap: None }` in
     // `deps_core::plan`, so the tap-and-cask shape of
-    // `check-deps.sh:280` is not expressible through this catalog today. The
+    // `retired-check-deps:280` is not expressible through this catalog today. The
     // entry is here so the dependency is not reported as unautomatable; the
     // gap is in `deps_core`, not in this table.
     insert(
@@ -362,7 +362,7 @@ fn insert(
 }
 
 /// Record a dependency whose package name matches its dependency name on
-/// apt, brew and pacman, which is `check-deps.sh:434-438`'s default case.
+/// apt, brew and pacman, which is `retired-check-deps:434-438`'s default case.
 fn insert_same_name_everywhere(catalog: &mut PackageCatalog, name: &str) {
     let availability = named(name);
     insert(

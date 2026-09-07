@@ -2,7 +2,7 @@
 #
 # Tests for the Docker harness (.scripts/deps/test-local.sh, the two
 # Dockerfiles) and the CI workflow (.github/workflows/deps-check.yml) that
-# together run check-deps.sh --fix --yes against throwaway Linux and macOS
+# together run `config deps install --yes` against throwaway Linux and macOS
 # environments.
 #
 # Deliberately builds and runs nothing. The containers are the slow, network-
@@ -82,7 +82,7 @@ fi
 
 fake_home="$FIXTURES/home"
 mkdir -p "$fake_home/.scripts/deps"
-cp "$DOTFILES_ROOT/.scripts/deps/check-deps.sh" "$fake_home/.scripts/deps/"
+cp "$DOTFILES_ROOT/.scripts/deps/test-local.sh" "$fake_home/.scripts/deps/"
 git init -q --bare "$fake_home/.cfg"
 
 home_git() { git --git-dir="$fake_home/.cfg" --work-tree="$fake_home" "$@"; }
@@ -122,37 +122,65 @@ home_git checkout -q mac
 # --- the ENTRYPOINT/CMD contract both images share -----------------------
 #
 # `docker run --rm depcheck-arch` with no arguments has to mean
-# `check-deps.sh --fix --yes`. test-local.sh and the workflow's arch job both
+# `config deps install --yes`. test-local.sh and the workflow's arch job both
 # run the image bare and read its exit code as the verdict, so a CMD that
-# lost --yes would hang on a prompt and a CMD that lost --fix would report
-# missing dependencies it never tried to install.
+# lost --yes would hang on a prompt and a CMD that lost the install verb
+# would report missing dependencies it never tried to install.
 
 for dockerfile in "$DOCKERFILE_UBUNTU" "$DOCKERFILE_ARCH"; do
     image=${dockerfile##*Dockerfile.}
     contents=$(cat "$dockerfile")
 
+    # The wrapper, not the engine. Neither image carries a Rust toolchain --
+    # installing one would pre-satisfy rustup, which is itself a manifest
+    # entry -- so the binary arrives through the /seed mount and the
+    # ENTRYPOINT is what reads it.
     entrypoint=$(sed -n 's/^ENTRYPOINT *//p' "$dockerfile")
-    assert_contains "$image ENTRYPOINT runs check-deps.sh" \
-        'check-deps.sh' "$entrypoint"
+    assert_contains "$image ENTRYPOINT runs the seeded wrapper" \
+        'deps-image-entrypoint.sh' "$entrypoint"
 
     cmd=$(sed -n 's/^CMD *//p' "$dockerfile")
-    assert_equals "$image CMD is exactly --fix --yes" \
-        '["--fix", "--yes"]' "$cmd"
+    assert_equals "$image CMD is exactly install --yes" \
+        '["install", "--yes"]' "$cmd"
+
+    # The manifest has to be findable, which is not implied by copying it in.
+    #
+    # The engine resolves conf paths against DOTFILES_ROOT, falling back to
+    # HOME. This image sets HOME=/root and COPYs the deps tree to /dotfiles,
+    # so without an explicit DOTFILES_ROOT the engine reads no manifest and
+    # reports a PASSING check of zero entries. Measured: the first container
+    # run after the port printed "0 entries" and the harness called it a
+    # clean bootstrap.
+    #
+    # This is the vacuous-pass shape the whole suite exists to prevent, and
+    # it is invisible to an exit-code check because the exit code is 0.
+    dotfiles_root=$(sed -n 's/^ENV DOTFILES_ROOT=//p' "$dockerfile")
+    assert_succeeds "$image sets DOTFILES_ROOT" test -n "$dotfiles_root"
+
+    workdir=$(sed -n 's/^WORKDIR *//p' "$dockerfile")
+    assert_equals "$image roots the engine where it copied the manifest" \
+        "$workdir" "$dotfiles_root"
+
+    # No toolchain in the image, asserted rather than assumed. This is the
+    # compensating-fixture shape the whole port exists to stop: an image that
+    # satisfies a dependency the run is supposed to be testing.
+    assert_equals "$image installs no Rust toolchain" '' \
+        "$(printf '%s\n' "$contents" | grep -E 'rustup|rust:|cargo' || true)"
 
     # --- DEPS_LOCAL_CONF neutralization ---------------------------------
     #
-    # These images verify the shared deps.conf only. check-deps.sh would
+    # These images verify the shared deps.conf only. The engine would
     # otherwise select deps-linux.conf here, whose entries (oh-my-zsh, xclip)
-    # belong to the linux machine rather than to this container.
-    # read_entries() skips a missing file, so pointing the variable at a path
-    # that does not exist is the neutralization.
+    # belong to the linux machine rather than to this container. The manifest
+    # reader skips a missing file, so pointing the variable at a path that
+    # does not exist is the neutralization.
 
     local_conf=$(sed -n 's/^ENV DEPS_LOCAL_CONF=//p' "$dockerfile")
     assert_succeeds "$image sets DEPS_LOCAL_CONF" test -n "$local_conf"
     assert_equals "$image points DEPS_LOCAL_CONF at a path that does not exist" \
         'absent' "$([ -e "$local_conf" ] && printf present || printf absent)"
 
-    # An absolute path, or check-deps.sh resolves it against its own working
+    # An absolute path, or the engine resolves it against its own working
     # directory and could land on a real file.
     assert_equals "$image DEPS_LOCAL_CONF is absolute" \
         'absolute' "$(path_shape "$local_conf")"
@@ -168,7 +196,7 @@ done
 # Ubuntu is digest-pinned because `ubuntu:24.04` is republished for every
 # point release, so a tag-only reference makes the image change under a
 # passing test. Arch is deliberately NOT digest-pinned because archlinux:base
-# is rolling-release: a stale snapshot plus check-deps.sh's `pacman -Sy`
+# is rolling-release: a stale snapshot plus the engine's `pacman -Sy`
 # against current mirrors is Arch's documented partial-upgrade breakage.
 #
 # Both decisions are documented in their respective Dockerfiles, and both are
@@ -315,18 +343,34 @@ assert_equals 'every checkout drops its credentials' '' \
 # the two disagree on the command or the Dockerfile, a green local run stops
 # meaning anything about CI.
 
-assert_contains 'the ubuntu job runs check-deps.sh --fix --yes' \
-    '.scripts/deps/check-deps.sh --fix --yes' "$(wf ubuntu_run)"
+# --yes on both, and asserted as its own claim. Without it the leg does not
+# fail -- it HANGS on the first per-dependency prompt, until the job's
+# timeout kills it, which is a slower and less legible failure.
+assert_contains 'the ubuntu job runs the deps install' \
+    'deps install --yes' "$(wf ubuntu_run)"
 
-assert_contains 'the macos job runs check-deps.sh --fix --yes' \
-    '.scripts/deps/check-deps.sh --fix --yes' "$(wf macos_run)"
+assert_contains 'the macos job runs the deps install' \
+    'deps install --yes' "$(wf macos_run)"
+
+# Both legs build the engine before they run it. A leg that installs
+# dependencies with a binary it never built is testing whatever the runner
+# image happened to ship.
+assert_contains 'the ubuntu job builds the engine first' \
+    'cargo build' "$(wf ubuntu_run)"
+assert_contains 'the macos job builds the engine first' \
+    'cargo build' "$(wf macos_run)"
 
 assert_equals 'the macos job runs on a macOS runner' 'macos-latest' "$(wf macos_runner)"
 
 assert_contains 'the arch job builds the arch Dockerfile' \
     '.scripts/deps/docker/Dockerfile.arch' "$(wf arch_run)"
 assert_contains 'the arch job runs the image it built' \
-    'docker run --rm depcheck-arch' "$(wf arch_run)"
+    'depcheck-arch' "$(wf arch_run)"
+
+# The seed mount, without which the image's wrapper has no binary to run.
+assert_contains 'the arch job mounts the seed' '/seed' "$(wf arch_run)"
+assert_contains 'the arch job names the prebuilt binary' \
+    'BOOTSTRAP_PREBUILT_BIN' "$(wf arch_run)"
 
 # The image tag is the join between the build step and the run step, and
 # test-local.sh builds the same `depcheck-$image` name. A rename in one place

@@ -120,7 +120,7 @@ fn dry_run_discloses_the_command_it_would_run() {
 
 /// An `--only` value the manifest does not hold is a caller error, exit 2.
 ///
-/// `check-deps.sh:101-107` treated a typo the same way. A silently narrowed
+/// `retired-check-deps:101-107` treated a typo the same way. A silently narrowed
 /// selection would let an install report success having installed none of
 /// what the caller named.
 #[test]

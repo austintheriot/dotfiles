@@ -24,7 +24,11 @@ HOME_README="$DOTFILES_ROOT/README.md"
 # is absent. Without that seam a probe cannot prove it distinguishes "the
 # parser rejected this" from "there is no parser", which is the bug this
 # suite shipped with.
-CHECK_SCRIPT=${CHECK_SCRIPT:-$DEPS_DIR/check-deps.sh}
+#
+# The engine is a Rust binary now, reached as `config-cli deps <verb>`. The
+# verb is part of the probe rather than part of this variable, because the
+# two verbs take the same flags and both must accept every documented one.
+CHECK_SCRIPT=${CHECK_SCRIPT:-config-cli}
 HOOK="$DEPS_DIR/depcheck-hook.sh"
 
 # --- both documents exist ----------------------------------------------
@@ -80,16 +84,16 @@ assert_contains 'the deps README documents the depcheck alias expansion' \
 
 # --- the documented flags are the flags the parser accepts --------------
 #
-# check-deps.sh exits 2 on an unknown argument, so the parser itself is the
+# The engine exits 2 on an unknown argument, so the parser itself is the
 # oracle. Every flag the docs name must be accepted, and every flag the
 # parser accepts must be documented.
 #
-# Only flags on a line that also names check-deps.sh or depcheck count.
-# Both READMEs document other tools whose flags this script must not try to
+# Only flags on a line that also names `config deps` or depcheck count.
+# Both READMEs document other tools whose flags this suite must not try to
 # feed to the argument parser.
 
 documented_flags=$(printf '%s\n' "$docs_text" \
-    | grep -E 'check-deps\.sh|depcheck' \
+    | grep -E 'config deps|depcheck' \
     | grep -oE '\-\-[a-z][a-z-]*' | sort -u)
 assert_succeeds 'the docs name at least one flag' test -n "$documented_flags"
 
@@ -115,10 +119,19 @@ missing_program=0
 while IFS= read -r flag; do
     [ -n "$flag" ] || continue
     value=$(flag_probe_value "$flag")
+    # --dry-run is appended so a probe never mutates this machine, except
+    # when the flag under probe IS --dry-run. The engine rejects a repeated
+    # flag, so passing it twice reports the parser refusing its own flag.
+    # The shell parser tolerated the repeat, which is why this only appeared
+    # when the engine became a binary.
+    guard=--dry-run
+    [ "$flag" = --dry-run ] && guard=''
     if [ -n "$value" ]; then
-        "$CHECK_SCRIPT" "$flag" "$value" --dry-run >/dev/null 2>&1
+        # shellcheck disable=SC2086
+        "$CHECK_SCRIPT" deps check "$flag" "$value" $guard >/dev/null 2>&1
     else
-        "$CHECK_SCRIPT" "$flag" --dry-run >/dev/null 2>&1
+        # shellcheck disable=SC2086
+        "$CHECK_SCRIPT" deps check "$flag" $guard >/dev/null 2>&1
     fi
     probe_status=$?
     probes_run=$((probes_run + 1))
@@ -134,16 +147,27 @@ done <<< "$documented_flags"
 # an empty list as success.
 assert_succeeds 'the flag probe ran at least once' test "$probes_run" -gt 0
 assert_equals 'the probed program exists' '0' "$missing_program"
-assert_equals 'check-deps.sh accepts every documented flag' '' "$rejected_flags"
+assert_equals 'the engine accepts every documented flag' '' "$rejected_flags"
 
 # The arity guard itself, which the probe above deliberately steps around.
 # Without it `--only` with nothing after it selects the empty set and reports
 # a vacuous success.
-"$CHECK_SCRIPT" --only >/dev/null 2>&1
+"$CHECK_SCRIPT" deps check --only >/dev/null 2>&1
 assert_equals 'a value-taking flag rejects a missing value' '2' "$?"
 
-parser_flags=$(grep -oE '^ +--[a-z-]+\)' "$CHECK_SCRIPT" 2>/dev/null \
-    | tr -d ' )' | sort -u)
+# Harvested from the engine's own --help rather than from its source. The
+# shell version grepped a `case` statement, which a compiled binary has no
+# equivalent of, and --help is the better oracle regardless: it is what the
+# parser publishes, so a flag the parser accepts but never lists is a
+# documentation defect on its own.
+#
+# Both verbs are harvested. They take the same flags today, and a flag added
+# to one alone would be a surface the docs cannot describe consistently.
+parser_flags=$(
+    { "$CHECK_SCRIPT" deps check --help 2>/dev/null
+      "$CHECK_SCRIPT" deps install --help 2>/dev/null
+    } | grep -oE '^ +--[a-z][a-z-]*' | tr -d ' ' | sort -u
+)
 
 # Same blind spot as the probe above, in the other direction: an absent or
 # unreadable program harvests nothing, the loop below never runs, and the
@@ -239,14 +263,42 @@ assert_succeeds 'the retirement check greps a file with content in it' \
 assert_equals 'the retired deps-local.conf is gone' \
     '' "$(grep -n 'deps-local\.conf' "$DEPS_README" || true)"
 
-# --- the documented pipe constraint matches read_entries ----------------
+# --- the documented pipe constraint matches the parser ------------------
 #
-# The docs warn that a check_command must not contain a pipe. That warning
-# is only true while read_entries still splits on one.
+# The docs warn that a check_command must not contain a pipe. That warning is
+# only true while the manifest parser still splits fields on one.
+#
+# Asserted against the parser's behaviour rather than against its source. The
+# shell version grepped for a literal `IFS='|' read` line, which a compiled
+# binary has no equivalent of, and a grep for source text could never have
+# proved the behaviour anyway.
+#
+# A four-field line is the probe: if `|` is the delimiter, the fourth field
+# makes the line malformed and the engine must reject the manifest. A parser
+# that split on something else would accept it.
+pipe_probe_conf="$FIXTURES/pipe-probe.conf"
+printf 'probe|command -v probe|https://example.invalid|fourth\n' > "$pipe_probe_conf"
+DEPS_CONF="$pipe_probe_conf" DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+    "$CHECK_SCRIPT" deps check --dry-run >/dev/null 2>&1
+assert_equals 'a fourth field is rejected, so | is still the delimiter' \
+    '2' "$?"
 
-assert_succeeds 'read_entries still splits fields on a pipe' \
-    grep -qF "IFS='|' read -r name check docs" "$CHECK_SCRIPT"
+# The positive control. Without it the assertion above passes against an
+# engine that rejects every manifest, including a well-formed one.
+#
+# The check names `sh`, which is present wherever this suite can run, so a
+# well-formed manifest exits 0. A dependency that is merely absent exits 1,
+# which is not a parse failure and would not distinguish the two outcomes
+# this pair exists to compare.
+pipe_control_conf="$FIXTURES/pipe-control.conf"
+printf 'probe|command -v sh|https://example.invalid\n' > "$pipe_control_conf"
+DEPS_CONF="$pipe_control_conf" DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+    "$CHECK_SCRIPT" deps check --dry-run >/dev/null 2>&1
+assert_equals 'a three-field line is accepted' '0' "$?"
+
+# The phrase the probe above proves true. Asserting the warning still states
+# the three-field rule is what keeps the prose and the parser in step.
 assert_contains 'the deps README warns about the pipe constraint' \
-    'read_entries' "$deps_readme"
+    'exactly three fields' "$deps_readme"
 
 finish

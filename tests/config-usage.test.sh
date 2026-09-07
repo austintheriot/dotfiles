@@ -53,12 +53,14 @@ shim_dir="$FIXTURES/shims"
 mkdir -p "$shim_dir"
 printf '#!/bin/sh\nprintf "manifest:%%s\\n" "$@"\n' > "$shim_dir/config-manifest"
 chmod 755 "$shim_dir/config-manifest"
+# The deps engine, which `config deps` and `config install` both exec. On PATH
+# rather than under $HOME: the wrappers resolve it by name.
+printf '#!/bin/sh\nprintf "deps:%%s\\n" "$@"\n' > "$shim_dir/config-cli"
+chmod 755 "$shim_dir/config-cli"
 mkdir -p "$home/.scripts/deps" "$home/tests"
-printf '#!/bin/sh\nprintf "deps:%%s\\n" "$@"\n' > "$home/.scripts/deps/check-deps.sh"
 printf '#!/bin/sh\nprintf "all:%%s\\n" "$@"\n' > "$home/tests/run-all.sh"
 printf '#!/bin/sh\nprintf "docker:%%s\\n" "$@"\n' > "$home/tests/run-in-docker.sh"
-chmod 755 "$home/.scripts/deps/check-deps.sh" "$home/tests/run-all.sh" \
-    "$home/tests/run-in-docker.sh"
+chmod 755 "$home/tests/run-all.sh" "$home/tests/run-in-docker.sh"
 
 run_config() {
     HOME="$home" PATH="$shim_dir:$PATH" "$CONFIG" "$@"
@@ -88,7 +90,11 @@ assert_equals 'config test --help does not run the suite' '' \
     "$(printf '%s' "$output" | grep -F 'all:' || true)"
 
 output=$(run_config install --help 2>&1)
-assert_equals 'config install --help does not exec check-deps' '' \
+assert_equals 'config install --help does not exec the deps engine' '' \
+    "$(printf '%s' "$output" | grep -F 'deps:' || true)"
+
+output=$(run_config deps --help 2>&1)
+assert_equals 'config deps --help does not exec the deps engine' '' \
     "$(printf '%s' "$output" | grep -F 'deps:' || true)"
 
 # install-hooks is the sharpest case: before this suite, `config install-hooks
@@ -297,7 +303,7 @@ assert_succeeds 'config install-hooks --describe does not link the dispatcher' \
 # marker its exec'd program would emit, which failed three ways. `manifest:`
 # is emitted by nothing, so that assertion passed even with the --describe
 # handling removed entirely (mutation-confirmed). `all:` and `deps:` did fire,
-# but only as substrings of `run-all:` and `check-deps:`, so renaming either
+# but only as substrings of `run-all:` and `config deps:`, so renaming either
 # program would have silenced them without a failure.
 #
 # A one-line-exact comparison needs no knowledge of what the exec'd program

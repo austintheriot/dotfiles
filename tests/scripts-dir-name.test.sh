@@ -53,7 +53,7 @@ assert_succeeds 'the .my-scripts directory is gone' \
 # them executable would suggest a way of running them that does not work:
 # executing tmux-split.sh in a subshell changes that subshell and exits.
 
-EXECUTED_SCRIPTS='deps/check-deps.sh deps/test-local.sh
+EXECUTED_SCRIPTS='deps/test-local.sh deps/test-bootstrap.sh
 alacritty-platform.sh
 tmux-update-window-names.sh tmux-worktree-config.sh
 config/config-stamp config/config-build config/config
@@ -195,8 +195,8 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
 
     # An exact count rather than "more than zero": a partial add is the
     # failure that actually happened, and it leaves some files staged.
-    assert_equals 'all 39 scripts are committed, not only on disk' \
-        '39' "$committed_count"
+    assert_equals 'all 40 scripts are committed, not only on disk' \
+        '40' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine
@@ -216,12 +216,12 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
         "$NEW_NAME/config/config-test" \
         "$NEW_NAME/config/config-init" \
         "$NEW_NAME/alacritty-platform.sh" \
-        "$NEW_NAME/deps/check-deps.sh" \
         "$NEW_NAME/deps/test-local.sh" \
         "$NEW_NAME/deps/test-bootstrap.sh" \
         "$NEW_NAME/deps/docker/bootstrap-entrypoint.sh" \
         "$NEW_NAME/deps/docker/bootstrap-bare-entrypoint.sh" \
         "$NEW_NAME/deps/docker/bootstrap-curl-entrypoint.sh" \
+        "$NEW_NAME/deps/docker/deps-image-entrypoint.sh" \
         "$NEW_NAME/tmux-update-window-names.sh" \
         "$NEW_NAME/tmux-worktree-config.sh" | sort)
     assert_equals 'the committed execute bits match the executed scripts' \

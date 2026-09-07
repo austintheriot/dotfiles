@@ -5,7 +5,7 @@
 #
 # The suite mutates $HOME by design: fixture git repos, tmux sessions on the
 # default tmux server, and (before the install-path fix in
-# .scripts/deps/check-deps.sh) a real ~/.oh-my-zsh created on a machine
+# the deps engine) a real ~/.oh-my-zsh created on a machine
 # that does not use oh-my-zsh. Inside the container all of that is discarded
 # with the container.
 #
@@ -18,7 +18,7 @@
 #
 # Usage:
 #   ~/tests/run-in-docker.sh              # the whole suite
-#   ~/tests/run-in-docker.sh check-deps   # one suite, by name
+#   ~/tests/run-in-docker.sh deps-manifest   # one suite, by name
 #
 # $DOTFILES_TEST_REF overrides which ref is archived (default: the
 # checked-out branch). The working-tree overlay is skipped when it names

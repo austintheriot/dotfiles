@@ -8,7 +8,7 @@
 # variant beside it. Both variants ship on the single branch; the base file
 # loads whichever this returns, so a machine needs no new files to switch.
 #
-# Written in POSIX sh because the callers are zsh (.zshrc), sh (check-deps.sh)
+# Written in POSIX sh because the callers are zsh (.zshrc), sh (setup.sh)
 # and tmux's own shell-command hooks.
 
 # The override comes first so one machine can exercise both platforms' variant

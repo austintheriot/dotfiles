@@ -57,7 +57,7 @@ impl Attempted {
 /// that `--dry-run` disclose privileged steps before the first password
 /// prompt, because the driver must aggregate that across steps beforehand,
 /// and aggregating over strings means grepping for `sudo`, which resurrects
-/// the string sniff at `check-deps.sh:545` inside the new design.
+/// the string sniff at `retired-check-deps:545` inside the new design.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionDescription {
     /// A one-line rendering of the action, for display.
@@ -69,7 +69,7 @@ pub struct ActionDescription {
     /// Whether the action permanently adds a trust root.
     ///
     /// `AptSource` and any future equivalent. It exists so the `gh` apt
-    /// pipeline at `check-deps.sh:236`, which permanently adds a
+    /// pipeline at `retired-check-deps:236`, which permanently adds a
     /// third-party APT trust root, cannot be disclosed as an ordinary
     /// package install.
     pub changes_trust_root: bool,
@@ -85,7 +85,7 @@ pub struct ActionDescription {
 /// `describe` must be a pure function of exactly the inputs `perform`
 /// consumes. Today's script gets this right by a stronger mechanism than
 /// two methods: it substitutes `${SUDO}` once into a single string used for
-/// both display and execution (`check-deps.sh:557-567`, with a comment
+/// both display and execution (`retired-check-deps:557-567`, with a comment
 /// saying so). Two methods can diverge, so an implementation builds the
 /// command once and has both methods read it.
 pub trait Installer {
@@ -239,7 +239,7 @@ pub struct Planning<'inputs> {
 /// observations, then [`perform_all`], then a **full** re-gather. Full, not
 /// scoped to `attempted`: installing `oh-my-zsh` makes
 /// `zsh-autosuggestions` installable, and a scoped re-gather would still
-/// call it missing (`check-deps.sh:339` emits that clone only when the
+/// call it missing (`retired-check-deps:339` emits that clone only when the
 /// oh-my-zsh custom directory exists). A full re-gather is also required if
 /// apt installs are ever batched, because one `apt-get install a b c` yields
 /// one exit status for three dependencies.
@@ -502,7 +502,7 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
     // rather than a manifest field, and this is what makes the pair a
     // fixpoint rather than one pass: cloning into a nonexistent
     // ~/.oh-my-zsh would land the plugin where nothing sources it
-    // (check-deps.sh:328-341).
+    // (retired-check-deps:328-341).
     fn autosuggestions_needs_oh_my_zsh() -> Requirements {
         Requirements::from_pairs(vec![(
             dependency("zsh-autosuggestions"),
@@ -541,7 +541,7 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
     // The fixpoint. Wave 1 sees nothing installed and installs oh-my-zsh.
     // Only after that does the directory the second entry's check points
     // into exist, so a single pass leaves zsh-autosuggestions missing, which
-    // is what check-deps.sh:328-341 does today.
+    // is what retired-check-deps:328-341 does today.
     #[test]
     fn the_loop_converges_only_after_a_second_wave() {
         let manifest = oh_my_zsh_manifest();
@@ -789,7 +789,7 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
         );
         assert!(
             described[1].changes_trust_root,
-            "the gh apt pipeline at check-deps.sh:236 adds a third-party APT trust root, \
+            "the gh apt pipeline at retired-check-deps:236 adds a third-party APT trust root, \
              so it cannot be disclosed as an ordinary package install"
         );
     }

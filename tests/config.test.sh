@@ -217,8 +217,8 @@ assert_equals 'config test -q passes -q through' 'all:-q' "$actual"
 actual=$(HOME="$home" "$CONFIG" test --docker)
 assert_equals 'config test --docker runs the whole suite in docker' 'docker:(none)' "$actual"
 
-actual=$(HOME="$home" "$CONFIG" test --docker check-deps)
-assert_equals 'config test --docker <suite> passes the suite name' 'docker:check-deps' "$actual"
+actual=$(HOME="$home" "$CONFIG" test --docker deps-manifest)
+assert_equals 'config test --docker <suite> passes the suite name' 'docker:deps-manifest' "$actual"
 
 output=$(HOME="$home" "$CONFIG" test --bogus 2>&1)
 status=$?

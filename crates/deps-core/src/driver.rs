@@ -89,8 +89,14 @@ pub struct ActionDescription {
 /// saying so). Two methods can diverge, so an implementation builds the
 /// command once and has both methods read it.
 pub trait Installer {
-    /// Describe `action` without performing it.
-    fn describe(&self, action: &InstallAction) -> ActionDescription;
+    /// Describe `step` without performing it.
+    ///
+    /// Takes the step rather than the action, because privilege is decided
+    /// by the planner from the availability, the manager and the elevation,
+    /// and an `InstallAction` carries none of the three. An installer handed
+    /// only the action has to guess, and the guess is what a dry run shows a
+    /// reader before the first password prompt.
+    fn describe(&self, step: &Step) -> ActionDescription;
 
     /// Perform `action` and report what happened.
     fn perform(&self, action: &InstallAction) -> StepOutcome;
@@ -185,11 +191,7 @@ pub fn perform_all(
 /// dry run cannot simulate later waves, because it cannot know what
 /// installing `nvm` does to the observations. It reports the first wave.
 pub fn describe(installer: &dyn Installer, built: &Plan) -> Vec<ActionDescription> {
-    built
-        .steps
-        .iter()
-        .map(|step| installer.describe(&step.action))
-        .collect()
+    built.steps.iter().map(|step| installer.describe(step)).collect()
 }
 
 /// What each dependency can be installed as, per manager.
@@ -442,12 +444,12 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
     }
 
     impl Installer for RecordingInstaller {
-        fn describe(&self, action: &InstallAction) -> ActionDescription {
+        fn describe(&self, step: &Step) -> ActionDescription {
             ActionDescription {
-                summary: format!("{action:?}"),
-                privilege: PrivilegeRequirement::None,
+                summary: format!("{:?}", step.action),
+                privilege: step.privilege,
                 command_preview: None,
-                changes_trust_root: matches!(action, InstallAction::AptSource { .. }),
+                changes_trust_root: matches!(step.action, InstallAction::AptSource { .. }),
             }
         }
 
@@ -695,7 +697,7 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
             order: &'a RefCell<Vec<&'static str>>,
         }
         impl Installer for OrderingInstaller<'_> {
-            fn describe(&self, _action: &InstallAction) -> ActionDescription {
+            fn describe(&self, _step: &Step) -> ActionDescription {
                 ActionDescription {
                     summary: String::new(),
                     privilege: PrivilegeRequirement::None,
@@ -780,6 +782,39 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
             described[1].changes_trust_root,
             "the gh apt pipeline at check-deps.sh:236 adds a third-party APT trust root, \
              so it cannot be disclosed as an ordinary package install"
+        );
+    }
+
+    /// A privileged step must describe itself as privileged.
+    ///
+    /// describe received only the action, and privilege is computed by
+    /// action_for from the availability, the manager and the elevation, none
+    /// of which an InstallAction carries. So an installer could not
+    /// re-derive it, and the reference implementation hardcoded None. A dry
+    /// run that renders every step as unprivileged cannot disclose a
+    /// password prompt before it happens, which is the property parent 3.5
+    /// puts on this field.
+    #[test]
+    fn describe_reports_the_step_privilege_not_a_guess() {
+        let step = Step {
+            dependency: dependency("gh"),
+            action: InstallAction::Package {
+                id: PackageId::parse("gh").expect("a valid package id"),
+            },
+            privilege: PrivilegeRequirement::Root,
+        };
+        let plan = Plan { steps: vec![step] };
+        let installer = RecordingInstaller::new();
+
+        let described = describe(&installer, &plan);
+
+        // Positive control: one step in means one description out, or the
+        // assertion below is indexing an empty vector.
+        assert_eq!(described.len(), 1, "the control must describe one step");
+        assert_eq!(
+            described[0].privilege,
+            PrivilegeRequirement::Root,
+            "describe must report the step's privilege, not the action's absence of one"
         );
     }
 

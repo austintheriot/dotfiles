@@ -4,6 +4,8 @@ use std::process::ExitCode;
 
 use crate::DepsVerb;
 
+pub mod catalog;
+
 /// Run one `deps` verb.
 ///
 /// Returns the exit code `deps_core::exit_status` decided, never one computed

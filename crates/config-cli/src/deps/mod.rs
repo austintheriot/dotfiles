@@ -7,6 +7,7 @@ use crate::DepsVerb;
 pub mod catalog;
 pub mod elevation;
 pub mod gather;
+pub mod installer;
 pub mod selection;
 
 /// Run one `deps` verb.

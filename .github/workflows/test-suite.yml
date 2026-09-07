@@ -106,13 +106,20 @@ jobs:
       # scheduled cadence: every full run installs over the network, and a push
       # about a shell script must not turn red because an upstream package
       # server is down. See the bootstrap job in that workflow.
+      # DOTFILES_ROOT roots the shipped conf files. The engine falls back to
+      # HOME, which on a runner is not the checkout, so without this it looks
+      # in /home/runner/.scripts/deps, finds nothing, parses an empty
+      # manifest, and rejects every --only name as unknown.
       - name: Install the suite's dependencies (from deps.conf)
+        env:
+          DOTFILES_ROOT: ${{ github.workspace }}
         run: |
           config-cli deps install --yes \
             --only tmux,zsh,git,fzf,ripgrep,shellcheck,zsh-autosuggestions
 
       - name: Install the suite's harness dependencies (from deps-ci.conf)
         env:
+          DOTFILES_ROOT: ${{ github.workspace }}
           DEPS_CONF: .scripts/deps/deps-ci.conf
           # Platform detection would otherwise add deps-mac.conf or
           # deps-linux.conf on top of the CI manifest, pulling in aerospace or

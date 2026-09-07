@@ -142,6 +142,7 @@ pub fn argv_sequence_for(
     action: &InstallAction,
     manager: PackageManager,
     privilege: PrivilegeRequirement,
+    elevation: Elevation,
 ) -> Vec<Vec<OsString>> {
     match action {
         InstallAction::Package { id } => match manager {
@@ -150,13 +151,18 @@ pub fn argv_sequence_for(
             // rule DEBIAN_FRONTEND is the environment half of: a question
             // apt would otherwise ask an unattended run.
             PackageManager::Apt => vec![
-                elevated(privilege, ["apt-get", "update", "-qq"]),
-                elevated_with(privilege, ["apt-get", "install", "-y"], [id.as_str()]),
+                elevated(privilege, elevation, ["apt-get", "update", "-qq"]),
+                elevated_with(privilege, elevation, ["apt-get", "install", "-y"], [id.as_str()]),
             ],
             // `-Sy` syncs and installs in one command, so pacman is one
             // argv where apt is two (`retired-check-deps:437`).
             PackageManager::Pacman => {
-                vec![elevated_with(privilege, ["pacman", "-Sy", "--noconfirm"], [id.as_str()])]
+                vec![elevated_with(
+                    privilege,
+                    elevation,
+                    ["pacman", "-Sy", "--noconfirm"],
+                    [id.as_str()],
+                )]
             }
             PackageManager::Brew => vec![words(["brew", "install", id.as_str()])],
             // An undetected manager has no install command in the shell
@@ -189,17 +195,18 @@ pub fn argv_sequence_for(
         // the same privilege writes the same bytes to the same place with no
         // shell, and the privilege stays with the write either way.
         InstallAction::AptSource { keyring, list } => vec![
-            elevated(privilege, ["apt-get", "update", "-qq"]),
-            elevated(privilege, ["apt-get", "install", "-y", "curl"]),
-            elevated(privilege, ["mkdir", "-p", "-m", "755", "/etc/apt/keyrings"]),
+            elevated(privilege, elevation, ["apt-get", "update", "-qq"]),
+            elevated(privilege, elevation, ["apt-get", "install", "-y", "curl"]),
+            elevated(privilege, elevation, ["mkdir", "-p", "-m", "755", "/etc/apt/keyrings"]),
             elevated(
                 privilege,
+                elevation,
                 ["curl", "-fsSL", "-o", keyring_path(*keyring), keyring_url(*keyring)],
             ),
-            elevated(privilege, ["chmod", "go+r", keyring_path(*keyring)]),
-            elevated_with(privilege, ["tee", source_list_path(*list)], []),
-            elevated(privilege, ["apt-get", "update", "-qq"]),
-            elevated(privilege, ["apt-get", "install", "-y", "gh"]),
+            elevated(privilege, elevation, ["chmod", "go+r", keyring_path(*keyring)]),
+            elevated_with(privilege, elevation, ["tee", source_list_path(*list)], []),
+            elevated(privilege, elevation, ["apt-get", "update", "-qq"]),
+            elevated(privilege, elevation, ["apt-get", "install", "-y", "gh"]),
         ],
         // pip installs into the user site directory, so no elevation. The
         // override is a separate word rather than part of a flag string,
@@ -251,8 +258,9 @@ pub fn argv_for(
     action: &InstallAction,
     manager: PackageManager,
     privilege: PrivilegeRequirement,
+    elevation: Elevation,
 ) -> Vec<OsString> {
-    argv_sequence_for(action, manager, privilege).pop().unwrap_or_default()
+    argv_sequence_for(action, manager, privilege, elevation).pop().unwrap_or_default()
 }
 
 /// Where a fetched installer script is written before it is run.
@@ -344,18 +352,33 @@ fn words<const COUNT: usize>(parts: [&str; COUNT]) -> Vec<OsString> {
     parts.into_iter().map(OsString::from).collect()
 }
 
-/// Prepend `sudo` as its own word when the step needs root.
+/// Whether a step's argv gets a literal `sudo` word.
+///
+/// Two independent facts decide it, and conflating them is what produced
+/// "sudo: not found" eleven times in one run. [`PrivilegeRequirement`] is a
+/// property of the STEP: this install writes outside the user's own
+/// directories. [`Elevation`] is a property of the MACHINE: this is how the
+/// process reaches root, if it can at all. `sudo` is the machine's answer,
+/// so a step that needs root on a process already running AS root takes no
+/// prefix -- there is nothing to escalate to, and on an image without sudo
+/// the word is simply a command that does not exist.
+fn needs_sudo_word(privilege: PrivilegeRequirement, elevation: Elevation) -> bool {
+    privilege == PrivilegeRequirement::Root && elevation == Elevation::ViaSudo
+}
+
+/// Prepend `sudo` as its own word when the step needs root and the machine
+/// reaches root through `sudo`.
 ///
 /// Its own word, never glued to the program and never an uninterpolated
-/// `${SUDO}` placeholder. Elevation is data on the [`Step`], so the driver
-/// decides it; `retired-check-deps:164-168` re-encoded that decision as a string
-/// prefix carrying its own trailing space, and a caller could then read a
-/// command whose privilege did not match its step.
+/// `${SUDO}` placeholder. `retired-check-deps:164-168` re-encoded that
+/// decision as a string prefix carrying its own trailing space, and a caller
+/// could then read a command whose privilege did not match its step.
 fn elevated<const COUNT: usize>(
     privilege: PrivilegeRequirement,
+    elevation: Elevation,
     parts: [&str; COUNT],
 ) -> Vec<OsString> {
-    elevated_with(privilege, parts, [])
+    elevated_with(privilege, elevation, parts, [])
 }
 
 /// Prepend `sudo` when needed, then append dependency-supplied words.
@@ -365,11 +388,12 @@ fn elevated<const COUNT: usize>(
 /// what makes a package name or path containing a space representable.
 fn elevated_with<const FIXED: usize, const EXTRA: usize>(
     privilege: PrivilegeRequirement,
+    elevation: Elevation,
     parts: [&str; FIXED],
     trailing: [&str; EXTRA],
 ) -> Vec<OsString> {
     let mut argv = Vec::with_capacity(FIXED + EXTRA + 1);
-    if privilege == PrivilegeRequirement::Root {
+    if needs_sudo_word(privilege, elevation) {
         argv.push(OsString::from("sudo"));
     }
     argv.extend(parts.into_iter().map(OsString::from));
@@ -442,6 +466,7 @@ pub enum Approval {
 /// disagree about which machine they are on.
 pub struct Spawning {
     manager: PackageManager,
+    elevation: Elevation,
     approval: Approval,
     policy: SpawnPolicy,
 }
@@ -449,8 +474,12 @@ pub struct Spawning {
 impl Spawning {
     /// An installer that really runs commands.
     #[must_use]
-    pub fn executing(manager: PackageManager, approval: Approval) -> Self {
-        Spawning { manager, approval, policy: SpawnPolicy::Execute }
+    pub fn executing(
+        manager: PackageManager,
+        elevation: Elevation,
+        approval: Approval,
+    ) -> Self {
+        Spawning { manager, elevation, approval, policy: SpawnPolicy::Execute }
     }
 
     /// An installer that never spawns, for tests.
@@ -458,9 +487,17 @@ impl Spawning {
     /// `perform` reports [`StepOutcome::NotAutomatable`] rather than
     /// [`StepOutcome::Installed`], because claiming an install that never ran
     /// is the false statement this whole design exists to prevent.
+    ///
+    /// Defaults to [`Elevation::ViaSudo`], which is the shape most existing
+    /// tests assert: a non-root machine that reaches root through `sudo`.
     #[must_use]
     pub fn refusing_to_spawn(manager: PackageManager) -> Self {
-        Spawning { manager, approval: Approval::Assumed, policy: SpawnPolicy::Refuse }
+        Spawning {
+            manager,
+            elevation: Elevation::ViaSudo,
+            approval: Approval::Assumed,
+            policy: SpawnPolicy::Refuse,
+        }
     }
 
     /// Ask the user whether to install, unless `--yes` already answered.
@@ -489,7 +526,8 @@ impl Spawning {
 
 impl Installer for Spawning {
     fn describe(&self, step: &Step) -> ActionDescription {
-        let sequence = argv_sequence_for(&step.action, self.manager, step.privilege);
+        let sequence =
+            argv_sequence_for(&step.action, self.manager, step.privilege, self.elevation);
         let preview =
             if sequence.is_empty() { None } else { Some(render_sequence(&sequence)) };
         ActionDescription {
@@ -517,7 +555,7 @@ impl Installer for Spawning {
         } else {
             PrivilegeRequirement::None
         };
-        let sequence = argv_sequence_for(action, self.manager, privilege);
+        let sequence = argv_sequence_for(action, self.manager, privilege, self.elevation);
         if sequence.is_empty() {
             return StepOutcome::NotAutomatable {
                 reason: NoInstallReason::ManagerNotNamedInManifest { manager: self.manager },
@@ -668,6 +706,13 @@ fn summarize(action: &InstallAction) -> String {
 /// same decision on the command containing `${SUDO}`, and emitting a command
 /// anyway is what produced "sh: 1: sudo: not found" eleven times in a single
 /// run.
+///
+/// The elevation reaches the installer itself, not only this match. Deciding
+/// only WHETHER a privileged installer exists leaves HOW it escalates
+/// unanswered, and the argv builder then has to guess. It guessed `sudo`
+/// unconditionally, which reproduced the same eleven failures on a root
+/// image with no sudo -- the exact shape `Dockerfile.bootstrap-bare` exists
+/// to catch.
 #[must_use]
 pub fn wire(
     manager: PackageManager,
@@ -676,11 +721,15 @@ pub fn wire(
 ) -> Installers<'static> {
     let privileged = match elevation {
         Elevation::AlreadyRoot | Elevation::ViaSudo => {
-            Some(Box::new(Spawning::executing(manager, approval)) as Box<dyn Installer>)
+            Some(Box::new(Spawning::executing(manager, elevation, approval))
+                as Box<dyn Installer>)
         }
         Elevation::Unavailable => None,
     };
-    Installers { ordinary: Box::new(Spawning::executing(manager, approval)), privileged }
+    Installers {
+        ordinary: Box::new(Spawning::executing(manager, elevation, approval)),
+        privileged,
+    }
 }
 
 #[cfg(test)]
@@ -744,9 +793,19 @@ mod tests {
     /// --noconfirm.
     #[test]
     fn non_interactivity_flags_live_in_the_argv() {
-        let apt = argv_for(&an_apt_action(), PackageManager::Apt, PrivilegeRequirement::Root);
+        let apt = argv_for(
+            &an_apt_action(),
+            PackageManager::Apt,
+            PrivilegeRequirement::Root,
+            Elevation::ViaSudo,
+        );
         let pacman =
-            argv_for(&a_pacman_action(), PackageManager::Pacman, PrivilegeRequirement::Root);
+            argv_for(
+                &a_pacman_action(),
+                PackageManager::Pacman,
+                PrivilegeRequirement::Root,
+                Elevation::ViaSudo,
+            );
 
         assert!(!apt.is_empty() && !pacman.is_empty(), "the control builds real argv");
         assert!(apt.iter().any(|word| word == "-y"), "apt needs -y: {apt:?}");
@@ -760,7 +819,12 @@ mod tests {
     #[test]
     fn privilege_is_a_separate_word_never_a_string_prefix() {
         let elevated =
-            argv_for(&an_apt_action(), PackageManager::Apt, PrivilegeRequirement::Root);
+            argv_for(
+                &an_apt_action(),
+                PackageManager::Apt,
+                PrivilegeRequirement::Root,
+                Elevation::ViaSudo,
+            );
 
         assert_eq!(
             elevated.first().map(OsString::as_os_str),
@@ -782,7 +846,12 @@ mod tests {
     fn a_name_with_a_space_stays_one_word() {
         let action = a_clone_into("weird dir/tpm");
 
-        let argv = argv_for(&action, PackageManager::Apt, PrivilegeRequirement::None);
+        let argv = argv_for(
+            &action,
+            PackageManager::Apt,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
 
         assert!(
             argv.iter().any(|word| word.to_string_lossy().ends_with("weird dir/tpm")),
@@ -806,12 +875,25 @@ mod tests {
         // The whole sequence, not just the install: `perform` spawns every
         // command in it, so a preview showing only the last one would hide
         // an `apt-get update` the reader is about to run as root.
-        let expected = argv_sequence_for(&step.action, PackageManager::Apt, step.privilege);
+        let expected = argv_sequence_for(
+            &step.action,
+            PackageManager::Apt,
+            step.privilege,
+            Elevation::ViaSudo,
+        );
         let preview = described.command_preview.expect("a spawnable action previews its argv");
         assert_eq!(preview, render_sequence(&expected), "the preview IS the argv");
         assert_eq!(
             expected.last().map(Vec::as_slice),
-            Some(argv_for(&step.action, PackageManager::Apt, step.privilege).as_slice()),
+            Some(
+                argv_for(
+                    &step.action,
+                    PackageManager::Apt,
+                    step.privilege,
+                    Elevation::ViaSudo,
+                )
+                .as_slice(),
+            ),
             "argv_for is the install command of the same sequence"
         );
     }
@@ -825,7 +907,12 @@ mod tests {
             tap: None,
         };
 
-        let sequence = argv_sequence_for(&action, PackageManager::Brew, PrivilegeRequirement::None);
+        let sequence = argv_sequence_for(
+            &action,
+            PackageManager::Brew,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
 
         assert_eq!(sequence.len(), 1, "a core formula is one command: {sequence:?}");
         assert_eq!(sequence[0], words(["brew", "install", "ripgrep"]));
@@ -847,13 +934,105 @@ mod tests {
             tap: Some(TapName::parse("nikitabobko/tap").expect("a valid tap name")),
         };
 
-        let sequence = argv_sequence_for(&action, PackageManager::Brew, PrivilegeRequirement::None);
+        let sequence = argv_sequence_for(
+            &action,
+            PackageManager::Brew,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
 
         assert_eq!(sequence[0], words(["brew", "tap", "nikitabobko/tap"]));
         assert_eq!(sequence[2], words(["brew", "install", "--cask", "aerospace"]));
         assert!(
             sequence.iter().flatten().all(|word| word != "sudo"),
             "brew refuses to run as root, so no word may be sudo: {sequence:?}"
+        );
+    }
+
+    /// A process already running as root emits no `sudo` word, even for a
+    /// step that needs root.
+    ///
+    /// The regression this pins: `elevated_with` keyed the prefix on
+    /// `PrivilegeRequirement` alone and never read `Elevation`, so a run on
+    /// a root image with no `sudo` emitted `sudo pacman -Sy ...` for every
+    /// privileged entry and every one of them died with "sudo: not found".
+    /// Measured on the `Full bootstrap / one-liner on bare Arch` leg: 11
+    /// privileged installs, 11 failures, 13 dependencies reported FAILED.
+    ///
+    /// `ViaSudo` is the positive control, so this asserts the elevation is
+    /// what decides the word rather than asserting an argv that happens to
+    /// be empty.
+    #[test]
+    fn a_root_process_needs_no_sudo_word_for_a_privileged_step() {
+        let via_sudo = argv_for(
+            &a_pacman_action(),
+            PackageManager::Pacman,
+            PrivilegeRequirement::Root,
+            Elevation::ViaSudo,
+        );
+        assert_eq!(
+            via_sudo.first().map(|word| word.to_string_lossy().into_owned()),
+            Some(String::from("sudo")),
+            "the control escalates: {via_sudo:?}"
+        );
+
+        let already_root = argv_for(
+            &a_pacman_action(),
+            PackageManager::Pacman,
+            PrivilegeRequirement::Root,
+            Elevation::AlreadyRoot,
+        );
+
+        assert!(!already_root.is_empty(), "the control builds real argv");
+        assert!(
+            !already_root.iter().any(|word| word == "sudo"),
+            "already root, nothing to escalate to: {already_root:?}"
+        );
+        assert_eq!(
+            already_root.first().map(|word| word.to_string_lossy().into_owned()),
+            Some(String::from("pacman")),
+            "the manager runs directly: {already_root:?}"
+        );
+    }
+
+    /// The same rule holds for every argv in a multi-command action.
+    ///
+    /// The apt source action is eight commands, and the bug dropped `sudo`
+    /// onto all eight. A test that only checked the install command would
+    /// pass while seven `sudo apt-get`/`sudo tee` calls still failed.
+    #[test]
+    fn a_root_process_needs_no_sudo_word_in_any_command_of_a_sequence() {
+        let action = InstallAction::AptSource {
+            keyring: KeyringSource::GithubCli,
+            list: SourceListEntry::GithubCli,
+        };
+
+        let via_sudo = argv_sequence_for(
+            &action,
+            PackageManager::Apt,
+            PrivilegeRequirement::Root,
+            Elevation::ViaSudo,
+        );
+        assert!(
+            via_sudo.iter().all(|argv| argv.first().is_some_and(|word| word == "sudo")),
+            "the control escalates every command: {via_sudo:?}"
+        );
+
+        let already_root = argv_sequence_for(
+            &action,
+            PackageManager::Apt,
+            PrivilegeRequirement::Root,
+            Elevation::AlreadyRoot,
+        );
+
+        assert_eq!(
+            already_root.len(),
+            via_sudo.len(),
+            "the same commands run either way, only the prefix differs"
+        );
+        assert!(
+            !already_root.iter().any(|argv| argv.iter().any(|word| word == "sudo")),
+            "already root, no command escalates: {already_root:?}"
         );
     }
 
@@ -865,10 +1044,20 @@ mod tests {
     #[test]
     fn an_unprivileged_step_carries_no_sudo_word() {
         let elevated =
-            argv_for(&an_apt_action(), PackageManager::Apt, PrivilegeRequirement::Root);
+            argv_for(
+                &an_apt_action(),
+                PackageManager::Apt,
+                PrivilegeRequirement::Root,
+                Elevation::ViaSudo,
+            );
         assert!(elevated.iter().any(|word| word == "sudo"), "the control elevates");
 
-        let plain = argv_for(&an_apt_action(), PackageManager::Apt, PrivilegeRequirement::None);
+        let plain = argv_for(
+            &an_apt_action(),
+            PackageManager::Apt,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
 
         assert!(!plain.is_empty(), "the control builds real argv");
         assert!(!plain.iter().any(|word| word == "sudo"), "no elevation, no word: {plain:?}");
@@ -939,7 +1128,12 @@ mod tests {
         };
 
         let elevated_argvs =
-            argv_sequence_for(&action, PackageManager::Apt, PrivilegeRequirement::Root);
+            argv_sequence_for(
+                &action,
+                PackageManager::Apt,
+                PrivilegeRequirement::Root,
+                Elevation::ViaSudo,
+            );
         let touches_etc: Vec<&Vec<OsString>> = elevated_argvs
             .iter()
             .filter(|argv| argv.iter().any(|word| word.to_string_lossy().contains("/etc/")))
@@ -954,7 +1148,12 @@ mod tests {
             );
         }
 
-        let plain = argv_sequence_for(&action, PackageManager::Apt, PrivilegeRequirement::None);
+        let plain = argv_sequence_for(
+            &action,
+            PackageManager::Apt,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
         assert!(
             !plain.iter().any(|argv| argv.iter().any(|word| word == "sudo")),
             "no elevation, no word: {plain:?}"
@@ -1016,7 +1215,12 @@ mod tests {
         let described = installer.describe(&step);
 
         assert_eq!(described.command_preview, None);
-        assert!(argv_for(&step.action, PackageManager::Apt, PrivilegeRequirement::None).is_empty());
+        assert!(argv_for(
+            &step.action,
+            PackageManager::Apt,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo).is_empty(),
+        );
     }
 
     /// `perform` never reports an outcome that is `reconcile`'s to produce.
@@ -1067,8 +1271,10 @@ mod tests {
     /// cannot run `apt-get`.
     #[test]
     fn assumed_approval_does_not_consult_stdin() {
-        let assumed = Spawning::executing(PackageManager::Apt, Approval::Assumed);
-        let asking = Spawning::executing(PackageManager::Apt, Approval::Ask);
+        let assumed =
+            Spawning::executing(PackageManager::Apt, Elevation::ViaSudo, Approval::Assumed);
+        let asking =
+            Spawning::executing(PackageManager::Apt, Elevation::ViaSudo, Approval::Ask);
 
         assert!(assumed.approved("package ripgrep"), "--yes approves without asking");
         // The control: with Ask and a non-terminal stdin, which is what

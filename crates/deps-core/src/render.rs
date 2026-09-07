@@ -58,6 +58,16 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
             // into the buffer skips the intermediate String, and `Write for
             // String` is infallible so the discarded Err does not exist.
             let _ = writeln!(stderr, "  FAILED    {}", row.dependency.as_str());
+
+            // The cause, indented under the name it belongs to. Without it
+            // the stdout line's "(see stderr)" points at a stream that only
+            // repeats the dependency name, and a failed run discloses
+            // nothing about why it failed.
+            if let Some(cause) = describe_cause(&row.outcome) {
+                for line in cause.lines() {
+                    let _ = writeln!(stderr, "              {line}");
+                }
+            }
         }
 
         let line = match &row.outcome {
@@ -95,6 +105,47 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
         stdout: format!("{summary}{stdout}"),
         stderr,
         exit_code: crate::exit_status(Ok(verdict)).code(),
+    }
+}
+
+/// The human-readable reason one failed row failed, if the outcome carries
+/// one.
+///
+/// Returns `None` for an outcome that is not a failure, so the caller can
+/// stay a single `if let` rather than repeating the failure match.
+///
+/// The child's own stderr is reproduced verbatim rather than summarized: it
+/// is the only text that distinguishes "no such package" from "no such
+/// command" from "permission denied", and every paraphrase this function
+/// could write would be a guess about a message it did not produce.
+fn describe_cause(outcome: &StepOutcome) -> Option<String> {
+    match outcome {
+        StepOutcome::InstallFailed { cause, .. } => Some(match cause {
+            crate::ExecFailure::NonZeroExit { code, stderr } => {
+                let message = stderr.as_str().trim();
+                if message.is_empty() {
+                    format!("exited {code} with no output on stderr")
+                } else {
+                    format!("exited {code}: {message}")
+                }
+            }
+            crate::ExecFailure::AuthenticationRefused => {
+                String::from("sudo refused authentication")
+            }
+            crate::ExecFailure::Spawn(error) => match error {
+                crate::SpawnError::NotFound => {
+                    String::from("the command is not on PATH")
+                }
+                crate::SpawnError::PermissionDenied => {
+                    String::from("the command exists and could not be executed")
+                }
+                crate::SpawnError::Other => String::from("the command could not be started"),
+            },
+        }),
+        StepOutcome::InstalledButCheckStillFails { check } => {
+            Some(format!("the install succeeded and the check still fails: {check:?}"))
+        }
+        _ => None,
     }
 }
 
@@ -214,6 +265,41 @@ mod tests {
         assert_ne!(
             rendered.exit_code, 0,
             "a NotReady report must not exit 0 on `check`"
+        );
+    }
+
+    /// stderr carries the CAUSE, not only the name of what failed.
+    ///
+    /// The defect this pins: every failed row printed
+    /// `failed <name> (see stderr)` on stdout while stderr held only
+    /// `FAILED <name>`. The line told a reader to look somewhere that
+    /// repeated the same fact, and the captured child stderr on
+    /// `ExecFailure::NonZeroExit` was never rendered at all.
+    ///
+    /// Measured cost: a CI run reported 13 dependencies FAILED with no
+    /// reason anywhere in the log. Diagnosing it needed a local
+    /// reproduction and a `--dry-run` to see the argv, because the failing
+    /// run itself disclosed nothing about why.
+    #[test]
+    fn a_failed_install_puts_the_cause_on_stderr() {
+        // Positive control: the ready fixture leaves stderr empty, so a
+        // non-empty stderr below is about this report and not about a
+        // renderer that always writes.
+        let ready = render(&a_ready_report(), Verb::Check);
+        assert!(ready.stderr.is_empty(), "the control must leave stderr empty");
+
+        let rendered = render(&a_report_with_a_failed_install(), Verb::Install);
+
+        assert!(
+            rendered.stderr.contains("E: Unable to locate package"),
+            "stderr must carry the child's own message, which is the only text \
+             that says WHY: {}",
+            rendered.stderr
+        );
+        assert!(
+            rendered.stderr.contains("100"),
+            "stderr must carry the exit code the command reported: {}",
+            rendered.stderr
         );
     }
 

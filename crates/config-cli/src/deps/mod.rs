@@ -168,7 +168,16 @@ fn dry_run(
     // built by the code that would spawn it. Only `describe` is called here,
     // and `describe` is pure, so no separate preview-only installer exists to
     // drift from the one that runs.
-    let describing = installer::Spawning::executing(manager, installer::Approval::Assumed);
+    //
+    // The run's own elevation, not a default: `sudo` appears in an install
+    // command only when this machine reaches root through `sudo`, so a
+    // preview built with any other elevation shows a command the real run
+    // would not spawn.
+    let describing = installer::Spawning::executing(
+        manager,
+        planning.elevation,
+        installer::Approval::Assumed,
+    );
     let descriptions = describe(&describing, &built);
 
     let (report, _reconcile_events) = reconcile(manifest, &[], &observations);

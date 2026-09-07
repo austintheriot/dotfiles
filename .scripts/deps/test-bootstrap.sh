@@ -45,53 +45,13 @@ if ! docker info >/dev/null 2>&1; then
     exit 1
 fi
 
-# The engine is a Rust binary now, and neither image carries a toolchain:
-# rustup is itself a manifest entry, so installing one in the image under
-# test would pre-satisfy the very dependency the run exists to exercise.
-#
-# So the binary is built in a SEPARATE throwaway Rust container and handed to
-# each image through a /seed mount. A separate container is the point: the
-# toolchain never touches the image whose bootstrap is being measured.
-#
-# Built for linux, not for the host. This harness runs on macOS, where a
-# native `cargo build` produces a Mach-O binary that a Linux container
-# cannot execute at all.
+# The binary the containers run is built by one shared script, not by a copy
+# per harness. See .scripts/deps/docker/build-seed-binary.sh for why it must
+# be a container build and why the builder image is pinned to bookworm: the
+# glibc floor of the build host becomes the floor of the binary, and three
+# bootstrap images are older than the CI runner.
 build_seed_binary() {
-    seed_dir=$1
-    seed_platform=$2
-
-    toolchain=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' "$HOME/crates/rust-toolchain.toml")
-    if [ -z "$toolchain" ]; then
-        printf 'test-bootstrap: no channel in crates/rust-toolchain.toml\n' >&2
-        return 1
-    fi
-
-    printf '=== building config-cli for the containers (rust %s) ===\n' "$toolchain"
-
-    # The repo ROOT is mounted, not just crates/. config-cli embeds the four
-    # conf files with include_str! at `../../../../.scripts/deps/`, four
-    # levels up and out of the workspace, so a crates-only context fails to
-    # compile with "couldn't read ... No such file or directory". Measured:
-    # this is what the first run of this function did, and how the coupling
-    # was found.
-    #
-    # --locked, matching every other build gate in this repo: a harness that
-    # silently updates the lockfile tests a dependency set that was never
-    # committed.
-    # shellcheck disable=SC2086
-    docker run --rm $seed_platform \
-        -v "$HOME/crates:/src/crates:ro" \
-        -v "$HOME/.scripts:/src/.scripts:ro" \
-        -v "$seed_dir:/out" \
-        -w /src/crates \
-        "rust:$toolchain" \
-        sh -c 'cargo build --release --locked \
-                --target-dir /tmp/target -p config-cli \
-            && cp /tmp/target/release/config-cli /out/config-cli' \
-        || return 1
-
-    chmod +x "$seed_dir/config-cli"
-    unset seed_dir seed_platform toolchain
+    "$HOME/.scripts/deps/docker/build-seed-binary.sh" "$1" "$HOME" "$2"
 }
 
 workdir=$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-bootstrap-XXXXXX")

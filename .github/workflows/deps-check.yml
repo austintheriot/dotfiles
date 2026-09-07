@@ -117,16 +117,17 @@ jobs:
       # pre-satisfy the very dependency the run exists to exercise. That is
       # the shape of the bug this whole port was written to stop.
       #
-      # The runner is ubuntu-latest and the image is amd64, so a native
-      # release build is directly executable inside the container.
+      # Built in a bookworm-based Rust container, NOT natively on the
+      # runner. The runner is Ubuntu 24.04 (glibc 2.39) and three bootstrap
+      # images are Debian bookworm (glibc 2.36), so a runner-built binary
+      # cannot start inside them. build-seed-binary.sh owns that rule and is
+      # the same script the local harnesses call, so the two cannot drift.
       - name: Build the deps engine for the container
         run: |
-          cd crates
-          cargo build --release --locked -p config-cli
-          mkdir -p /tmp/seed-arch
-          cp target/release/config-cli /tmp/seed-arch/
-          cp ../.scripts/deps/docker/seed-prebuilt.sh /tmp/seed-arch/
-          cp ../.scripts/deps/docker/deps-image-entrypoint.sh /tmp/seed-arch/
+          .scripts/deps/docker/build-seed-binary.sh \
+            /tmp/seed-arch "$GITHUB_WORKSPACE" --platform=linux/amd64
+          cp .scripts/deps/docker/seed-prebuilt.sh /tmp/seed-arch/
+          cp .scripts/deps/docker/deps-image-entrypoint.sh /tmp/seed-arch/
 
       - name: Bootstrap and check dependencies (pacman)
         run: |
@@ -195,10 +196,14 @@ jobs:
           # than a build stage in the image: rustup is a manifest entry,
           # so a toolchain installed into the image under test would
           # pre-satisfy the very dependency the run exists to exercise.
-          # The runner is amd64 and so is the image, so a native release
-          # build is directly executable inside the container.
-          ( cd crates && cargo build --release --locked -p config-cli )
-          cp crates/target/release/config-cli /tmp/seed/
+          #
+          # Built in a bookworm-based Rust container, NOT natively here. The
+          # runner is Ubuntu 24.04 (glibc 2.39) and this image is older, so a
+          # runner-built binary dies before main with "GLIBC_2.39 not found".
+          # build-seed-binary.sh owns that rule for CI and the local
+          # harnesses alike.
+          .scripts/deps/docker/build-seed-binary.sh \
+            /tmp/seed "$GITHUB_WORKSPACE" --platform=linux/amd64
 
       # The entrypoint runs the bootstrap and then asserts the state a
       # finished bootstrap must leave behind: the hooks linked, `config` on
@@ -269,10 +274,14 @@ jobs:
           # than a build stage in the image: rustup is a manifest entry,
           # so a toolchain installed into the image under test would
           # pre-satisfy the very dependency the run exists to exercise.
-          # The runner is amd64 and so is the image, so a native release
-          # build is directly executable inside the container.
-          ( cd crates && cargo build --release --locked -p config-cli )
-          cp crates/target/release/config-cli /tmp/seed-bare/
+          #
+          # Built in a bookworm-based Rust container, NOT natively here. The
+          # runner is Ubuntu 24.04 (glibc 2.39) and this image is older, so a
+          # runner-built binary dies before main with "GLIBC_2.39 not found".
+          # build-seed-binary.sh owns that rule for CI and the local
+          # harnesses alike.
+          .scripts/deps/docker/build-seed-binary.sh \
+            /tmp/seed-bare "$GITHUB_WORKSPACE" --platform=linux/amd64
           # The bare image has no git when setup.sh first runs, so the script
           # is read from the seed directory rather than out of the clone.
           cp setup.sh /tmp/seed-bare/setup.sh
@@ -349,10 +358,14 @@ jobs:
           # than a build stage in the image: rustup is a manifest entry,
           # so a toolchain installed into the image under test would
           # pre-satisfy the very dependency the run exists to exercise.
-          # The runner is amd64 and so is the image, so a native release
-          # build is directly executable inside the container.
-          ( cd crates && cargo build --release --locked -p config-cli )
-          cp crates/target/release/config-cli /tmp/seed-curl/
+          #
+          # Built in a bookworm-based Rust container, NOT natively here. The
+          # runner is Ubuntu 24.04 (glibc 2.39) and this image is older, so a
+          # runner-built binary dies before main with "GLIBC_2.39 not found".
+          # build-seed-binary.sh owns that rule for CI and the local
+          # harnesses alike.
+          .scripts/deps/docker/build-seed-binary.sh \
+            /tmp/seed-curl "$GITHUB_WORKSPACE" --platform=linux/amd64
 
           # Served over HTTP by the container, not read from the mount. The
           # copy is what the entrypoint publishes; setup.sh must arrive by
@@ -426,10 +439,14 @@ jobs:
           # than a build stage in the image: rustup is a manifest entry,
           # so a toolchain installed into the image under test would
           # pre-satisfy the very dependency the run exists to exercise.
-          # The runner is amd64 and so is the image, so a native release
-          # build is directly executable inside the container.
-          ( cd crates && cargo build --release --locked -p config-cli )
-          cp crates/target/release/config-cli /tmp/seed-curl-arch/
+          #
+          # Built in a bookworm-based Rust container, NOT natively here. The
+          # runner is Ubuntu 24.04 (glibc 2.39) and this image is older, so a
+          # runner-built binary dies before main with "GLIBC_2.39 not found".
+          # build-seed-binary.sh owns that rule for CI and the local
+          # harnesses alike.
+          .scripts/deps/docker/build-seed-binary.sh \
+            /tmp/seed-curl-arch "$GITHUB_WORKSPACE" --platform=linux/amd64
           cp setup.sh /tmp/seed-curl-arch/setup.sh
 
       - name: Run and verify the Arch curl-pipe bootstrap

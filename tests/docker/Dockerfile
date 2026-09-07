@@ -19,15 +19,22 @@
 FROM rust:1.94-slim-bookworm@sha256:cf9dd0ec73e75f827fe59123fff9dc65af1a1c8363c3c31ee8d7f8ad0b6a5fb2 AS builder
 WORKDIR /build
 COPY crates/Cargo.toml crates/Cargo.lock ./
+# One COPY per workspace member, and container.test.sh asserts this list
+# matches what cargo reports. Adding deps-core without these three lines
+# failed the build with "failed to read /build/deps-core/Cargo.toml" during a
+# push, so the guard exists to make the next crate fail in a test instead.
 COPY crates/config-manifest/Cargo.toml config-manifest/
 COPY crates/dotfiles-path/Cargo.toml dotfiles-path/
-RUN mkdir config-manifest/src dotfiles-path/src \
+COPY crates/deps-core/Cargo.toml deps-core/
+RUN mkdir config-manifest/src dotfiles-path/src deps-core/src \
     && echo 'fn main() {}' > config-manifest/src/main.rs \
     && echo '' > dotfiles-path/src/lib.rs \
+    && echo '' > deps-core/src/lib.rs \
     && cargo build --release --locked --quiet \
     && rm -rf config-manifest/src target/release/config-manifest target/release/deps/config_manifest*
 COPY crates/config-manifest/src ./config-manifest/src
 COPY crates/dotfiles-path/src ./dotfiles-path/src
+COPY crates/deps-core/src ./deps-core/src
 RUN cargo build --release --locked --quiet
 
 FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171

@@ -299,5 +299,45 @@ done
 assert_equals 'the runner overlays the root-level files it copies' \
     '' "$missing_from_overlay"
 
+# --- the builder stage knows every workspace member -------------------------
+
+# The builder pre-warms the dependency cache by copying each crate's
+# Cargo.toml, stubbing its src, and building once. That list is written out
+# crate by crate, so every new workspace member breaks the image until
+# someone adds three more lines, and the failure is a Docker build error
+# during a push rather than a test.
+#
+# This already happened: adding deps-core made the stage fail with
+# "failed to read /build/deps-core/Cargo.toml" and blocked the push.
+#
+# Compares the members cargo reports against the paths the Dockerfile names,
+# so the next crate fails HERE, with a message naming the file to edit.
+
+DOCKERFILE="$DOTFILES_ROOT/tests/docker/Dockerfile"
+
+if command -v cargo >/dev/null 2>&1 && [ -f "$DOTFILES_ROOT/crates/Cargo.toml" ]; then
+    workspace_members=$(cd "$DOTFILES_ROOT/crates" \
+        && cargo metadata --no-deps --format-version 1 2>/dev/null \
+        | python3 -c 'import json,sys; print("\n".join(sorted(p["name"] for p in json.load(sys.stdin)["packages"])))' 2>/dev/null || true)
+
+    # Positive control: cargo must have reported members, or the emptiness
+    # check below would pass against an empty comparison.
+    assert_succeeds 'cargo reports the workspace members' \
+        test -n "$workspace_members"
+
+    unknown_to_builder=''
+    for member in $workspace_members; do
+        grep -qF "crates/$member/Cargo.toml" "$DOCKERFILE" \
+            || unknown_to_builder="$unknown_to_builder $member"
+    done
+
+    assert_equals "every workspace member is named in tests/docker/Dockerfile's builder stage (add COPY, mkdir and stub lines for any listed here)" \
+        '' "$unknown_to_builder"
+else
+    skip 'cargo reports the workspace members' 'no cargo or no workspace here'
+    skip "every workspace member is named in tests/docker/Dockerfile's builder stage (add COPY, mkdir and stub lines for any listed here)" \
+        'no cargo or no workspace here'
+fi
+
 
 finish

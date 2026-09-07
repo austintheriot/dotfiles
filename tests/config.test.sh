@@ -407,7 +407,7 @@ if [ -d "$DOTFILES_ROOT/.cfg" ] || [ -d "$DOTFILES_ROOT/.git" ]; then
     # everything is current".
     # The build's own status is checked, not discarded. Swallowing it made a
     # failed build read as a doctor defect: on a CI runner config-build
-    # installs into $HOME/.local/bin while PATH resolves config-manifest to
+    # installs into $HOME/.local/bin while PATH resolves config-cli to
     # the workflow's own crates/target/release copy, so doctor compared an
     # unstamped binary and was correct to report a mismatch. The assertion
     # blamed doctor for it.
@@ -436,7 +436,7 @@ if [ -d "$DOTFILES_ROOT/.cfg" ] || [ -d "$DOTFILES_ROOT/.git" ]; then
     #
     # Asserted by pointing DOTFILES_ROOT at a copy while leaving the binary
     # where config-build put it. Without the fix this prints
-    # "config-manifest: not installed".
+    # "config-cli: not installed".
     split_root="$FIXTURES/split-root"
     mkdir -p "$split_root"
     cp -R "$DOTFILES_ROOT/crates" "$split_root/crates"
@@ -451,12 +451,18 @@ if [ -d "$DOTFILES_ROOT/.cfg" ] || [ -d "$DOTFILES_ROOT/.git" ]; then
         '' "$(printf '%s' "$split_out" | grep 'not installed' || true)"
 
     # The behavior doctor exists for, asserted rather than checked by hand.
-    probe="$DOTFILES_ROOT/crates/config-manifest/src/doctor.rs"
+    #
+    # The probe edits config-cli, not config-manifest. config-manifest is
+    # library-only: it installs no binary, so doctor drops it from both sides
+    # of the comparison and an edit there moves nothing. Pointed at
+    # config-manifest this block asserted "stale" against a crate doctor was
+    # correct to ignore, which is a silent pass rather than a real check.
+    probe="$DOTFILES_ROOT/crates/config-cli/src/doctor.rs"
     cp "$probe" "$FIXTURES/doctor.rs.orig"
     printf '\n// staleness probe\n' >> "$probe"
 
     # Same PATH pinning as the fresh case above. Without it this asserted
-    # "stale" against whichever config-manifest the environment resolved
+    # "stale" against whichever config-cli the environment resolved
     # first, which on CI is the workflow's unstamped build -- so it would
     # have passed for the wrong reason while the fresh case failed.
     doctor_path="${CONFIG_BIN_DIR:-$HOME/.local/bin}:$PATH"
@@ -464,7 +470,7 @@ if [ -d "$DOTFILES_ROOT/.cfg" ] || [ -d "$DOTFILES_ROOT/.git" ]; then
     doctor_status=0
     PATH="$doctor_path" "$DOCTOR" >/dev/null 2>&1 || doctor_status=$?
     assert_equals 'doctor exits 1 when a binary is stale' '1' "$doctor_status"
-    assert_contains 'doctor names the stale crate' 'config-manifest' "$doctor_out"
+    assert_contains 'doctor names the stale crate' 'config-cli' "$doctor_out"
     assert_contains 'doctor names the fix' 'config build' "$doctor_out"
 
     cp "$FIXTURES/doctor.rs.orig" "$probe"

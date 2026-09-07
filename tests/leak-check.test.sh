@@ -429,7 +429,7 @@ PRE_PUSH="$DOTFILES_ROOT/tests/pre-push"
 # own scripts as "$HOME/tests/...". On CI, DOTFILES_ROOT is the checkout while
 # HOME is the runner home, so without this the hook looks for leak-check.sh in
 # the wrong tree and every assertion below fails. The pushed ref is `feature`,
-# so the config-manifest stamp block never runs.
+# so the config-cli stamp block never runs.
 run_pre_push() {
     local local_sha=$1 remote_sha=$2
     (

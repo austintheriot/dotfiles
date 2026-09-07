@@ -13,7 +13,7 @@
 # premise.
 #
 # The gap that matters is the stamp check. It verifies the built
-# config-manifest against the crate tree in the pushed ref, and two pushed
+# config-cli against the crate tree in the pushed ref, and two pushed
 # refs can hold different trees there. Checking only the first ref lets a
 # binary that is stale for the second ref through the gate that exists to
 # catch exactly that.
@@ -74,7 +74,7 @@ git -C "$repo" checkout -q main
 assert_succeeds 'the fixture branches hold different crate trees' \
     test "$main_tree" != "$feature_tree"
 
-# The stubs. config-manifest reports the tree it was "built" from, which the
+# The stubs. config-cli reports the tree it was "built" from, which the
 # hook compares against config-stamp's read of the pushed ref's actual tree.
 # Pointing it at the main tree models the real situation the hook must catch: a
 # binary built for one branch while a push carries both.
@@ -96,7 +96,7 @@ mkdir -p "$stub_dir" "$FIXTURES/hookhome/tests"
 
 make_stubs() {
     local stamp=$1
-    cat > "$stub_dir/config-manifest" <<STUB
+    cat > "$stub_dir/config-cli" <<STUB
 #!/bin/sh
 case \$1 in
     --stamp) printf '%s\n' "$stamp" ;;
@@ -117,7 +117,7 @@ case \$1 in
     *) exit 0 ;;
 esac
 STUB
-    chmod 755 "$stub_dir/config-manifest"
+    chmod 755 "$stub_dir/config-cli"
 
     # The leak scan, the Rust checks and the Docker suite are the slow halves.
     # All pass unconditionally here so a failure in this file can only come
@@ -236,7 +236,7 @@ crateless_output=$(printf 'refs/heads/main %s refs/heads/main %s\n' \
 crateless_status=$?
 
 # Positive control before the narrow property: an empty output would satisfy
-# a "does not mention config-manifest" check for the wrong reason.
+# a "does not mention config-cli" check for the wrong reason.
 assert_succeeds 'the hook produced output for a crateless push' \
     test -n "$crateless_output"
 assert_equals 'a ref carrying no crates passes the stamp gate' \

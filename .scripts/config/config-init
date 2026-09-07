@@ -82,7 +82,7 @@ git_dir="$HOME/.cfg"
 # one level up, where an install and a build happen in one process.
 #
 # ~/.local/bin as well, because config-install-hooks puts `config` there and
-# config-build installs config-manifest there, and both are resolved by name
+# config-build installs config-cli there, and both are resolved by name
 # afterwards.
 # Remembered before the prepend below, because the closing hint has to answer
 # "can the CALLER'S shell see config?" and not "can this script see it?". The

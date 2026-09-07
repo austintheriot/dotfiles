@@ -51,8 +51,6 @@ home=$(make_fixture_home usage)
 # itself rather than handing it to a program that may not be installed.
 shim_dir="$FIXTURES/shims"
 mkdir -p "$shim_dir"
-printf '#!/bin/sh\nprintf "manifest:%%s\\n" "$@"\n' > "$shim_dir/config-manifest"
-chmod 755 "$shim_dir/config-manifest"
 # The binary every thin wrapper execs: `config deps`, `config install`, and
 # now `config test` all resolve it by name on PATH rather than under $HOME.
 #
@@ -303,9 +301,10 @@ assert_succeeds 'config install-hooks --describe does not link the dispatcher' \
 
 # Asserted positively: --describe prints exactly the `# help:` line and
 # nothing else. The earlier version grepped each wrapper's output for a
-# marker its exec'd program would emit, which failed three ways. `manifest:`
-# is emitted by nothing, so that assertion passed even with the --describe
-# handling removed entirely (mutation-confirmed). `all:` and `deps:` did fire,
+# marker its exec'd program would emit, which failed three ways. The
+# `config-manifest` stub's `manifest:` marker was emitted by nothing, so that
+# assertion passed even with the --describe handling removed entirely
+# (mutation-confirmed). `all:` and `deps:` did fire,
 # but only as substrings of `run-all:` and `config deps:`, so renaming either
 # program would have silenced them without a failure.
 #
@@ -486,36 +485,12 @@ else
         'present' 'missing'
 fi
 
-# --- the binary and its shim describe themselves identically ----------------
-
-# config-manifest --describe and the config-doctor shim's `# help:` line are
-# two copies of one string, and only the shim's copy reaches `config help`
-# today. Nothing else asserts they agree, so a drift would ship a description
-# that is correct in the binary and wrong in the listing, or the reverse.
-#
-# The duplication is temporary by design: the port that turns doctor into a
-# binary subcommand deletes the shim, leaving one copy. Until then this is
-# what keeps them honest, and when the shim goes this block goes with it.
-manifest_bin=$(command -v config-manifest 2>/dev/null || true)
-doctor_shim="$CONFIG_DIR/config-doctor"
-
-if [ -n "$manifest_bin" ] && [ -f "$doctor_shim" ]; then
-    shim_help=$(sed -n 's/^# help: //p' "$doctor_shim" | head -1)
-    binary_help=$("$manifest_bin" --describe 2>/dev/null | head -1)
-
-    # Both sides must be non-empty, or two failed reads would compare equal
-    # and report a pass.
-    assert_succeeds 'the doctor shim carries a help line' test -n "$shim_help"
-    assert_succeeds 'the binary answers --describe' test -n "$binary_help"
-
-    assert_equals 'the binary and the doctor shim describe themselves identically' \
-        "$shim_help" "$binary_help"
-else
-    skip 'the doctor shim carries a help line' 'no config-manifest on PATH, or no shim'
-    skip 'the binary answers --describe' 'no config-manifest on PATH, or no shim'
-    skip 'the binary and the doctor shim describe themselves identically' \
-        'no config-manifest on PATH, or no shim'
-fi
+# The `config-manifest --describe` cross-check that used to live here is gone
+# with the binary it asked. The doctor shim's `# help:` line is now the only
+# copy of that description, so there is no second copy to drift from and
+# nothing left to compare. `config-cli` carries no `--describe`: it is one
+# binary behind several verbs, so a single description could not name them all.
+# The listing itself is still asserted above, against the recorded fixture.
 
 # --- config deps resolves through the dispatcher -----------------------------
 #

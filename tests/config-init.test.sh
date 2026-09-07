@@ -273,7 +273,7 @@ assert_equals 'it does not tell the reader to run config build later' '' \
     "$(printf '%s\n' "$output" | grep 'once cargo is on PATH' || true)"
 
 # ~/.local/bin too: config-install-hooks puts `config` there and config-build
-# installs config-manifest there, and both are resolved by name afterwards.
+# installs config-cli there, and both are resolved by name afterwards.
 #
 # Driven rather than grepped. An earlier version grepped config-init for
 # ".local/bin", which passed on a comment mentioning the path and would have

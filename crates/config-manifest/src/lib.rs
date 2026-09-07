@@ -1,6 +1,11 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 //! The git-sync and build-stamp half of the `config` command.
 //!
+//! Library-only. The binary that used to own the `doctor` and `verify-stamps`
+//! subcommands is gone: both are `config-cli` subcommands now, calling the
+//! same modules below. Two binaries on PATH meant two copies of the argument
+//! parsing and two chances for the stamp comparison to drift.
+//!
 //! Split pure from effectful along module lines rather than by convention:
 //! `doctor`, `path`, and `stamp` are functions of their arguments, and `git`
 //! is the one module that runs a subprocess. That split is what lets the

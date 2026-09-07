@@ -15,9 +15,12 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 mod deps;
+mod doctor;
 mod help;
 mod reload;
+mod stamps;
 mod test_runner;
+mod verify_stamps;
 
 /// The `config-cli` command line: the subcommands ported out of the
 /// `.scripts/config/config-*` shell scripts, plus `--stamp`.
@@ -56,6 +59,15 @@ enum Command {
     /// List the config subcommands and what each one does.
     #[command(name = "help")]
     Help(help::HelpArgs),
+    /// Report installed binaries that do not match their source.
+    #[command(name = "doctor")]
+    Doctor(doctor::DoctorArgs),
+    /// Compare installed binary stamps against the stamps pushed on a ref.
+    ///
+    /// Not reachable through the `config` dispatcher: `tests/pre-push` is the
+    /// only caller, and it runs this binary by path rather than by verb.
+    #[command(name = "verify-stamps")]
+    VerifyStamps(verify_stamps::VerifyStampsArgs),
 }
 
 /// A `deps` verb: whether to change anything.
@@ -104,6 +116,8 @@ fn main() -> ExitCode {
         Some(Command::Reload(arguments)) => reload::run(arguments),
         Some(Command::Test(arguments)) => test_runner::run(arguments),
         Some(Command::Help(arguments)) => help::run(arguments),
+        Some(Command::Doctor(arguments)) => doctor::run(arguments),
+        Some(Command::VerifyStamps(arguments)) => verify_stamps::run(arguments),
         None => {
             // A bare invocation is a usage error, so the help goes to
             // stderr and the exit code stays 2, matching every other usage

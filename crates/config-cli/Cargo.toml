@@ -5,7 +5,9 @@ edition = "2024"
 publish = false
 
 [dependencies]
+anyhow = { workspace = true }
 clap = { workspace = true }
+config-manifest = { path = "../config-manifest" }
 deps-core = { path = "../deps-core" }
 dotfiles-path = { path = "../dotfiles-path" }
 

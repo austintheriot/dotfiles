@@ -17,10 +17,17 @@
 #
 # Environment:
 #   DOTFILES_ROOT   Repo root. Default $HOME.
+#
+# A shim, deliberately. Every decision lives in config-cli, and this file
+# exists so `config doctor` resolves through the dispatcher rather than
+# falling through to git: .scripts/config/config finds a verb only by testing
+# `[ -x "$here/config-<verb>" ]` and otherwise hands the word to git, with no
+# config-cli fallback, so deleting this file would turn `config doctor` into
+# `git doctor` permanently.
 
 set -eu
 
 . "$(dirname "$(readlink -f "$0")")/usage.sh"
 usage_if_requested "${1:-}"
 
-exec config-manifest doctor "$@"
+exec config-cli doctor "$@"

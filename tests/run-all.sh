@@ -33,7 +33,7 @@ TESTS_DIR=$(cd "$(dirname "$0")" && pwd)
 DOTFILES_ROOT=${DOTFILES_ROOT:-$HOME}
 export DOTFILES_ROOT
 
-# The suite calls config-manifest by name. config-build installs it to
+# The suite calls config-cli by name. config-build installs it to
 # ~/.local/bin, which not every invoking shell has on PATH.
 case ":$PATH:" in
     *":$HOME/.local/bin:"*) ;;

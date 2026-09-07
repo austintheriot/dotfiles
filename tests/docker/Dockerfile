@@ -11,7 +11,7 @@
 # image tests the dotfiles suite, not the dependency manifest, so it wants a
 # small base with the tooling available in one apt index. Digest-pinned so a
 # base-image republish cannot change a passing suite underneath us.
-# Builder stage: compiles crates/config-manifest so the runtime image below
+# Builder stage: compiles the crates workspace so the runtime image below
 # carries only the binary and stays Rust-free. Digest-pinned like the runtime
 # base. The dependency layer is built first from a stub main.rs so a source
 # edit does not recompile dependencies; a single COPY of the whole crate would
@@ -38,18 +38,32 @@ COPY crates/dotfiles-path/Cargo.toml dotfiles-path/
 COPY crates/deps-core/Cargo.toml deps-core/
 COPY crates/tmux-core/Cargo.toml tmux-core/
 COPY crates/tmux-tools/Cargo.toml tmux-tools/
+# The warm-up build: stub sources so the dependency compile lands in a layer
+# that survives an edit to any real source.
+#
+# EVERY stub is removed afterwards, not only the binaries'. A stub left behind
+# is overwritten by the COPY below, but cargo fingerprints what it already
+# compiled: the real source arrives and the rlib built from the empty stub is
+# still considered fresh, so the final build fails with "no `X` in the root"
+# for every item the library genuinely exports. The three library crates used
+# to be left in place, which kept this one cache-bust away from failing that
+# way, and it did fail that way the first time the stub line itself changed.
 RUN mkdir config-cli/src config-manifest/src dotfiles-path/src deps-core/src tmux-core/src tmux-tools/src \
     && echo 'fn main() {}' > config-cli/src/main.rs \
-    && echo 'fn main() {}' > config-manifest/src/main.rs \
+    && echo '' > config-manifest/src/lib.rs \
     && echo '' > dotfiles-path/src/lib.rs \
     && echo '' > deps-core/src/lib.rs \
     && echo '' > tmux-core/src/lib.rs \
     && echo 'fn main() {}' > tmux-tools/src/main.rs \
     && cargo build --release --locked --quiet \
-    && rm -rf config-cli/src config-manifest/src tmux-tools/src target/release/config-cli \
-        target/release/config-manifest target/release/tmux-tools \
+    && rm -rf config-cli/src config-manifest/src dotfiles-path/src deps-core/src \
+        tmux-core/src tmux-tools/src \
+        target/release/config-cli target/release/tmux-tools \
         target/release/deps/config_cli* target/release/deps/config_manifest* \
-        target/release/deps/tmux_tools*
+        target/release/deps/dotfiles_path* target/release/deps/deps_core* \
+        target/release/deps/tmux_core* target/release/deps/tmux_tools* \
+        target/release/deps/libconfig_manifest* target/release/deps/libdotfiles_path* \
+        target/release/deps/libdeps_core* target/release/deps/libtmux_core*
 # The tracked files the catalog embeds at compile time. Copied to
 # /build/.scripts so the crate-relative escape above resolves.
 COPY .scripts/deps ../.scripts/deps
@@ -90,8 +104,6 @@ RUN apt-get update \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# The suite's shell tests call config-manifest by name, as pre-push and CI do.
-COPY --from=builder /build/crates/target/release/config-manifest /usr/local/bin/config-manifest
 # tmux-update-window-names.sh is now a shim that execs this binary, so the
 # suite fails with "exec: tmux-tools: not found" without it. The builder
 # already compiles every workspace member; only the binaries the suite calls
@@ -102,6 +114,11 @@ COPY --from=builder /build/crates/target/release/tmux-tools /usr/local/bin/tmux-
 # flag against it. Without it those probes exit 127, which the suite reads
 # as a rejected flag, so its harvest finds nothing and passes vacuously
 # until the count assertion catches it.
+#
+# It also carries the doctor and verify-stamps subcommands that
+# config-manifest's own binary used to own, which the shell suites and
+# pre-push call by name. config-manifest is library-only and installs
+# nothing, so there is no second binary to copy.
 COPY --from=builder /build/crates/target/release/config-cli /usr/local/bin/config-cli
 
 # A UTF-8 locale is load-bearing, not cosmetic. With no LANG set, tmux treats

@@ -146,15 +146,15 @@ fi
 # Runs whenever a branch is among the pushed refs, which is every ordinary
 # push. pre-push compares and refuses; it does not compute.
 #
-# config-stamp --ref owns the committed side, config-manifest verify-stamps
-# owns the comparison policy, and neither copy of the workspace member list
+# config-stamp --ref owns the committed side, config-cli verify-stamps owns
+# the comparison policy, and neither copy of the workspace member list
 # lives here: config-stamp's own output supplies the crate names, and
 # verify-stamps reads them from that output. This hook used to spell the
 # comparison itself, member by member, with a second copy of "library crates
 # have nothing to gate" and "a differing stamp is stale" baked into shell case
 # statements.
 #
-# config-stamp and config-manifest are the copies that ship beside this hook,
+# config-stamp and config-cli are the copies that ship beside this hook,
 # resolved from the hook's own location rather than $HOME: the two coincide in
 # production (this hook is installed at $HOME/.cfg/hooks, a symlink into the
 # tracked tree), but a test drives the hook against a throwaway fixture repo
@@ -167,7 +167,7 @@ if [ "$pushing_branch" -eq 1 ]; then
     hook_dir=$(dirname "$(readlink -f "$0")")
     stamp_cmd="$hook_dir/../.scripts/config/config-stamp"
     BIN_DIR=${CONFIG_BIN_DIR:-$HOME/.local/bin}
-    config_manifest_bin="$BIN_DIR/config-manifest"
+    config_cli_bin="$BIN_DIR/config-cli"
 
     for ref in $push_refs; do
         # A ref with no workspace manifest carries no crates, so there is
@@ -179,8 +179,8 @@ if [ "$pushing_branch" -eq 1 ]; then
         git rev-parse --verify --quiet "$ref:crates/Cargo.toml" >/dev/null \
             || continue
 
-        if [ ! -x "$config_manifest_bin" ]; then
-            printf 'pre-push: config-manifest is not built; run %s\n' \
+        if [ ! -x "$config_cli_bin" ]; then
+            printf 'pre-push: config-cli is not built; run %s\n' \
                 "$hook_dir/../.scripts/config/config-build" >&2
             exit 1
         fi
@@ -195,7 +195,7 @@ if [ "$pushing_branch" -eq 1 ]; then
 
         if ! printf '%s\n' "$pushed_stamps" \
             | DOTFILES_ROOT="$PWD" CONFIG_BIN_DIR="$BIN_DIR" \
-                "$config_manifest_bin" verify-stamps --ref "$ref"; then
+                "$config_cli_bin" verify-stamps --ref "$ref"; then
             exit 1
         fi
     done

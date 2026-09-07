@@ -38,3 +38,29 @@ remember. `tests/rust-checks.sh` (planned in
 `docs/superpowers/plans/2026-09-07-rust-gate-and-strict-lints.md`) carries
 the `env -u` guard for the gate's own invocation, but that does not protect
 a developer running `cargo test` by hand.
+
+## `config build` leaves a stale binary when a crate becomes a library
+
+**What happens.** A workspace member that had a `src/main.rs` and loses it
+becomes library-only. `config build` handles the build correctly: it compiles
+the member and prints `config-build: <name> is a library, nothing to install`.
+It does not remove the binary a previous run installed, so
+`~/.local/bin/<name>` survives with the last compiled copy and stays on PATH.
+
+**Why it costs time.** The stale binary answers `--stamp` with whatever it was
+built from, so `config doctor` and the pre-push stamp gate both keep it out of
+their comparison (the crate has no `src/main.rs`, so both sides drop it) while
+`command -v <name>` still finds it. Nothing reports the leftover. A reader
+checking whether a migration finished sees the binary and concludes it did
+not, or worse, a script that resolves the old name by mistake keeps working
+locally and fails on any machine that never had it installed.
+
+**Why the repository can fix this.** `config-build:64` already knows the
+member is a library, at the exact moment it decides not to install. It has
+`$BIN_DIR` and `$member` in hand and could remove a leftover in the same
+branch.
+
+**The fix.** In the library branch of `.scripts/config/config-build`, remove
+`$BIN_DIR/$member` when it exists, and say so on stdout the same way the
+install path reports where it installed. Silence there is the same defect as
+silence anywhere else in that script.

@@ -12,8 +12,11 @@ mod tmux;
 use std::path::Path;
 use std::process::ExitCode;
 
-use tmux::{Server, WindowTarget};
-use tmux_core::{RepositoryFacts, WindowFacts, format_branches, window_name};
+use tmux::{Direction, Server, WindowTarget};
+use tmux_core::{
+    Arrangement, DEFAULT_HORIZONTAL_SPLITS, DEFAULT_VERTICAL_SPLITS, Layout, RepositoryFacts,
+    WindowFacts, format_branches, layout_with_counts, window_name,
+};
 
 /// Where the fallback `@wname_bare_repos` patterns live, relative to `$HOME`.
 ///
@@ -45,6 +48,7 @@ fn main() -> ExitCode {
         Some("close") => close(arguments.collect()),
         Some("worktree-config") => worktree_config(),
         Some("list-branches") => list_branches(),
+        Some("split") => split(arguments.collect()),
         Some(other) => {
             eprintln!("tmux-tools: unknown subcommand {other}");
             ExitCode::from(2)
@@ -184,6 +188,160 @@ fn list_branches() -> ExitCode {
         println!("{line}");
     }
     ExitCode::SUCCESS
+}
+
+/// Runs the `split` subcommand: arranges the current window into a named
+/// layout, matching `.scripts/tmux-split.sh`'s `case`.
+///
+/// Three exit codes, and the distinction between the last two is the point
+/// of this port:
+///
+/// - 0: the name is a layout, and the panes were created.
+/// - 3: the name is not a layout. `tmux-start.sh` passes a session name
+///   here, and most session names are not layout names, so this is the
+///   ordinary case rather than a failure. The shell version reached it by
+///   printing usage, which told a user who typed a perfectly good session
+///   name that they had used the command wrong.
+/// - 2: a genuine usage error, such as no argument at all or a count that
+///   is not a number.
+fn split(arguments: Vec<String>) -> ExitCode {
+    let (name, vertical_splits, horizontal_splits) = match parse_split_arguments(&arguments) {
+        Ok(parsed) => parsed,
+        Err(message) => {
+            eprintln!("tmux-tools split: {message}");
+            eprintln!("usage: tmux-tools split <layout> [vertical_splits] [horizontal_splits]");
+            return ExitCode::from(2);
+        }
+    };
+
+    let Some(layout) = layout_with_counts(&name, vertical_splits, horizontal_splits) else {
+        // Deliberately silent. See this function's exit-code list: the
+        // caller passed a name that is not a layout, which is not an error
+        // and must not print usage.
+        return ExitCode::from(3);
+    };
+
+    let server = Server::from_env();
+    let Some(origin) = current_pane(&server) else {
+        eprintln!("tmux-tools split: no pane to split");
+        return ExitCode::FAILURE;
+    };
+
+    if arrange(&server, &origin, layout) {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+/// Parses `split`'s three positional arguments, matching the shell's
+/// `${1:-}`, `${2:-DEFAULT_VERTICAL_SPLITS}` and
+/// `${3:-DEFAULT_HORIZONTAL_SPLITS}`.
+///
+/// # Errors
+///
+/// Returns a message when no layout name is given, when a count is not a
+/// number, or when more than three arguments are passed.
+fn parse_split_arguments(arguments: &[String]) -> Result<(String, u32, u32), String> {
+    let (name, counts) = arguments
+        .split_first()
+        .ok_or_else(|| "a layout name is required".to_string())?;
+
+    let parse_count = |raw: &String, position: &str| {
+        raw.parse::<u32>()
+            .map_err(|_| format!("{position} must be a number, got {raw}"))
+    };
+
+    let (vertical_splits, horizontal_splits) = match counts {
+        [] => (DEFAULT_VERTICAL_SPLITS, DEFAULT_HORIZONTAL_SPLITS),
+        [vertical] => (
+            parse_count(vertical, "vertical_splits")?,
+            DEFAULT_HORIZONTAL_SPLITS,
+        ),
+        [vertical, horizontal] => (
+            parse_count(vertical, "vertical_splits")?,
+            parse_count(horizontal, "horizontal_splits")?,
+        ),
+        _ => return Err(format!("unexpected arguments: {}", arguments.join(" "))),
+    };
+
+    Ok((name.clone(), vertical_splits, horizontal_splits))
+}
+
+/// Resolves the pane to split.
+///
+/// `$TMUX_PANE` first, because that is what the shell script relied on: it
+/// ran inside the pane being split, so tmux resolved its bare
+/// `split-window` against that pane. A subprocess inherits the variable but
+/// is not the active client, so the value has to be read and passed
+/// explicitly. `display-message` is the fallback for a caller that has no
+/// `TMUX_PANE`, such as a test driving a detached server.
+fn current_pane(server: &Server) -> Option<String> {
+    match std::env::var("TMUX_PANE") {
+        Ok(pane) if !pane.is_empty() => Some(pane),
+        _ => server.current_pane_id(),
+    }
+}
+
+/// Creates `layout`'s panes, starting from `origin`.
+///
+/// Returns whether every tmux call succeeded, so `split` can propagate a
+/// failing status the way the sourced script propagated `$?`.
+fn arrange(server: &Server, origin: &str, layout: Layout) -> bool {
+    match layout.arrangement {
+        // create_vertical_terminals: a vertical stack, focus back on top.
+        Arrangement::VerticalTerminals => {
+            stack_vertically(server, origin, layout.vertical_splits).is_some()
+                && server.select_pane(origin)
+        }
+
+        // create_editor_with_terminals: one horizontal split for the
+        // editor, the terminals stacked in the new right-hand pane, then
+        // focus back on the editor. The shell's `select-pane -L` moved left
+        // from the terminal stack, which is this same pane by id.
+        Arrangement::EditorWithTerminals => {
+            let Some(terminals) = server.split_window(origin, Direction::Horizontal) else {
+                return false;
+            };
+            stack_vertically(server, &terminals, layout.vertical_splits).is_some()
+                && server.select_pane(origin)
+        }
+
+        // create_main_above_two_below: the vertical stack first, then the
+        // bottom pane of that stack divided side by side, then focus back
+        // on the main area above. The shell's `select-pane -D` moved down
+        // into the pane its own loop had just created, which is the id
+        // `stack_vertically` returns.
+        Arrangement::MainAboveTwoBelow => {
+            let Some(bottom) = stack_vertically(server, origin, layout.vertical_splits) else {
+                return false;
+            };
+            let mut pane = bottom;
+            for _ in 1..layout.horizontal_splits {
+                let Some(next) = server.split_window(&pane, Direction::Horizontal) else {
+                    return false;
+                };
+                pane = next;
+            }
+            server.select_pane(origin)
+        }
+    }
+}
+
+/// Splits `origin` downward until the stack holds `count` panes, and
+/// returns the last pane created.
+///
+/// Reproduces `create_vertical_splits`'s `for ((i=1; i<count; i++))`: the
+/// count is the total number of panes in the stack, so a count of 1 makes
+/// no split at all and returns `origin` itself. Each split subdivides the
+/// pane the previous one created, which is what the shell's bare
+/// `split-window -v` did by leaving the cursor on the new pane.
+fn stack_vertically(server: &Server, origin: &str, count: u32) -> Option<String> {
+    let mut pane = origin.to_string();
+    for _ in 1..count {
+        pane = server.split_window(&pane, Direction::Vertical)?;
+    }
+    Some(pane)
 }
 
 /// Splits a window's `@wname_bare_repos` value on `|` for

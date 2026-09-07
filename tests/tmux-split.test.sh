@@ -7,8 +7,9 @@
 # the panes that result.
 #
 # Every layout defaults to DEFAULT_VERTICAL_SPLITS (2). An unknown layout must
-# leave the sourcing shell alive, which is why show_usage returns rather than
-# exits.
+# leave the sourcing shell alive, which is why the shim returns the binary's
+# status rather than using `exec`: `exec` in a sourced script replaces the
+# interactive shell and closes the user's terminal.
 #
 # Usage: ~/tests/tmux-split.test.sh
 
@@ -80,9 +81,31 @@ target_window "$window"
 pane=$(first_pane "$window")
 usage=$(in_pane "$pane" zsh -c 'source "$1" "$2"' zsh "$SCRIPT" bogus-layout 2>&1)
 status=$?
-assert_equals 'an unknown layout exits non-zero' '1' "$status"
-assert_contains 'an unknown layout prints usage' 'Available layouts' "$usage"
+# Exit 3, not 1, and no usage text. An unrecognized name is not a usage
+# error: tmux-start.sh passes a session name here and most session names are
+# not layout names, so a user who typed a perfectly good session name must
+# not be told they used the command wrong. Exit 2 stays reserved for a
+# genuine usage error, which the no-argument case below covers.
+assert_equals 'an unknown layout exits 3' '3' "$status"
+assert_equals 'an unknown layout prints nothing' '' "$usage"
 assert_equals 'an unknown layout splits nothing' '1' "$(pane_count "$window")"
+tmux kill-window -t "$window" 2>/dev/null
+
+# A genuine usage error is still exit 2, and still says usage. Without this
+# the assertions above would pass for a binary that had collapsed every
+# failure into one silent code.
+window=$(fresh_window)
+target_window "$window"
+pane=$(first_pane "$window")
+# `set --` first, because a sourced script inherits the caller's positional
+# parameters. Without it "$1" is still the script path from `zsh -c`'s own
+# argument list, the shim forwards that path as a layout name, and the case
+# under test never runs. That inheritance is the exact defect this port
+# removed from tmux-start.sh, and it is just as live in a test harness.
+usage=$(in_pane "$pane" zsh -c 'set --; source "'"$SCRIPT"'"' zsh 2>&1)
+status=$?
+assert_equals 'no layout argument is a usage error' '2' "$status"
+assert_contains 'a usage error still prints usage' 'usage' "$usage"
 tmux kill-window -t "$window" 2>/dev/null
 
 window=$(fresh_window)

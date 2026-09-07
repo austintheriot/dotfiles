@@ -8,9 +8,14 @@
 //! tmux server, and it is the same split `deps-core` uses.
 
 mod branches;
+mod layout;
 mod naming;
 
 pub use branches::{BranchRef, format_branches};
+pub use layout::{
+    Arrangement, DEFAULT_HORIZONTAL_SPLITS, DEFAULT_VERTICAL_SPLITS, Layout, layout_for,
+    layout_with_counts,
+};
 pub use naming::{HeadState, RepositoryFacts, WindowFacts, window_name};
 
 #[cfg(test)]
@@ -28,6 +33,7 @@ mod purity {
             ("lib.rs", include_str!("lib.rs")),
             ("naming.rs", include_str!("naming.rs")),
             ("branches.rs", include_str!("branches.rs")),
+            ("layout.rs", include_str!("layout.rs")),
         ];
         for (file_name, source) in sources {
             for forbidden in forbidden_capabilities() {
@@ -56,6 +62,7 @@ mod purity {
             include_str!("lib.rs"),
             include_str!("naming.rs"),
             include_str!("branches.rs"),
+            include_str!("layout.rs"),
         ] {
             assert!(
                 !source.is_empty(),

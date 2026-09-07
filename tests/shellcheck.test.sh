@@ -94,9 +94,12 @@ assert_equals 'the dependency step runs on both runners' '' \
 # ZSH_SCRIPTS: shellcheck refuses zsh, so these are never linted.
 # SOURCED_BASH: no shebang because they are sourced, linted as bash.
 
+# tmux-split.sh is not on this list. It became a POSIX shim over
+# `tmux-tools split`, so it carries a #!/bin/sh shebang and is linted like
+# any other sh script. The "every zsh exclusion is still a zsh script"
+# assertion below is what caught the dialect change.
 ZSH_SCRIPTS='.scripts/tmux-close.sh
 .scripts/tmux-setup.sh
-.scripts/tmux-split.sh
 .scripts/tmux-start.sh
 .scripts/zsh-git-widgets.sh
 tests/leak-check.sh'

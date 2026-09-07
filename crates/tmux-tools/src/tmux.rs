@@ -172,6 +172,72 @@ impl Server {
         let pane_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
         (!pane_id.is_empty()).then_some(pane_id)
     }
+
+    /// Splits `target_pane`, matching `tmux-split.sh`'s bare
+    /// `tmux split-window -v` and `tmux split-window -h`.
+    ///
+    /// The shell script passed no `-t` because it ran inside the pane it
+    /// was splitting, so tmux resolved the target from the caller's own
+    /// `$TMUX_PANE`. A subprocess is not the active client, so the target
+    /// is passed explicitly here and the caller resolves it from the same
+    /// `TMUX_PANE` the script relied on.
+    ///
+    /// Returns the new pane's id, so the caller can walk the arrangement
+    /// without re-listing the window.
+    pub fn split_window(&self, target_pane: &str, direction: Direction) -> Option<String> {
+        let output = self
+            .command()
+            .args([
+                "split-window",
+                direction.flag(),
+                "-t",
+                target_pane,
+                "-P",
+                "-F",
+                "#{pane_id}",
+            ])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let pane_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        (!pane_id.is_empty()).then_some(pane_id)
+    }
+
+    /// Makes `target_pane` the window's active pane, matching
+    /// `tmux-split.sh`'s `tmux select-pane -U` and `-L` calls.
+    ///
+    /// The script moved directionally from wherever the split had left the
+    /// cursor. This takes a pane id instead, because the caller already
+    /// knows which pane each `select-pane` in the script was aiming at and
+    /// a directional move from a subprocess would resolve against the
+    /// active client rather than the pane being arranged.
+    pub fn select_pane(&self, target_pane: &str) -> bool {
+        self.command()
+            .args(["select-pane", "-t", target_pane])
+            .status()
+            .is_ok_and(|status| status.success())
+    }
+}
+
+/// Which axis a `split-window` call divides the pane along.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    /// `split-window -v`: the new pane appears below.
+    Vertical,
+    /// `split-window -h`: the new pane appears to the right.
+    Horizontal,
+}
+
+impl Direction {
+    /// The `tmux split-window` flag for this axis.
+    fn flag(self) -> &'static str {
+        match self {
+            Direction::Vertical => "-v",
+            Direction::Horizontal => "-h",
+        }
+    }
 }
 
 /// Parses one `list-windows`/`display-message` output line into a

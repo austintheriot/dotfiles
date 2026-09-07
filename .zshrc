@@ -57,14 +57,25 @@ export PATH="$HOME/.bun/bin:$PATH"
 # Examples:
 #   s              # Start/attach default session named 'zsh'
 #   s myproject    # Start/attach session named 'myproject' with splits
-alias s='source ~/.scripts/tmux-start.sh'
+#
+# The attach lives here rather than in the script. A subprocess that
+# attaches attaches itself, so the process that takes over the TTY has to be
+# this shell. The script prints the session to attach to and prints nothing
+# when it returned early (already inside tmux), so the guard reproduces the
+# script's own condition rather than attaching unconditionally.
+alias s='_tmux_session=$(source ~/.scripts/tmux-start.sh); [ -n "$_tmux_session" ] && tmux attach -t "$_tmux_session"; unset _tmux_session'
 
 # [se]tup - Setup multi-window tmux session for code projects
 # Creates windows for multiple work directories (Notability projects, staging, reviews)
 # Examples:
 #   se             # Create/attach 'code' session with predefined windows
 #   se mywork      # Create/attach 'mywork' session with predefined windows
-alias se='source ~/.scripts/tmux-setup.sh'
+#
+# The attach lives here for the same reason it does on `s` above. The script
+# prints the session for both of its old attach calls (the already-exists
+# branch and the freshly-built one) and prints nothing when it returned
+# early, so this one guard covers both.
+alias se='_tmux_session=$(source ~/.scripts/tmux-setup.sh); [ -n "$_tmux_session" ] && tmux attach -t "$_tmux_session"; unset _tmux_session'
 
 # [sp]lit - Create tmux pane layouts
 # Examples:

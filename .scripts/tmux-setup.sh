@@ -4,10 +4,19 @@
 #
 # Sourced from .zshrc (`alias se`), never executed: the early `return`
 # statements below need a calling shell to return to.
+#
+# The two `tmux attach` calls this script used to make now live in the
+# alias. A subprocess that attaches attaches itself, and the alias runs in
+# the caller's own terminal, which is the process that has to take over the
+# TTY. This script prints the session to attach to on stdout and the alias
+# attaches to whatever it printed, so the alias attaches under exactly the
+# conditions this script used to: never when already inside tmux, and
+# otherwise to the session named here whether it already existed or was
+# just built.
 
 # Return early if already inside a tmux session
 if [ -n "$TMUX" ]; then
-    echo "Already inside a tmux session. Please detach first."
+    echo "Already inside a tmux session. Please detach first." >&2
     return
 fi
 
@@ -18,8 +27,10 @@ SESSION_NAME="${1:-code}"
 
 # Check if session already exists
 if tmux has-session -t $SESSION_NAME 2>/dev/null; then
-    echo "Session '$SESSION_NAME' already exists. Attaching..."
-    tmux attach -t $SESSION_NAME
+    # stderr, so the message does not land in the session name the alias
+    # reads off stdout.
+    echo "Session '$SESSION_NAME' already exists. Attaching..." >&2
+    echo $SESSION_NAME
     return
 fi
 
@@ -78,5 +89,5 @@ create_named_window ~/Documents/code/notability-dev-tool "DevTool"
 # Select the first window
 tmux select-window -t $SESSION_NAME:1
 
-# Attach to the session
-tmux attach -t $SESSION_NAME
+# The alias attaches to whatever this prints.
+echo $SESSION_NAME

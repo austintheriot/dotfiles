@@ -28,9 +28,17 @@ NEWLINE='
 '
 
 # Every alias whose body sources a script from .scripts, as "alias<TAB>path".
+#
+# The `source` is matched anywhere in the alias body, not only as the whole
+# body. An alias that wraps the source in a command substitution to capture
+# what the script printed (`s` and `se` do, so the attach can happen in the
+# caller's own terminal) still runs that script's `setopt` calls in the
+# shell, so it still has to be covered. An anchored whole-body pattern
+# dropped both of those the moment the alias grew a wrapper, and a guard
+# that silently stops covering a file is indistinguishable from no guard.
 sourced=$(
-    grep -oE "^alias [a-zA-Z0-9_-]+='source ~/\.scripts/[A-Za-z0-9_/.-]+'" "$ZSHRC" \
-        | sed -E "s#^alias ([a-zA-Z0-9_-]+)='source ~/(\.scripts/[A-Za-z0-9_/.-]+)'#\1${TAB}\2#"
+    grep -oE "^alias [a-zA-Z0-9_-]+='[^']*source ~/\.scripts/[A-Za-z0-9_/.-]+" "$ZSHRC" \
+        | sed -E "s#^alias ([a-zA-Z0-9_-]+)='[^']*source ~/(\.scripts/[A-Za-z0-9_/.-]+)#\1${TAB}\2#"
 )
 
 assert_succeeds 'at least one sourcing alias is present' \

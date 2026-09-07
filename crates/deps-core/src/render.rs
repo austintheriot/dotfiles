@@ -45,6 +45,16 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
     let mut stderr = String::new();
 
     for row in &report.rows {
+        // A failed row writes to both streams: stdout keeps the per-row
+        // listing complete so its count matches the summary line, and
+        // stderr is what a caller greps for.
+        if matches!(
+            row.outcome,
+            StepOutcome::InstallFailed { .. } | StepOutcome::InstalledButCheckStillFails { .. }
+        ) {
+            stderr.push_str(&format!("  FAILED    {}\n", row.dependency.as_str()));
+        }
+
         let line = match &row.outcome {
             StepOutcome::AlreadyPresent => format!("  present   {}\n", row.dependency.as_str()),
             StepOutcome::Installed => format!("  installed {}\n", row.dependency.as_str()),
@@ -56,8 +66,7 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
                 format!("  manual    {} ({reason:?})\n", row.dependency.as_str())
             }
             StepOutcome::InstallFailed { .. } | StepOutcome::InstalledButCheckStillFails { .. } => {
-                stderr.push_str(&format!("  FAILED    {}\n", row.dependency.as_str()));
-                String::new()
+                format!("  failed    {} (see stderr)\n", row.dependency.as_str())
             }
         };
         stdout.push_str(&line);
@@ -90,6 +99,7 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
 mod tests {
     use super::*;
     use crate::{CheckStatus, InstallStatus, Report, ReportRow, StepOutcome};
+    use dotfiles_path::{BoundedText, PackageId};
 
     fn a_ready_report() -> Report {
         Report {
@@ -103,6 +113,26 @@ mod tests {
         }
     }
 
+    fn a_report_with_a_failed_install() -> Report {
+        Report {
+            rows: vec![ReportRow {
+                dependency: crate::DependencyName::parse("ripgrep").expect("a valid name"),
+                outcome: StepOutcome::InstallFailed {
+                    action: crate::InstallAction::Package {
+                        id: PackageId::parse("ripgrep").expect("a test package id parses"),
+                    },
+                    cause: crate::ExecFailure::NonZeroExit {
+                        code: 100,
+                        stderr: BoundedText::truncating("E: Unable to locate package"),
+                    },
+                },
+                after: crate::Observation::Absent,
+            }],
+            check: CheckStatus::NotReady,
+            install: InstallStatus::AttemptFailed,
+        }
+    }
+
     /// A ready check reports success on stdout and exits 0.
     #[test]
     fn a_ready_check_renders_to_stdout_and_exits_zero() {
@@ -113,6 +143,37 @@ mod tests {
         assert!(!rendered.stdout.is_empty(), "a check must say something");
         assert_eq!(rendered.exit_code, 0);
         assert!(rendered.stderr.is_empty(), "nothing failed, so stderr stays empty");
+    }
+
+    /// A failed row writes to both streams and still appears in the stdout
+    /// listing, so the listing's row count matches the summary line.
+    #[test]
+    fn a_failed_install_names_the_dependency_on_both_streams() {
+        // Positive control: the ready fixture leaves stderr empty (proved
+        // in `a_ready_check_renders_to_stdout_and_exits_zero` above), which
+        // is what makes a non-empty stderr below mean something rather than
+        // holding for a renderer that always writes to stderr.
+        let ready = render(&a_ready_report(), Verb::Check);
+        assert!(ready.stderr.is_empty(), "the control must leave stderr empty");
+
+        let rendered = render(&a_report_with_a_failed_install(), Verb::Check);
+
+        assert!(
+            !rendered.stderr.is_empty(),
+            "a failed install must be visible on stderr, which is what a caller greps for"
+        );
+        assert!(
+            rendered.stderr.contains("ripgrep"),
+            "stderr must name the dependency that failed, not just say something failed"
+        );
+        assert!(
+            rendered.stdout.contains("ripgrep"),
+            "the row must still appear in the stdout listing, or its count desyncs from the summary"
+        );
+        assert_ne!(
+            rendered.exit_code, 0,
+            "a NotReady report must not exit 0 on `check`"
+        );
     }
 
     /// The verb changes the wording, which is what makes the per-verb exit

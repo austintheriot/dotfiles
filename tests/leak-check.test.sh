@@ -311,6 +311,40 @@ status=0
 (cd "$rename_repo" && "$LEAK_CHECK" --range 'HEAD~2..HEAD' >/dev/null 2>&1) || status=$?
 assert_equals 'a renamed path does not read as unscannable' '0' "$status"
 
+# An empty file counts as scanned, not as unscannable.
+#
+# Git emits a `diff --git` line for a zero-byte file and no hunk, so it never
+# produces a `+++` header. It also cannot carry a secret. Blocking on it
+# refused a push over a 0-byte file nobody references.
+empty_repo="$FIXTURES/empty-range"
+mkdir -p "$empty_repo"
+git -C "$empty_repo" init -q .
+git -C "$empty_repo" config user.email t@t
+git -C "$empty_repo" config user.name t
+printf 'seed\n' > "$empty_repo/seed.txt"
+git -C "$empty_repo" add seed.txt
+git -C "$empty_repo" commit -q -m seed
+
+: > "$empty_repo/placeholder"
+git -C "$empty_repo" add placeholder
+git -C "$empty_repo" commit -q -m 'add a zero-byte file'
+
+status=0
+(cd "$empty_repo" && "$LEAK_CHECK" --range 'HEAD~1..HEAD' >/dev/null 2>&1) || status=$?
+assert_equals 'an empty file does not read as unscannable' '0' "$status"
+
+# The positive control: a genuinely unreadable file in the same shape must
+# still block, or the fix above has made the guard useless rather than
+# correct.
+printf 'placeholder -diff\n' > "$empty_repo/.gitattributes"
+printf 'real content that cannot be read\n' > "$empty_repo/placeholder"
+git -C "$empty_repo" add .gitattributes placeholder
+git -C "$empty_repo" commit -q -m 'mark a NON-empty file unreadable'
+
+status=0
+(cd "$empty_repo" && "$LEAK_CHECK" --range 'HEAD~1..HEAD' >/dev/null 2>&1) || status=$?
+assert_equals 'a non-empty unreadable file still blocks' '2' "$status"
+
 # The substring hazard, in the one shape that distinguishes the two
 # implementations. A shorter path must not read as scanned because a longer
 # path containing it has a header.

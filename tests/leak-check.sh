@@ -180,10 +180,28 @@ unscannable_paths() {
   #
   # Both header spellings are kept: `+++ b/path` is the default, and
   # `+++ path` is what --no-prefix output produces.
+  # An empty file counts as scanned. Git emits a `diff --git` line for it and
+  # no hunk at all, because there is no content to show, so it never produces
+  # a `+++` header. It also cannot carry a secret: the blob is zero bytes.
+  # Treating it as unscannable blocked a push over a 0-byte file nobody
+  # references.
+  #
+  # Matched on the index line's all-zero destination hash rather than on the
+  # path, so this recognises the CONDITION and not one known file. `e69de29`
+  # is git's empty blob; the destination side of an index line is what the
+  # file became.
+  local empty_paths
+  empty_paths=$(printf '%s\n' "$diff_text" \
+    | awk '
+        /^diff --git a\// { path = $3; sub(/^a\//, "", path); next }
+        /^index [0-9a-f]+\.\.e69de29/ { if (path != "") print path }
+      ' \
+    | sort -u)
   headers=$(printf '%s\n' "$diff_text" \
     | sed -n -e 's|^+++ b/\(.*\)$|\1|p' -e 's|^+++ \([^b].*\)$|\1|p' \
     | grep -v '^/dev/null$' \
     | sort -u)
+  headers=$(printf '%s\n%s\n' "$headers" "$empty_paths" | grep -v '^$' | sort -u)
   printf '%s\n' "$path_list" | sort -u | comm -23 - <(printf '%s\n' "$headers")
 }
 

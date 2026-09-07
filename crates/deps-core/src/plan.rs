@@ -99,6 +99,17 @@ impl Selection {
     pub fn contains(&self, name: &DependencyName) -> bool {
         self.0.contains(name)
     }
+
+    /// Every name in the selection, in sorted order.
+    ///
+    /// `all` builds itself from the manifest, so its members exist by
+    /// construction; only `named` can carry a name the manifest lacks. The
+    /// two are indistinguishable once built, which is why the caller checks
+    /// every name rather than just the explicitly named ones. Checking a name
+    /// that came from the manifest costs one lookup and cannot fail.
+    pub fn names(&self) -> impl Iterator<Item = &DependencyName> {
+        self.0.iter()
+    }
 }
 
 /// The requirement graph.
@@ -420,6 +431,20 @@ fn topological_order(
 ) -> Result<Vec<DependencyName>, PlanError> {
     let mut marks: BTreeMap<DependencyName, Mark> = BTreeMap::new();
     let mut ordered = Vec::new();
+
+    // Every explicitly named selection entry must exist. The walk below is
+    // driven by the manifest and filtered by the selection, so a selected
+    // name the manifest lacks was previously never visited and vanished:
+    // `plan` returned Ok with zero steps, and a typo in `--only` reported
+    // success while installing nothing.
+    for name in selection.names() {
+        if manifest.get(name).is_none() {
+            return Err(PlanError::UnknownDependency {
+                name: name.clone(),
+                did_you_mean: nearest_name(manifest, name),
+            });
+        }
+    }
 
     for entry in manifest.entries() {
         if !selection.contains(&entry.name) {
@@ -922,5 +947,64 @@ mod tests {
             }
         );
         assert_eq!(built.steps[0].privilege, PrivilegeRequirement::None);
+    }
+
+    /// A selected name that the manifest does not carry must be an error.
+    ///
+    /// `topological_order` walks `manifest.entries()` and filters by the
+    /// selection, so a selected name absent from the manifest was never
+    /// visited and simply vanished: `plan` returned `Ok` with zero steps and
+    /// `PlanError::UnknownDependency` was unreachable. Verified before the
+    /// fix by running `plan` with a one-entry manifest and a selection naming
+    /// something else: "Ok: 0 steps planned".
+    ///
+    /// A typo in `--only` reporting success while installing nothing is the
+    /// failure shape this whole plan keeps finding, so it gets a test.
+    #[test]
+    fn a_selected_name_the_manifest_lacks_is_an_error() {
+        // "gitx" rather than a transposition like "gti": nearest_name scores
+        // by common PREFIX length, deliberately, so that a no-dependency
+        // crate need not carry an edit-distance implementation. "gti" shares
+        // only "g" with "git" and correctly yields no suggestion.
+        let manifest = manifest_of(&["git"]);
+        let missing = dependency("gitx");
+        let selection = Selection::named(vec![missing.clone()]);
+
+        // Positive control: the same manifest and a REAL name must plan a
+        // step, or a failure below would prove nothing about the unknown name.
+        let (built, _events) = plan(
+            &manifest,
+            PackageManager::Brew,
+            &Selection::named(vec![dependency("git")]),
+            &Requirements::none(),
+            &ObservationMap::default(),
+            Elevation::Unavailable,
+            &PackageCatalog::default(),
+        )
+        .expect("a known name plans");
+        assert_eq!(built.steps.len(), 1, "the control must plan one step");
+
+        let error = plan(
+            &manifest,
+            PackageManager::Brew,
+            &selection,
+            &Requirements::none(),
+            &ObservationMap::default(),
+            Elevation::Unavailable,
+            &PackageCatalog::default(),
+        )
+        .expect_err("an unknown name must not plan silently");
+
+        match error {
+            PlanError::UnknownDependency { name, did_you_mean } => {
+                assert_eq!(name, missing);
+                assert_eq!(
+                    did_you_mean,
+                    Some(dependency("git")),
+                    "gitx shares the whole of git as a prefix, so the hint fires"
+                );
+            }
+            other => panic!("expected UnknownDependency, got {other:?}"),
+        }
     }
 }

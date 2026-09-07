@@ -10,11 +10,11 @@ mod check;
 mod manifest;
 
 pub use check::{
-    Check, CheckPath, Observation, ObservationMap, Observations, PathRoot, evaluate,
+    Check, CheckParseError, CheckPath, Observation, ObservationMap, Observations, PathRoot,
+    evaluate, parse_check_expression,
 };
 pub use manifest::{
-    CheckParseError, ConfKind, DependencyName, Manifest, ManifestEntry, ParseError,
-    parse_manifest,
+    ConfKind, DependencyName, Manifest, ManifestEntry, ParseError, parse_manifest,
 };
 
 #[cfg(test)]

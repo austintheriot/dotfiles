@@ -1366,6 +1366,50 @@ never `cfg!`-selected inside it, so the core stays testable for both
 platforms from either machine. `cfg!(target_os)` is not used for
 `DOTFILES_PLATFORM` at all; see 7.2.
 
+### 7.6a What the collapse missed: the bootstrap path
+
+7.6 enumerated the collapse's deletions and re-derivations from the
+*maintainer's* side and missed the *new machine's* side entirely. `setup.sh`
+derived a branch name from `uname -s` (`branch=$platform`), so every fresh
+bootstrap checked out `mac` or `linux` after both became frozen history, and
+`README.md`'s documented one-liner fetched `setup.sh` itself from `mac`.
+Measured while planning: `refs/heads/mac` was **31 commits ahead of
+`origin/mac`**, and `origin/main` carried 40+ commits neither had.
+
+**Five gates covered this path and none failed**, each because its fixture
+encodes the two-branch model:
+
+| Gate | Why it passed anyway |
+|---|---|
+| `setup.test.sh` branch-exists assertion | A stale **local** `mac` ref satisfies `rev-parse refs/heads/mac`. The assertion never compares that ref to the remote or to `main` |
+| `setup.test.sh` same-blob assertion | Compares `mac:setup.sh` to `linux:setup.sh`, two frozen refs that agree forever, with an `else skip` arm if either is pruned |
+| `setup.test.sh` `make_seed` | Builds every one of ~13 fixtures with `mac` and `linux` and **no `main`** |
+| `test-bootstrap.sh`, `deps-check.yml` | Both **create** `mac` and `linux` in their seed repositories, manufacturing exactly the branches the stale detection required. `deps-check.yml` does it in four jobs and defaults `ref` to `mac` |
+| `pre-push` stamp gate | Matched `refs/heads/mac\|refs/heads/linux` to set `pushing_synced_branch`, and the whole stamp block is guarded on it. **The collapse to `main` silently disabled stamp verification on every push** |
+
+The last is the most serious: a push-time correctness gate stopped running
+and no test failed, because `pre-push-multi-ref.test.sh` is the only suite
+driving that path and it feeds the hook those two literals. Verified by
+running the hook's own logic against a `main` ref line:
+`pushing_synced_branch=0`, gate skipped. No stale binary actually shipped,
+which is luck rather than the gate working.
+
+**The correction.** `setup.sh` defaults to `main` and keeps `--branch` as the
+only selector, because `work` and `home` are real refs that no amount of
+`uname` implies. Platform detection stays -- it selects per-platform files at
+runtime -- but no longer names a ref. `pre-push` keys on the ref *shape*
+(`refs/heads/*`) rather than an enumerated name, so a new branch cannot opt
+out of stamp verification by not being on a list. Both seed builders create
+one branch, so a regression of the mapping fails instead of being
+accommodated.
+
+**The general lesson, which is this repo's established bug class.** A gate
+whose fixture is built to make the subject pass is not a gate. 7.5 cites the
+same shape in `deps-docs.test.sh` (exit 127 read as "flag accepted"), and
+10.6 tabulates all four confirmed instances. When a change deletes a code
+path, it must delete that path's fixture in the same commit, or the fixture
+keeps the dead path looking alive.
+
 ## 8. Consequences for existing decisions
 
 ### 8.1 The stamp: one computation owner, one policy owner
@@ -1608,3 +1652,47 @@ manifest; `CommandName::parse` rejecting path separators; the rejection of
 phantom-typed `Step` (with a stronger reason supplied in 5.5); the withdrawal
 of the `GitRepo` trait (8.3); and section 6.3's rule about `Plan` remaining a
 value, which is the sentence the whole design's integrity rests on.
+
+### 10.6 Claims corrected during planning, after the revision
+
+A third pass, while building the plan for steps 1 and 3, found three more.
+Two are undercounts and one is not achievable as written. Recorded in the
+same spirit as 10.1: a reader who checks a claim and finds it wrong has no
+way to tell which other claims to trust.
+
+| Claim | Reality | Where |
+|---|---|---|
+| `usage.sh:32-35` extracts the `# usage:` block the same way "and needs the same treatment" | **Not achievable.** `print_usage` is *sourced*, and reads `$0` to find the calling script's own header (`usage.sh:3-5` states this as the design). There is no subprocess to delegate `--describe` to. The achievable fix is a text-file guard that returns 1 with a message, rather than emitting a `sed` error plus empty help | 7.3 |
+| the `check-deps.sh` rename has a "blast radius of **18 consumers**" | **34 files, 97 references** (`config grep -rl`, excluding `docs/`). The table enumerated 5 and the prose roughly 13. Not a reason to re-plan the step, but a reason not to trust a remembered count halfway through it | 7.4 step 3 |
+| 7.6 enumerates the collapse's consequences | It covers the maintainer's side and **omits the new machine's side entirely**. `setup.sh` mapped `uname` to a branch name, so every fresh bootstrap checked out frozen history, and four gates covered that path without failing. See the new 7.6a | 7.6 |
+
+One claim in 7.3 was confirmed by reproduction rather than accepted:
+pointing `sed -n 's/^# help: //p'` at a compiled binary does print
+`sed: RE error: illegal byte sequence` to stderr and the pipeline still exits
+0, so the degradation is silent. 7.4 step 3's `deps-docs.test.sh` exit-127
+claim also reproduced exactly: a missing program exits 127, `[ 127 -ne 2 ]`
+is true, and the assertion passes about a program that does not exist.
+
+**The pattern across all three passes is one bug class, and it now has four
+confirmed instances.** A gate whose fixture is built to make the subject pass
+is not a gate:
+
+| Instance | How it passed | Found |
+|---|---|---|
+| `deps-docs.test.sh` flag probe | Exit 127 read as "flag accepted" | first revision, 7.5 |
+| `setup.test.sh` branch assertions | A stale **local** `mac` ref satisfied "the documented branch exists"; two frozen refs compared to each other agree forever | planning, 7.6a |
+| `test-bootstrap.sh` and `deps-check.yml` seeds | **Created** `mac` and `linux`, manufacturing the branches the stale detection required | planning, 7.6a |
+| `pre-push` stamp gate | Matched `refs/heads/mac\|refs/heads/linux`, so the collapse to `main` disabled stamp verification on every push. The only suite driving that path feeds the hook those two literals | planning, 7.6a |
+
+The last is the most serious defect found on this project: a push-time
+correctness gate stopped running and nothing failed. It is also the argument
+that settled `config doctor`'s fate. `doctor` was proposed for deletion as
+redundant with the push gate, and the push gate turned out to have been off
+for weeks. A read-only way to ask "does the installed binary match its
+source" is what let that question be answered at all, so `doctor` stays.
+
+**Consequence for how this spec should be read.** Three passes each found
+false claims, and the third found them in text the second pass had already
+corrected. Treat every count and every file:line in this document as a
+claim to re-verify at the moment of use, not as a fact. The plan derived
+from it re-measures rather than quoting where the number drives work.

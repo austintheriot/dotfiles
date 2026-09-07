@@ -64,6 +64,13 @@ and a paraphrase is how a constraint gets lost.
   `assert_equals 'no X' '' "$(cmd)"` passes when `cmd` breaks for an
   unrelated reason, so assert first that the pipeline produced something,
   then assert the narrow property.
+- **When verifying that a gate refuses something, the sabotage must not
+  disable the gate.** Found the hard way in Task 1: stubbing the whole
+  `config-manifest` binary made `verify-stamps` exit 0, because that binary
+  *is* the comparator. A stub must lie only about the input under test and
+  delegate everything else to the real implementation. Ask of every sabotage:
+  if the gate were broken, would this still fail? If replacing the component
+  removes the check, the test proves nothing.
 - **A fixture built to make the subject pass is not a gate.** Three instances
   of this shape are already fixed on this branch (Task 1's four satisfied
   fixtures, Task 1a's dead stamp gate, Task 12's exit-127 oracle). When a
@@ -230,11 +237,26 @@ Prove it refuses:
 send), but it also triggers the Docker suite, which takes minutes. Drive the
 hook directly instead, which is what the multi-ref suite already does:
 
+**The obvious recipe reports a false pass. Verified.** Replacing the whole
+binary with `printf '#!/bin/sh\necho stale-stamp\n'` makes `verify-stamps`
+exit **0**, because `verify-stamps` *is* the comparator: it probes the
+installed binary's `--stamp` itself, so stubbing the binary **disables the
+check rather than failing it**. That is this plan's own bug class one level
+up, a verification whose fixture disables the thing being verified, so the
+sabotage must lie only on `--stamp` and `exec` the real binary for everything
+else:
+
 ```sh
 cd ~ && cp "$HOME/.local/bin/config-manifest" /tmp/config-manifest.good
 
-# A binary whose stamp cannot match its source.
-printf '#!/bin/sh\necho stale-stamp\n' > "$HOME/.local/bin/config-manifest"
+# Lies on --stamp only. Everything else reaches the real binary, so the
+# comparator still runs and can observe the lie. A stub that answers every
+# subcommand would exit 0 and prove nothing.
+cat > "$HOME/.local/bin/config-manifest" <<'STUB'
+#!/bin/sh
+if [ "$1" = "--stamp" ]; then echo "deadbeef:deadbeef:deadbeef"; exit 0; fi
+exec /tmp/config-manifest.good "$@"
+STUB
 chmod 755 "$HOME/.local/bin/config-manifest"
 
 head_sha=$(config rev-parse HEAD)
@@ -264,7 +286,14 @@ workable options, in preference order:
 Do not add an env seam to the production hook for a check that runs once.
 
 Record both exit codes and whether the restored run printed
-`pre-push: stamp gate passed`. If the sabotaged run succeeds, the gate is
+`pre-push: stamp gate passed`. Verified expected output for the sabotaged
+run, so anything else is a real finding:
+
+```
+pre-push: config-manifest is stale (built deadbeef:deadbeef:deadbeef,
+pushed efed80b6...); run `config build`
+config-manifest verify-stamps: refusing push of HEAD
+``` If the sabotaged run succeeds, the gate is
 still not running and Step 3 is wrong. **This verification is not optional
 here:** the gate provably has not run since the collapse, so "the test
 passes" only shows the test agrees with the code, not that the gate refuses

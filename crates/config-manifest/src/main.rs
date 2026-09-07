@@ -20,6 +20,15 @@ struct Cli {
     #[arg(long)]
     stamp: bool,
 
+    /// Print the one-line description `config help` lists this command under.
+    ///
+    /// Not `exclusive`, for the same reason --stamp is not: --root is
+    /// env-backed, so a shell that exports DOTFILES_ROOT makes clap treat
+    /// --root as supplied, and an exclusive --describe would collide with it
+    /// and exit 2.
+    #[arg(long)]
+    describe: bool,
+
     /// The dotfiles worktree to operate on. Defaults to the home directory.
     #[arg(long, env = "DOTFILES_ROOT", value_name = "dir", global = true)]
     root: Option<PathBuf>,
@@ -61,6 +70,19 @@ fn main() -> ExitCode {
         Ok(cli) => cli,
         Err(error) => return exit_from_clap_error(error),
     };
+
+    // config-help builds its listing by running `config-<sub> --describe` and
+    // formatting each answer with `printf '  %-14s %s\n'`, so the contract is
+    // exactly one line on stdout and exit 0. Handled before every other
+    // branch, because asking a command what it does must not run it.
+    //
+    // Unreached today: `config doctor` is a shim whose own `# help:` line is
+    // what the listing shows. This exists for the port that removes the shim,
+    // which leaves no shell script to hold the description.
+    if cli.describe {
+        println!("Report installed binaries that do not match their source");
+        return ExitCode::SUCCESS;
+    }
 
     if cli.stamp {
         // `option_env!` is read at compile time, so cargo rebuilds when

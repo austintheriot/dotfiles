@@ -161,3 +161,81 @@ fn stamp_works_while_dotfiles_root_is_set() {
         .success()
         .stdout("unstamped\n");
 }
+
+#[test]
+fn describe_prints_one_line_and_succeeds() {
+    // config-help formats each description with `printf '  %-14s %s\n'`, so a
+    // second line or a leading space shifts every row after it. The line count
+    // is the assertion, not just the presence of text.
+    let assert = run(&["--describe"]).success();
+    let description = stdout_of(&assert);
+    assert!(
+        !description.trim().is_empty(),
+        "--describe printed nothing: {description:?}"
+    );
+    assert_eq!(
+        description.lines().count(),
+        1,
+        "--describe printed more than one line: {description:?}"
+    );
+    assert!(
+        description.ends_with('\n'),
+        "--describe did not end with a newline: {description:?}"
+    );
+    assert!(
+        !description.starts_with(char::is_whitespace),
+        "--describe indented its line, which the %-14s column already does: {description:?}"
+    );
+}
+
+#[test]
+fn describe_writes_nothing_to_stderr() {
+    // A warning on stderr lands in the same terminal as the listing, which is
+    // the failure mode the shell side replaced: `sed` on a binary printed
+    // "RE error: illegal byte sequence" while the pipeline still exited 0.
+    let assert = run(&["--describe"]).success();
+    let noise = stderr_of(&assert);
+    assert!(noise.is_empty(), "--describe wrote to stderr: {noise:?}");
+}
+
+#[test]
+fn describe_stays_a_global_flag_not_a_subcommand() {
+    // Same constraint --stamp and --version carry: config-help invokes
+    // `config-<sub> --describe`, with no subcommand word to put in front of it.
+    let assert = run(&["--help"]).success();
+    let help = stdout_of(&assert);
+    assert!(help.contains("--describe"), "--help omits --describe: {help}");
+}
+
+#[test]
+fn describe_works_while_dotfiles_root_is_set() {
+    // --root is env-backed, so a shell that exports DOTFILES_ROOT makes clap
+    // treat --root as supplied. An `exclusive` --describe would collide with it
+    // and exit 2, which is the bug the --stamp comment already records.
+    Command::cargo_bin("config-manifest")
+        .expect("binary built")
+        .env("DOTFILES_ROOT", "/tmp")
+        .arg("--describe")
+        .assert()
+        .success();
+}
+
+#[test]
+fn describe_does_no_work() {
+    // Asking a command what it does must not be the same as doing it. Pointed
+    // at a directory that is not a repo, `doctor` fails; `--describe` must
+    // succeed there, which proves it returns before the gather.
+    let empty = tempfile::tempdir().expect("tempdir");
+    Command::cargo_bin("config-manifest")
+        .expect("binary built")
+        .args(["--root".as_ref(), empty.path().as_os_str()])
+        .arg("--describe")
+        .assert()
+        .success();
+    Command::cargo_bin("config-manifest")
+        .expect("binary built")
+        .args(["--root".as_ref(), empty.path().as_os_str()])
+        .arg("doctor")
+        .assert()
+        .failure();
+}

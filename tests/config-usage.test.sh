@@ -430,4 +430,36 @@ else
     skip '/bin/echo is missing, so there is no binary to point print_usage at'
 fi
 
+# --- the listing renders identically -----------------------------------------
+
+# The point of the --describe migration is that nothing about `config help`
+# changed. A recorded expectation is the only assertion that proves it: the
+# column is built with `printf '  %-14s %s\n'`, so a description that gained a
+# trailing newline or a second line would shift every row after it and no other
+# test in this suite would notice.
+#
+# The expectation was captured from `config help` before the first --describe
+# commit, so a match proves the migration is invisible in the output rather
+# than merely self-consistent. Regenerate it only for a deliberate edit to the
+# listing's own format, to a `# help:` line, or when a subcommand is added or
+# removed.
+#
+# The listing is read from the real .scripts/config rather than through
+# run_config: run_config points HOME at a fixture whose .scripts/config does
+# not exist, and the expectation records the real set of siblings.
+expectation="$DOTFILES_ROOT/tests/fixtures/config-help-before-describe.txt"
+if [ -f "$expectation" ]; then
+    expected=$(cat "$expectation")
+    # An empty expectation would make the comparison below pass against an
+    # equally empty listing, so assert the recorded text exists first.
+    assert_succeeds 'the recorded config help listing is not empty' \
+        test -n "$expected"
+    actual=$("$CONFIG_DIR/config-help" 2>/dev/null)
+    assert_equals 'config help renders exactly the recorded listing' \
+        "$expected" "$actual"
+else
+    assert_equals 'the recorded config help listing exists' \
+        'present' 'missing'
+fi
+
 finish

@@ -122,6 +122,15 @@ impl Selection {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Requirements(BTreeMap<DependencyName, Vec<DependencyName>>);
 
+/// An edge naming a dependency no shipped manifest holds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequirementEdgeError {
+    /// The dependent the edge belongs to.
+    pub dependent: DependencyName,
+    /// The name that matches no manifest entry.
+    pub unknown: DependencyName,
+}
+
 impl Requirements {
     /// The empty graph, which is what the conf files describe today.
     pub fn none() -> Self {
@@ -131,6 +140,35 @@ impl Requirements {
     /// Build the graph from dependent-to-prerequisites pairs.
     pub fn from_pairs(pairs: Vec<(DependencyName, Vec<DependencyName>)>) -> Self {
         Requirements(pairs.into_iter().collect())
+    }
+
+    /// Build a graph, rejecting any edge that names an unknown dependency.
+    ///
+    /// `known` is the union of every conf file this repo ships, not one
+    /// platform's manifest, because an edge is correct or not independently
+    /// of which machine is running. Checking against one platform's manifest
+    /// would reject the macOS-absent prerequisite this design depends on.
+    ///
+    /// # Errors
+    ///
+    /// Returns every offending edge rather than the first, so one run names
+    /// every typo.
+    pub fn validated(
+        pairs: Vec<(DependencyName, Vec<DependencyName>)>,
+        known: &BTreeSet<DependencyName>,
+    ) -> Result<Self, Vec<RequirementEdgeError>> {
+        let mut errors = Vec::new();
+        for (dependent, prerequisites) in &pairs {
+            for prerequisite in prerequisites {
+                if !known.contains(prerequisite) {
+                    errors.push(RequirementEdgeError {
+                        dependent: dependent.clone(),
+                        unknown: prerequisite.clone(),
+                    });
+                }
+            }
+        }
+        if errors.is_empty() { Ok(Requirements::from_pairs(pairs)) } else { Err(errors) }
     }
 
     /// What `of` requires, in the order the caller listed it.
@@ -245,15 +283,22 @@ pub enum Event {
         /// The prerequisite that is not yet present.
         on: DependencyName,
     },
-    /// The prerequisite is not in the selected manifest, which differs from
-    /// "requires a dependency that does not exist". `oh-my-zsh` is in
-    /// `deps-linux.conf:11` and legitimately absent on macOS, where
-    /// `zsh-autosuggestions` installs fine through brew, so
-    /// `PlanError::UnknownDependency` would be the wrong error.
-    PrerequisiteNotSelected {
-        /// The dependent whose requirement is out of scope.
+    /// The prerequisite is not in this platform's manifest. A legitimate
+    /// platform difference: oh-my-zsh is in `deps-linux.conf:11` and absent
+    /// on macOS, where zsh-autosuggestions installs through brew.
+    PrerequisiteNotInManifest {
+        /// The dependent whose prerequisite is absent.
         dependency: DependencyName,
-        /// The prerequisite that is not selected.
+        /// The absent prerequisite.
+        on: DependencyName,
+    },
+    /// The prerequisite exists on this platform and the selection excludes
+    /// it. Not a platform difference: the run narrowed past a requirement it
+    /// still has.
+    PrerequisiteDeselected {
+        /// The dependent whose prerequisite was excluded.
+        dependency: DependencyName,
+        /// The excluded prerequisite.
         on: DependencyName,
     },
 }
@@ -404,9 +449,12 @@ fn action_for(
 /// The first prerequisite that is selected, in the manifest, and not yet
 /// present.
 ///
-/// A prerequisite outside the selected manifest records an event and does not
-/// block, because it is a legitimate platform difference rather than a
-/// missing install.
+/// A prerequisite outside the platform manifest records
+/// [`Event::PrerequisiteNotInManifest`] and does not block, because it is a
+/// legitimate platform difference rather than a missing install. A
+/// prerequisite the manifest has but the run deselected records
+/// [`Event::PrerequisiteDeselected`] and does block, because the machine has
+/// it and the run chose not to satisfy it.
 fn first_unsatisfied_prerequisite(
     name: &DependencyName,
     requirements: &Requirements,
@@ -416,15 +464,23 @@ fn first_unsatisfied_prerequisite(
     events: &mut Vec<Event>,
 ) -> Option<DependencyName> {
     for prerequisite in requirements.prerequisites(name) {
-        if manifest.get(prerequisite).is_none() || !selection.contains(prerequisite) {
-            // Not an error: oh-my-zsh is in deps-linux.conf:11 and
-            // legitimately absent on macOS, where zsh-autosuggestions
-            // installs through brew.
-            events.push(Event::PrerequisiteNotSelected {
+        if manifest.get(prerequisite).is_none() {
+            events.push(Event::PrerequisiteNotInManifest {
                 dependency: name.clone(),
                 on: prerequisite.clone(),
             });
             continue;
+        }
+        if !selection.contains(prerequisite) {
+            // Blocking, unlike the absent case: the machine has this
+            // prerequisite in its manifest and the run chose not to satisfy
+            // it, so planning the dependent's install would run it against a
+            // world nobody is going to prepare.
+            events.push(Event::PrerequisiteDeselected {
+                dependency: name.clone(),
+                on: prerequisite.clone(),
+            });
+            return Some(prerequisite.clone());
         }
         if !satisfied.contains(prerequisite) {
             return Some(prerequisite.clone());
@@ -887,11 +943,114 @@ mod tests {
             &packages_named(&["zsh-autosuggestions"]),
         )
         .expect("an absent prerequisite is not a plan error");
-        assert!(events.contains(&Event::PrerequisiteNotSelected {
+        assert!(events.contains(&Event::PrerequisiteNotInManifest {
             dependency: dependency("zsh-autosuggestions"),
             on: dependency("oh-my-zsh"),
         }));
         assert!(matches!(built.steps[0].action, InstallAction::Brew { .. }));
+    }
+
+    /// A requirement edge naming a dependency no manifest holds must be
+    /// rejected at construction.
+    ///
+    /// Nothing walked Requirements, so a typo planned successfully, emitted
+    /// PrerequisiteNotSelected for a name that exists nowhere, ordered
+    /// nothing, and exited 0. That is indistinguishable from a correct macOS
+    /// run, where the prerequisite is legitimately absent.
+    #[test]
+    fn a_requirement_edge_naming_an_unknown_dependency_is_rejected() {
+        let known: BTreeSet<DependencyName> =
+            [dependency("zsh-autosuggestions"), dependency("oh-my-zsh")]
+                .into_iter()
+                .collect();
+
+        // Positive control: the correct table must validate, or the
+        // rejection below proves only that the constructor rejects
+        // everything.
+        Requirements::validated(
+            vec![(dependency("zsh-autosuggestions"), vec![dependency("oh-my-zsh")])],
+            &known,
+        )
+        .expect("the correct table validates");
+
+        let errors = Requirements::validated(
+            vec![(dependency("zsh-autosuggestions"), vec![dependency("oh-my-zhs")])],
+            &known,
+        )
+        .expect_err("a typo must be rejected");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].unknown, dependency("oh-my-zhs"));
+    }
+
+    /// `validated` names every offending edge in one run, not just the
+    /// first, so a table with two typos does not require two separate runs
+    /// to discover the second.
+    #[test]
+    fn a_requirement_table_with_two_typos_reports_both() {
+        let known: BTreeSet<DependencyName> =
+            [dependency("zsh-autosuggestions"), dependency("oh-my-zsh"), dependency("fzf")]
+                .into_iter()
+                .collect();
+
+        // Positive control: a table with only correct edges validates, so
+        // the two-error assertion below cannot be explained by validated
+        // rejecting everything it sees.
+        Requirements::validated(
+            vec![
+                (dependency("zsh-autosuggestions"), vec![dependency("oh-my-zsh")]),
+                (dependency("fzf"), vec![dependency("oh-my-zsh")]),
+            ],
+            &known,
+        )
+        .expect("a table of correct edges validates");
+
+        let errors = Requirements::validated(
+            vec![
+                (dependency("zsh-autosuggestions"), vec![dependency("oh-my-zhs")]),
+                (dependency("fzf"), vec![dependency("ohmyzsh")]),
+            ],
+            &known,
+        )
+        .expect_err("both typos must be rejected");
+        assert_eq!(errors.len(), 2, "one run must name every typo, not just the first");
+        assert_eq!(errors[0].unknown, dependency("oh-my-zhs"));
+        assert_eq!(errors[1].unknown, dependency("ohmyzsh"));
+    }
+
+    /// A deselected prerequisite is not the same fact as an absent one.
+    ///
+    /// plan.rs:397 was a disjunction, so "this platform lacks it" and "the
+    /// run narrowed past it" produced one event. The first is the macOS case
+    /// the design relies on; the second plans a real install whose
+    /// prerequisite nobody is going to satisfy.
+    #[test]
+    fn a_deselected_prerequisite_is_distinguished_from_an_absent_one() {
+        let manifest = manifest_of(&["oh-my-zsh", "zsh-autosuggestions"]);
+        let requirements = Requirements::from_pairs(vec![(
+            dependency("zsh-autosuggestions"),
+            vec![dependency("oh-my-zsh")],
+        )]);
+        let narrowed = Selection::named(vec![dependency("zsh-autosuggestions")]);
+
+        let (_built, events) = plan(
+            &manifest,
+            PackageManager::Pacman,
+            &narrowed,
+            &requirements,
+            &ObservationMap::default(),
+            Elevation::AlreadyRoot,
+            &packages_named(&["oh-my-zsh", "zsh-autosuggestions"]),
+        )
+        .expect("a narrowed selection plans");
+
+        assert!(!events.is_empty(), "the control must emit events");
+        assert!(
+            events.contains(&Event::PrerequisiteDeselected {
+                dependency: dependency("zsh-autosuggestions"),
+                on: dependency("oh-my-zsh"),
+            }),
+            "a prerequisite the manifest has but the selection excludes is deselected, not absent"
+        );
     }
 
     // A cycle is RequirementCycle, not ManifestParse: every line parses.

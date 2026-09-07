@@ -426,6 +426,29 @@ if [ -d "$DOTFILES_ROOT/.cfg" ] || [ -d "$DOTFILES_ROOT/.git" ]; then
     assert_equals 'doctor exits 0 when every binary is current' '0' "$doctor_status"
     assert_equals 'doctor is silent when every binary is current' '' "$doctor_out"
 
+    # doctor must look where config-build installs, even when DOTFILES_ROOT
+    # is not $HOME. It defaulted to $DOTFILES_ROOT/.local/bin while
+    # config-build:37 defaults to $HOME/.local/bin. Those coincide on a
+    # developer machine, where DOTFILES_ROOT IS $HOME, and diverge in CI,
+    # where DOTFILES_ROOT is the checkout -- so doctor reported
+    # "not installed" for a binary that was installed correctly.
+    #
+    # Asserted by pointing DOTFILES_ROOT at a copy while leaving the binary
+    # where config-build put it. Without the fix this prints
+    # "config-manifest: not installed".
+    split_root="$FIXTURES/split-root"
+    mkdir -p "$split_root"
+    cp -R "$DOTFILES_ROOT/crates" "$split_root/crates"
+    mkdir -p "$split_root/.scripts/config"
+    cp "$DOTFILES_ROOT/.scripts/config/config-stamp" "$split_root/.scripts/config/"
+    git -C "$split_root" init -q .
+    git -C "$split_root" add -A >/dev/null 2>&1
+    git -C "$split_root" -c user.email=t@t -c user.name=t commit -q -m 'split-root probe'
+
+    split_out=$(DOTFILES_ROOT="$split_root" "$DOCTOR" 2>&1 || true)
+    assert_equals 'doctor does not report a not-installed binary when DOTFILES_ROOT is not HOME' \
+        '' "$(printf '%s' "$split_out" | grep 'not installed' || true)"
+
     # The behavior doctor exists for, asserted rather than checked by hand.
     probe="$DOTFILES_ROOT/crates/config-manifest/src/doctor.rs"
     cp "$probe" "$FIXTURES/doctor.rs.orig"

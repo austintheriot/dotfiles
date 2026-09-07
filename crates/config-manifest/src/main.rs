@@ -150,8 +150,16 @@ fn has_installed_binary(root: &PathBuf, crate_name: &str) -> bool {
 
 /// Probes the installed binary for one crate's build-time stamp.
 fn built_stamp_for(root: &PathBuf, crate_name: &str) -> Option<String> {
+    // Defaults to $HOME/.local/bin, matching config-build:37, which is the
+    // script that decides where binaries go. This read used to default to
+    // `root.join(".local/bin")`, and $DOTFILES_ROOT is $HOME on a developer
+    // machine, so the two agreed there and disagreed everywhere else. In CI,
+    // DOTFILES_ROOT is the checkout, so doctor looked in
+    // <checkout>/.local/bin, found nothing, and reported "not installed" for
+    // a binary config-build had just installed correctly.
     let bin_dir = std::env::var_os("CONFIG_BIN_DIR")
         .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/bin")))
         .unwrap_or_else(|| root.join(".local/bin"));
     let binary = bin_dir.join(crate_name);
     let output = std::process::Command::new(&binary).arg("--stamp").output().ok()?;

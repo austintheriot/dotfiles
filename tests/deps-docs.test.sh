@@ -222,8 +222,22 @@ for platform in mac linux; do
         test -f "$DEPS_DIR/deps-$platform.conf"
 done
 
+# Greps the FILE, not the file's contents. This passed
+# "$deps_readme" (the text) where grep expects a path, so grep warned about a
+# filename too long, printed nothing to stdout, and the empty-expected
+# assertion passed no matter what the README said. Verified before the fix by
+# appending a deps-local.conf mention and watching the assertion still report
+# ok.
+#
+# The positive control matters for the same reason the assertion did not: with
+# an unreadable path, "no match" and "the grep never ran" look identical.
+assert_succeeds 'the deps README is readable for the retirement check' \
+    test -r "$DEPS_README"
+assert_succeeds 'the retirement check greps a file with content in it' \
+    sh -c 'test -s "$1"' _ "$DEPS_README"
+
 assert_equals 'the retired deps-local.conf is gone' \
-    '' "$(grep -n 'deps-local\.conf' "$deps_readme")"
+    '' "$(grep -n 'deps-local\.conf' "$DEPS_README" || true)"
 
 # --- the documented pipe constraint matches read_entries ----------------
 #

@@ -115,7 +115,6 @@ pub enum ParseError {
     BadCheck { line: usize, cause: CheckParseError },
     BadDocs { line: usize, cause: NameError },
     DuplicateName { line: usize, name: DependencyName },
-    InterpreterCheckInPlatformConf { line: usize },
 }
 
 /// Parse manifest text into typed entries.

@@ -139,6 +139,39 @@ impl Server {
             .args(["set", "-w", "-t", window_id, OWNERSHIP_OPTION, name])
             .output();
     }
+
+    /// Kills every pane in `target_pane`'s window except `target_pane`
+    /// itself, matching `tmux kill-pane -a -t <target_pane>`.
+    ///
+    /// Returns whether the underlying `tmux` call exited successfully, so
+    /// the caller can propagate a failing exit status the way the sourced
+    /// shell script propagated `$?` from its own final command.
+    pub fn kill_other_panes(&self, target_pane: &str) -> bool {
+        self.command()
+            .args(["kill-pane", "-a", "-t", target_pane])
+            .status()
+            .is_ok_and(|status| status.success())
+    }
+
+    /// Returns the active pane's `#{pane_id}`, matching
+    /// `tmux display-message -p '#{pane_id}'`.
+    ///
+    /// A dedicated call rather than routing through [`Self::display_message`]:
+    /// that method parses the full [`STATE_FORMAT`] row for `name-windows`,
+    /// and a pane id lookup has no window state to parse.
+    #[must_use]
+    pub fn current_pane_id(&self) -> Option<String> {
+        let output = self
+            .command()
+            .args(["display-message", "-p", "#{pane_id}"])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let pane_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        (!pane_id.is_empty()).then_some(pane_id)
+    }
 }
 
 /// Parses one `list-windows`/`display-message` output line into a

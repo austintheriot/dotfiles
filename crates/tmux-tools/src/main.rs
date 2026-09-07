@@ -41,6 +41,8 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("name-windows") => name_windows(arguments.collect()),
+        Some("close") => close(arguments.collect()),
+        Some("worktree-config") => worktree_config(),
         Some(other) => {
             eprintln!("tmux-tools: unknown subcommand {other}");
             ExitCode::from(2)
@@ -110,6 +112,62 @@ fn name_windows(arguments: Vec<String>) -> ExitCode {
 
     ExitCode::SUCCESS
 }
+
+/// Runs the `close` subcommand: kills every pane in the current window
+/// except the target pane, matching `tmux-close.sh`'s
+/// `tmux kill-pane -a -t "$(tmux display-message -p '#{pane_id}')"`.
+///
+/// Accepts an optional `-t <pane>` so a test can target a specific pane
+/// without an attached client; the shell script never passes this flag and
+/// always resolves the active pane itself.
+///
+/// The shell script has no `-z` early-exit branch for "no tmux session":
+/// that check lives in the shim's caller, which stays sourced so the
+/// message and its `return` still reach the interactive shell. See the
+/// report for the exact division of labor.
+fn close(arguments: Vec<String>) -> ExitCode {
+    let explicit_target = match arguments.as_slice() {
+        [] => None,
+        [flag, target] if flag == "-t" => Some(target.clone()),
+        _ => {
+            eprintln!("tmux-tools close: unexpected arguments: {}", arguments.join(" "));
+            return ExitCode::from(2);
+        }
+    };
+
+    let server = Server::from_env();
+
+    let target_pane = match explicit_target.or_else(|| server.current_pane_id()) {
+        Some(pane) => pane,
+        None => {
+            eprintln!("tmux-tools close: no active pane to target");
+            return ExitCode::from(2);
+        }
+    };
+
+    if server.kill_other_panes(&target_pane) {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+/// Runs the `worktree-config` subcommand: prints the numbered-worktree
+/// window count that `tmux-setup.sh` sizes its worktree window loop with.
+///
+/// `tmux-worktree-config.sh`'s only effect is the shell assignment
+/// `WORKTREE_COUNT=15`, which a subprocess cannot reproduce in its parent
+/// shell. Printing the number is the honest port: the shim script still
+/// performs the assignment itself, from this binary's output. See the
+/// report for why this differs from a tmux-option-setting subcommand.
+fn worktree_config() -> ExitCode {
+    println!("{WORKTREE_COUNT}");
+    ExitCode::SUCCESS
+}
+
+/// The number of numbered worktree windows `tmux-setup.sh`
+/// creates, matching `tmux-worktree-config.sh`'s `WORKTREE_COUNT=15`.
+const WORKTREE_COUNT: u32 = 15;
 
 /// Splits a window's `@wname_bare_repos` value on `|` for
 /// `tmux_core::window_name`, falling back to the script's documented

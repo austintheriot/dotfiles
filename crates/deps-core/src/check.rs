@@ -190,11 +190,6 @@ pub enum CheckParseError {
     BadModuleName(NameError),
     /// A recognized `ls -d` listing holding an invalid filename pattern.
     BadGlob(NameError),
-    /// An alternation with no branches. Unreachable through the grammar,
-    /// which always parses a first operand before it looks for a second, and
-    /// retained so `AnyOf`'s non-emptiness has a named failure rather than an
-    /// implicit one.
-    EmptyAlternation,
     /// A `PythonImport` in a platform-selected conf file. `PythonImport` is
     /// the one check that spawns an interpreter, and `deps-ci.conf` is
     /// selected only by an explicit `DEPS_CONF`, so this rule keeps the
@@ -258,10 +253,13 @@ fn parse_test_or(raw: &str) -> Result<Option<Check>, CheckParseError> {
     let Some(body) = raw.strip_prefix("test ") else {
         return Ok(None);
     };
+    // `split` always yields at least one item, even for an empty subject
+    // (`"".split(" -o ")` is `[""]`), so there is no empty-alternation case to
+    // handle: a leading operand always exists and an empty one fails in
+    // parse_test_operand with a specific error. `AnyOf { first, rest }` then
+    // carries non-emptiness in the type rather than in a runtime check.
     let mut operands = body.split(" -o ");
-    let Some(head) = operands.next() else {
-        return Err(CheckParseError::EmptyAlternation);
-    };
+    let head = operands.next().unwrap_or(body);
     let first = parse_test_operand(head.trim())?;
     let mut rest = Vec::new();
     for tail in operands {

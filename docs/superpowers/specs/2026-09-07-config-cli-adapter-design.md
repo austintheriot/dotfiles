@@ -368,7 +368,7 @@ by an explicit `DEPS_CONF`. All of that needs an owner and a test.
 |---|---|
 | `crates/config-cli/` | New. Module layout above. |
 | `crates/Cargo.toml` | New workspace member. |
-| `tests/docker/Dockerfile` | Builder stage gains the member. `tests/container.test.sh` already asserts cargo's member list matches this file, so omitting it fails a test rather than a Docker build. The runtime stage stays Rust-free at this step; the shell-test-port spec's section 4a owns putting a toolchain there and says why that waits. |
+| `tests/docker/Dockerfile` | Builder stage gains the member. `tests/container.test.sh` already asserts cargo's member list matches this file, so omitting it fails a test rather than a Docker build. The runtime stage stays Rust-free, and stays that way until a ported Rust suite needs to run in it (shell-test-port spec, section 4a). |
 | `.scripts/config/config-deps` | New shell shim. Sources `usage.sh`, execs `config-cli deps "$@"`. |
 | `.scripts/config/config-install` | Becomes a 3-line shim to `config deps install` per 7.3. |
 | `.scripts/deps/check-deps.sh` | Deleted, last, in one commit with every consumer. |
@@ -611,15 +611,28 @@ inside it produces the non-converging fixpoint described in item 1 below.
 it becomes possible to get wrong.
 
 **One gate note.** This step adds the workspace's first binary crate beyond
-`config-manifest`, and `cargo clippy --locked --all-targets -- -D warnings`
-is enforced by no gate anywhere in this repo (verified: zero hits outside
-prose across `.github/`, `.scripts/` and `tests/`). The seven-task
-`deps-core` completion held that invariant by hand across every task. The
-shell-test-port spec's section 4a owns adding the clippy leg to
-`run-all.sh` and to `test-suite.yml`, and sequences it ahead of the suite
-conversions for this reason. If that has not landed by the time this step
-starts, hold the invariant by hand here too and say so in the plan's Global
-Constraints, as the `deps-core` plan did.
+`config-manifest`, and as of 2026-09-07 no gate anywhere in this repo runs
+`cargo clippy` (verified: zero hits outside prose across `.github/`,
+`.scripts/` and `tests/`). The seven-task `deps-core` completion held that
+invariant by hand across every task, and two implementers tripped it in
+tasks whose briefs did not predict it.
+
+The shell-test-port spec's section 4a owns the fix, declares the lint policy
+in `crates/Cargo.toml` so it binds every invocation rather than one command
+line, and blocks on nothing, so it should land **before** this step. A new
+binary crate arriving under an unenforced invariant is how the invariant
+stops being true. If 4a has not landed when this step starts, hold the
+invariant by hand and say so in the plan's Global Constraints, as the
+`deps-core` plan did.
+
+Note also that this crate is the first workspace member whose tests may
+genuinely need IO: `config-cli` is the adapter, so its tests drive real
+installers. 4a.1's argument that the Rust checks are safe to run on the host
+rests on today's members being hermetic (pure crates, plus a
+`config-manifest` whose every test builds its own `tempfile::tempdir()`).
+**Keep that property**: an adapter test that mutates the real `$HOME` or the
+real repository breaks the host-side gate for everyone. Drive IO against a
+fixture directory the test owns, the way `config-manifest` already does.
 
 The parent spec's 7.5a bootstrap gates are the acceptance test for this step:
 the rewrite is not done until a bare image fully initializes through the

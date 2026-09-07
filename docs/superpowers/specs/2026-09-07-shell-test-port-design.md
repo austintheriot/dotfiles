@@ -30,11 +30,12 @@ Specs 4 and 5 are independent of the 1-2-3 chain and of each other. Spec 5's
 first tranche is the only piece with a reproduced defect behind it and no
 prerequisite, so it can run first, alongside spec 1.
 
-**Section 4a's clippy leg is smaller than a tranche and blocks on nothing at
-all**, not even Tranche A. It is a few lines in `run-all.sh` and
-`test-suite.yml`, it closes an invariant that no gate enforces today, and it
-is a no-op in the current Rust-free container, so it can land before spec 1's
-successor rather than waiting for 34 suite conversions. Sequenced in 4a.
+**Section 4a is smaller than a tranche and blocks on nothing at all**, not
+even Tranche A, and it needs no change to the test image. It adds the Rust
+checks to `tests/pre-push` on the host and to `test-suite.yml`, and declares
+the lint policy in `crates/Cargo.toml` so it binds every invocation rather
+than one command line. Worth landing before spec 2, which adds the first new
+binary crate and would otherwise inherit an unenforced invariant.
 
 ## 1. Why this is last, and why one tranche is not
 
@@ -175,8 +176,10 @@ tranche C rests on consistency alone.
   caught that the host missed, including two shellcheck findings the host's
   newer version does not report. A Rust suite must still run there, which
   means the test image needs the toolchain the deps images deliberately lack.
-  Section 4a states what that costs and what it fixes, because the same
-  change closes a gate hole that exists today.
+  Section 4a owns that change. It does NOT own the local gate fix: the Rust
+  checks are hermetic and run on the host before the container leg, so
+  closing today's gate hole does not wait for this image to grow a
+  toolchain.
 - **`cargo test` already runs the whole workspace.** Fixed in `fc33e5ac`:
   `run-all.sh` previously pointed `--manifest-path` at one crate, so
   `dotfiles-path`'s tests were outside the suite from the day it landed.
@@ -223,53 +226,139 @@ enough that two implementers hit it (a `clone_on_copy` on a `Copy` type, and
 an unused import that only fires on the non-test target) in tasks whose
 briefs did not predict either.
 
-**Decision: this port owns both fixes, because it already owns the change
-they need.** Section 4's container-leg bullet commits to putting a Rust
-toolchain in `tests/docker/Dockerfile`'s runtime stage, since a ported suite
-cannot run without one. Once that toolchain is there:
+### 4a.1 The Rust checks run on the HOST, before the container
 
-1. `command -v cargo` becomes true in the container, so `run-all.sh`'s
-   existing Rust leg starts running under pre-push with no change to
-   `run-all.sh` at all. The hole closes as a side effect of the port rather
-   than as separate work.
-2. Add a clippy leg to `run-all.sh` beside the `cargo test` leg, gated on the
-   same `command -v cargo` probe and reported through `run_suite` so it
-   counts like every other suite. It must run
-   `cargo clippy --locked --all-targets -- -D warnings` from inside
-   `crates/`, not with `--manifest-path`, for the reason already documented
-   at `run-all.sh:196-199` and in `test-suite.yml`: rustup honours
-   `crates/rust-toolchain.toml` only when the working directory is under
-   `crates/`, so a run from the repo root declares the 1.94.0 pin without
-   applying it.
-3. Add the same clippy step to `test-suite.yml`, so the invariant is enforced
-   before merge and not only before push. Cheap: Rust is preinstalled on both
-   runners and the workflow already builds from `crates/`.
+The first draft of this section said the local fix waits for a toolchain in
+the test image. **That was wrong, and the reason it was wrong is the reason
+the container exists in the first place.**
 
-**The cost, stated rather than waved at.** A toolchain in the runtime stage
-makes the test image substantially larger and its build slower, and
-`tests/docker/Dockerfile`'s own header gives "stays Rust-free" as a
-deliberate property. That property was chosen when the image ran shell
-suites against a prebuilt binary. This port changes the premise: the suite
-being run IS Rust, so the toolchain stops being overhead and becomes the
-thing under test. Reusing the existing builder stage's cached
-`~/.cargo`/`target` layers is what keeps the added time bounded, and the
-builder already compiles all three crates on every push, so the compile cost
-is largely paid twice rather than newly.
+`tests/run-in-docker.sh` exists to contain **mutation**. Its own header and
+`tests/docker/Dockerfile`'s say so: the shell suites write fixture git repos
+into `$HOME`, spawn tmux sessions on the real server, and once created a real
+`~/.oh-my-zsh/custom/plugins/zsh-autosuggestions` on a machine that does not
+use oh-my-zsh. `tests/pre-push` refuses a host fallback for that reason, and
+that refusal is correct **for those suites**.
 
-**Do NOT fix this by adding a host fallback to `tests/pre-push`.** Its own
-comment rejects that explicitly: falling back when the daemon is down
-reintroduces the tmux and fixture-repo flake the container exists to contain,
-and "a gate that quietly changes what it tests is worse than one that tells
-you to start Docker." A host-side `cargo test` in the hook would be that
-same defect in a new place. The toolchain goes in the image.
+`cargo test` is not one of those suites. It mutates nothing:
 
-**Sequencing.** Step 2 and step 3 do not depend on the port and are worth
-landing first: the clippy leg in CI is a few lines and closes the wider hole
-immediately, and it can gate on `command -v cargo` locally so it is a no-op
-in today's Rust-free container. Step 1 arrives with Tranche A, since that is
-when a Rust test first needs to run in the container. Ordering it this way
-means the unenforced invariant gets a gate in the next step rather than after
-34 suite conversions.
+- `deps-core` and `dotfiles-path` are pure by construction, and `deps-core`
+  enforces it with a purity test that scans its own sources for the IO
+  capability paths and fails the build if one appears.
+- `config-manifest` does shell out to `git` and read `$HOME` in production,
+  but **every one of its tests builds its own `tempfile::tempdir()` and
+  passes explicit `--git-dir` and `--work-tree`**, so no test reads or writes
+  the real repository. The `$HOME` reads are in `main.rs` runtime paths, not
+  tests.
+
+**Verified rather than reasoned.** The whole workspace was run with `HOME`
+pointed at an empty throwaway directory (`RUSTUP_HOME` and `CARGO_HOME` kept
+real, since those are the toolchain's, not the tests'). Result: all suites
+green, the real home directory unchanged at 111 entries, tmux session count
+unchanged, and **the fake home completely empty afterwards**. Zero mutation.
+
+So the local hole needs no image change at all:
+
+1. **Run the Rust checks on the host in `tests/pre-push`, before it hands off
+   to Docker.** They are fast, hermetic, and they fail fast on exactly the
+   class of breakage the container leg cannot see. This is not the rejected
+   "host fallback": a fallback silently substitutes a weaker check when the
+   daemon is down, whereas this is an additional gate that always runs and
+   never replaces the container leg. If cargo is absent it must SKIP loudly,
+   the same way `run-all.sh` does, because a gate that says nothing when it
+   skips is indistinguishable from one that is not installed.
+2. **Leave `tests/docker/Dockerfile`'s runtime stage Rust-free until a ported
+   Rust suite actually needs to run there.** Section 4's container-leg
+   requirement still stands for Tranche A onward, but it is no longer a
+   prerequisite for closing the gate, and it stops being a reason to carry
+   toolchain weight in an image that today runs only shell.
+3. **Add the same checks to `test-suite.yml`.** `cargo test` already runs
+   there through `run-all.sh` on the runner; the strict checks below do not.
+
+All Rust invocations run from inside `crates/`, never with
+`--manifest-path`, for the reason already documented at `run-all.sh:196-199`
+and in `test-suite.yml`: rustup honours `crates/rust-toolchain.toml` only
+when the working directory is under `crates/`, so a run from the repo root
+declares the 1.94.0 pin without applying it. That exact mistake has failed
+CI once already.
+
+### 4a.2 Strict checks, and where strictness belongs
+
+The invariant the `deps-core` work held by hand was one command line. A
+command line is the wrong home for it: it binds one invocation, so an IDE, a
+bare `cargo clippy`, and a teammate's terminal all disagree with the gate.
+
+**Decision: `[workspace.lints]` in `crates/Cargo.toml`, with each member
+opting in via `[lints] workspace = true`.** Lint configuration then travels
+with the code and applies to every invocation, and the gate's `-D warnings`
+becomes the enforcement of a policy declared in the manifest rather than the
+policy itself.
+
+**Measured before specifying, because a strict set adopted blind is a
+strict set that gets switched off.** A trial of `clippy::all` +
+`clippy::pedantic` + `rust_2018_idioms` + `missing_docs` + the
+panic-family lints over the current workspace produced **315 warnings with
+`--all-targets`**. The breakdown is what decides the design:
+
+| Warning | Count | Disposition |
+|---|---|---|
+| `expect()`/`unwrap()`/`panic` in tests | ~123 of 126 | **Test-only. Must not be denied.** CLAUDE.md permits them in test code, and only **3** occur outside tests. |
+| `missing_docs` on public variants and struct fields | 68 | **Adopt.** CLAUDE.md already requires doc comments on public items, so these are real gaps. |
+| `must_use_candidate` | 41 | **Do not adopt.** Pure `pedantic` noise on a codebase whose builders are already used positionally. |
+| `missing_errors_doc` | 5 | **Adopt.** CLAUDE.md already requires `# Errors` on fallible public functions. |
+| `format_push_string`, `doc_markdown`, `redundant_closure`, `match_same_arms`, `items_after_statements` | ~30 | **Adopt case by case**, all mechanical. |
+
+The three non-test `expect()` calls are all `writeln!` into a `String` at
+`config-manifest/src/doctor.rs:153,157,167`, which cannot fail. Those are
+CLAUDE.md's "proven invariant" exception, so `expect_used` at deny would
+force an `#[allow]` on correct code. `clippy::format_push_string` already
+flags that same pattern more precisely and is the better lint to adopt.
+
+**So the strict set is deny-by-default with two scoped carve-outs, not a
+blanket `pedantic`:**
+
+```toml
+[workspace.lints.rust]
+unsafe_code = "forbid"          # deps-core and dotfiles-path have none; keep it that way
+missing_docs = "warn"
+unused_qualifications = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+missing_errors_doc = "warn"
+format_push_string = "warn"
+# NOT pedantic wholesale: 41 must_use_candidate warnings are noise here.
+# NOT unwrap_used/expect_used/panic at workspace level: 98% of the hits are
+# test code where CLAUDE.md permits them, and the 3 production sites are
+# writeln! into a String, which cannot fail.
+```
+
+`unsafe_code = "forbid"` is the one at `forbid` rather than `warn`: forbid
+cannot be lifted by a local `#[allow]`, which is the point. Nothing in these
+crates needs unsafe, and `deps-core`'s whole design argument is that it holds
+no capabilities.
+
+**The panic-family lints are still worth having, scoped to non-test code.**
+Cargo cannot express "deny in `src`, allow in `#[cfg(test)]`" through
+`[workspace.lints]`, so the options are a crate-level
+`#![cfg_attr(not(test), deny(clippy::unwrap_used))]` per crate, or leaving
+the rule to review as today. **Decision: the `cfg_attr` form, one line per
+crate**, because it makes the rule mechanical exactly where CLAUDE.md makes
+it absolute and silent exactly where CLAUDE.md permits the construct. Verify
+after adding it that the three `doctor.rs` sites still compile, since they
+are the only production hits and they are legitimate.
+
+**Adoption is one commit per lint family, not one big commit.** 68 missing-doc
+warnings is real work on public API surface, and mixing it with the gate
+wiring means a reviewer cannot tell a policy change from a docs change. Land
+the gate first with the lint set at `warn`, then flip to the gate's
+`-D warnings` once the count is zero, so the gate never lands red.
+
+**Sequencing.** All of 4a.1 and 4a.2 blocks on nothing, not even Tranche A,
+and none of it needs the test image to change. It is worth landing before
+the adapter step, because that step adds the workspace's first binary crate
+past `config-manifest` and would otherwise inherit an invariant that no gate
+enforces.
 
 ## 5. Order
 

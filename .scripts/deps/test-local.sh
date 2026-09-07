@@ -146,17 +146,24 @@ for image in ubuntu arch; do
         continue
     fi
 
-    # The output is captured as well as shown, because the exit code alone
-    # cannot distinguish a real bootstrap from a vacuous one.
+    # Redirected to a file, then printed, so the container's own exit status
+    # stays authoritative and the summary line can still be inspected after
+    # the run.
+    #
+    # Not a `| tee` pipeline, which would show the output live but hand back
+    # tee's status instead of the container's, and PIPESTATUS is not POSIX.
+    # The exit code is what decides a pass here, so it wins over liveness;
+    # the log is on disk if a run needs watching from another terminal.
+    run_log="$workdir/$image.log"
     # shellcheck disable=SC2086
-    if run_output=$(docker run --rm $platform_args \
+    if docker run --rm $platform_args \
         -v "$seed:/seed:ro" \
         -e BOOTSTRAP_PREBUILT_BIN=/seed/config-cli \
-        "depcheck-$image" 2>&1)
+        "depcheck-$image" > "$run_log" 2>&1
     then
-        printf '%s\n' "$run_output"
+        cat "$run_log"
     else
-        printf '%s\n' "$run_output"
+        cat "$run_log"
         printf '\n=== %s: config deps install exited non-zero ===\n' "$image" >&2
         status=1
         continue
@@ -171,7 +178,7 @@ for image in ubuntu arch; do
     #
     # So the count is the assertion, not the status. An image whose manifest
     # the engine cannot find fails here instead of passing silently.
-    if printf '%s\n' "$run_output" | grep -qE ': 0 entries'; then
+    if grep -qE ': 0 entries' "$run_log"; then
         printf '\n=== %s: the run considered 0 dependencies ===\n' "$image" >&2
         printf 'test-local: the engine found no manifest in this image.\n' >&2
         printf 'test-local: check DOTFILES_ROOT against where the deps tree is copied.\n' >&2

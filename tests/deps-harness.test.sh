@@ -37,6 +37,10 @@
 
 . "$(dirname "$0")/lib.sh"
 
+# DOTFILES_ROOT is assigned by lib.sh, sourced above. shellcheck cannot see
+# across a `.` source, so it reads the first use as a possible misspelling.
+# This became the FIRST use when the retired engine's path was removed.
+# shellcheck disable=SC2153
 HARNESS="$DOTFILES_ROOT/.scripts/deps/test-local.sh"
 DOCKERFILE_UBUNTU="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.ubuntu"
 DOCKERFILE_ARCH="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.arch"

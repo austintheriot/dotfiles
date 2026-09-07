@@ -1,16 +1,17 @@
 //! The dependency-check core. No IO of any kind.
 //!
 //! Every function here is a function of its arguments. Parsing takes text,
-//! planning takes an observation map, and the loop driver lives in the CLI
-//! crate. The crate boundary is what makes that compiler-enforced rather
-//! than a discipline (spec 7.1), and `config_manifest::doctor` is the
-//! in-repo precedent for the module shape.
+//! planning takes an observation map, and reconciling takes the world
+//! observed after the loop. The crate boundary is what makes that compiler-enforced
+//! rather than a discipline (spec 7.1), and `config_manifest::doctor` is
+//! the in-repo precedent for the module shape.
 
 mod action;
 mod check;
 mod manifest;
 mod outcome;
 mod plan;
+mod reconcile;
 
 pub use check::{
     Check, CheckParseError, CheckPath, Observation, ObservationMap, Observations, PathRoot,
@@ -31,6 +32,7 @@ pub use plan::{
     Elevation, Event, PackageCatalog, Plan, PlanError, PrivilegeRequirement, RawSelector,
     Requirements, Selection, Step, plan,
 };
+pub use reconcile::{Report, ReportRow, reconcile};
 
 #[cfg(test)]
 mod purity {
@@ -52,6 +54,7 @@ mod purity {
             ("manifest.rs", include_str!("manifest.rs")),
             ("outcome.rs", include_str!("outcome.rs")),
             ("plan.rs", include_str!("plan.rs")),
+            ("reconcile.rs", include_str!("reconcile.rs")),
         ];
         for (file_name, source) in sources {
             for forbidden in forbidden_capabilities() {
@@ -86,6 +89,7 @@ mod purity {
             include_str!("manifest.rs"),
             include_str!("outcome.rs"),
             include_str!("plan.rs"),
+            include_str!("reconcile.rs"),
         ] {
             assert!(
                 !source.is_empty(),

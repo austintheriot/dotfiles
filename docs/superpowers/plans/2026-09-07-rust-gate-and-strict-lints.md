@@ -154,10 +154,21 @@ all green, real home unchanged, fake home still empty afterwards.
 
 - [ ] **Step 1: Write the failing test**
 
-Create `tests/rust-gate.test.sh`. It is a suite in the repo's own harness, so
-read `tests/lib.sh` for `describe`, `assert_eq`, `assert_contains`, `skip`
-and `finish` before writing, and copy the header shape from an existing small
-suite such as `tests/profile-path.test.sh`.
+Create `tests/rust-gate.test.sh`. It is a suite in the repo's own harness.
+
+> **Note, added after Task 1 shipped.** The code block below still uses
+> `describe` and `assert_eq`, which do NOT exist. The implemented file uses
+> the real names correctly. The block is left as written so the correction
+> above it stays legible; take the names from the paragraph, not the block.
+
+**The real helper names, verified in `tests/lib.sh`:** `assert_equals`
+(:205), `assert_contains` (:218), `assert_succeeds` (:234), `skip` (:265),
+`finish` (:322). There is **no `assert_eq` and no `describe`** despite what
+an earlier draft of this plan said. All of them are description-first, so the
+description is the FIRST argument, not the last. Read `tests/lib.sh` and copy
+the header shape from an existing small suite such as
+`tests/profile-path.test.sh`. The test code below uses the real names; if you
+find a further discrepancy, the harness wins and you must say so.
 
 ```sh
 #!/usr/bin/env bash
@@ -398,12 +409,26 @@ real git process is running.
 
 - [ ] **Step 7: Verify shellcheck is clean**
 
+Use the REPO's invocation, not a bare `shellcheck`. `tests/shellcheck.test.sh`
+always supplies `-x` (follow sourced files) and
+`-e "SC1091,SC2016"` (the two the repo suppresses deliberately), and without
+them a sourced `lib.sh` produces a false-positive SC1091 that is not a real
+finding:
+
 ```sh
-cd ~ && shellcheck tests/rust-checks.sh tests/rust-gate.test.sh; echo "shellcheck=$?"
+cd ~ && shellcheck -x -e "SC1091,SC2016" tests/rust-checks.sh tests/rust-gate.test.sh
+echo "shellcheck=$?"
 ```
 
-Expected: `shellcheck=0`. The suite runs shellcheck over `tests/`, so a
-finding here fails the suite later. Fix any finding now.
+Expected: `shellcheck=0`. Then confirm against the suite that actually gates
+it, which is the authority:
+
+```sh
+cd ~ && bash tests/shellcheck.test.sh 2>&1 | tail -2
+```
+
+Expected: PASS. If the bare invocation and the suite disagree, the suite is
+right.
 
 - [ ] **Step 8: Commit**
 
@@ -632,14 +657,13 @@ whenever a later step puts a toolchain there.
 Append to `tests/rust-gate.test.sh` from Task 1:
 
 ```sh
-describe "run-all.sh runs clippy as a counted suite"
 runner_text=$(cat "$DOTFILES_ROOT/tests/run-all.sh")
-assert_contains "$runner_text" "cargo clippy" \
-    "run-all.sh must run clippy, or the invariant has no gate in CI"
+assert_contains "run-all.sh must run clippy, or the invariant has no gate in CI" \
+    "$runner_text" "cargo clippy"
 # Counted, not a bare command: an uncounted check does not appear in the
 # suite total, so its absence is invisible in the summary line.
-assert_contains "$runner_text" 'run_suite "cargo clippy in crates/"' \
-    "the clippy leg must go through run_suite so it is counted and timed"
+assert_contains "the clippy leg must go through run_suite so it is counted and timed" \
+    "$runner_text" 'run_suite "cargo clippy in crates/"'
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -1011,7 +1035,7 @@ rather than grepping, which is the pattern to follow. Append to
 `tests/rust-gate.test.sh`:
 
 ```sh
-describe "CI runs clippy explicitly"
+# Parsed rather than grepped, matching deps-harness.test.sh.
 # Parsed rather than grepped, matching deps-harness.test.sh: a reformat of
 # the workflow must not produce a false pass or a false failure.
 ci_has_clippy=$(python3 - "$DOTFILES_ROOT/.github/workflows/test-suite.yml" <<'PY'
@@ -1027,8 +1051,8 @@ found = any("cargo clippy" in str(step.get("run", "")) for step in steps)
 print("0" if found else "1")
 PY
 )
-assert_eq "0" "$ci_has_clippy" \
-    "test-suite.yml must run cargo clippy, so the invariant gates before merge"
+assert_equals "test-suite.yml must run cargo clippy, so the invariant gates before merge" \
+    "0" "$ci_has_clippy"
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**

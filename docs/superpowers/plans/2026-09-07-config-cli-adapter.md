@@ -1651,15 +1651,24 @@ no usage text.
 documented flags and probe them. Check what they assert, then add to whichever
 suite owns subcommand discovery:
 
-```sh
-describe "config deps is a discoverable subcommand"
-assert_contains "$(config help 2>&1)" "deps" \
-    "config help must list deps, or the subcommand is invisible"
+**The harness's real helper names**, verified in `tests/lib.sh`:
+`assert_equals` (:205), `assert_contains` (:218), `assert_succeeds` (:234),
+`skip` (:265), `finish` (:322). There is **no `assert_eq` and no `describe`**,
+and all of them take the DESCRIPTION FIRST. Read `tests/lib.sh` and an
+existing small suite before writing; the harness wins over this plan.
 
-describe "config deps prints usage for a bad flag and exits 2"
+```sh
+assert_contains "config help must list deps, or the subcommand is invisible" \
+    "$(config help 2>&1)" "deps"
+
 usage_output=$(config deps --not-a-real-flag 2>&1); usage_status=$?
-assert_eq "2" "$usage_status" "a rejected flag is exit 2, the repo-wide convention"
+assert_equals "a rejected flag is exit 2, the repo-wide convention" \
+    "2" "$usage_status"
 ```
+
+Confirm the argument order against `tests/lib.sh` before running: a helper
+called with expected and actual swapped still passes and reports backwards
+when it fails, which is worse than failing outright.
 
 - [ ] **Step 3: Run it to verify it fails**
 

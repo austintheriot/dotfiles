@@ -688,4 +688,239 @@ mod tests {
         };
         assert_eq!(run(), run());
     }
+
+    // deps.conf:36 and :45. node requires nvm, and nvm's own install is
+    // manual-only (check-deps.sh:369-372), so on a machine with neither,
+    // node is blocked rather than attempted.
+    #[test]
+    fn a_dependent_is_blocked_when_its_prerequisite_is_absent() {
+        let manifest = manifest_of(&["nvm", "node"]);
+        let requirements =
+            Requirements::from_pairs(vec![(dependency("node"), vec![dependency("nvm")])]);
+        let (built, events) = plan(
+            &manifest,
+            PackageManager::Apt,
+            &Selection::all(&manifest),
+            &requirements,
+            &ObservationMap::from_pairs(vec![]),
+            Elevation::ViaSudo,
+            &packages_named(&["nvm", "node"]),
+        )
+        .expect("a two-entry plan succeeds");
+
+        // The ordering claim is deliberately NOT made here. manifest_of
+        // writes nvm first, so a planner that ignored the graph entirely
+        // would still put nvm at index 0 and this assertion would pass
+        // vacuously. Confirmed: with topological_order replaced by the
+        // manifest order, this test stays green. The ordering guarantee is
+        // pinned by the_graph_reorders_a_dependent_written_before_its_prerequisite,
+        // which writes the dependent first.
+        let node_step = built
+            .steps
+            .iter()
+            .find(|step| step.dependency == dependency("node"))
+            .expect("node has a step");
+        assert!(matches!(
+            node_step.action,
+            InstallAction::NotAutomatable {
+                reason: NoInstallReason::PrerequisiteNotYetInstalled { .. }
+            }
+        ));
+        assert!(events.contains(&Event::StepBlocked {
+            dependency: dependency("node"),
+            on: dependency("nvm"),
+        }));
+    }
+
+    // The ordering claim above, made non-vacuous. manifest_of writes nvm
+    // first, so a planner that ignored the graph entirely would still put
+    // nvm at index 0. Here the manifest writes node first, so index 0 is
+    // nvm only because topological_order moved it.
+    #[test]
+    fn the_graph_reorders_a_dependent_written_before_its_prerequisite() {
+        let manifest = manifest_of(&["node", "nvm"]);
+        let requirements =
+            Requirements::from_pairs(vec![(dependency("node"), vec![dependency("nvm")])]);
+        let (built, _) = plan(
+            &manifest,
+            PackageManager::Apt,
+            &Selection::all(&manifest),
+            &requirements,
+            &ObservationMap::from_pairs(vec![]),
+            Elevation::ViaSudo,
+            &packages_named(&["nvm", "node"]),
+        )
+        .expect("a two-entry plan succeeds");
+        let order: Vec<&str> = built
+            .steps
+            .iter()
+            .map(|step| step.dependency.as_str())
+            .collect();
+        assert_eq!(order, vec!["nvm", "node"], "the graph outranks the file order");
+    }
+
+    // The fixpoint evidence, as a value. check-deps.sh:339-341 emits the
+    // zsh-autosuggestions clone only when the oh-my-zsh custom directory
+    // exists, so installing oh-my-zsh in wave 1 is what makes
+    // zsh-autosuggestions installable in wave 2. One pass does not
+    // converge, and this pins that plan() itself does not pretend it does:
+    // the same inputs with the prerequisite now Present yield a real step
+    // where the earlier wave yielded a block.
+    #[test]
+    fn a_later_wave_unblocks_a_dependent_once_the_prerequisite_is_present() {
+        let manifest = manifest_of(&["oh-my-zsh", "zsh-autosuggestions"]);
+        let requirements = Requirements::from_pairs(vec![(
+            dependency("zsh-autosuggestions"),
+            vec![dependency("oh-my-zsh")],
+        )]);
+        let packages = packages_named(&["oh-my-zsh", "zsh-autosuggestions"]);
+        let run = |observations: &ObservationMap| {
+            plan(
+                &manifest,
+                PackageManager::Apt,
+                &Selection::all(&manifest),
+                &requirements,
+                observations,
+                Elevation::ViaSudo,
+                &packages,
+            )
+            .expect("a two-entry plan succeeds")
+        };
+
+        let (first_wave, _) = run(&ObservationMap::from_pairs(vec![]));
+        let blocked = first_wave
+            .steps
+            .iter()
+            .find(|step| step.dependency == dependency("zsh-autosuggestions"))
+            .expect("the dependent has a step in wave 1");
+        assert!(matches!(
+            blocked.action,
+            InstallAction::NotAutomatable {
+                reason: NoInstallReason::PrerequisiteNotYetInstalled { .. }
+            }
+        ));
+
+        let installed = Check::Command(
+            CommandName::parse("oh-my-zsh").expect("a name parses"),
+        );
+        let (second_wave, _) =
+            run(&ObservationMap::from_pairs(vec![(installed, Observation::Present)]));
+        let unblocked = second_wave
+            .steps
+            .iter()
+            .find(|step| step.dependency == dependency("zsh-autosuggestions"))
+            .expect("the dependent has a step in wave 2");
+        assert!(
+            matches!(unblocked.action, InstallAction::Package { .. }),
+            "wave 2 plans the real install: {:?}",
+            unblocked.action
+        );
+    }
+
+    // A prerequisite absent from the selected manifest is not an error.
+    // oh-my-zsh is in deps-linux.conf:12 and legitimately not in the macOS
+    // manifest, where zsh-autosuggestions installs through brew, so
+    // PlanError::UnknownDependency would be the wrong answer.
+    #[test]
+    fn a_prerequisite_outside_the_selected_manifest_is_an_event_not_an_error() {
+        let manifest = manifest_of(&["zsh-autosuggestions"]);
+        let requirements = Requirements::from_pairs(vec![(
+            dependency("zsh-autosuggestions"),
+            vec![dependency("oh-my-zsh")],
+        )]);
+        let (built, events) = plan(
+            &manifest,
+            PackageManager::Brew,
+            &Selection::all(&manifest),
+            &requirements,
+            &ObservationMap::from_pairs(vec![]),
+            Elevation::ViaSudo,
+            &packages_named(&["zsh-autosuggestions"]),
+        )
+        .expect("an absent prerequisite is not a plan error");
+        assert!(events.contains(&Event::PrerequisiteNotSelected {
+            dependency: dependency("zsh-autosuggestions"),
+            on: dependency("oh-my-zsh"),
+        }));
+        assert!(matches!(built.steps[0].action, InstallAction::Brew { .. }));
+    }
+
+    // A cycle is RequirementCycle, not ManifestParse: every line parses.
+    #[test]
+    fn a_requirement_cycle_names_its_chain() {
+        let manifest = manifest_of(&["fzf", "ripgrep"]);
+        let requirements = Requirements::from_pairs(vec![
+            (dependency("fzf"), vec![dependency("ripgrep")]),
+            (dependency("ripgrep"), vec![dependency("fzf")]),
+        ]);
+        let failure = plan(
+            &manifest,
+            PackageManager::Apt,
+            &Selection::all(&manifest),
+            &requirements,
+            &ObservationMap::from_pairs(vec![]),
+            Elevation::ViaSudo,
+            &packages_named(&["fzf", "ripgrep"]),
+        )
+        .expect_err("a cycle does not plan");
+        let PlanError::RequirementCycle { chain } = failure else {
+            panic!("a cycle must be RequirementCycle, not {failure:?}");
+        };
+        assert!(chain.len() >= 2, "the chain names the cycle: {chain:?}");
+    }
+
+    // A manager with no entry resolves through the mandatory fallback, which
+    // states its own reason. This is what makes resolve total without
+    // fabricating a claim about upstream.
+    #[test]
+    fn an_unnamed_manager_resolves_through_the_fallback() {
+        let manifest = manifest_of(&["ripgrep"]);
+        let (built, _) = plan(
+            &manifest,
+            PackageManager::Unknown,
+            &Selection::all(&manifest),
+            &Requirements::none(),
+            &ObservationMap::from_pairs(vec![]),
+            Elevation::ViaSudo,
+            &packages_named(&["ripgrep"]),
+        )
+        .expect("Unknown is a variant, not an error");
+        assert!(matches!(
+            built.steps[0].action,
+            InstallAction::NotAutomatable {
+                reason: NoInstallReason::ManagerNotNamedInManifest {
+                    manager: PackageManager::Unknown
+                }
+            }
+        ));
+    }
+
+    // A dependency the catalog holds no entry for at all, which is a
+    // different path from a manager the entry does not name: the first
+    // resolves through PackageMap's fallback, the second never reaches a
+    // PackageMap. Both must state the same reason rather than one of them
+    // panicking or silently producing a Package step.
+    #[test]
+    fn a_dependency_outside_the_catalog_reports_the_manager_it_asked_for() {
+        let manifest = manifest_of(&["ripgrep"]);
+        let (built, _) = plan(
+            &manifest,
+            PackageManager::Apt,
+            &Selection::all(&manifest),
+            &Requirements::none(),
+            &ObservationMap::from_pairs(vec![]),
+            Elevation::ViaSudo,
+            &PackageCatalog::new(),
+        )
+        .expect("an uncatalogued dependency is not a plan error");
+        assert_eq!(
+            built.steps[0].action,
+            InstallAction::NotAutomatable {
+                reason: NoInstallReason::ManagerNotNamedInManifest {
+                    manager: PackageManager::Apt
+                }
+            }
+        );
+        assert_eq!(built.steps[0].privilege, PrivilegeRequirement::None);
+    }
 }

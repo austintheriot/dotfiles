@@ -9,9 +9,9 @@
 # mac never received. None of those four were platform-specific. They were
 # just fixes applied on whichever machine hit the problem.
 #
-# So .zshrc is now shared and drift-checked, and the genuinely
-# platform-specific lines live in .zshrc-mac / .zshrc-linux -- both of which
-# ship on both branches and are drift-checked too.
+# So .zshrc is now shared, and the genuinely platform-specific lines live in
+# .zshrc-mac / .zshrc-linux -- both of which ship on the single branch and
+# are selected at runtime.
 #
 # The contract:
 #   1. .zshrc names no platform-specific absolute path of its own
@@ -30,11 +30,10 @@ ZSHRC_LINUX="$DOTFILES_ROOT/.zshrc-linux"
 
 assert_succeeds 'the shared zshrc exists' test -f "$ZSHRC"
 
-# --- both variants ship on both branches ------------------------------------
+# --- both variants ship on the single branch --------------------------------
 
-# This is what puts them inside the drift check. A variant that existed only
-# on its own branch would be exempt from `config check`, which is how the
-# per-branch files drifted in the first place.
+# A variant that was absent would leave its platform sourcing nothing, with no
+# other check to notice. These two assertions are that check.
 assert_succeeds 'the mac variant ships here' test -f "$ZSHRC_MAC"
 assert_succeeds 'the linux variant ships here' test -f "$ZSHRC_LINUX"
 

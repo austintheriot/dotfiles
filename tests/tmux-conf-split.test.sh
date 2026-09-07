@@ -4,9 +4,9 @@
 # actual behavior: the file parses cleanly, the shared keybindings and hooks
 # resolve, and the platform variant's clipboard binding is the one in effect.
 #
-# tmux.conf is the shared file, byte-identical on both branches.
-# tmux-mac.conf and tmux-linux.conf hold the clipboard commands and both ship
-# on both branches, so the drift check covers them too.
+# tmux.conf is the shared, platform-neutral file. tmux-mac.conf and
+# tmux-linux.conf hold the clipboard commands and both ship on the single
+# branch, sourced by platform at runtime.
 #
 # Runs against the real installed config file, on a throwaway tmux SERVER
 # (its own -L socket), not the developer's live server. `-f` only takes
@@ -62,8 +62,8 @@ VARIANT=$(platform_variant "$CONFIG")
 
 assert_succeeds 'this platform has a tmux variant file' test -f "$VARIANT"
 
-# Both variants ship on both branches, so the one for the other platform must
-# be here too -- that is what keeps it inside `config check`.
+# Both variants ship on the single branch, so the one for the other platform
+# must be here too. This assertion is what now catches one going missing.
 other_platform=mac; [ "$DOTFILES_PLATFORM" = mac ] && other_platform=linux
 assert_succeeds "the $other_platform variant also ships here" \
     test -f "$DOTFILES_ROOT/.config/tmux/tmux-$other_platform.conf"

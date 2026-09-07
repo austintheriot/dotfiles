@@ -1,6 +1,6 @@
 # macOS-specific shell configuration. Loaded by the shared .zshrc via
-# platform_source_variant. Ships on both branches so the drift check covers
-# it; only a mac shell ever sources it.
+# platform_source_variant, which selects the variant at runtime; only a mac
+# shell ever sources it.
 
 # zsh-autosuggestions init - see https://github.com/zsh-users/zsh-autosuggestions
 # Homebrew here; the linux variant reaches into oh-my-zsh's custom plugins.

@@ -7,9 +7,9 @@
 # linux branch never received option_as_alt or the Cmd+N binding. Neither loss
 # was deliberate.
 #
-# It is now shared and drift-checked. The platform keys live in
-# alacritty-mac.toml / alacritty-linux.toml, which both ship on both branches
-# so they are drift-checked too.
+# It is now shared, and the platform keys live in alacritty-mac.toml /
+# alacritty-linux.toml, which both ship on the single branch. The assertions
+# below are what now catches a variant going missing.
 #
 # The awkward part, and the reason this suite exists: Alacritty has no
 # conditional import. A shared config that imports both variants applies both
@@ -115,8 +115,8 @@ assert_equals 'the stale platform content is gone' \
 
 # --- the pointer is machine-local, not tracked ------------------------------
 
-# Tracking it would put a per-machine file inside the drift check, which would
-# then fail on every push from whichever machine wrote it last.
+# Tracking it would put a per-machine file in the repo, so each machine would
+# fight the last one over its contents on every push.
 if git --git-dir="$DOTFILES_ROOT/.cfg" --work-tree="$DOTFILES_ROOT" \
         rev-parse --git-dir >/dev/null 2>&1; then
     tracked=$(git --git-dir="$DOTFILES_ROOT/.cfg" --work-tree="$DOTFILES_ROOT" \

@@ -129,8 +129,8 @@ assert_succeeds 'at least one search root is present' test -n "$present_roots"
 #   - TODO-AGENTS.md quotes history verbatim: the claim line names the
 #     directory being renamed, and an item can be a pasted error message
 #     ("/Users/austin/.my-scripts/... returned 127"). Rewriting a quote
-#     falsifies it. The file is per-branch (`~TODO-AGENTS.md`) and holds no
-#     live path this repo resolves, so a stale name there breaks nothing.
+#     falsifies it. The file holds no live path this repo resolves, so a
+#     stale name there breaks nothing.
 #   - __pycache__ holds compiled bytecode that embeds the string from
 #     whatever the .py source said when it was last imported. It is
 #     regenerated from the source this suite already checks, and rewriting

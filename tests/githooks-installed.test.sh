@@ -7,8 +7,8 @@
 # travel with the repo. The symlinks under .cfg/hooks that make git actually
 # run them do not travel, and nothing recreates them on a new machine. This
 # machine had tests/pre-push tracked and executable for a full day while
-# .cfg/hooks/pre-push did not exist, so every push skipped the drift check
-# and the test suite silently. container.test.sh asserts the hook file's
+# .cfg/hooks/pre-push did not exist, so every push skipped the leak scan, the
+# stamp gate and the test suite silently. container.test.sh asserts the hook file's
 # contents; only this file asserts git will run it.
 #
 # Skipped entirely where there is no .cfg repository: the test image carries

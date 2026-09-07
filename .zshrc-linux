@@ -1,6 +1,6 @@
 # Linux/WSL-specific shell configuration. Loaded by the shared .zshrc via
-# platform_source_variant. Ships on both branches so the drift check covers
-# it; only a linux shell ever sources it.
+# platform_source_variant, which selects the variant at runtime; only a linux
+# shell ever sources it.
 
 # zsh-autosuggestions - installed as an oh-my-zsh custom plugin - see https://github.com/zsh-users/zsh-autosuggestions
 # oh-my-zsh here; the mac variant reaches into Homebrew's share directory.

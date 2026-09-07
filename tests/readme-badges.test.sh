@@ -39,8 +39,9 @@ $badges
 EOF
 assert_equals 'every badge names a workflow file that exists' '' "$missing_workflow"
 
-# Every badge must pin a branch. Without ?branch=, GitHub reports the default
-# branch, which is not what a per-branch badge is claiming to show.
+# Every badge must pin a branch. Without ?branch=, GitHub reports whatever it
+# considers the default, which is a claim about a branch this README never
+# names. Pinning makes the badge say which branch it is reporting on.
 unpinned=''
 while IFS= read -r badge; do
     [ -n "$badge" ] || continue

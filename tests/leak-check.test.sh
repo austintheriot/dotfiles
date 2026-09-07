@@ -3,9 +3,9 @@
 # Tests for tests/leak-check.sh in both modes.
 #
 # Staged mode is what pre-commit runs. Range mode is what pre-push runs, and
-# it exists because `git commit-tree` (used by `config sync`) and
-# `git commit --no-verify` never invoke pre-commit, so without a push-time
-# scan those commits reach the public repo unscanned.
+# it exists because `git commit-tree` and `git commit --no-verify` never
+# invoke pre-commit, so without a push-time scan those commits reach the
+# public repo unscanned.
 #
 # The project term rules are injected through LEAK_PATTERN_FILE and
 # LEAK_ALLOW_FILE. The real files under ~/.claude/local/ are never read, so

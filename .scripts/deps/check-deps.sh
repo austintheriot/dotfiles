@@ -15,12 +15,11 @@
 #
 # Reads dependencies from $DEPS_CONF (default: deps.conf next to this
 # script) and, if it exists, $DEPS_LOCAL_CONF -- the platform-exclusive
-# dependencies that don't belong in the shared, cross-branch-identical
-# deps.conf. That defaults to deps-mac.conf or deps-linux.conf beside this
-# script, chosen by ~/.scripts/platform.sh. Both variants ship on both
-# branches, so the drift check covers them; only the selection differs per
-# machine. See README.md in this directory for the manifest format and how to
-# add a new dependency.
+# dependencies that don't belong in the shared, platform-neutral deps.conf.
+# That defaults to deps-mac.conf or deps-linux.conf beside this script,
+# chosen by ~/.scripts/platform.sh. Both variants ship on the single branch;
+# only the selection differs per machine. See README.md in this directory for
+# the manifest format and how to add a new dependency.
 #
 # Exit code:
 #   without --fix: non-zero if anything is missing (informational -- used by

@@ -1,8 +1,8 @@
 # macOS-specific setup
 
 Setup notes that apply only to the mac machine. Everything shared lives in
-[README.md](./README.md). This file ships on both branches so the drift check
-covers it; only a mac reader needs it.
+[README.md](./README.md). This file ships on the single branch alongside the
+Linux one; only a mac reader needs it.
 
 ## Rust
 

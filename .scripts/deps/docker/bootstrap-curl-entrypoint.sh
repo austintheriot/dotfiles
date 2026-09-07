@@ -178,8 +178,9 @@ check 'the bare repo exists' test -d "$HOME/.cfg"
 check 'status.showUntrackedFiles is no' \
     test "$(git --git-dir="$HOME/.cfg" config --get status.showUntrackedFiles)" = 'no'
 
-# Branch selection. This container is Linux, so a mac-only seed would be a
-# harness bug rather than a product bug -- the CI job seeds both branches.
+# Branch selection. setup.sh takes no --branch here, so it checks out its
+# default. The CI job seeds that default alongside the pushed ref, so a
+# missing branch here is a harness bug rather than a product bug.
 checked_out=$(git --git-dir="$HOME/.cfg" --work-tree="$HOME" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '<none>')
 printf 'checked-out branch: %s\n' "$checked_out"
 check 'it checked out a branch this platform can use' \

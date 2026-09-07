@@ -1,5 +1,6 @@
 # Linux/WSL-specific Alacritty configuration. Imported by the shared
-# alacritty.toml. Ships on both branches so the drift check covers it.
+# alacritty.toml on a Linux machine, selected at runtime by
+# ~/.scripts/alacritty-platform.sh.
 #
 # Deliberately near-empty: everything this platform needs is already in the
 # shared alacritty.toml. The file exists so the split is symmetric and so

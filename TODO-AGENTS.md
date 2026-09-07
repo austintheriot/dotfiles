@@ -283,9 +283,9 @@ research agent and once independently.
   malformed manifest, unreadable manifest, git subprocess failure,
   non-UTF-8 tree entry, refused sync, and post-sync coverage gap. The
   `Err` arm at `main.rs:86` flattens every structured error the crate
-  built into the same status. `check.rs:75` documents that pre-push,
-  branch-drift.yml and deps-harness grep the message TEXT, which is the
-  structure being reconstructed from strings.
+  built into the same status. The 2026-09-06 collapse deleted `check.rs`
+  and branch-drift.yml, so the specific message-text grepping this entry
+  cited is gone; re-read the surviving callers before acting on it.
   Fix direction: one `Outcome` sum with a single exhaustive
   `exit_code()` match. The numbers stay as they are today, so nothing
   downstream breaks, but they become derived from a named meaning in one
@@ -393,7 +393,8 @@ research agent and once independently.
        the same day.
   What this cost, stated plainly rather than argued away:
     - The every-tracked-file-matches-a-rule invariant in `.sync-manifest` is
-      gone. Nothing now catches a file added without thought.
+      gone, along with the file itself. Nothing now catches a file added
+      without thought.
     - `origin/mac` and `origin/linux` are deliberately left in place, so
       this is reversible while they exist. Deleting them makes it not.
 
@@ -421,12 +422,16 @@ research agent and once independently.
   pre-push does more than the question assumed, in this order:
     1. leak-check --range on every pushed range, blocking on a finding and
        also on exit 2, which is "could not scan" rather than "clean".
-    2. when mac or linux is being pushed: the config-manifest binary's
-       stamp must match the pushed crate, then a mac-vs-linux drift check.
+    2. on any branch push: the config-manifest binary's stamp must match
+       the pushed crate. This used to fire only for mac or linux, so the
+       2026-09-06 collapse to main disabled it silently until it was
+       widened to every ref. The mac-vs-linux drift check it used to run
+       after the stamp gate is deleted.
     3. the full suite, in Docker, but ONLY when a pushed path matches
-       TRIGGER_PATHS (.scripts/*.sh, .claude/scripts/*.py,
-       .claude/hooks/*.sh, tests/, .sync-manifest, .github/workflows/,
-       crates/). A push touching nothing else skips the suite and says so.
+       TRIGGER_PATHS (.scripts/, .claude/scripts/*.py, .claude/hooks/*.sh,
+       tests/, .github/workflows/, crates/, .config/nvim/, .config/tmux/,
+       setup.sh, .zshrc*). A push touching nothing else skips the suite and
+       says so.
   Worth knowing about that last one: a change to a file outside those
   paths does not run the suite locally. .config/nvim/ is outside them, so
   the nvim work in this session pushed without the suite until a tests/

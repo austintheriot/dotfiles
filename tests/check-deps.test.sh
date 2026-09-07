@@ -322,9 +322,9 @@ assert_equals 'every docs url survives parsing' '' "$malformed_docs"
 # it: drop it there and the shell sources a plugin nothing installs, silently
 # losing autosuggestions with every check still reporting success.
 #
-# Every manifest counts. Both platform variants ship on both branches now, so
+# Every manifest counts. Both platform variants ship on the single branch, so
 # this reads all of them rather than only the one this machine selects --
-# which is what lets the mac branch's suite catch a dependency dropped from
+# which is what lets a mac machine's suite catch a dependency dropped from
 # the linux variant.
 all_tracked=$(cat "$DEPS_CONF_REAL" \
         "$DOTFILES_ROOT"/.scripts/deps/deps-mac.conf \
@@ -390,9 +390,9 @@ assert_contains 'aerospace trusts the tap before installing' \
 
 # --- a macOS-only dependency never fails --fix on Linux -----------------
 #
-# The deps-check workflow checks out one branch and runs every platform job
-# against it, and deps-mac.conf ships on both branches, so it is present in
-# the Ubuntu and Arch jobs.
+# The deps-check workflow runs every platform job against the same branch,
+# and deps-mac.conf ships there unconditionally, so it is present in the
+# Ubuntu and Arch jobs.
 # aerospace has no Linux build at all. Emitting the default
 # `apt-get install aerospace` there produced "E: Unable to locate package
 # aerospace" and failed the whole job, which is what the first real

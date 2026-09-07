@@ -5,13 +5,13 @@
 #
 # Every config file with a platform-specific part (.zshrc, tmux.conf,
 # alacritty.toml, deps.conf) is a shared base file plus a `-mac` / `-linux`
-# variant beside it. Both variants ship on both branches, so the drift check
-# covers them too; the base file loads whichever this returns.
+# variant beside it. Both variants ship on the single branch; the base file
+# loads whichever this returns, so a machine needs no new files to switch.
 #
 # Written in POSIX sh because the callers are zsh (.zshrc), sh (check-deps.sh)
 # and tmux's own shell-command hooks.
 
-# The override comes first so one machine can exercise both branches' variant
+# The override comes first so one machine can exercise both platforms' variant
 # files. A value that names no known platform is discarded rather than
 # trusted: it would otherwise select a variant file that does not exist, and
 # every config would silently fall back to bare shared behavior.

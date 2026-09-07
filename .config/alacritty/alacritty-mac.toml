@@ -1,6 +1,6 @@
 # macOS-specific Alacritty configuration. Imported by the shared
-# alacritty.toml. Ships on both branches so the drift check covers it; the
-# keys here are macOS-only and Alacritty ignores them elsewhere.
+# alacritty.toml on a mac, selected at runtime by
+# ~/.scripts/alacritty-platform.sh. The keys here are macOS-only.
 
 # Cmd+N opens a new Alacritty window. `open -n` is macOS's launcher.
 [[keyboard.bindings]]

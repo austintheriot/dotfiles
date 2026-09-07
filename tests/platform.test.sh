@@ -10,7 +10,7 @@
 #
 # The contract:
 #   1. it names exactly one platform, from a closed set
-#   2. the answer is overridable, so a test can drive both branches from
+#   2. the answer is overridable, so a test can drive both platforms from
 #      one machine
 #   3. an unrecognized uname is an explicit "unknown", never a silent
 #      guess at mac
@@ -53,10 +53,9 @@ assert_equals 'FreeBSD is unknown, not mac' 'unknown' "$(detect_with_uname FreeB
 
 # --- the answer is overridable ----------------------------------------------
 
-# This is what lets one machine test both branches' variant files. Without
-# it, the linux variant of every config file would be unreachable from the
-# mac branch's test suite, and the drift check would be the only thing
-# looking at it.
+# This is what lets one machine test both platforms' variant files. Without
+# it, the linux variant of every config file would be unreachable from a mac
+# machine's test suite, and nothing would be looking at it.
 overridden=$(env DOTFILES_PLATFORM=linux sh -c \
     ". '$PLATFORM_SH' && printf '%s' \"\$DOTFILES_PLATFORM\"")
 assert_equals 'a preset DOTFILES_PLATFORM is respected' 'linux' "$overridden"

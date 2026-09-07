@@ -1,8 +1,8 @@
 # Linux / WSL-specific setup
 
 Setup notes that apply only to the Linux machine. Everything shared lives in
-[README.md](./README.md). This file ships on both branches so the drift check
-covers it; only a Linux reader needs it.
+[README.md](./README.md). This file ships on the single branch alongside the
+mac one; only a Linux reader needs it.
 
 ## Shell setup
 
@@ -31,7 +31,7 @@ on the older build.
 ## Claude Code notifications
 
 Not wired up here. The mac hook drives aerospace and osascript, both of which
-are macOS-only, so `~/.claude/hooks/notify.sh` is a mac-branch file.
+are macOS-only, so `~/.claude/hooks/notify.sh` only ever fires on a mac.
 
 If picking this back up: WSLg gives this box a live `DISPLAY` and
 `WAYLAND_DISPLAY`, so `notify-send` (apt package `libnotify-bin`) can fire a

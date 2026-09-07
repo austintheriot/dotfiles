@@ -107,7 +107,7 @@ COPY README.md /root/README.md
 # check-deps.test.sh reads the zshrc files to decide whether this branch
 # needs oh-my-zsh. Both silently lose those assertions without this.
 # The glob covers both platform variants (.zshrc-mac and .zshrc-linux), which
-# now ship on both branches.
+# both ship on the single branch and are selected at runtime.
 COPY .zshrc* /root/
 # setup.sh is the bootstrap entry point, and three suites read it:
 # setup.test.sh drives it against a fixture HOME, bootstrap-harness.test.sh

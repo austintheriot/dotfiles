@@ -80,7 +80,11 @@ pub fn reconcile(
             },
             (Some(other), _) => other,
             (None, Observation::Present) => StepOutcome::AlreadyPresent,
-            (None, _) => StepOutcome::Blocked { on: entry.name.clone() },
+            // No outcome and not present: this run never considered it,
+            // so there is no prerequisite to name. This used to report
+            // Blocked { on: entry.name }, which told the reader a dependency
+            // waits on itself.
+            (None, _) => StepOutcome::NotSelected,
         };
 
         rows.push(ReportRow {
@@ -193,6 +197,12 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
 
     // A dependency the loop never attempted still gets a row, so the report
     // covers the manifest rather than only the steps.
+    //
+    // This test previously asserted `Blocked { on: zsh-autosuggestions }` for
+    // the zsh-autosuggestions row: a dependency waiting on itself. That is
+    // not a state that exists, and asserting it meant a green test pinned the
+    // defect in place. Reproduced through reconcile before the fix with a
+    // two-entry manifest and one observation: `fzf -> Blocked { on: fzf }`.
     #[test]
     fn an_unattempted_dependency_still_gets_a_row() {
         let manifest = oh_my_zsh_manifest();
@@ -203,9 +213,34 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
         let (report, _events) = reconcile(&manifest, &[], &after);
         assert_eq!(report.rows.len(), 2, "one row per manifest entry");
         assert_eq!(report.rows[0].outcome, StepOutcome::AlreadyPresent);
+        assert_eq!(report.rows[1].outcome, StepOutcome::NotSelected);
+    }
+
+    /// A dependency nothing considered must not report the machine ready.
+    ///
+    /// `NotSelected` exists because reconcile has no prerequisite to name for
+    /// an entry the selection excluded. It still has to count as not ready:
+    /// the entry is in the manifest and absent from the machine, so a run
+    /// that reports success would be claiming an environment is complete
+    /// while a tracked dependency is missing.
+    #[test]
+    fn a_not_selected_dependency_is_not_ready() {
+        // Positive control: the same summary must call a present dependency
+        // ready, or the assertion below would hold for the wrong reason.
         assert_eq!(
-            report.rows[1].outcome,
-            StepOutcome::Blocked { on: dependency("zsh-autosuggestions") }
+            crate::summarize_check(&[StepOutcome::AlreadyPresent]),
+            crate::CheckStatus::Ready
+        );
+
+        assert_eq!(
+            crate::summarize_check(&[StepOutcome::NotSelected]),
+            crate::CheckStatus::NotReady
+        );
+
+        // And it is not an attempt failure: nothing was attempted.
+        assert_eq!(
+            crate::summarize_install(&[StepOutcome::NotSelected]),
+            crate::InstallStatus::AllSucceeded
         );
     }
 }

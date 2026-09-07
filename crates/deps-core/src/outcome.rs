@@ -85,6 +85,16 @@ pub enum StepOutcome {
         /// The dependency this step waits on.
         on: DependencyName,
     },
+    /// In the manifest, absent from the machine, and never considered by
+    /// this run.
+    ///
+    /// Distinct from `Blocked`, which names a real prerequisite the step
+    /// waits on. Reconcile emits a row per manifest entry, so an entry the
+    /// selection excluded has no outcome and no prerequisite to name.
+    /// Reporting it as `Blocked { on: <itself> }` said a dependency waits on
+    /// itself, which is not a state that exists, and a caller rendering the
+    /// `on` field would print it.
+    NotSelected,
 }
 
 /// The result of `deps check`.

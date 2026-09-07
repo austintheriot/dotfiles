@@ -292,17 +292,29 @@ assert_succeeds 'config install-hooks --describe does not link pre-commit' \
 assert_succeeds 'config install-hooks --describe does not link the dispatcher' \
     test ! -e "$home/.local/bin/config"
 
-output=$(run_config test --describe 2>&1)
-assert_equals 'config test --describe does not run the suite' '' \
-    "$(printf '%s' "$output" | grep -F 'all:' || true)"
+# Asserted positively: --describe prints exactly the `# help:` line and
+# nothing else. The earlier version grepped each wrapper's output for a
+# marker its exec'd program would emit, which failed three ways. `manifest:`
+# is emitted by nothing, so that assertion passed even with the --describe
+# handling removed entirely (mutation-confirmed). `all:` and `deps:` did fire,
+# but only as substrings of `run-all:` and `check-deps:`, so renaming either
+# program would have silenced them without a failure.
+#
+# A one-line-exact comparison needs no knowledge of what the exec'd program
+# prints: any exec adds output, and any output that is not the description
+# fails.
+for described in test install doctor; do
+    expected_line=$(sed -n 's/^# help: //p' "$CONFIG_DIR/config-$described" | head -1)
 
-output=$(run_config install --describe 2>&1)
-assert_equals 'config install --describe does not exec check-deps' '' \
-    "$(printf '%s' "$output" | grep -F 'deps:' || true)"
+    # Positive control: the shim must carry a help line, or the comparison
+    # below would be between two empty strings.
+    assert_succeeds "config $described carries a help line to describe" \
+        test -n "$expected_line"
 
-output=$(run_config doctor --describe 2>&1)
-assert_equals 'config doctor --describe does not exec config-manifest' '' \
-    "$(printf '%s' "$output" | grep -F 'manifest:' || true)"
+    output=$(run_config "$described" --describe 2>&1)
+    assert_equals "config $described --describe prints only its description" \
+        "$expected_line" "$output"
+done
 
 # print_describe takes the file to describe, defaulting to $0. Without the
 # argument the only way to test it against a named file is to copy a script

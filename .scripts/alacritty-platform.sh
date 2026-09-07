@@ -8,8 +8,8 @@
 # this script points that path at the right variant.
 #
 # The generated file is the only per-machine artifact in the Alacritty config
-# and is deliberately untracked. Both real variants stay tracked and stay
-# inside `config check`.
+# and is deliberately untracked. Both real variants stay tracked, so a machine
+# that switches platform needs no new files.
 #
 # Run by shell startup and by `config reload`, so it must be cheap,
 # idempotent, and safe to run when nothing has changed.

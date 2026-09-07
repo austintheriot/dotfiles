@@ -164,10 +164,9 @@ alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn bui
 
 
 # ENVIRONMENT-SPECIFIC CONFIGURATIONS #######################################################################
-# This file is shared byte-for-byte between the mac and linux branches, so
-# everything platform-specific lives in .zshrc-mac / .zshrc-linux beside it.
-# Both variants ship on both branches, which is what keeps them inside
-# `config check` rather than exempt from it.
+# Everything platform-specific lives in .zshrc-mac / .zshrc-linux beside this
+# file, selected at runtime by platform_source_variant. Both variants ship on
+# the single branch, so this file stays platform-neutral.
 source ~/.scripts/platform.sh
 platform_source_variant ~/.zshrc
 

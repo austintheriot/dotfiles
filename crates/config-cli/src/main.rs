@@ -15,10 +15,12 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 mod deps;
+mod help;
 mod reload;
 mod test_runner;
 
-/// The `config-cli` command line: one subcommand, `deps`.
+/// The `config-cli` command line: the subcommands ported out of the
+/// `.scripts/config/config-*` shell scripts, plus `--stamp`.
 #[derive(Parser)]
 // `subcommand_required` cannot coexist with the exclusive `--stamp` flag, so
 // the missing-subcommand case is handled after parsing instead, matching
@@ -51,6 +53,9 @@ enum Command {
     /// Run the test suite, optionally in Docker or in a watch loop.
     #[command(name = "test")]
     Test(test_runner::TestArgs),
+    /// List the config subcommands and what each one does.
+    #[command(name = "help")]
+    Help(help::HelpArgs),
 }
 
 /// A `deps` verb: whether to change anything.
@@ -98,6 +103,7 @@ fn main() -> ExitCode {
         Some(Command::Deps { verb }) => deps::run(verb),
         Some(Command::Reload(arguments)) => reload::run(arguments),
         Some(Command::Test(arguments)) => test_runner::run(arguments),
+        Some(Command::Help(arguments)) => help::run(arguments),
         None => {
             // A bare invocation is a usage error, so the help goes to
             // stderr and the exit code stays 2, matching every other usage

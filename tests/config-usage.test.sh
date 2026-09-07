@@ -55,7 +55,21 @@ printf '#!/bin/sh\nprintf "manifest:%%s\\n" "$@"\n' > "$shim_dir/config-manifest
 chmod 755 "$shim_dir/config-manifest"
 # The binary every thin wrapper execs: `config deps`, `config install`, and
 # now `config test` all resolve it by name on PATH rather than under $HOME.
-printf '#!/bin/sh\nprintf "deps:%%s\\n" "$@"\n' > "$shim_dir/config-cli"
+#
+# `help` is the exception this stub forwards rather than echoes. Every other
+# verb here is asserted on for argv forwarding, which an echo answers, but the
+# listing's content is what this suite checks about `config help`, and an echo
+# would make those assertions pass against "deps:help" while proving nothing.
+# Forwarded to the real binary found on the outer PATH, which is the same
+# binary `config help` reaches outside the fixture.
+real_config_cli=$(command -v config-cli 2>/dev/null || true)
+cat > "$shim_dir/config-cli" <<STUB
+#!/bin/sh
+if [ "\${1:-}" = help ] && [ -x "$real_config_cli" ]; then
+    exec "$real_config_cli" "\$@"
+fi
+printf "deps:%s\\n" "\$@"
+STUB
 chmod 755 "$shim_dir/config-cli"
 mkdir -p "$home/.scripts/deps" "$home/tests"
 

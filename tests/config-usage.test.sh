@@ -455,11 +455,45 @@ if [ -f "$expectation" ]; then
     assert_succeeds 'the recorded config help listing is not empty' \
         test -n "$expected"
     actual=$("$CONFIG_DIR/config-help" 2>/dev/null)
-    assert_equals 'config help renders exactly the recorded listing' \
+    # Names the file on failure. A mismatch here is usually a deliberate
+    # subcommand addition rather than a defect, and a diff with no path to
+    # regenerate sends the reader hunting for it.
+    assert_equals "config help renders exactly the recorded listing (regenerate: .scripts/config/config-help > tests/fixtures/config-help-before-describe.txt)" \
         "$expected" "$actual"
 else
     assert_equals 'the recorded config help listing exists' \
         'present' 'missing'
+fi
+
+# --- the binary and its shim describe themselves identically ----------------
+
+# config-manifest --describe and the config-doctor shim's `# help:` line are
+# two copies of one string, and only the shim's copy reaches `config help`
+# today. Nothing else asserts they agree, so a drift would ship a description
+# that is correct in the binary and wrong in the listing, or the reverse.
+#
+# The duplication is temporary by design: the port that turns doctor into a
+# binary subcommand deletes the shim, leaving one copy. Until then this is
+# what keeps them honest, and when the shim goes this block goes with it.
+manifest_bin=$(command -v config-manifest 2>/dev/null || true)
+doctor_shim="$CONFIG_DIR/config-doctor"
+
+if [ -n "$manifest_bin" ] && [ -f "$doctor_shim" ]; then
+    shim_help=$(sed -n 's/^# help: //p' "$doctor_shim" | head -1)
+    binary_help=$("$manifest_bin" --describe 2>/dev/null | head -1)
+
+    # Both sides must be non-empty, or two failed reads would compare equal
+    # and report a pass.
+    assert_succeeds 'the doctor shim carries a help line' test -n "$shim_help"
+    assert_succeeds 'the binary answers --describe' test -n "$binary_help"
+
+    assert_equals 'the binary and the doctor shim describe themselves identically' \
+        "$shim_help" "$binary_help"
+else
+    skip 'the doctor shim carries a help line' 'no config-manifest on PATH, or no shim'
+    skip 'the binary answers --describe' 'no config-manifest on PATH, or no shim'
+    skip 'the binary and the doctor shim describe themselves identically' \
+        'no config-manifest on PATH, or no shim'
 fi
 
 finish

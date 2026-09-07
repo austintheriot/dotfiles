@@ -9,6 +9,7 @@
 mod action;
 mod check;
 mod manifest;
+mod outcome;
 mod plan;
 
 pub use check::{
@@ -21,6 +22,10 @@ pub use action::{
 };
 pub use manifest::{
     ConfKind, DependencyName, Manifest, ManifestEntry, ParseError, parse_manifest,
+};
+pub use outcome::{
+    CheckStatus, ExecFailure, InstallStatus, SpawnError, StepOutcome, summarize_check,
+    summarize_install,
 };
 pub use plan::{
     Elevation, Event, PackageCatalog, Plan, PlanError, PrivilegeRequirement, RawSelector,
@@ -45,6 +50,7 @@ mod purity {
             ("lib.rs", include_str!("lib.rs")),
             ("check.rs", include_str!("check.rs")),
             ("manifest.rs", include_str!("manifest.rs")),
+            ("outcome.rs", include_str!("outcome.rs")),
             ("plan.rs", include_str!("plan.rs")),
         ];
         for (file_name, source) in sources {
@@ -78,6 +84,7 @@ mod purity {
             include_str!("lib.rs"),
             include_str!("check.rs"),
             include_str!("manifest.rs"),
+            include_str!("outcome.rs"),
             include_str!("plan.rs"),
         ] {
             assert!(

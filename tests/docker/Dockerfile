@@ -26,15 +26,23 @@ COPY crates/Cargo.toml crates/Cargo.lock ./
 COPY crates/config-manifest/Cargo.toml config-manifest/
 COPY crates/dotfiles-path/Cargo.toml dotfiles-path/
 COPY crates/deps-core/Cargo.toml deps-core/
-RUN mkdir config-manifest/src dotfiles-path/src deps-core/src \
+COPY crates/tmux-core/Cargo.toml tmux-core/
+COPY crates/tmux-tools/Cargo.toml tmux-tools/
+RUN mkdir config-manifest/src dotfiles-path/src deps-core/src tmux-core/src tmux-tools/src \
     && echo 'fn main() {}' > config-manifest/src/main.rs \
     && echo '' > dotfiles-path/src/lib.rs \
     && echo '' > deps-core/src/lib.rs \
+    && echo '' > tmux-core/src/lib.rs \
+    && echo 'fn main() {}' > tmux-tools/src/main.rs \
     && cargo build --release --locked --quiet \
-    && rm -rf config-manifest/src target/release/config-manifest target/release/deps/config_manifest*
+    && rm -rf config-manifest/src tmux-tools/src target/release/config-manifest \
+        target/release/tmux-tools target/release/deps/config_manifest* \
+        target/release/deps/tmux_tools*
 COPY crates/config-manifest/src ./config-manifest/src
 COPY crates/dotfiles-path/src ./dotfiles-path/src
 COPY crates/deps-core/src ./deps-core/src
+COPY crates/tmux-core/src ./tmux-core/src
+COPY crates/tmux-tools/src ./tmux-tools/src
 RUN cargo build --release --locked --quiet
 
 FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171

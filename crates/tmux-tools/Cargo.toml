@@ -1,0 +1,11 @@
+[package]
+name = "tmux-tools"
+edition = "2024"
+version = "0.1.0"
+publish = false
+
+[dependencies]
+tmux-core = { path = "../tmux-core" }
+
+[lints]
+workspace = true

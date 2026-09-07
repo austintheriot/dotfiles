@@ -26,8 +26,20 @@ set -u
 
 ref=${1:-HEAD}
 
-GIT_DIR_PATH="$HOME/.cfg"
-WORK_TREE_PATH="$HOME"
+# The repository being pushed, not always the dotfiles repository.
+#
+# Git exports GIT_DIR and GIT_WORK_TREE into a hook, naming the repo whose
+# push is being gated, so honouring them is what makes this script correct
+# for any caller. Falling back to ~/.cfg keeps a bare `tests/rust-checks.sh`
+# working by hand, where nothing is exported.
+#
+# Hardcoding ~/.cfg was wrong and CI caught it: leak-check.test.sh drives the
+# hook with GIT_DIR pointed at a throwaway fixture repo, so a ref that exists
+# only there could not be archived out of ~/.cfg, the archive failed, and the
+# hook blocked a push it should have allowed. The host run passed because the
+# ref happened to exist in both.
+GIT_DIR_PATH="${GIT_DIR:-$HOME/.cfg}"
+WORK_TREE_PATH="${GIT_WORK_TREE:-$HOME}"
 
 git_cmd() {
     git --git-dir="$GIT_DIR_PATH" --work-tree="$WORK_TREE_PATH" "$@"

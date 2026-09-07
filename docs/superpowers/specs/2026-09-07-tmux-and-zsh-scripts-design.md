@@ -38,11 +38,17 @@ above, and is already executed rather than sourced.** It is the largest and easi
 and the parent spec buries it behind the two blocked scripts. It should go
 first.
 
-**Two scripts have `return`-with-value, not one.** The parent spec's 3.7 says
+**The parent spec's 3.7 is wrong about `tmux-split.sh` specifically.** It says
 the sourced scripts' `return` statements "are early-exit guards passing no
-value back". `tmux-split.sh:74` is `return 1` and
-`tmux-update-window-names.sh` has one too. Section 7.4 contradicts 3.7 on
-`tmux-split.sh` specifically; 3.7 is the wrong half.
+value back". `tmux-split.sh:74` is `return 1` at the script's top level, in a
+**sourced** script, so the value reaches the interactive shell and sets `$?`.
+Section 7.4 contradicts 3.7 on exactly this point, and 3.7 is the wrong half.
+
+An earlier draft of this section said "two scripts have return-with-value",
+counting `tmux-update-window-names.sh`. That overstates the correction: that
+script is **executed** rather than sourced and its returns are
+function-local, so they are ordinary control flow with no sourcing
+implication. One script has the problem, not two.
 
 **Why sourcing at all.** Not the `return` statements: `tmux attach` must run
 in the caller's terminal to take over the TTY, and a subprocess that attaches

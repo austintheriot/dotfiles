@@ -155,10 +155,23 @@ across 9 command shapes.
 **Corrected from this document's own first draft**, which said "98 effect
 sites across 10 command shapes" with per-shape figures roughly 2x these. That
 grep counted comment lines: the file is 619 lines of which 306 are comment or
-blank, and it discusses its own commands in prose extensively. 61 is also
-exactly the figure the parent spec cites ("313 code lines of which only 61
-invoke an external tool"), which should have been noticed as corroboration
-rather than contradicted.
+blank, and it discusses its own commands in prose extensively.
+
+**These are 61 occurrences, not 61 lines, and the apparent agreement with the
+parent spec is a coincidence of unit.** A first revision of this section
+claimed 61 "is exactly the figure the parent spec cites" and treated that as
+corroboration. The parent's 61 counts code LINES that invoke an external
+tool; measured, that is **34**:
+
+```sh
+grep -vE '^[[:space:]]*(#|$)' check-deps.sh \
+  | grep -cE 'brew|apt-get|pacman|rustup|git clone|curl|pip'
+```
+
+Two different metrics landing on the same number is not independent
+confirmation, and presenting it as such was the strongest possible claim
+resting on nothing. Either figure is fine for sizing the work. Neither
+corroborates the other.
 
 The bare `pacman` sites are `command -v` probes rather than unelevated
 writes: checked, and every real pacman write carries `${SUDO}`.
@@ -368,7 +381,43 @@ Build `config-cli` **once**, in a native `ubuntu-latest` job step with
 `actions/cache` over `~/.cargo` and `crates/target`, then hand the binary to
 each image through the `/seed` mount that already exists.
 
-**The seam is already there and is currently dead code.**
+**The seam exists for ONE of the six images, not all of them. Corrected
+after review.** A first draft of this section said "hand the binary to each
+image through the `/seed` mount that already exists", which is false for
+two legs and needs new work for two more:
+
+| Image | `/seed` mount | Entrypoint reads the variable |
+|---|---|---|
+| `bootstrap-curl` | yes | **yes** (`bootstrap-curl-entrypoint.sh:50`) |
+| `bootstrap-curl-arch` | yes | yes (same entrypoint) |
+| `bootstrap` | yes (`deps-check.yml:151`) | **no** (0 hits for `PREBUILT`) |
+| `bootstrap-bare` | yes | **no** (0 hits) |
+| `arch` | **no** (`deps-check.yml:89` is a bare `docker run --rm depcheck-arch`) | n/a, `ENTRYPOINT` is the script itself |
+| `ubuntu` | **no** (`test-local.sh:87`, local only) | n/a, same |
+
+So section 9's "both must receive the binary through 8.2's seam" is
+buildable for the two curl legs and requires per-image work for the rest.
+**The `arch` and `ubuntu` images have no shell wrapper at all**: their
+`ENTRYPOINT` is `check-deps.sh` directly (`Dockerfile.ubuntu:47`), so there
+is nothing to read a variable.
+
+**This strengthens the parent spec's third option, which section 8 omitted.**
+Parent 7.4 step 3 offered three, and this document argued against two of
+them without noticing the third: "accept that the containers test the shell
+path only until step 3 lands and **retire them with it**." Given that the
+`arch` and `ubuntu` legs would each need a new wrapper entrypoint plus a
+mount to receive a binary, and that the two curl legs already cover apt and
+pacman on genuinely bare images, retirement is the option the evidence most
+supports. Section 8.5's argument that `Dockerfile.ubuntu` has two live
+consumers is an argument against **silent deletion**, not against deliberate
+retirement.
+
+**Decision deferred to the plan, with the options priced:** either add a
+wrapper entrypoint plus `-v /seed` to `arch` and `ubuntu` (two images, two
+new files), or retire those two legs with `check-deps.sh` and rely on the
+curl gates, which already exercise apt and pacman from bare.
+
+**The one seam that does exist is currently dead code.**
 `bootstrap-curl-entrypoint.sh:45-60` reads `BOOTSTRAP_PREBUILT_BIN`, and its
 comment reached this conclusion before the port began:
 
@@ -384,6 +433,13 @@ variable skips the copy, so the run proceeds against whatever is on `PATH`.
 That is a fail-open of precisely the kind section 4.3 describes, and the
 comment's stated reason for optionality ("the shell path is what ships until
 step 3 lands") expires the moment this step lands.
+
+**`bootstrap-harness.test.sh:357` pins the optional spelling** with
+`grep -qE 'BOOTSTRAP_PREBUILT_BIN:-'`, so making the variable required breaks
+a passing gate. Name it in the commit and replace the assertion with its
+inverse: assert the variable is required, and that an unset variable **fails**
+the run. Without that, whoever hits the failure is likely to "fix" it by
+restoring the default.
 
 ### 8.3 Costs, measured
 
@@ -594,7 +650,7 @@ necessary.
 platform condition.** Verified in `plan.rs:395-401`:
 `first_unsatisfied_prerequisite` treats a prerequisite that is absent from
 the manifest as **not an error**, and its comment names this exact case:
-`oh-my-zsh` lives in `deps-linux.conf:12` and is legitimately absent on
+`oh-my-zsh` lives in `deps-linux.conf:11` and is legitimately absent on
 macOS. So on macOS the edge is not blocking, with no condition
 anywhere.
 
@@ -614,8 +670,8 @@ Three reasons, in order:
 
 1. **The graph is not manifest data.** It is knowledge about install
    mechanics that already lives in code, beside the install-command table.
-   `check-deps.sh:346-352` decides zsh-autosuggestions' install shape per
-   manager and `:383-386` decides node's per nvm presence. The prerequisite
+   `check-deps.sh:335-342` decides zsh-autosuggestions' install shape per
+   manager and `:386` decides node's per nvm presence. The prerequisite
    is the same fact those branches already encode. A separate file splits one
    fact across two artifacts that can drift, with nothing to catch it, which
    is the failure `deps-ci.conf:8-12` documents about a duplicated list.

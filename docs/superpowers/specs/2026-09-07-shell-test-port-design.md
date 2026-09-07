@@ -47,8 +47,8 @@ by which suites read which format:
 
 | Format | Suites that parse it |
 |---|---|
-| YAML (`.github/workflows/`) | `bootstrap-harness`, `check-deps`, `container`, `deps-harness`, `readme-badges`, `scripts-dir-name`, `shellcheck` |
-| Markdown | `config-docs`, `doc-links`, `deps-docs`, `readme-badges`, `setup`, `container`, `deps-harness`, `leak-check`, `pre-push-multi-ref`, `scripts-dir-name` |
+| YAML (`.github/workflows/`) | `bootstrap-harness`, `check-deps`, `container`, `deps-harness`, `readme-badges`, `scripts-dir-name`, `shellcheck`, `workflow-action-versions`, `workflow-labels` (**9**) |
+| Markdown | `config-docs`, `doc-links`, `deps-docs`, `readme-badges`, `setup`, `container`, `deps-harness`, `leak-check`, `pre-push-multi-ref`, `scripts-dir-name`, `check-deps`, `config-usage` (**12**) |
 | TOML | `alacritty-platform-split`, `config-manifest-lifecycle`, `container`, `doc-links`, `platform`, `pre-push-multi-ref`, `run-all-filter` |
 
 **The three tranches OVERLAP. They are not a partition, and an earlier
@@ -84,8 +84,29 @@ read as acceptance, a parser harvest over an absent file, and a `grep` handed
 a file's *contents* where a path belongs. A real parser makes all four
 unrepresentable rather than merely fixed.
 
-**This tranche pays for itself and blocks on nothing. It should start before
-steps 3b, 4 and 5, not after them.**
+**Tranche A is nearly twice the size the parent spec states, and this is an
+unflagged parent correction until now.** Parent 7.5 says "**10 suites get
+better.** They currently `grep` and `sed` over tracked files." Measured
+against the real files, tranche A names **19 distinct suites**: the parent's
+count predates two workflow suites and omits two Markdown parsers.
+
+`workflow-labels.test.sh:50` is the sharpest omission. It already shells out
+to an inline Python parser to filter `.yml` and `.yaml`, which is the
+strongest single argument for this tranche, and the parent spec did not have
+it.
+
+Doubling the surface strengthens the ordering argument rather than weakening
+it: more suites gain a real parser, and none blocks on another step.
+
+**This tranche pays for itself and blocks on nothing. It goes before steps
+3b, 4 and 5, not after them.**
+
+**Two exclusions, because steps 3b and 4 use them as gates.**
+`container.test.sh` is what the adapter spec relies on to assert cargo's
+workspace members against the test Dockerfile, and `scripts-dir-name.test.sh`
+is what the subcommand spec relies on to count scripts exactly. Converting
+either while another step depends on it puts two documents in one file for
+different reasons. **Those two convert after step 4.**
 
 ### Tranche B: shell stays the subject (7 suites)
 
@@ -102,7 +123,7 @@ branches so neither can drift unseen") that the branch collapse made
 vacuous. One branch cannot drift from itself, so the guarantee holds
 trivially and the test asserts a mechanism that no longer exists.
 
-### Tranche C: equivalent, with better fixtures (26 suites)
+### Tranche C: equivalent, with better fixtures (the remainder)
 
 `assert_cmd` plus `tempfile` replaces the `tests/lib.sh` harness. The payoff
 is thin per suite, so this goes last and incrementally.
@@ -110,7 +131,7 @@ is thin per suite, so this goes last and incrementally.
 **One claim withdrawn from the parent spec's first draft, recorded so it is
 not used as justification again.** It said `tempfile` "fixes the
 fixture-ownership defect where cleanup kills tmux sessions by name pattern on
-a shared server." The pattern-kill at `lib.sh:77-79` exists but is
+a shared server." The pattern-kill at `lib.sh:87-89` exists but is
 **PID-scoped**: names are `TEST_NAME-$$-suffix` and the grep is
 `^${TEST_NAME}-$$-`, with a comment stating the PID is there precisely so
 concurrent runs cannot collide. Cross-kill would need the same test file

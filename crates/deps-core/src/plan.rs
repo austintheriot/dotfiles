@@ -247,7 +247,7 @@ pub enum Event {
     },
     /// The prerequisite is not in the selected manifest, which differs from
     /// "requires a dependency that does not exist". `oh-my-zsh` is in
-    /// `deps-linux.conf:12` and legitimately absent on macOS, where
+    /// `deps-linux.conf:11` and legitimately absent on macOS, where
     /// `zsh-autosuggestions` installs fine through brew, so
     /// `PlanError::UnknownDependency` would be the wrong error.
     PrerequisiteNotSelected {
@@ -395,7 +395,7 @@ fn first_unsatisfied_prerequisite(
 ) -> Option<DependencyName> {
     for prerequisite in requirements.prerequisites(name) {
         if manifest.get(prerequisite).is_none() || !selection.contains(prerequisite) {
-            // Not an error: oh-my-zsh is in deps-linux.conf:12 and
+            // Not an error: oh-my-zsh is in deps-linux.conf:11 and
             // legitimately absent on macOS, where zsh-autosuggestions
             // installs through brew.
             events.push(Event::PrerequisiteNotSelected {
@@ -843,7 +843,7 @@ mod tests {
     }
 
     // A prerequisite absent from the selected manifest is not an error.
-    // oh-my-zsh is in deps-linux.conf:12 and legitimately not in the macOS
+    // oh-my-zsh is in deps-linux.conf:11 and legitimately not in the macOS
     // manifest, where zsh-autosuggestions installs through brew, so
     // PlanError::UnknownDependency would be the wrong answer.
     #[test]

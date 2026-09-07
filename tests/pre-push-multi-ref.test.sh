@@ -119,13 +119,22 @@ esac
 STUB
     chmod 755 "$stub_dir/config-manifest"
 
-    # The leak scan and the Docker suite are the two slow halves. Both pass
-    # unconditionally here so a failure in this file can only come from the
-    # ref-selection logic under test.
+    # The leak scan, the Rust checks and the Docker suite are the slow halves.
+    # All pass unconditionally here so a failure in this file can only come
+    # from the ref-selection logic under test.
+    #
+    # EVERY script the hook requires needs a stub here, because the hook fails
+    # closed on a missing dependency and this fixture points HOME at a
+    # directory holding only what this block creates. Adding a hook dependency
+    # without adding its stub makes every "the push passes" assertion in this
+    # file fail with exit 1, which reads as a ref-selection bug and is not
+    # one. That happened when the Rust checks were added.
     printf '#!/bin/sh\nexit 0\n' > "$FIXTURES/hookhome/tests/leak-check.sh"
     printf '#!/bin/sh\nexit 0\n' > "$FIXTURES/hookhome/tests/run-in-docker.sh"
+    printf '#!/bin/sh\nexit 0\n' > "$FIXTURES/hookhome/tests/rust-checks.sh"
     chmod 755 "$FIXTURES/hookhome/tests/leak-check.sh" \
-        "$FIXTURES/hookhome/tests/run-in-docker.sh"
+        "$FIXTURES/hookhome/tests/run-in-docker.sh" \
+        "$FIXTURES/hookhome/tests/rust-checks.sh"
 }
 
 # Feeds the hook a push of both refs and returns its exit status.

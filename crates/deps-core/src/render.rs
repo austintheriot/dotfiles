@@ -79,13 +79,10 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
     };
     let summary = format!("deps {heading}: {} entries\n", report.rows.len());
 
-    // Task 3 widens `Verdict::Install` to carry the post-install `CheckStatus`
-    // alongside `InstallStatus`; that signature change lands in Task 3's own
-    // commit, so this arm stays one-argument until then.
     let verdict = match verb {
         Verb::Check => crate::Verdict::Check(report.check),
         Verb::DryRun => crate::Verdict::DryRun(report.check),
-        Verb::Install => crate::Verdict::Install(report.install),
+        Verb::Install => crate::Verdict::Install(report.install, report.check),
     };
 
     Rendered {

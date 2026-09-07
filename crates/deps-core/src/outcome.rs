@@ -161,7 +161,12 @@ pub enum Verdict {
     /// A `deps check` run.
     Check(CheckStatus),
     /// A `deps install` run.
-    Install(InstallStatus),
+    ///
+    /// Carries both summaries, because they answer different questions and
+    /// a run can succeed at every attempt while leaving the machine
+    /// incomplete. Reporting only the first is how an install exited 0 with
+    /// three dependencies missing.
+    Install(InstallStatus, CheckStatus),
     /// A `--dry-run` run.
     DryRun(CheckStatus),
 }
@@ -210,10 +215,27 @@ fn exit_status_has_no_public_constructor() {}
 /// is correct for both verbs permanently, and the unused cells allow growth
 /// without renumbering.
 ///
+/// The table:
+///
+/// | Verdict                                          | Code |
+/// |---------------------------------------------------|------|
+/// | `Check(Ready)`                                     | 0    |
+/// | `Check(NotReady)`                                  | 1    |
+/// | `DryRun(Ready)`                                    | 0    |
+/// | `DryRun(NotReady)`                                 | 1    |
+/// | `Install(AllSucceeded, Ready)`                     | 0    |
+/// | `Install(AllSucceeded, NotReady)`                  | 4    |
+/// | `Install(AttemptFailed, _)`                        | 3    |
+/// | `Err(_)`                                           | 2    |
+///
 /// Exit 2 means every caller error, matching the repo-wide convention that
 /// `check-deps.sh:109` and `:116` already use and that `deps-docs.test.sh`
 /// relies on as its oracle for "the parser rejected this flag". Narrowing 2
 /// to one condition would break that oracle's semantics.
+///
+/// Exit 4 means every attempted install succeeded and the machine is still
+/// not ready, the manual-only case. Distinct from 3, because nothing
+/// failed, and distinct from 0, because the caller cannot proceed.
 pub fn exit_status(result: Result<Verdict, PlanError>) -> ExitStatus {
     let Ok(verdict) = result else {
         return ExitStatus(2);
@@ -223,8 +245,9 @@ pub fn exit_status(result: Result<Verdict, PlanError>) -> ExitStatus {
         Verdict::Check(CheckStatus::NotReady) => ExitStatus(1),
         Verdict::DryRun(CheckStatus::Ready) => ExitStatus(0),
         Verdict::DryRun(CheckStatus::NotReady) => ExitStatus(1),
-        Verdict::Install(InstallStatus::AllSucceeded) => ExitStatus(0),
-        Verdict::Install(InstallStatus::AttemptFailed) => ExitStatus(3),
+        Verdict::Install(InstallStatus::AttemptFailed, _) => ExitStatus(3),
+        Verdict::Install(InstallStatus::AllSucceeded, CheckStatus::NotReady) => ExitStatus(4),
+        Verdict::Install(InstallStatus::AllSucceeded, CheckStatus::Ready) => ExitStatus(0),
     }
 }
 
@@ -314,6 +337,51 @@ mod tests {
         assert_eq!(summarize_check(&outcomes), CheckStatus::NotReady);
     }
 
+    /// An install that attempted nothing and left the machine incomplete
+    /// must not exit 0.
+    ///
+    /// The reported incident: a bootstrap ended "no unresolved failures (16
+    /// of 18 were already missing)" and exited 0 with three dependencies
+    /// absent. summarize_install said AllSucceeded, because NotAutomatable
+    /// is not an attempt failure, and Verdict::Install carried no readiness,
+    /// so the exit table had no cell that could disagree.
+    #[test]
+    fn an_install_that_leaves_the_machine_not_ready_does_not_exit_zero() {
+        let manual_only = [StepOutcome::NotAutomatable {
+            reason: NoInstallReason::UpstreamPublishesNoStableUrl,
+        }];
+
+        // Positive controls. Nothing was attempted, so nothing failed, and
+        // the machine is not ready. Both must hold or the assertion below
+        // is about the wrong inputs.
+        assert_eq!(summarize_install(&manual_only), InstallStatus::AllSucceeded);
+        assert_eq!(summarize_check(&manual_only), CheckStatus::NotReady);
+
+        let verdict = Verdict::Install(
+            summarize_install(&manual_only),
+            summarize_check(&manual_only),
+        );
+        assert_ne!(
+            exit_status(Ok(verdict)).code(),
+            0,
+            "an incomplete machine must not report success"
+        );
+    }
+
+    /// The success path still exits 0, so the fix does not make every
+    /// install look like a failure.
+    #[test]
+    fn an_install_that_leaves_the_machine_ready_exits_zero() {
+        let all_good = [StepOutcome::Installed, StepOutcome::AlreadyPresent];
+        assert_eq!(summarize_install(&all_good), InstallStatus::AllSucceeded);
+        assert_eq!(summarize_check(&all_good), CheckStatus::Ready);
+        assert_eq!(
+            exit_status(Ok(Verdict::Install(InstallStatus::AllSucceeded, CheckStatus::Ready)))
+                .code(),
+            0
+        );
+    }
+
     // InstalledButCheckStillFails carries the Check so the report can name
     // which predicate failed rather than saying "the install did not
     // satisfy the check" as check-deps.sh:589 does today.
@@ -335,8 +403,9 @@ mod tests {
         let cases = [
             (Ok(Verdict::Check(CheckStatus::Ready)), 0),
             (Ok(Verdict::Check(CheckStatus::NotReady)), 1),
-            (Ok(Verdict::Install(InstallStatus::AllSucceeded)), 0),
-            (Ok(Verdict::Install(InstallStatus::AttemptFailed)), 3),
+            (Ok(Verdict::Install(InstallStatus::AllSucceeded, CheckStatus::Ready)), 0),
+            (Ok(Verdict::Install(InstallStatus::AllSucceeded, CheckStatus::NotReady)), 4),
+            (Ok(Verdict::Install(InstallStatus::AttemptFailed, CheckStatus::NotReady)), 3),
             (Ok(Verdict::DryRun(CheckStatus::Ready)), 0),
             (Ok(Verdict::DryRun(CheckStatus::NotReady)), 1),
         ];
@@ -400,7 +469,8 @@ mod tests {
     fn nonzero_and_not_two_always_means_not_ready() {
         let not_ready = [
             Ok(Verdict::Check(CheckStatus::NotReady)),
-            Ok(Verdict::Install(InstallStatus::AttemptFailed)),
+            Ok(Verdict::Install(InstallStatus::AttemptFailed, CheckStatus::NotReady)),
+            Ok(Verdict::Install(InstallStatus::AllSucceeded, CheckStatus::NotReady)),
             Ok(Verdict::DryRun(CheckStatus::NotReady)),
         ];
         for verdict in not_ready {
@@ -440,10 +510,12 @@ mod tests {
         assert_eq!(summarize_check(&none), CheckStatus::Ready);
         assert_eq!(exit_status(Ok(Verdict::Check(CheckStatus::Ready))).code(), 0);
 
-        // The install verb agrees: nothing attempted means nothing failed.
+        // The install verb agrees: nothing attempted means nothing failed,
+        // and the empty machine is Ready, so it exits 0 rather than 4.
         assert_eq!(summarize_install(&none), InstallStatus::AllSucceeded);
         assert_eq!(
-            exit_status(Ok(Verdict::Install(InstallStatus::AllSucceeded))).code(),
+            exit_status(Ok(Verdict::Install(InstallStatus::AllSucceeded, CheckStatus::Ready)))
+                .code(),
             0
         );
     }

@@ -112,6 +112,43 @@ Copied verbatim from the spec and from `~/.claude/CLAUDE.md`.
 - **An assertion is not a test until you have observed it fail against the
   unfixed code.** Every task has an explicit red step.
 
+## CORRECTION, added after Task 1 shipped: the scripts become SHIMS, not deletions
+
+Task 1 disagreed with this plan and was right. Verified before accepting it.
+
+`.scripts/config/config:29` resolves a verb ONLY by testing
+`[ -x "$here/config-$1" ]`, and line 34 falls through to `git` otherwise.
+**There is no `config-cli` fallback in the dispatcher.** Confirmed
+empirically: `config no-such-verb` answers
+`git: 'no-such-verb' is not a git command`.
+
+So deleting `config-reload` would not open a commit-boundary window, the
+thing this plan's atomicity argument is about. It would break `config
+reload` **permanently** into `git reload`. I wrote that argument without
+ever checking whether the dispatcher had a fallback, and it does not.
+
+The spec agrees: its disposition table lists `config-reload`, `config-test`
+and `config-help` as **"Ports"**, and reserves **"Delete it"** for
+`config-doctor` alone, which is a different case (a pure exec shim with no
+logic to move, whose target moves in Task 4).
+
+**So Tasks 1, 2 and 3 leave a two-line shim behind:**
+
+```sh
+exec config-cli <verb> "$@"
+```
+
+matching the existing `config-deps` and `config-install` pattern, and keep
+their `# usage:` and `# help:` headers so `config help` and the doc suites
+still see them.
+
+**Consequences for the guard.** `tests/scripts-dir-name.test.sh` counts
+committed scripts and lists executables explicitly. Tasks 1 through 3 delete
+nothing, so **the count does not change** for them. Task 1 correctly left it
+at 40. Only Task 4 removes a script, so only Task 4 updates the count and the
+execute-bit allowlist. Every "decrement to 37/36/35/34" instruction below is
+wrong and superseded by this paragraph.
+
 ## The atomic-swap pattern
 
 Every port task follows the same five moves. Task 1 establishes it on the

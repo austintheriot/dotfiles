@@ -404,8 +404,24 @@ if [ -d "$DOTFILES_ROOT/.cfg" ] || [ -d "$DOTFILES_ROOT/.git" ]; then
     # Status asserted separately from output. A silent failure (the binary not
     # on PATH, a crash before writing) would otherwise read as "silent because
     # everything is current".
-    "$DOTFILES_ROOT/.scripts/config/config-build" >/dev/null 2>&1
-    doctor_out=$("$DOCTOR" 2>&1)
+    # The build's own status is checked, not discarded. Swallowing it made a
+    # failed build read as a doctor defect: on a CI runner config-build
+    # installs into $HOME/.local/bin while PATH resolves config-manifest to
+    # the workflow's own crates/target/release copy, so doctor compared an
+    # unstamped binary and was correct to report a mismatch. The assertion
+    # blamed doctor for it.
+    build_out=$("$DOTFILES_ROOT/.scripts/config/config-build" 2>&1)
+    build_status=$?
+    # On failure the build's own output is printed, so the reader gets the
+    # cause instead of a bare exit code. Printed rather than folded into the
+    # assertion's value, because the value has to compare equal to '0'.
+    [ "$build_status" -eq 0 ] || printf 'config-build said: %s\n' "$build_out" >&2
+    assert_equals 'config-build succeeds before doctor is asked' '0' "$build_status"
+
+    # doctor reads the binary PATH resolves, so the freshly installed one has
+    # to be the one it finds. Without this the suite tests whichever copy the
+    # environment happened to put first.
+    doctor_out=$(PATH="${CONFIG_BIN_DIR:-$HOME/.local/bin}:$PATH" "$DOCTOR" 2>&1)
     doctor_status=$?
     assert_equals 'doctor exits 0 when every binary is current' '0' "$doctor_status"
     assert_equals 'doctor is silent when every binary is current' '' "$doctor_out"
@@ -415,9 +431,14 @@ if [ -d "$DOTFILES_ROOT/.cfg" ] || [ -d "$DOTFILES_ROOT/.git" ]; then
     cp "$probe" "$FIXTURES/doctor.rs.orig"
     printf '\n// staleness probe\n' >> "$probe"
 
-    doctor_out=$("$DOCTOR" 2>&1 || true)
+    # Same PATH pinning as the fresh case above. Without it this asserted
+    # "stale" against whichever config-manifest the environment resolved
+    # first, which on CI is the workflow's unstamped build -- so it would
+    # have passed for the wrong reason while the fresh case failed.
+    doctor_path="${CONFIG_BIN_DIR:-$HOME/.local/bin}:$PATH"
+    doctor_out=$(PATH="$doctor_path" "$DOCTOR" 2>&1 || true)
     doctor_status=0
-    "$DOCTOR" >/dev/null 2>&1 || doctor_status=$?
+    PATH="$doctor_path" "$DOCTOR" >/dev/null 2>&1 || doctor_status=$?
     assert_equals 'doctor exits 1 when a binary is stale' '1' "$doctor_status"
     assert_contains 'doctor names the stale crate' 'config-manifest' "$doctor_out"
     assert_contains 'doctor names the fix' 'config build' "$doctor_out"

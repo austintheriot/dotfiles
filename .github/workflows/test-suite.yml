@@ -104,10 +104,23 @@ jobs:
       # Rust is preinstalled on both runners. The suite's shell tests call
       # config-manifest by name, so the release binary goes on PATH. cargo test
       # itself runs inside run-all.sh.
+      # Built from inside crates/, not with --manifest-path from the repo
+      # root. Two reasons, both of which failed CI once:
+      #
+      #   - crates/ became a Cargo workspace, so the target directory is
+      #     crates/target/release, not crates/config-manifest/target/release.
+      #     The old path still existed on a developer machine as a leftover
+      #     from before the workspace, which is why this passed locally and
+      #     failed on a clean runner.
+      #   - rustup only honours crates/rust-toolchain.toml when the working
+      #     directory is inside crates/. Building from the repo root used the
+      #     runner's default toolchain (1.98.0) instead of the pinned 1.94.0,
+      #     so the pin was declared and not applied.
       - name: Build config-manifest
+        working-directory: crates
         run: |
-          cargo build --release --locked --manifest-path crates/config-manifest/Cargo.toml
-          echo "$GITHUB_WORKSPACE/crates/config-manifest/target/release" >> "$GITHUB_PATH"
+          cargo build --release --locked
+          echo "$GITHUB_WORKSPACE/crates/target/release" >> "$GITHUB_PATH"
 
       # A UTF-8 locale is load-bearing rather than cosmetic. With no LANG set,
       # tmux treats a tab as non-printable and substitutes "_" in

@@ -126,7 +126,14 @@ if [ -f "$TOOLCHAIN_FILE" ] && command -v rustc >/dev/null 2>&1; then
         grep -qE '^channel = "1\.[0-9]+\.[0-9]+"' "$TOOLCHAIN_FILE"
 
     pinned=$(sed -n 's/^channel = "\(.*\)"/\1/p' "$TOOLCHAIN_FILE")
-    installed=$(rustc --version | awk '{print $2}')
+    # Read from inside crates/, because rustup only honours
+    # crates/rust-toolchain.toml when the working directory is under it.
+    # Reading from wherever the suite happens to run reports the machine's
+    # DEFAULT toolchain, so this assertion passed on a developer box whose
+    # default already matched the pin and failed on a runner whose default
+    # was 1.98.0 -- reporting a pin mismatch that was really a measurement
+    # taken in the wrong place.
+    installed=$(cd "$(dirname "$TOOLCHAIN_FILE")" && rustc --version | awk '{print $2}')
     assert_equals 'the pinned toolchain is the one installed' "$pinned" "$installed"
 else
     skip 'the toolchain is pinned (crates/ or rustc not present here)'

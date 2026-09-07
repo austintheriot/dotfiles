@@ -324,4 +324,48 @@ git|command -v git|https://git-scm.com/downloads
             .expect("the real deps.conf head parses");
         assert_eq!(first.entries(), second.entries());
     }
+
+    /// The real `deps.conf` does not parse yet, and this pins exactly why.
+    ///
+    /// `parse_check` recognizes two shapes today: `command -v <name>` and
+    /// `[ -d "$HOME/<path>" ]`. The tracked conf files use four more, which
+    /// spec 5.2's `Check` enum covers and the next task implements:
+    /// `[ -s ... ]` and `test -f ... -o ...` (file tests), `python3 -c
+    /// "import ..."` (interpreter), and two `if ...; then true; else ...; fi`
+    /// fallback chains (`AnyOf`).
+    ///
+    /// Without this test the gap is invisible: every unit test above feeds
+    /// `parse_manifest` a hand-written line in a supported shape, so the suite
+    /// is green while the parser cannot read the file it exists to read. This
+    /// asserts the CURRENT boundary, so it fails the moment a new shape lands
+    /// and has to be updated deliberately rather than discovered later.
+    #[test]
+    fn real_conf_fails_only_on_the_unimplemented_check_shapes() {
+        let real_conf = "\
+git|command -v git|https://git-scm.com/downloads
+oh-my-zsh|[ -d \"$HOME/.oh-my-zsh\" ]|https://ohmyz.sh
+nvm|[ -s \"$HOME/.nvm/nvm.sh\" ]|https://github.com/nvm-sh/nvm
+";
+
+        // Positive control: the two supported shapes must parse on their own,
+        // or a failure below would prove nothing about the third line.
+        let supported = "\
+git|command -v git|https://git-scm.com/downloads
+oh-my-zsh|[ -d \"$HOME/.oh-my-zsh\" ]|https://ohmyz.sh
+";
+        let parsed = parse_manifest(supported, ConfKind::ExplicitOnly)
+            .expect("the two implemented shapes parse");
+        assert_eq!(parsed.entries.len(), 2);
+
+        // The `[ -s ... ]` file test is not implemented, so it is the line
+        // that fails, and it fails as Unrecognized rather than as a field or
+        // name error.
+        let error = parse_manifest(real_conf, ConfKind::ExplicitOnly)
+            .expect_err("the -s file test is not implemented yet");
+        assert_eq!(
+            error,
+            ParseError::BadCheck { line: 3, cause: CheckParseError::Unrecognized },
+            "expected line 3 to be the unimplemented shape"
+        );
+    }
 }

@@ -70,10 +70,23 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     [ -z "$push_ref" ] && push_ref=$local_sha
     push_refs="$push_refs $local_sha"
 
+    # Paths come from `git log --name-only`, which lists what each commit in
+    # the range touched, NOT from `git diff`, which lists the net effect.
+    #
+    # The two disagree whenever a path is added and later deleted inside the
+    # range, and leak-check.sh scans per commit on purpose (a secret added in
+    # one commit and removed in the next has an empty net diff and is still
+    # published). A net-diff path list against a per-commit scan means the
+    # scan finds no diff header for a path that no longer exists at the tip,
+    # and the guard blocks the push for a path carrying nothing.
+    #
+    # Measured on this repo's first push of a new branch: the net diff listed
+    # 357 paths while the log listed 501, and the 144 extra were files added
+    # and later deleted. Every one of them blocked the push.
     if [ "$remote_sha" = "$zero" ]; then
-        range_paths=$(git diff --name-only "$empty_tree" "$local_sha")
+        range_paths=$(git log --format= --name-only "$empty_tree..$local_sha")
     else
-        range_paths=$(git diff --name-only "$remote_sha" "$local_sha")
+        range_paths=$(git log --format= --name-only "$remote_sha..$local_sha")
     fi
     changed_paths="$changed_paths
 $range_paths"

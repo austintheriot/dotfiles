@@ -1655,8 +1655,9 @@ value, which is the sentence the whole design's integrity rests on.
 
 ### 10.6 Claims corrected during planning, after the revision
 
-A third pass, while building the plan for steps 1 and 3, found three more.
-Two are undercounts and one is not achievable as written. Recorded in the
+A third pass, while building the plan for steps 1 and 3, found six more.
+Two are undercounts, one is not achievable as written, two describe file
+formats and exports that do not exist, and three cited line numbers drift. Recorded in the
 same spirit as 10.1: a reader who checks a claim and finds it wrong has no
 way to tell which other claims to trust.
 
@@ -1665,6 +1666,9 @@ way to tell which other claims to trust.
 | `usage.sh:32-35` extracts the `# usage:` block the same way "and needs the same treatment" | **Not achievable.** `print_usage` is *sourced*, and reads `$0` to find the calling script's own header (`usage.sh:3-5` states this as the design). There is no subprocess to delegate `--describe` to. The achievable fix is a text-file guard that returns 1 with a message, rather than emitting a `sed` error plus empty help | 7.3 |
 | the `check-deps.sh` rename has a "blast radius of **18 consumers**" | **34 files, 97 references** (`config grep -rl`, excluding `docs/`). The table enumerated 5 and the prose roughly 13. Not a reason to re-plan the step, but a reason not to trust a remembered count halfway through it | 7.4 step 3 |
 | 7.6 enumerates the collapse's consequences | It covers the maintainer's side and **omits the new machine's side entirely**. `setup.sh` mapped `uname` to a branch name, so every fresh bootstrap checked out frozen history, and four gates covered that path without failing. See the new 7.6a | 7.6 |
+| 5.5's manifest example is `[[dependency]]` TOML with `requires = ["nvm"]` | **No conf file is TOML.** `deps.conf:2` states the real format: `name|check_command|docs_url`, pipe-separated, one entry per line. There is no `requires` field and no `version` field. The requirement graph therefore has to be a separate input to `plan`, not a manifest column, and `deps.conf:18-20` says in the file itself that no ordering is guaranteed | 5.5 |
+| 7.1 lists seven types in `dotfiles-path` | `crates/dotfiles-path/src/lib.rs:11` exports **two**: `CheckRelPath` and `PathError`. `CommandName`, `ModuleName`, `GlobPattern`, `PackageId`, `DocsUrl` and `BoundedText` do not exist yet, so the plan adds each at the task that first needs it | 7.1 |
+| 3.5 cites `check-deps.sh:173-188`; 5.1 cites `:568` and `:374,389` | Off by one or two: the elevation block is **168-188**, the empty-versus-missing test is **:569**, and the two sites are **374 and 390**. The substance of all three claims is correct | 3.5, 5.1 |
 
 One claim in 7.3 was confirmed by reproduction rather than accepted:
 pointing `sed -n 's/^# help: //p'` at a compiled binary does print

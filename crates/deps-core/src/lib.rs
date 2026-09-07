@@ -6,15 +6,25 @@
 //! than a discipline (spec 7.1), and `config_manifest::doctor` is the
 //! in-repo precedent for the module shape.
 
+mod action;
 mod check;
 mod manifest;
+mod plan;
 
 pub use check::{
     Check, CheckParseError, CheckPath, Observation, ObservationMap, Observations, PathRoot,
     evaluate, parse_check_expression,
 };
+pub use action::{
+    BrewKind, CloneSource, InstallAction, KeyringSource, NoInstallReason, PackageAvailability,
+    PackageManager, PackageMap, ScriptInstaller, SourceListEntry, TapName,
+};
 pub use manifest::{
     ConfKind, DependencyName, Manifest, ManifestEntry, ParseError, parse_manifest,
+};
+pub use plan::{
+    Elevation, Event, PackageCatalog, Plan, PlanError, PrivilegeRequirement, RawSelector,
+    Requirements, Selection, Step, plan,
 };
 
 #[cfg(test)]
@@ -31,9 +41,11 @@ mod purity {
     #[test]
     fn no_module_names_an_io_capability() {
         let sources = [
+            ("action.rs", include_str!("action.rs")),
             ("lib.rs", include_str!("lib.rs")),
             ("check.rs", include_str!("check.rs")),
             ("manifest.rs", include_str!("manifest.rs")),
+            ("plan.rs", include_str!("plan.rs")),
         ];
         for (file_name, source) in sources {
             for forbidden in forbidden_capabilities() {
@@ -62,9 +74,11 @@ mod purity {
             );
         }
         for source in [
+            include_str!("action.rs"),
             include_str!("lib.rs"),
             include_str!("check.rs"),
             include_str!("manifest.rs"),
+            include_str!("plan.rs"),
         ] {
             assert!(
                 !source.is_empty(),

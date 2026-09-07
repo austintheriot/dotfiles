@@ -279,6 +279,38 @@ status=$?
 assert_equals 'a -diff marked path does not pass silently' '2' "$status"
 assert_contains 'the block names the unscannable path' 'hidden.txt' "$output"
 
+# A renamed file must not read as unscannable in range mode.
+#
+# git's rename detection pairs an add and a delete of similar content into ONE
+# entry reported under the NEW path, while `--name-only` (which builds the
+# path list) still lists the OLD path. So the old path has no `+++ b/<path>`
+# header and the guard blocked the push for a path carrying nothing. Nine
+# paths blocked this way on the first push of `main`, every one a file moved
+# years ago. RANGE_LOG_FLAGS carries --no-renames for this reason.
+rename_repo="$FIXTURES/rename-range"
+mkdir -p "$rename_repo"
+git -C "$rename_repo" init -q .
+git -C "$rename_repo" config user.email t@t
+git -C "$rename_repo" config user.name t
+printf 'seed\n' > "$rename_repo/seed.txt"
+git -C "$rename_repo" add seed.txt
+git -C "$rename_repo" commit -q -m seed
+
+mkdir -p "$rename_repo/olddir"
+printf 'a line\nb line\nc line\nd line\ne line\n' > "$rename_repo/olddir/moved.txt"
+git -C "$rename_repo" add olddir/moved.txt
+git -C "$rename_repo" commit -q -m 'add the file at its old path'
+
+mkdir -p "$rename_repo/newdir"
+git -C "$rename_repo" mv olddir/moved.txt newdir/moved.txt
+git -C "$rename_repo" commit -q -m 'move it, which git reports as a rename'
+
+# The range spans both commits, so the old path appears in --name-only and
+# the rename collapses its header under the new path.
+status=0
+(cd "$rename_repo" && "$LEAK_CHECK" --range 'HEAD~2..HEAD' >/dev/null 2>&1) || status=$?
+assert_equals 'a renamed path does not read as unscannable' '0' "$status"
+
 # The substring hazard, in the one shape that distinguishes the two
 # implementations. A shorter path must not read as scanned because a longer
 # path containing it has a header.

@@ -95,7 +95,23 @@ ALLOW_FILE="${LEAK_ALLOW_FILE:-$HOME/.claude/local/leak-allow.conf}"
 # Renamed content is re-scanned at its new path on purpose (no -M): a project
 # term arriving at a new path is a fresh disclosure at that path, so the cost
 # of a false block on a pure rename is preferred over a missed leak.
-RANGE_LOG_FLAGS=(--diff-filter=ACMR --diff-merges=first-parent)
+# --no-renames is required, not cosmetic.
+#
+# With rename detection on, git pairs an add and a delete of similar content
+# into ONE entry reported under the NEW path only. `--name-only` (which
+# builds the path list) still lists the old path, so the old path has no
+# `+++ b/<path>` header in the scan text and unscannable_paths blocks the
+# push for a path that carries nothing.
+#
+# Measured on this repo's first push of `main`: 9 paths blocked this way,
+# every one a file moved to a new directory years ago. Verified the mechanism
+# by re-running one path with and without the flag: with detection on the
+# header count is 0, with --no-renames it is 1.
+#
+# Turning detection off also scans strictly more text, which is the safe
+# direction for a leak guard: a rename whose content changed en route gets
+# read as a delete plus an add, and the add is scanned.
+RANGE_LOG_FLAGS=(--diff-filter=ACMR --diff-merges=first-parent --no-renames)
 
 TMP_OUT=$(mktemp) || exit 2
 TMP_ERR=$(mktemp) || exit 2

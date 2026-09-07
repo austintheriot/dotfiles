@@ -77,25 +77,23 @@ done
 # The container needs a bare repo to clone from, and building it here rather
 # than reusing ~/.cfg keeps the test off the real repository entirely.
 #
-# The seed carries BOTH platform branches, not just the host's. The container
-# is Linux and detects `linux`, so a seed built only on the host's branch --
-# `mac` on this machine -- makes setup.sh fail with "Not a valid object name
-# linux" on a branch that exists upstream and only appears missing here. That
-# is a defect in the harness rather than in setup.sh, and it took a real
-# container run to surface, because both platform branches exist on the real
-# remote.
+# This used to create BOTH `mac` and `linux` alongside the host's branch,
+# because setup.sh detected a platform and checked out the matching branch, so
+# a seed built only on the host's branch made a Linux container fail with "Not
+# a valid object name linux". setup.sh now defaults to `main`, so the seed
+# needs one branch, and manufacturing the frozen pair would hide a regression
+# of the mapping instead of failing on it.
 #
-# Both branches point at the same tree. This harness tests the bootstrap
-# mechanism, not the differences between the branches; the drift check
-# (`config check`) is what compares their contents.
+# `main` is still created when the host is on a feature branch, because the
+# container passes no --branch and so takes setup.sh's default. It points at
+# the same tree: this harness tests the bootstrap mechanism, not the contents
+# of any particular branch.
 git -C "$staging" init -q -b "$branch"
 git -C "$staging" add -A
 git -C "$staging" -c user.email=t@t -c user.name=t commit -q -m "bootstrap test tree"
-for platform_branch in mac linux; do
-    if [ "$platform_branch" != "$branch" ]; then
-        git -C "$staging" branch -q "$platform_branch"
-    fi
-done
+if [ "$branch" != 'main' ]; then
+    git -C "$staging" branch -q main
+fi
 git clone -q --bare "$staging" "$seed/repo.git"
 
 # HEAD in a bare clone points at whatever the source had checked out. The

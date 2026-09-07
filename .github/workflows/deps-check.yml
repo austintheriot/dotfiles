@@ -122,23 +122,20 @@ jobs:
           mkdir -p /tmp/seed
           git config --global user.email ci@example.com
           git config --global user.name CI
-          ref="${GITHUB_REF_NAME:-mac}"
+          ref="${GITHUB_REF_NAME:-main}"
           git init -q -b "$ref" /tmp/staging
           tar -c --exclude=.git . | tar -x -C /tmp/staging
           git -C /tmp/staging add -A
           git -C /tmp/staging commit -q -m "bootstrap test tree"
 
-          # Both platform branches, not just the pushed one. The container is
-          # Linux and setup.sh detects `linux`, so a seed built only on the
-          # pushed ref fails with "Not a valid object name linux" whenever
-          # this workflow runs from the mac branch -- a branch that exists on
-          # the real remote and is missing only from this synthetic seed.
-          # Caught by a real container run, not by the static tests.
-          for platform_branch in mac linux; do
-            if [ "$platform_branch" != "$ref" ]; then
-              git -C /tmp/staging branch -q "$platform_branch"
-            fi
-          done
+          # `main` as well as the pushed ref, because the container passes no
+          # --branch and setup.sh defaults to `main`. This used to create
+          # `mac` and `linux` instead, for the platform-to-branch mapping that
+          # the 2026-09-06 collapse removed; manufacturing those frozen names
+          # here would hide a regression of the mapping.
+          if [ "$ref" != main ]; then
+            git -C /tmp/staging branch -q main
+          fi
 
           git clone -q --bare /tmp/staging /tmp/seed/repo.git
           git --git-dir=/tmp/seed/repo.git symbolic-ref HEAD "refs/heads/$ref"
@@ -185,7 +182,7 @@ jobs:
 
       - name: Build the seed repository
         run: |
-          ref="${GITHUB_REF_NAME:-mac}"
+          ref="${GITHUB_REF_NAME:-main}"
           mkdir -p /tmp/seed-bare
           git config --global user.email ci@example.com
           git config --global user.name CI
@@ -194,14 +191,12 @@ jobs:
           git -C /tmp/staging-bare add -A
           git -C /tmp/staging-bare commit -q -m "bare bootstrap test tree"
 
-          # Both platform branches, for the reason the job above documents:
-          # the container is Linux and setup.sh detects `linux`, so a seed
-          # built only on the pushed ref fails whenever this runs from mac.
-          for platform_branch in mac linux; do
-            if [ "$platform_branch" != "$ref" ]; then
-              git -C /tmp/staging-bare branch -q "$platform_branch"
-            fi
-          done
+          # `main` as well as the pushed ref, for the reason the job above
+          # documents: the container passes no --branch, so it takes
+          # setup.sh's default.
+          if [ "$ref" != main ]; then
+            git -C /tmp/staging-bare branch -q main
+          fi
 
           git clone -q --bare /tmp/staging-bare /tmp/seed-bare/repo.git
           git --git-dir=/tmp/seed-bare/repo.git symbolic-ref HEAD "refs/heads/$ref"

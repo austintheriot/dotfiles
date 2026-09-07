@@ -4,26 +4,24 @@
 # usage: setup.sh [-y|--yes] [-n|--dry-run] [-b|--branch <name>]
 #                 [-r|--repo <url>]
 #
-# Clones the bare repo to ~/.cfg, picks the branch for this machine, checks
-# the worktree out into $HOME, then hands off to `config init`, which does
-# every post-clone step. This half is the part that cannot live inside the
-# repo it is cloning, and nothing more.
+# Clones the bare repo to ~/.cfg, checks the worktree out into $HOME, then
+# hands off to `config init`, which does every post-clone step. This half is
+# the part that cannot live inside the repo it is cloning, and nothing more.
 #
 # The remote-server one-liner:
 #
-#   curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/mac/setup.sh | sh -s -- --yes
+#   curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/main/setup.sh | sh
 #
 # On a machine that is already cloned, run `config init` instead. This script
 # refuses to touch an existing ~/.cfg.
 #
 # Options:
-#   -y, --yes          Do not prompt: accept the detected branch and install
-#                      dependencies unattended. For CI, Docker, and a remote
-#                      box with no one at the terminal.
+#   -y, --yes          Do not prompt: install dependencies unattended. For
+#                      CI, Docker, and a remote box with no one at the
+#                      terminal.
 #   -n, --dry-run      Print every step and change nothing.
-#   -b, --branch NAME  Check out NAME instead of the detected branch. The
-#                      only way to reach a branch uname cannot imply, such as
-#                      `work` or `home`.
+#   -b, --branch NAME  Check out NAME instead of `main`. The only branch
+#                      selector, and the only way to reach `work` or `home`.
 #   -r, --repo URL     Clone from URL instead of the default remote. Also
 #                      accepts a local path, which is what the tests use.
 #
@@ -313,59 +311,19 @@ if [ -d "$git_dir" ]; then
     exit 1
 fi
 
-# Branch selection. Detection names the platform; the branch is the reader's
-# to confirm, because `work` and `home` are real branches that no amount of
-# uname will imply. So the detected value is offered as a default rather than
-# taken silently, and Enter accepts it. Checking out the wrong branch on a
-# fresh machine is tedious to undo, and one keypress is cheaper than that.
-if [ -z "$branch" ]; then
-    platform='unknown'
-    if [ -f "$HOME/.scripts/platform.sh" ]; then
-        # An already-cloned machine has the real helper. Prefer it, so the
-        # branch-naming convention has one definition.
-        # shellcheck source=.scripts/platform.sh
-        . "$HOME/.scripts/platform.sh"
-        platform=$DOTFILES_PLATFORM
-    else
-        case "${DOTFILES_PLATFORM:-}" in
-            mac|linux) platform=$DOTFILES_PLATFORM ;;
-            # An explicitly exported value is a decision, including the
-            # decision that detection failed. Re-deriving from uname here
-            # would override the caller and, in the container suites, check
-            # out a branch for the host rather than the container.
-            unknown) platform=unknown ;;
-            *)
-                # The same mapping platform.sh makes, spelled here because on
-                # a fresh machine that file does not exist yet. A platform
-                # uname cannot name is reported, never guessed: defaulting an
-                # unrecognized system to `mac` would check out Homebrew paths
-                # onto a machine that has no Homebrew.
-                case "$(uname -s 2>/dev/null)" in
-                    Darwin) platform=mac ;;
-                    Linux) platform=linux ;;
-                    *) platform=unknown ;;
-                esac
-                ;;
-        esac
-    fi
-
-    if [ "$platform" = 'unknown' ]; then
-        printf 'setup.sh: cannot tell which branch this machine wants (uname -s: %s)\n' \
-            "$(uname -s 2>/dev/null || printf 'unavailable')" >&2
-        printf 'setup.sh: pass --branch <name> to choose one\n' >&2
-        exit 1
-    fi
-
-    branch=$platform
-
-    # Offer it rather than take it. Skipped under --yes, which a run with no
-    # terminal has already set for itself above.
-    if [ "$yes" -eq 0 ] && [ "$dry_run" -eq 0 ]; then
-        printf 'setup.sh: detected %s. Branch to check out [%s]: ' "$platform" "$branch"
-        read -r reply
-        [ -n "$reply" ] && branch=$reply
-    fi
-fi
+# One branch. Platform differences are per-platform FILES selected at runtime
+# (.zshrc-mac, tmux-mac.conf, deps-mac.conf) by .scripts/platform.sh, so
+# nothing about this machine's OS implies a ref. --branch stays the only
+# branch selector: it is how a reader reaches `work` or `home`, which no
+# amount of uname implies.
+#
+# This used to read `branch=$platform`, after detecting Darwin as `mac` and
+# Linux as `linux`. Both branches became frozen history in the 2026-09-06
+# collapse to `main`, so that mapping bootstrapped every new machine onto a
+# stale tree. Detection is not deleted, it moved to where it is actually
+# consumed: platform.sh detects for itself, and `config init` reports its own
+# unknown platform.
+[ -n "$branch" ] || branch=main
 
 run() {
     if [ "$dry_run" -eq 1 ]; then

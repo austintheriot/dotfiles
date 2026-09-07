@@ -23,17 +23,23 @@ is the repository and an unpushed commit lives nowhere else.
 stamped binary, in that order. It is idempotent, so re-running it after a pull
 is the intended way to pick up a new dependency.
 
-## One URL, both platforms
+## One URL, one branch
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/mac/setup.sh | sh
+curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/main/setup.sh | sh
 ```
 
-The same URL on every platform. `mac` in it is only the branch the file is
-fetched from, not the branch you get: `setup.sh` reads `uname` and checks out
-the matching branch itself. `tests/setup.test.sh` asserts the file is the
-same blob on `mac` and `linux`, so one URL is the whole story. Verified on
-Linux against the `mac` URL: it selects `linux`.
+The same URL on every platform, and it checks out `main` on every platform.
+There is one branch. Platform differences are per-platform files selected at
+runtime (`.zshrc-mac` beside `.zshrc-linux`), so nothing about the machine's
+OS implies a branch.
+
+`setup.sh` used to read `uname` and check out `mac` or `linux`. Both became
+frozen history in the 2026-09-06 collapse to `main`, so that mapping
+bootstrapped every new machine onto a stale tree. `--branch` is now the only
+branch selector, which is how `work` and `home` stay reachable: no amount of
+`uname` implies either name. `tests/setup.test.sh` asserts that no platform
+maps to a branch name.
 
 ## Unattended versus interactive
 
@@ -43,8 +49,8 @@ git is missing, then clones, checks out, and installs everything else. Verified
 from a bare `debian:bookworm-slim` carrying nothing but curl.
 
 With a terminal it asks before installing git, since a machine that is missing
-git is more likely a surprise than an intent. It also offers the detected
-branch, and `config init` prompts before each install. `--yes` skips both.
+git is more likely a surprise than an intent. `config init` also prompts
+before each install. `--yes` skips both prompts.
 
 ## Options
 

@@ -10,17 +10,17 @@ repository with `$HOME` as the worktree.
 One command, on macOS, Linux or WSL:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/mac/setup.sh | sh
+curl -fsSL https://raw.githubusercontent.com/austintheriot/dotfiles/main/setup.sh | sh
 ```
 
 Nothing needs to be installed first, not even git. The script clones the repo
-to `~/.cfg`, picks the branch that matches this machine, checks the worktree
-out into `$HOME`, and installs the dependencies. An existing `.zshrc` is moved
-into a timestamped `~/.dotfiles-backup-*` directory rather than overwritten.
+to `~/.cfg`, checks the worktree out into `$HOME`, and installs the
+dependencies. An existing `.zshrc` is moved into a timestamped
+`~/.dotfiles-backup-*` directory rather than overwritten.
 
-The `mac` in the URL is only the branch the file is fetched from, not the
-branch you get. `setup.sh` reads `uname` and checks out the matching branch
-itself.
+There is one branch, `main`, and the same URL works on every platform.
+Platform differences are per-platform files selected at runtime, so nothing
+about the machine's OS implies a branch. Pass `--branch` to reach another one.
 
 Options are in [SETUP.md](./SETUP.md), along with what the script does and why
 it stops where it does.

@@ -19,13 +19,18 @@ SETUP="$DOTFILES_ROOT/setup.sh"
 
 assert_succeeds 'setup.sh exists and is executable' test -x "$SETUP"
 
-# A seed repo shaped like the real one: two platform branches, and a
+# A seed repo shaped like the real one: one branch named `main`, and a
 # .scripts/config tree whose config-init is a stub that records its flags.
 # setup.sh checks out from this, so the stub is what the checkout delivers.
+#
+# One branch, deliberately. This used to build `mac` and `linux` because
+# setup.sh mapped a detected platform to a branch of that name. Both refs
+# became frozen history in the 2026-09-06 collapse to `main`, so a seed that
+# still manufactured them would let a reintroduced mapping keep passing.
 make_seed() {
     local seed="$FIXTURES/seed-$1"
     mkdir -p "$seed/.scripts/config"
-    git -C "$seed" init -q -b mac
+    git -C "$seed" init -q -b main
 
     cp "$DOTFILES_ROOT/.scripts/config/config" "$seed/.scripts/config/config"
     cp "$DOTFILES_ROOT/.scripts/config/usage.sh" "$seed/.scripts/config/usage.sh"
@@ -38,15 +43,17 @@ printf 'init %s\n' "$*" >> "$HOME/.calls"
 STUB
     chmod +x "$seed/.scripts/config/config-init"
 
-    printf 'mac branch marker\n' > "$seed/.marker"
+    printf 'main branch marker\n' > "$seed/.marker"
     git -C "$seed" add -A
-    git -C "$seed" -c user.email=t@t -c user.name=t commit -q -m 'mac'
+    git -C "$seed" -c user.email=t@t -c user.name=t commit -q -m 'main'
 
-    git -C "$seed" checkout -q -b linux
-    printf 'linux branch marker\n' > "$seed/.marker"
+    # A second branch that no uname can imply, so the --branch override has
+    # something real to reach. `work` is one of the names the flag exists for.
+    git -C "$seed" checkout -q -b work
+    printf 'work branch marker\n' > "$seed/.marker"
     git -C "$seed" add -A
-    git -C "$seed" -c user.email=t@t -c user.name=t commit -q -m 'linux'
-    git -C "$seed" checkout -q mac
+    git -C "$seed" -c user.email=t@t -c user.name=t commit -q -m 'work'
+    git -C "$seed" checkout -q main
 
     printf '%s' "$seed"
 }
@@ -68,8 +75,8 @@ status=$?
 assert_equals 'setup.sh --yes exits 0 against a local seed' '0' "$status"
 assert_succeeds 'the bare repo lands at ~/.cfg' test -d "$home/.cfg"
 assert_succeeds 'the worktree is checked out into $HOME' test -f "$home/.marker"
-assert_equals 'the detected branch is what got checked out' \
-    'mac branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+assert_equals 'the default branch is what got checked out' \
+    'main branch marker' "$(cat "$home/.marker" 2>/dev/null)"
 assert_contains 'it hands off to config init with --yes' 'init --yes' "$(cat "$home/.calls")"
 
 # The clone must be bare, and the work tree must be $HOME. A non-bare clone
@@ -77,32 +84,54 @@ assert_contains 'it hands off to config init with --yes' 'init --yes' "$(cat "$h
 assert_equals 'the clone is bare' 'true' \
     "$(git --git-dir="$home/.cfg" config --get core.bare)"
 
-# --- platform detection -----------------------------------------------------
+# --- platform detection survives, branch mapping does not -------------------
 
+# Platform detection still runs, because `.zshrc-mac` versus `.zshrc-linux`
+# selection needs DOTFILES_PLATFORM at runtime. What it no longer does is name
+# a ref. So a linux machine and a mac machine reach the same branch.
 seed=$(make_seed detect)
 home=$(new_home detect)
 HOME="$home" DOTFILES_PLATFORM=linux "$SETUP" --yes --repo "$seed" >/dev/null 2>&1
-assert_equals 'a linux platform checks out the linux branch' \
-    'linux branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+assert_equals 'a linux machine checks out the single branch' \
+    'main branch marker' "$(cat "$home/.marker" 2>/dev/null)"
 
-# An explicit --branch overrides detection, which is what makes a work or
+seed=$(make_seed detect_mac)
+home=$(new_home detect_mac)
+HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" >/dev/null 2>&1
+assert_equals 'a mac machine checks out the single branch' \
+    'main branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+
+# No platform may map to a branch name. This is the assertion whose absence
+# let the collapse ship half-done: a stale local ref satisfied the old
+# branch-existence check, so nothing failed while setup.sh still bootstrapped
+# every new machine onto frozen history. Anchored to an assignment at the
+# start of a line, so the comment recording the removed mapping does not read
+# as the mapping itself.
+assert_equals 'setup.sh maps no platform to a branch name' '' \
+    "$(grep -nE '^[[:space:]]*branch=\$\{?platform' "$DOTFILES_ROOT/setup.sh" || true)"
+
+# An explicit --branch overrides the default, which is what makes a work or
 # home branch reachable at all: those names are not derivable from uname.
 seed=$(make_seed override)
 home=$(new_home override)
-HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" --branch linux >/dev/null 2>&1
-assert_equals '--branch overrides platform detection' \
-    'linux branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" --branch work >/dev/null 2>&1
+assert_equals '--branch overrides the default branch' \
+    'work branch marker' "$(cat "$home/.marker" 2>/dev/null)"
 
-# A platform uname cannot name must not be guessed into a branch. platform.sh
-# already returns "unknown" rather than defaulting to mac; setup.sh must stop
-# there and ask rather than checking out a branch for the wrong machine.
+# An unrecognized platform must no longer block the clone. It used to exit 1,
+# because the platform named the branch and guessing one for an unknown system
+# would check out Homebrew paths onto a machine with no Homebrew. The branch no
+# longer depends on the platform, so the clone half has nothing left to refuse:
+# variant selection is platform.sh's job, inside `config init`, which detects
+# for itself and reports its own unknown.
 seed=$(make_seed unknown)
 home=$(new_home unknown)
 output=$(HOME="$home" DOTFILES_PLATFORM=unknown "$SETUP" --yes --repo "$seed" 2>&1)
 status=$?
-assert_equals 'an undetectable platform exits non-zero' '1' "$status"
-assert_contains 'it says the platform could not be detected' 'branch' "$output"
-assert_equals 'it runs no handoff' '' "$(cat "$home/.calls")"
+assert_equals 'an unrecognized platform still clones' '0' "$status"
+assert_equals 'it checks out the single branch anyway' \
+    'main branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+assert_contains 'it still hands off to config init' 'init --yes' "$(cat "$home/.calls")"
 
 # --- pre-existing files -----------------------------------------------------
 
@@ -118,7 +147,7 @@ status=$?
 
 assert_equals 'a colliding file does not fail the bootstrap' '0' "$status"
 assert_equals 'the tracked version wins in $HOME' \
-    'mac branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+    'main branch marker' "$(cat "$home/.marker" 2>/dev/null)"
 
 backup_dir=$(find "$home" -maxdepth 1 -type d -name '.dotfiles-backup-*' 2>/dev/null | head -1)
 assert_succeeds 'a timestamped backup directory is created' test -n "$backup_dir"
@@ -167,7 +196,7 @@ assert_equals 'setup.sh --dry-run exits 0' '0' "$status"
 assert_succeeds 'dry run creates no repo' test ! -d "$home/.cfg"
 assert_succeeds 'dry run checks out nothing' test ! -f "$home/.marker"
 assert_equals 'dry run runs no handoff' '' "$(cat "$home/.calls")"
-assert_contains 'dry run names the branch it would use' 'mac' "$output"
+assert_contains 'dry run names the branch it would use' 'main' "$output"
 
 # --- usage ------------------------------------------------------------------
 
@@ -260,7 +289,7 @@ assert_contains 'a non-interactive run hands off unattended' \
 # And it must still have checked out, rather than stopping at the prompt it
 # skipped.
 assert_equals 'a non-interactive run still checks out' \
-    'mac branch marker' "$(cat "$home/.marker" 2>/dev/null)"
+    'main branch marker' "$(cat "$home/.marker" 2>/dev/null)"
 
 # An explicit --yes stays equivalent, so every existing caller (Docker, the
 # CI bootstrap job, the documented one-liner) keeps working unchanged.
@@ -368,37 +397,27 @@ PATH="$nogit_bin" HOME="$dry_home" DOTFILES_PLATFORM=linux \
 assert_equals 'a dry run installs no git' '' "$(cat "$FIXTURES/apt-git.log" 2>/dev/null)"
 
 
-# --- one URL serves every platform ------------------------------------------
+# --- one URL, one branch ----------------------------------------------------
 #
-# The README documents a single `mac` URL for macOS, Linux and WSL. That is
-# only safe while two facts hold, and both can rot silently, so both are
-# asserted here rather than trusted.
+# The README documents a single URL for macOS, Linux and WSL. That URL must
+# name the branch that actually receives commits, because it fetches both the
+# script and, through the default, the tree the script checks out.
 #
-# Fact one: the branch a copy of setup.sh came from must not influence which
-# branch it checks out. Detection reads uname (or DOTFILES_PLATFORM), never
-# the fetch URL, so the same file picks `linux` on Linux and `mac` on macOS.
-# Verified for real against the published mac URL from a Linux container,
-# which selected `linux`.
-seed=$(make_seed oneurl)
-
-home=$(new_home oneurl_linux)
-HOME="$home" DOTFILES_PLATFORM=linux "$SETUP" --yes --repo "$seed" >/dev/null 2>&1
-assert_equals 'a linux machine checks out linux regardless of the fetch branch' \
-    'linux branch marker' "$(cat "$home/.marker" 2>/dev/null)"
-
-home=$(new_home oneurl_mac)
-HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" >/dev/null 2>&1
-assert_equals 'a mac machine checks out mac regardless of the fetch branch' \
-    'mac branch marker' "$(cat "$home/.marker" 2>/dev/null)"
-
-# Fact two: the URL the README documents must name a branch that exists and
-# carries this file. A README pointing at a renamed or deleted branch is a
-# broken one-liner, and nothing else in the suite would notice.
+# The branch a copy of setup.sh came from must not influence which branch it
+# checks out. Detection reads uname (or DOTFILES_PLATFORM) for variant file
+# selection, never for a ref, so every machine reaches the same branch.
+# Covered above under "platform detection survives".
 readme_url=$(grep -o 'https://raw.githubusercontent.com/[^ ]*/setup.sh' \
     "$DOTFILES_ROOT/README.md" | head -1)
 assert_succeeds 'the README documents a raw URL' test -n "$readme_url"
 
 readme_branch=$(printf '%s\n' "$readme_url" | sed 's|.*/dotfiles/||; s|/setup.sh||')
+
+# Positive control before the narrow claim: an edit that breaks the sed leaves
+# readme_branch empty, and an empty value would otherwise make a wrong branch
+# name look like the right one.
+assert_succeeds 'the URL yields a branch name' test -n "$readme_branch"
+assert_equals 'the README bootstrap URL names main' 'main' "$readme_branch"
 
 # Every git-backed assertion below is guarded on the repository existing.
 # The test container carries a COPY of the tree with no .cfg at all, so an
@@ -406,24 +425,13 @@ readme_branch=$(printf '%s\n' "$readme_url" | sed 's|.*/dotfiles/||; s|/setup.sh
 # than on anything this suite means to check. scripts-dir-name.test.sh guards
 # the same way for the same reason.
 if [ -d "$DOTFILES_ROOT/.cfg" ]; then
-    assert_succeeds 'the documented branch is a real branch here' \
-        git --git-dir="$DOTFILES_ROOT/.cfg" rev-parse --verify --quiet "refs/heads/$readme_branch"
-    assert_succeeds 'that branch carries setup.sh' \
-        git --git-dir="$DOTFILES_ROOT/.cfg" cat-file -e "$readme_branch:setup.sh"
-
-    # setup.sh must be identical on both branches, or the single URL silently
-    # serves one platform a different script.
-    mac_blob=$(git --git-dir="$DOTFILES_ROOT/.cfg" rev-parse "mac:setup.sh" 2>/dev/null || true)
-    linux_blob=$(git --git-dir="$DOTFILES_ROOT/.cfg" rev-parse "linux:setup.sh" 2>/dev/null || true)
-    if [ -n "$mac_blob" ] && [ -n "$linux_blob" ]; then
-        assert_equals 'setup.sh is the same blob on mac and linux' "$mac_blob" "$linux_blob"
-    else
-        skip 'setup.sh is the same blob on mac and linux' 'one of the branches is missing here'
-    fi
+    assert_succeeds 'main is a real branch here' \
+        git --git-dir="$DOTFILES_ROOT/.cfg" rev-parse --verify --quiet refs/heads/main
+    assert_succeeds 'main carries setup.sh' \
+        git --git-dir="$DOTFILES_ROOT/.cfg" cat-file -e main:setup.sh
 else
-    skip 'the documented branch is a real branch here' 'no repository in this environment'
-    skip 'that branch carries setup.sh' 'no repository in this environment'
-    skip 'setup.sh is the same blob on mac and linux' 'no repository in this environment'
+    skip 'main is a real branch here' 'no repository in this environment'
+    skip 'main carries setup.sh' 'no repository in this environment'
 fi
 
 # The README must not reintroduce a second per-platform URL. That is the

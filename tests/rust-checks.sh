@@ -73,8 +73,34 @@ snapshot=$(mktemp -d "${TMPDIR:-/tmp}/rust-checks.XXXXXX") || {
 # failing check still cleans up.
 trap 'rm -rf "$snapshot"' EXIT
 
-if ! git_cmd archive "$ref" crates | tar -x -C "$snapshot"; then
-    printf 'rust-checks: cannot archive crates/ from %s\n' "$ref" >&2
+# crates/ plus every tracked path a crate reads at COMPILE time.
+#
+# config-cli's catalog embeds the four dependency manifests with
+# `include_str!("../../../../.scripts/deps/*.conf")`, which escapes crates/.
+# Archiving crates/ alone left those paths absent and the crate could not
+# compile, while a developer-machine build succeeded because the real files
+# were simply there. That is this repo's dominant bug class, the environment
+# compensating for a gap the engine has, and this gate exists to catch it.
+#
+# A path that no longer exists at $ref is skipped rather than fatal, so an
+# older ref that predates a directory still checks the rest.
+# One entry today. Kept as a list because the next crate that embeds a
+# tracked file will add to it, and a list makes that a one-word change
+# rather than a restructure.
+COMPILE_TIME_PATHS='.scripts/deps'
+
+archive_paths='crates'
+for compile_time_path in $COMPILE_TIME_PATHS; do
+    if git_cmd rev-parse --verify --quiet "$ref:$compile_time_path" >/dev/null 2>&1; then
+        archive_paths="$archive_paths $compile_time_path"
+    fi
+done
+
+# Word splitting is intended: archive_paths is a space-separated pathspec
+# list built above, not a single path.
+# shellcheck disable=SC2086
+if ! git_cmd archive "$ref" $archive_paths | tar -x -C "$snapshot"; then
+    printf 'rust-checks: cannot archive %s from %s\n' "$archive_paths" "$ref" >&2
     exit 1
 fi
 

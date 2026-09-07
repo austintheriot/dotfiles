@@ -367,27 +367,35 @@ research agent and once independently.
 # QUESTIONS (leave until queried)
 
 - Should the mac/linux two-branch model collapse to one branch?
-  Raised by an /expert-review agent on 2026-09-05, and REJECTED after
-  checking the branches it had not read. Recorded so it is not re-proposed
-  without the counter-evidence.
-  The agent's measurement is correct: the model costs roughly 3,100 lines
-  (the crate, config-check, config-sync, config-push-all, branch-drift.yml,
-  the drift tests, the stamp machinery) and `mac` and `linux` differ in
-  only 8 files, 6 of which are unsynced planning documents. The genuinely
-  platform-exclusive content is 2 files, and `.scripts/platform.sh` already
-  implements runtime variant selection, which `.sync-manifest:17-22`
-  explicitly argues is the preferred convention.
-  The conclusion does not follow, for a reason the agent flagged it had
-  not checked (its own stated confidence was 65 because it had not read
-  `work` or `home`). Those branches, plus `home-mac`, differ from `mac` in
-  about 360 of 354 tracked files and last moved 2 to 3 years ago. They are
-  fossils, not a live content-visibility mechanism. So the live system IS
-  the two branches the drift check governs, and collapsing them would not
-  remove branching from the repo. It would delete the only automated
-  consistency gate over the two active public branches.
-  Given four confirmed blockers whose common shape is a gate that passes
-  silently, removing a gate that works is the wrong direction. The part of
-  the finding worth acting on is the fossil-branch item in TODOS.
+  Raised by an /expert-review agent on 2026-09-05 and REJECTED then.
+  RESOLVED 2026-09-06: collapsed, at the owner's direction, onto `main`.
+  Recorded in full because the 2026-09-05 rejection was not wrong, and the
+  reason it stopped applying is specific.
+  What the rejection got right, and what still holds: `linux` was and is a
+  LIVE branch, not a fossil. It received a real commit on 2026-09-06. So
+  collapsing did delete the only automated consistency gate over two active
+  public branches, exactly as argued.
+  What changed:
+    1. The rejection's decisive argument was "given four confirmed blockers
+       whose common shape is a gate that passes silently, removing a gate
+       that works is the wrong direction." All four of those blockers are
+       now fixed and verified. The argument was about SEQUENCING, and the
+       sequence completed.
+    2. The cost is now measured rather than estimated. Of 163 linux-only
+       commits, 35 are titled "Sync shared paths from mac" -- pure overhead
+       the gate imposes to keep two branches byte-identical.
+    3. Every platform-specific file already shipped on both branches
+       (.zshrc-mac, .zshrc-linux, tmux-mac.conf, tmux-linux.conf,
+       deps-mac.conf, deps-linux.conf), so runtime variant selection had
+       already replaced per-branch content. Verified.
+    4. `mac` was a strict superset: exactly ONE file existed only on
+       `linux`, and it was a proptest seed deliberately untracked earlier
+       the same day.
+  What this cost, stated plainly rather than argued away:
+    - The every-tracked-file-matches-a-rule invariant in `.sync-manifest` is
+      gone. Nothing now catches a file added without thought.
+    - `origin/mac` and `origin/linux` are deliberately left in place, so
+      this is reversible while they exist. Deleting them makes it not.
 
 - Should GitHub secret scanning push protection be enabled?
   Free for public repos. It would be a second, higher-quality net for

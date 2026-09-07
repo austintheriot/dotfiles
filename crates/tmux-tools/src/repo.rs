@@ -114,28 +114,22 @@ fn main_repository_name(git_directory: &Path) -> Option<String> {
 
 /// Reads `HEAD` and classifies it as a branch or a detached commit.
 ///
-/// `ref: refs/heads/<branch>` is a branch. A bare 40-character hex string is
-/// a detached head; its short sha is the first 8 characters, matching what
-/// `git rev-parse --short HEAD` produces for the repository sizes these
-/// window directories have. Any other shape is unrecognized and yields
-/// `None`, sending the caller to the `git rev-parse` fallback.
+/// `ref: refs/heads/<branch>` is a branch, read directly. A bare 40-character
+/// hex string is a detached head, but this function does not shorten it
+/// itself: git's abbreviation length is `core.abbrev` (default "auto"),
+/// which grows past 7 characters to stay unambiguous as a repository's
+/// object count grows, and only `git rev-parse --short` knows that count.
+/// Returning `None` here for a detached head sends the caller to that
+/// fallback rather than emitting a short sha of a length git would not have
+/// chosen itself.
 fn read_head(git_directory: &Path) -> Option<HeadState> {
     let contents = std::fs::read_to_string(git_directory.join("HEAD")).ok()?;
     let trimmed = contents.trim();
 
-    if let Some(branch_ref) = trimmed.strip_prefix("ref:") {
-        let branch_ref = branch_ref.trim();
-        let branch_name = branch_ref.strip_prefix("refs/heads/")?;
-        return Some(HeadState::Branch(branch_name.to_string()));
-    }
-
-    let is_full_sha = trimmed.len() == 40 && trimmed.chars().all(|character| character.is_ascii_hexdigit());
-    if is_full_sha {
-        let short_sha = trimmed.get(0..8)?.to_string();
-        return Some(HeadState::Detached { short_sha });
-    }
-
-    None
+    let branch_ref = trimmed.strip_prefix("ref:")?;
+    let branch_ref = branch_ref.trim();
+    let branch_name = branch_ref.strip_prefix("refs/heads/")?;
+    Some(HeadState::Branch(branch_name.to_string()))
 }
 
 /// Falls back to spawning `git rev-parse` when a direct read did not work.

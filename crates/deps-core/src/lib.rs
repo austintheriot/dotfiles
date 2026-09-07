@@ -15,6 +15,7 @@ mod manifest;
 mod outcome;
 mod plan;
 mod reconcile;
+mod render;
 
 pub use check::{
     Check, CheckParseError, CheckPath, Observation, ObservationMap, Observations, PathRoot,
@@ -40,6 +41,7 @@ pub use plan::{
     Requirements, Selection, Step, plan,
 };
 pub use reconcile::{Report, ReportRow, reconcile};
+pub use render::{Rendered, Verb, render};
 
 #[cfg(test)]
 mod purity {
@@ -63,6 +65,7 @@ mod purity {
             ("outcome.rs", include_str!("outcome.rs")),
             ("plan.rs", include_str!("plan.rs")),
             ("reconcile.rs", include_str!("reconcile.rs")),
+            ("render.rs", include_str!("render.rs")),
         ];
         for (file_name, source) in sources {
             for forbidden in forbidden_capabilities() {
@@ -99,6 +102,7 @@ mod purity {
             include_str!("outcome.rs"),
             include_str!("plan.rs"),
             include_str!("reconcile.rs"),
+            include_str!("render.rs"),
         ] {
             assert!(
                 !source.is_empty(),

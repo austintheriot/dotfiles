@@ -1,0 +1,133 @@
+//! Rendering a report to two streams and one exit code.
+//!
+//! Pure. Follows `config-manifest`'s `stamp::Rendered`, which the parent
+//! spec cites as precedent: returning output as a value rather than writing
+//! it makes the whole reporting path testable without capturing streams.
+
+use crate::{Report, StepOutcome};
+
+/// Which verb produced a report.
+///
+/// The wording and the exit code both depend on it: a `NotReady` report is
+/// a failure for `check` and an accurate preview for `--dry-run`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verb {
+    /// `config deps check`.
+    Check,
+    /// `config deps install`.
+    Install,
+    /// Either verb with `--dry-run`.
+    DryRun,
+}
+
+/// Two output streams and an exit code, as a value.
+///
+/// Follows `config-manifest`'s `stamp::Rendered`. Returning the streams
+/// rather than writing them keeps every reporting decision testable without
+/// capturing a process's output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rendered {
+    /// What belongs on stdout.
+    pub stdout: String,
+    /// What belongs on stderr. Empty when nothing failed.
+    pub stderr: String,
+    /// The code to hand the process exit.
+    pub exit_code: u8,
+}
+
+/// Render one report for one verb.
+///
+/// Pure. The exit code comes from `exit_status`, so this function has no
+/// opinion about which number means what: that mapping has exactly one
+/// owner, per spec 5.4.
+pub fn render(report: &Report, verb: Verb) -> Rendered {
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+
+    for row in &report.rows {
+        let line = match &row.outcome {
+            StepOutcome::AlreadyPresent => format!("  present   {}\n", row.dependency.as_str()),
+            StepOutcome::Installed => format!("  installed {}\n", row.dependency.as_str()),
+            StepOutcome::NotSelected => format!("  missing   {}\n", row.dependency.as_str()),
+            StepOutcome::Blocked { on } => {
+                format!("  waiting   {} (needs {})\n", row.dependency.as_str(), on.as_str())
+            }
+            StepOutcome::NotAutomatable { reason } => {
+                format!("  manual    {} ({reason:?})\n", row.dependency.as_str())
+            }
+            StepOutcome::InstallFailed { .. } | StepOutcome::InstalledButCheckStillFails { .. } => {
+                stderr.push_str(&format!("  FAILED    {}\n", row.dependency.as_str()));
+                String::new()
+            }
+        };
+        stdout.push_str(&line);
+    }
+
+    let heading = match verb {
+        Verb::Check => "checked dependencies",
+        Verb::Install => "installed dependencies",
+        Verb::DryRun => "would install",
+    };
+    let summary = format!("deps {heading}: {} entries\n", report.rows.len());
+
+    // Task 3 widens `Verdict::Install` to carry the post-install `CheckStatus`
+    // alongside `InstallStatus`; that signature change lands in Task 3's own
+    // commit, so this arm stays one-argument until then.
+    let verdict = match verb {
+        Verb::Check => crate::Verdict::Check(report.check),
+        Verb::DryRun => crate::Verdict::DryRun(report.check),
+        Verb::Install => crate::Verdict::Install(report.install),
+    };
+
+    Rendered {
+        stdout: format!("{summary}{stdout}"),
+        stderr,
+        exit_code: crate::exit_status(Ok(verdict)).code(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{CheckStatus, InstallStatus, Report, ReportRow, StepOutcome};
+
+    fn a_ready_report() -> Report {
+        Report {
+            rows: vec![ReportRow {
+                dependency: crate::DependencyName::parse("git").expect("a valid name"),
+                outcome: StepOutcome::AlreadyPresent,
+                after: crate::Observation::Present,
+            }],
+            check: CheckStatus::Ready,
+            install: InstallStatus::AllSucceeded,
+        }
+    }
+
+    /// A ready check reports success on stdout and exits 0.
+    #[test]
+    fn a_ready_check_renders_to_stdout_and_exits_zero() {
+        let rendered = render(&a_ready_report(), Verb::Check);
+
+        // Positive control: stdout must carry something, or the assertions
+        // below would hold for a renderer that writes nothing at all.
+        assert!(!rendered.stdout.is_empty(), "a check must say something");
+        assert_eq!(rendered.exit_code, 0);
+        assert!(rendered.stderr.is_empty(), "nothing failed, so stderr stays empty");
+    }
+
+    /// The verb changes the wording, which is what makes the per-verb exit
+    /// codes legible: the same NotReady report is a failure for `check` and
+    /// a preview for `--dry-run`.
+    #[test]
+    fn the_verb_changes_the_wording() {
+        let report = a_ready_report();
+        let checked = render(&report, Verb::Check);
+        let previewed = render(&report, Verb::DryRun);
+
+        assert!(!checked.stdout.is_empty(), "the control must produce output");
+        assert_ne!(
+            checked.stdout, previewed.stdout,
+            "a check and a dry run must not read identically"
+        );
+    }
+}

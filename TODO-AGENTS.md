@@ -364,6 +364,64 @@ research agent and once independently.
     - keep precmd but make the no-change path cheap, which is the same
       idea one level down.
 
+- Create an expert agent for agent sandboxing, local inference, GPU
+  allocation, and orchestration. Nothing in `~/.claude/agents/` covers any of
+  it: grep for gpu, sandbox, infer, orchestr or local returns no agent file.
+  The lens is the machine an agent runs on rather than the code it writes,
+  which is why none of the existing specialists fit. Roughly, what it should
+  hold:
+    - sandboxing and isolation. What a subagent can reach, filesystem and
+      network scope, containers versus VMs versus per-process confinement,
+      seccomp and namespaces on Linux, the sandbox-exec and TCC model on
+      macOS, and the failure mode where a sandbox is asserted rather than
+      enforced.
+    - local inference. Serving runtimes (llama.cpp, vLLM, Ollama, MLX on
+      Apple silicon), quantisation tradeoffs, context-window versus VRAM
+      arithmetic, batching, and when local is genuinely cheaper than an API
+      rather than assumed to be.
+    - GPU allocation. Which process gets which device, VRAM budgeting across
+      concurrent agents, unified memory on Apple silicon versus discrete
+      VRAM, MIG and time-slicing, and detecting contention rather than
+      discovering it as a slowdown.
+    - orchestration. Concurrency limits, queueing and backpressure, what a
+      stalled agent looks like from outside, resource-aware scheduling, and
+      the cost model that decides how many agents are worth running at once.
+  Use `/create-expert-agent`, which already knows how to research a domain
+  and wire a new lens into `/expert-review`, `/expert-plan` and `/consult`.
+  Worth splitting if the research shows it is really two agents: the
+  sandboxing and orchestration half is a systems-and-safety lens, while local
+  inference and GPU allocation is a hardware-and-serving lens, and that
+  split is the sort of thing the skill is meant to decide on evidence.
+  Evidence this is worth having: a session on 2026-09-07 ran up to four
+  subagents concurrently and hit real resource questions with no expert to
+  ask. It picked a concurrency cap of three to four by feel, discovered by
+  accident that `cargo --locked` fails transiently while a concurrent agent
+  rewrites `Cargo.lock`, and had one agent stall in a wait loop for over an
+  hour before anyone noticed. Every one of those is in this agent's lens.
+
+- Automate the sandboxing, inference and GPU configuration in this repo,
+  once the agent above exists to say what the configuration should be.
+  Deliberately a second item: the first decides what is correct, this one
+  makes a fresh machine arrive at it without a human remembering the steps.
+  The shape this repo already uses:
+    - `deps.conf` and its platform variants declare what must be installed,
+      and `config deps install` now installs them. Anything the setup needs
+      (a serving runtime, a GPU toolchain, a container runtime) belongs
+      there rather than in a README instruction.
+    - `config-init` runs before a toolchain exists and is where bootstrap
+      ordering lives.
+    - `.claude/settings.json` and `~/.claude/local/` hold agent
+      configuration, the latter untracked, which is where anything
+      machine-specific or private goes.
+  What that likely means concretely, to be confirmed by the agent's
+  recommendations rather than assumed here: manifest entries for whatever
+  runtime is chosen, a checked model cache location, per-machine GPU and
+  concurrency limits expressed as configuration rather than as habits, and a
+  `config` subcommand or a test that verifies the machine actually matches
+  the declared setup. The last one matters most: this repo's dominant bug
+  class is an environment quietly compensating for a gap in the engine, so
+  a setup that is documented but unverified will drift the same way.
+
 # QUESTIONS (leave until queried)
 
 - Should the mac/linux two-branch model collapse to one branch?

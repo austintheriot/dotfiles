@@ -5,6 +5,7 @@
 //! which decides. Exit 2 is every usage error, matching the repo-wide
 //! convention `check-deps.sh` and `config-manifest` already use.
 
+mod git_branches;
 mod repo;
 mod tmux;
 
@@ -12,7 +13,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use tmux::{Server, WindowTarget};
-use tmux_core::{RepositoryFacts, WindowFacts, window_name};
+use tmux_core::{RepositoryFacts, WindowFacts, format_branches, window_name};
 
 /// Where the fallback `@wname_bare_repos` patterns live, relative to `$HOME`.
 ///
@@ -43,6 +44,7 @@ fn main() -> ExitCode {
         Some("name-windows") => name_windows(arguments.collect()),
         Some("close") => close(arguments.collect()),
         Some("worktree-config") => worktree_config(),
+        Some("list-branches") => list_branches(),
         Some(other) => {
             eprintln!("tmux-tools: unknown subcommand {other}");
             ExitCode::from(2)
@@ -168,6 +170,21 @@ fn worktree_config() -> ExitCode {
 /// The number of numbered worktree windows `tmux-setup.sh`
 /// creates, matching `tmux-worktree-config.sh`'s `WORKTREE_COUNT=15`.
 const WORKTREE_COUNT: u32 = 15;
+
+/// Runs the `list-branches` subcommand: one `git for-each-ref` call, formatted
+/// the way `zsh-git-widgets.sh`'s `git | rg | sed | sed` pipeline formatted
+/// its candidates, one branch per line on stdout.
+///
+/// `fzf` and the trailing `cut -f1` that reads the picked line back out stay
+/// in the widget: this binary's job ends at producing the candidate list,
+/// and picking one is the interactive part `tmux-core` holds no IO to run.
+fn list_branches() -> ExitCode {
+    let refs = git_branches::list();
+    for line in format_branches(&refs) {
+        println!("{line}");
+    }
+    ExitCode::SUCCESS
+}
 
 /// Splits a window's `@wname_bare_repos` value on `|` for
 /// `tmux_core::window_name`, falling back to the script's documented

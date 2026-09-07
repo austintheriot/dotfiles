@@ -4,17 +4,20 @@
 # Ctrl+G - fuzzy-pick a git branch and paste it onto the command line.
 # Lists local + remote branches by most-recent commit, strips the remote prefix,
 # and inserts the chosen name at the cursor.
+#
+# The listing and formatting (the old git | rg | sed | sed stages) moved into
+# tmux-tools list-branches: one spawn instead of five, and the widget's own
+# LBUFFER assignment, zle -N registration and bindkey calls stay here because
+# assigning into the zsh line editor is impossible from another process. This
+# is not a keystroke path: the widget blocks on the interactive fzf picker
+# below, so a human is reading the screen while it runs, and the spawn-cost
+# argument that keeps .zshrc startup lean does not apply to a Ctrl+G press.
 fzf-git-branch-widget() {
   setopt localoptions pipefail no_aliases 2>/dev/null
   local branch
   branch=$(
-    git branch --color=always --format="%(refname:short)%09%(color:yellow)%(committerdate:relative)%(color:reset)" --sort=-committerdate --all 2>/dev/null \
-      | rg -v 'HEAD|^origin' \
-      | sed 's/^[* ]*//' \
-      | sed 's#^remotes/[^/]*/##' \
-      | fzf --ansi --no-sort --reverse --height=40% --min-height=20 \
-            --delimiter=$'\t' --with-nth=1,2 --nth=1 \
-      | cut -f1
+    tmux-tools list-branches \
+      | fzf --ansi --no-sort --reverse --height=40% --min-height=20
   )
   if [[ -n "$branch" ]]; then
     LBUFFER="${LBUFFER}${branch}"

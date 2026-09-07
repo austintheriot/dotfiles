@@ -7,8 +7,10 @@
 //! in. That split is what makes this crate's behavior testable without a
 //! tmux server, and it is the same split `deps-core` uses.
 
+mod branches;
 mod naming;
 
+pub use branches::{BranchRef, format_branches};
 pub use naming::{HeadState, RepositoryFacts, WindowFacts, window_name};
 
 #[cfg(test)]
@@ -25,6 +27,7 @@ mod purity {
         let sources = [
             ("lib.rs", include_str!("lib.rs")),
             ("naming.rs", include_str!("naming.rs")),
+            ("branches.rs", include_str!("branches.rs")),
         ];
         for (file_name, source) in sources {
             for forbidden in forbidden_capabilities() {
@@ -49,7 +52,11 @@ mod purity {
                 "a needle the purity test relies on does not match a source that names it"
             );
         }
-        for source in [include_str!("lib.rs"), include_str!("naming.rs")] {
+        for source in [
+            include_str!("lib.rs"),
+            include_str!("naming.rs"),
+            include_str!("branches.rs"),
+        ] {
             assert!(
                 !source.is_empty(),
                 "include_str! yielded empty text, so the purity test proves nothing"

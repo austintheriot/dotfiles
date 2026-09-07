@@ -166,6 +166,24 @@ assert_contains 'the summary names the failing suite' 'delta' "$output"
 # resolved DOTFILES_ROOT to empty, so the path did not exist and the guarded
 # assertion silently skipped while reporting a pass.
 
+# Python test discovery must skip ephemeral scratch. `.claude/jobs/<id>/` is
+# a background job's workspace: it holds third-party checkouts a job cloned to
+# read, and their test suites are neither this repo's code nor this repo's
+# responsibility. Six such suites reported red during this work and misled two
+# separate readers into checking whether they had broken something.
+#
+# `*/plugins/*` was already excluded for the same reason. This adds the other
+# ephemeral tree.
+
+discovery_line=$(grep -n "name 'test_\*\.py'" -A2 "$RUN_ALL" | tr -d '\n' || true)
+
+# Positive control: the find invocation must be locatable, or the assertion
+# below compares two empty strings.
+assert_succeeds 'run-all.sh has a python discovery find' test -n "$discovery_line"
+
+assert_succeeds 'python discovery excludes ephemeral job workspaces' \
+    sh -c 'printf "%s" "$1" | grep -q "jobs"' _ "$discovery_line"
+
 manifest_line=$(grep -E '^cargo_manifest=' "$RUN_ALL" || true)
 
 # Positive control: the assignment must exist, or the assertion below is

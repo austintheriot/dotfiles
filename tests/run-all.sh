@@ -172,8 +172,14 @@ export PYTHON_BIN
 
 python_dirs=''
 if [ -z "$only" ] && [ -n "$PYTHON_BIN" ]; then
+    # Two trees are excluded, both ephemeral and neither this repo's code.
+    # plugins/ is vendored third-party. jobs/<id>/ is a background job's
+    # scratch workspace, which holds checkouts a job cloned in order to read
+    # them; six such suites once reported red here and sent two readers
+    # looking for a regression they had not caused.
     python_dirs=$(find "$DOTFILES_ROOT/.claude" "$DOTFILES_ROOT/.scripts" \
-                     -name 'test_*.py' -type f -not -path '*/plugins/*' \
+                     -name 'test_*.py' -type f \
+                     -not -path '*/plugins/*' -not -path '*/jobs/*' \
                      -exec dirname {} + 2>/dev/null | sort -u)
 fi
 

@@ -316,9 +316,15 @@ assert_equals 'the runner overlays the root-level files it copies' \
 DOCKERFILE="$DOTFILES_ROOT/tests/docker/Dockerfile"
 
 if command -v cargo >/dev/null 2>&1 && [ -f "$DOTFILES_ROOT/crates/Cargo.toml" ]; then
-    workspace_members=$(cd "$DOTFILES_ROOT/crates" \
-        && cargo metadata --no-deps --format-version 1 2>/dev/null \
-        | python3 -c 'import json,sys; print("\n".join(sorted(p["name"] for p in json.load(sys.stdin)["packages"])))' 2>/dev/null || true)
+    # Not `cd X && cargo ... || true`: that is SC2015, and if cd succeeded
+    # while cargo failed the `|| true` would hide it and yield an empty list,
+    # which the positive control below would then be the only thing catching.
+    # A subshell keeps the cd scoped and lets the status through.
+    workspace_members=$(
+        cd "$DOTFILES_ROOT/crates" || exit 1
+        cargo metadata --no-deps --format-version 1 2>/dev/null \
+            | python3 -c 'import json,sys; print("\n".join(sorted(p["name"] for p in json.load(sys.stdin)["packages"])))' 2>/dev/null
+    )
 
     # Positive control: cargo must have reported members, or the emptiness
     # check below would pass against an empty comparison.

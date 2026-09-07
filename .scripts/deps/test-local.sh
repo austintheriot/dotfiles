@@ -30,7 +30,7 @@ git_cmd() {
 branch=$(git_cmd branch --show-current)
 if [ -z "$branch" ]; then
     printf 'test-local: HEAD is detached, so there is no branch to archive.\n' >&2
-    printf 'test-local: check out mac or linux and run this again.\n' >&2
+    printf 'test-local: check out main and run this again.\n' >&2
     exit 1
 fi
 

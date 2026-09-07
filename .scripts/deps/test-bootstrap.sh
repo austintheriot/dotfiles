@@ -31,7 +31,7 @@ git_cmd() {
 branch=$(git_cmd branch --show-current)
 if [ -z "$branch" ]; then
     printf 'test-bootstrap: HEAD is detached, so there is no branch to clone.\n' >&2
-    printf 'test-bootstrap: check out mac or linux and run this again.\n' >&2
+    printf 'test-bootstrap: check out main and run this again.\n' >&2
     exit 1
 fi
 

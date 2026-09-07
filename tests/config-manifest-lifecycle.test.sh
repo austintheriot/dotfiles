@@ -103,12 +103,20 @@ fi
 assert_succeeds 'tests/check-branch-drift.sh is deleted' \
     test ! -e "$DOTFILES_ROOT/tests/check-branch-drift.sh"
 
-callers=$(grep -rln 'check-branch-drift\.sh' \
-    "$DOTFILES_ROOT/tests" "$DOTFILES_ROOT/.github" "$DOTFILES_ROOT/.scripts" \
-    "$DOTFILES_ROOT/.claude/rules" 2>/dev/null \
-    | grep -v -e '/check-branch-drift\.test\.sh$' -e '/config-manifest-lifecycle\.test\.sh$' || true)
-assert_equals 'no script, workflow, or rule outside the two drift test files still names check-branch-drift.sh' \
-    '' "$callers"
+find_callers() {
+    grep -rln "$1" \
+        "$DOTFILES_ROOT/tests" "$DOTFILES_ROOT/.github" "$DOTFILES_ROOT/.scripts" \
+        "$DOTFILES_ROOT/.claude/rules" 2>/dev/null \
+        | grep -v -e '/config-manifest-lifecycle\.test\.sh$' || true
+}
+
+# Positive control. The assertion below expects an empty result, so without a
+# pattern that must match, a broken grep invocation would report a pass.
+assert_contains 'the caller search finds a name that is genuinely referenced' \
+    'config/config-build' "$(find_callers 'config-build')"
+
+assert_equals 'no script, workflow, or rule still names check-branch-drift.sh' \
+    '' "$(find_callers 'check-branch-drift\.sh')"
 
 # --- toolchain pin, workspace, and untracked seed ----------------------------
 #

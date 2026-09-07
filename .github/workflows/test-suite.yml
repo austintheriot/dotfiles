@@ -1,6 +1,6 @@
 name: Test suite (linux + macOS)
 
-# Runs tests/run-all.sh on both platforms this repo is branched for.
+# Runs tests/run-all.sh on both platforms this repo supports.
 #
 # Before this existed no workflow ran the suite at all: it only ever ran from
 # the local pre-push hook, so a green push meant "Docker was running on the

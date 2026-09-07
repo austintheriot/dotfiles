@@ -39,10 +39,10 @@ git_cmd() {
 }
 
 # $DOTFILES_TEST_REF names the ref to archive. The pre-push hook sets it to
-# the ref being pushed, which is not always the checked-out branch: pushing
-# linux from a worktree while $HOME sits on mac is how this repo normally
-# ships a linux change. Archiving the checked-out branch there would test
-# mac's code and report a pass for a linux push.
+# the ref being pushed, which is not always the checked-out branch: a push
+# from a worktree leaves $HOME on whatever branch it was already on.
+# Archiving the checked-out branch there would test $HOME's code and report
+# a pass for the pushed ref.
 # An explicitly-passed ref is validated here, before the daemon probe, so a
 # typo reports the typo rather than a stopped daemon. The default is left to
 # resolve later: this script also runs inside the test image, where there is
@@ -72,7 +72,7 @@ fi
 
 if [ -z "$branch" ]; then
     printf 'run-in-docker: HEAD is detached, so there is no branch to archive.\n' >&2
-    printf 'run-in-docker: check out mac or linux, or set $DOTFILES_TEST_REF.\n' >&2
+    printf 'run-in-docker: check out main, or set $DOTFILES_TEST_REF.\n' >&2
     exit 1
 fi
 

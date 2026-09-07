@@ -15,6 +15,7 @@ name: Dependency bootstrap
 
 on:
   push:
+    branches: [main]
     paths:
       - '.scripts/deps/**'
       - '.github/workflows/deps-check.yml'
@@ -249,7 +250,7 @@ jobs:
 
       - name: Build the seed repository
         run: |
-          ref="${GITHUB_REF_NAME:-mac}"
+          ref="${GITHUB_REF_NAME:-main}"
           mkdir -p /tmp/seed-curl
           git config --global user.email ci@example.com
           git config --global user.name CI
@@ -258,14 +259,12 @@ jobs:
           git -C /tmp/staging-curl add -A
           git -C /tmp/staging-curl commit -q -m "curl-pipe bootstrap test tree"
 
-          # Both platform branches, for the reason the jobs above document:
-          # the container is Linux and setup.sh detects `linux`, so a seed
-          # built only on the pushed ref fails whenever this runs from mac.
-          for platform_branch in mac linux; do
-            if [ "$platform_branch" != "$ref" ]; then
-              git -C /tmp/staging-curl branch -q "$platform_branch"
-            fi
-          done
+          # `main` as well as the pushed ref, for the reason the jobs above
+          # document: the container passes no --branch, so it takes
+          # setup.sh's default.
+          if [ "$ref" != main ]; then
+            git -C /tmp/staging-curl branch -q main
+          fi
 
           git clone -q --bare /tmp/staging-curl /tmp/seed-curl/repo.git
           git --git-dir=/tmp/seed-curl/repo.git symbolic-ref HEAD "refs/heads/$ref"
@@ -317,7 +316,7 @@ jobs:
 
       - name: Build the seed repository
         run: |
-          ref="${GITHUB_REF_NAME:-mac}"
+          ref="${GITHUB_REF_NAME:-main}"
           mkdir -p /tmp/seed-curl-arch
           git config --global user.email ci@example.com
           git config --global user.name CI
@@ -326,11 +325,9 @@ jobs:
           git -C /tmp/staging-curl-arch add -A
           git -C /tmp/staging-curl-arch commit -q -m "arch curl-pipe bootstrap test tree"
 
-          for platform_branch in mac linux; do
-            if [ "$platform_branch" != "$ref" ]; then
-              git -C /tmp/staging-curl-arch branch -q "$platform_branch"
-            fi
-          done
+          if [ "$ref" != main ]; then
+            git -C /tmp/staging-curl-arch branch -q main
+          fi
 
           git clone -q --bare /tmp/staging-curl-arch /tmp/seed-curl-arch/repo.git
           git --git-dir=/tmp/seed-curl-arch/repo.git symbolic-ref HEAD "refs/heads/$ref"

@@ -17,7 +17,16 @@
 # edit does not recompile dependencies; a single COPY of the whole crate would
 # silently defeat that cache and the measured 0.8s/2.6s rebuilds rest on it.
 FROM rust:1.94-slim-bookworm@sha256:cf9dd0ec73e75f827fe59123fff9dc65af1a1c8363c3c31ee8d7f8ad0b6a5fb2 AS builder
-WORKDIR /build
+# /build/crates, not /build, so the builder's directory depth matches the
+# real repository's. config-cli's catalog embeds the dependency manifests
+# with `include_str!("../../../../.scripts/deps/*.conf")`, and that escape
+# resolves relative to the crate. Under /build it landed on /.scripts at the
+# filesystem root and the crate could not compile; under /build/crates it
+# lands on /build/.scripts, which is inside the build context and mirrors
+# how the path resolves from ~/crates. Matching the layout is what makes one
+# relative path correct in both places, rather than each consumer carrying a
+# different fix.
+WORKDIR /build/crates
 COPY crates/Cargo.toml crates/Cargo.lock ./
 # One COPY per workspace member, and container.test.sh asserts this list
 # matches what cargo reports. Adding deps-core without these three lines
@@ -41,6 +50,10 @@ RUN mkdir config-cli/src config-manifest/src dotfiles-path/src deps-core/src tmu
         target/release/config-manifest target/release/tmux-tools \
         target/release/deps/config_cli* target/release/deps/config_manifest* \
         target/release/deps/tmux_tools*
+# The tracked files the catalog embeds at compile time. Copied to
+# /build/.scripts so the crate-relative escape above resolves.
+COPY .scripts/deps ../.scripts/deps
+
 COPY crates/config-cli/src ./config-cli/src
 COPY crates/config-manifest/src ./config-manifest/src
 COPY crates/dotfiles-path/src ./dotfiles-path/src
@@ -78,7 +91,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # The suite's shell tests call config-manifest by name, as pre-push and CI do.
-COPY --from=builder /build/target/release/config-manifest /usr/local/bin/config-manifest
+COPY --from=builder /build/crates/target/release/config-manifest /usr/local/bin/config-manifest
 
 # A UTF-8 locale is load-bearing, not cosmetic. With no LANG set, tmux treats
 # a tab as non-printable and substitutes "_" in display-message output.

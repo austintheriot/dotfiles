@@ -76,4 +76,52 @@ PY
 assert_equals "test-suite.yml must run cargo clippy, so the invariant gates before merge" \
     "0" "$ci_has_clippy"
 
+# The lint POLICY, not just the gate that enforces it. Without these, the
+# policy is held only by clippy currently passing: delete `[lints] workspace
+# = true` from one member manifest, or drop a cfg_attr line, and clippy still
+# exits 0 with fewer lints while the suite still reports every assertion
+# green. Verified that exact scenario before adding these: removing
+# config-manifest's opt-in left clippy at exit 0 and this suite at 8 passed.
+# That is the failure this whole gate exists to prevent, one level up.
+# Gated on crates/ existing, because this suite also runs inside the test
+# container, whose runtime stage carries no crates/ at all: the Dockerfile
+# copies the workspace into its BUILDER stage only, then ships just the
+# binary. Reading the manifests there fails on a missing path rather than on
+# a real policy gap. `skip` rather than an early return, so the container run
+# reports the coverage it did not exercise instead of silently passing.
+if [ ! -f "$DOTFILES_ROOT/crates/Cargo.toml" ]; then
+    skip "lint policy assertions (no crates/ in this environment)"
+else
+workspace_manifest=$(cat "$DOTFILES_ROOT/crates/Cargo.toml")
+assert_contains "crates/Cargo.toml must declare the rust lint policy" \
+    "[workspace.lints.rust]" "$workspace_manifest"
+assert_contains "crates/Cargo.toml must declare the clippy lint policy" \
+    "[workspace.lints.clippy]" "$workspace_manifest"
+# forbid rather than deny, so a local #[allow] cannot lift it.
+assert_contains "unsafe_code must be forbidden, not merely denied" \
+    'unsafe_code = "forbid"' "$workspace_manifest"
+
+# Every member must opt in, or the workspace policy reaches nothing.
+for member_manifest in "$DOTFILES_ROOT"/crates/*/Cargo.toml; do
+    member_name=$(basename "$(dirname "$member_manifest")")
+    # Matched as the TABLE, not the bare value: "workspace = true" also
+    # appears on every dependency line, so the value alone matched a
+    # dependency and passed even with the [lints] table deleted. Verified
+    # that false positive before narrowing this.
+    assert_contains "$member_name must opt into the workspace lints" \
+        "[lints]" "$(cat "$member_manifest")"
+done
+
+# Every crate root must carry the panic-family carve-out. Cargo cannot
+# express "deny in src, allow in cfg(test)" through [workspace.lints], so
+# this lives per root, and config-manifest needs it on BOTH roots: doctor.rs
+# is a module of lib.rs, so a main.rs attribute cannot reach it.
+for crate_root in "$DOTFILES_ROOT"/crates/*/src/lib.rs "$DOTFILES_ROOT"/crates/*/src/main.rs; do
+    [ -f "$crate_root" ] || continue
+    root_label=${crate_root#"$DOTFILES_ROOT"/crates/}
+    assert_contains "$root_label must deny unwrap and expect outside tests" \
+        "cfg_attr(not(test), deny(" "$(cat "$crate_root")"
+done
+fi
+
 finish

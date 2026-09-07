@@ -24,8 +24,13 @@
 # runs the command.
 usage_if_requested() {
     case ${1:-} in
-        --help|-h) print_usage; exit 0 ;;
-        --describe) print_describe; exit 0 ;;
+        # Both take the subject as an optional argument, and the subject
+        # here is the calling script itself, which is each function's
+        # default. Passed explicitly as "$0" so the intent is stated rather
+        # than inherited: a bare call would also read as "forward my own
+        # arguments", which is the opposite of what this does.
+        --help|-h) print_usage "$0"; exit 0 ;;
+        --describe) print_describe "$0"; exit 0 ;;
     esac
 }
 

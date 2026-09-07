@@ -8,6 +8,7 @@ use dotfiles_path::BoundedText;
 use crate::action::{InstallAction, NoInstallReason};
 use crate::check::Check;
 use crate::manifest::DependencyName;
+use crate::plan::PlanError;
 
 /// Why a process could not be started.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -139,10 +140,88 @@ pub fn summarize_install(outcomes: &[StepOutcome]) -> InstallStatus {
     if attempt_failed { InstallStatus::AttemptFailed } else { InstallStatus::AllSucceeded }
 }
 
+/// What one run concluded.
+///
+/// `DryRun` carries a `CheckStatus` rather than its own type, because a dry
+/// run answers the same question `deps check` answers: is the environment
+/// ready. It is a separate variant only so the table can give it its own
+/// column if the codes ever diverge.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Verdict {
+    /// A `deps check` run.
+    Check(CheckStatus),
+    /// A `deps install` run.
+    Install(InstallStatus),
+    /// A `--dry-run` run.
+    DryRun(CheckStatus),
+}
+
+/// A process exit code.
+///
+/// A newtype with a private field, not a `pub enum`. A `pub enum` has public
+/// constructors and `#[non_exhaustive]` restrains only other crates, while
+/// `config-cli` is in this same workspace, so a `pub enum` cannot make
+/// `exit_status` the only constructor. The nine-site provenance regression
+/// this prevents is real, so the mechanism has to work rather than be
+/// documented.
+///
+/// The field is private to this module and no `From`, `new`, or `Default`
+/// impl exists. [`exit_status`] is the sole way to obtain one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExitStatus(u8);
+
+impl ExitStatus {
+    /// The code to hand the process exit.
+    pub fn code(&self) -> u8 {
+        self.0
+    }
+}
+
+/// A compile-fail witness for `ExitStatus`'s private field.
+///
+/// The doctests are `compile_fail`, so `cargo test` fails if the field ever
+/// becomes public or a public constructor appears. That is the mechanism
+/// spec 5.4 requires, and a comment claiming privacy is not.
+///
+/// ```compile_fail
+/// let forged = deps_core::ExitStatus(1);
+/// ```
+///
+/// ```compile_fail
+/// let forged: deps_core::ExitStatus = Default::default();
+/// ```
+#[allow(dead_code)]
+fn exit_status_has_no_public_constructor() {}
+
+/// Map one run's verdict to a process exit code.
+///
+/// The single place this mapping exists. Codes are per-verb disjoint, so a
+/// consumer learning "nonzero and not 2 means the environment is not ready"
+/// is correct for both verbs permanently, and the unused cells allow growth
+/// without renumbering.
+///
+/// Exit 2 means every caller error, matching the repo-wide convention that
+/// `check-deps.sh:109` and `:116` already use and that `deps-docs.test.sh`
+/// relies on as its oracle for "the parser rejected this flag". Narrowing 2
+/// to one condition would break that oracle's semantics.
+pub fn exit_status(result: Result<Verdict, PlanError>) -> ExitStatus {
+    let Ok(verdict) = result else {
+        return ExitStatus(2);
+    };
+    match verdict {
+        Verdict::Check(CheckStatus::Ready) => ExitStatus(0),
+        Verdict::Check(CheckStatus::NotReady) => ExitStatus(1),
+        Verdict::DryRun(CheckStatus::Ready) => ExitStatus(0),
+        Verdict::DryRun(CheckStatus::NotReady) => ExitStatus(1),
+        Verdict::Install(InstallStatus::AllSucceeded) => ExitStatus(0),
+        Verdict::Install(InstallStatus::AttemptFailed) => ExitStatus(3),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Check, DependencyName, InstallAction, NoInstallReason};
+    use crate::{Check, DependencyName, InstallAction, NoInstallReason, PlanError};
     use dotfiles_path::{BoundedText, CommandName, PackageId};
 
     fn command_check(name: &str) -> Check {
@@ -237,5 +316,86 @@ mod tests {
             panic!("the fixture is that variant");
         };
         assert_eq!(check, command_check("rg"));
+    }
+
+    // The table in spec 5.4. Every cell, including the reserved ones,
+    // asserted as one test so a renumbering cannot slip through per-case.
+    #[test]
+    fn the_exit_code_table_holds() {
+        let cases = [
+            (Ok(Verdict::Check(CheckStatus::Ready)), 0),
+            (Ok(Verdict::Check(CheckStatus::NotReady)), 1),
+            (Ok(Verdict::Install(InstallStatus::AllSucceeded)), 0),
+            (Ok(Verdict::Install(InstallStatus::AttemptFailed)), 3),
+            (Ok(Verdict::DryRun(CheckStatus::Ready)), 0),
+            (Ok(Verdict::DryRun(CheckStatus::NotReady)), 1),
+        ];
+        for (verdict, expected) in cases {
+            assert_eq!(
+                exit_status(verdict.clone()).code(),
+                expected,
+                "the wrong code for {verdict:?}"
+            );
+        }
+    }
+
+    // Exit 2 keeps its repo-wide meaning: the caller made a usage error.
+    // Three misuse conditions exit 2 today (check-deps.sh:109 for --only
+    // with no value, :116 for an unknown argument, and --only naming a
+    // nonexistent dependency), clap exits 2 for its own usage errors
+    // deliberately, and deps-docs.test.sh uses exit 2 as its oracle for
+    // "the parser rejected this flag". Narrowing 2 breaks that oracle.
+    #[test]
+    fn every_plan_error_exits_two() {
+        let errors = [
+            PlanError::UnknownDependency {
+                name: DependencyName::parse("ripgpre").expect("a name parses"),
+                did_you_mean: DependencyName::parse("ripgrep").ok(),
+            },
+            PlanError::MalformedSelector {
+                raw: crate::RawSelector::parse("a,,b").expect("a bounded selector parses"),
+            },
+            PlanError::RequirementCycle {
+                chain: vec![
+                    DependencyName::parse("fzf").expect("a name parses"),
+                    DependencyName::parse("ripgrep").expect("a name parses"),
+                ],
+            },
+            PlanError::ManifestVersion { found: 2, supported: 1 },
+        ];
+        for error in errors {
+            assert_eq!(
+                exit_status(Err(error.clone())).code(),
+                2,
+                "every caller error is 2, including {error:?}"
+            );
+        }
+    }
+
+    // The behavior change spec 5.4 makes deliberately.
+    // check-deps.sh:600-602 exits 0 unconditionally on --dry-run, pinned by
+    // check-deps.test.sh:130 ('dry-run always exits 0'). That is a latent
+    // hole: a CI gate on --dry-run passes on a machine with everything
+    // missing. "Would install three things" means "three things are
+    // missing".
+    #[test]
+    fn a_dry_run_with_something_missing_does_not_exit_zero() {
+        assert_eq!(exit_status(Ok(Verdict::DryRun(CheckStatus::NotReady))).code(), 1);
+    }
+
+    // Codes are per-verb disjoint, so a consumer learning "nonzero and not
+    // 2 means the environment is not ready" is correct for both verbs
+    // permanently.
+    #[test]
+    fn nonzero_and_not_two_always_means_not_ready() {
+        let not_ready = [
+            Ok(Verdict::Check(CheckStatus::NotReady)),
+            Ok(Verdict::Install(InstallStatus::AttemptFailed)),
+            Ok(Verdict::DryRun(CheckStatus::NotReady)),
+        ];
+        for verdict in not_ready {
+            let code = exit_status(verdict).code();
+            assert!(code != 0 && code != 2, "the rule requires nonzero and not 2, got {code}");
+        }
     }
 }

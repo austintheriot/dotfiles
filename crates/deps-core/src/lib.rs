@@ -24,8 +24,8 @@ pub use manifest::{
     ConfKind, DependencyName, Manifest, ManifestEntry, ParseError, parse_manifest,
 };
 pub use outcome::{
-    CheckStatus, ExecFailure, InstallStatus, SpawnError, StepOutcome, summarize_check,
-    summarize_install,
+    CheckStatus, ExecFailure, ExitStatus, InstallStatus, SpawnError, StepOutcome, Verdict,
+    exit_status, summarize_check, summarize_install,
 };
 pub use plan::{
     Elevation, Event, PackageCatalog, Plan, PlanError, PrivilegeRequirement, RawSelector,

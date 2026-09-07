@@ -149,6 +149,14 @@ impl Requirements {
     /// of which machine is running. Checking against one platform's manifest
     /// would reject the macOS-absent prerequisite this design depends on.
     ///
+    /// The caller that owns the production requirement table also owns the
+    /// test that matters: it must assert that table validates against the
+    /// union of all four shipped conf files. That test catches a typo which
+    /// neither platform's live run would, because a misspelled prerequisite
+    /// is absent everywhere and therefore looks exactly like the legitimate
+    /// macOS case. No such table exists in this crate, so the test cannot
+    /// live here.
+    ///
     /// # Errors
     ///
     /// Returns every offending edge rather than the first, so one run names

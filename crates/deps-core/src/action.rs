@@ -273,8 +273,17 @@ pub enum PackageAvailability {
     Clone {
         /// The upstream to clone.
         source: CloneSource,
-        /// Where the clone lands. The same value the check reads, so
-        /// convergence is structural rather than hoped for.
+        /// Where the clone lands.
+        ///
+        /// A catalog MUST set this to the same value the dependency's check
+        /// reads, byte for byte, because that equality is what makes
+        /// convergence structural. Nothing here enforces it: the catalog
+        /// that builds this value does not exist yet, and `plan` never
+        /// compares it against the manifest's check. A catalog that points
+        /// the clone at a directory while the check reads a file inside it
+        /// gets a non-converging fixpoint, where the clone succeeds, the
+        /// re-gather still reports absent, and the step has already been
+        /// retired.
         into: CheckPath,
     },
     /// `node`, which installs through nvm rather than a manager.

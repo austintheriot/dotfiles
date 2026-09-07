@@ -98,6 +98,11 @@ COPY --from=builder /build/crates/target/release/config-manifest /usr/local/bin/
 # by name need to reach the runtime stage, which is what keeps this image
 # Rust-free while still exercising ported code.
 COPY --from=builder /build/crates/target/release/tmux-tools /usr/local/bin/tmux-tools
+# config-deps execs this, and deps-docs.test.sh probes every documented
+# flag against it. Without it those probes exit 127, which the suite reads
+# as a rejected flag, so its harvest finds nothing and passes vacuously
+# until the count assertion catches it.
+COPY --from=builder /build/crates/target/release/config-cli /usr/local/bin/config-cli
 
 # A UTF-8 locale is load-bearing, not cosmetic. With no LANG set, tmux treats
 # a tab as non-printable and substitutes "_" in display-message output.

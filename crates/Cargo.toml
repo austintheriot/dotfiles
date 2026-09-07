@@ -11,7 +11,7 @@
 # rather than iterating zero crates.
 [workspace]
 resolver = "3"
-members = ["config-manifest", "dotfiles-path"]
+members = ["config-manifest", "deps-core", "dotfiles-path"]
 
 [workspace.dependencies]
 anyhow = "1.0.104"

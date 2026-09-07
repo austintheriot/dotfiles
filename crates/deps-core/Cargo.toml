@@ -1,0 +1,11 @@
+[package]
+name = "deps-core"
+edition = "2024"
+version = "0.1.0"
+publish = false
+
+# dotfiles-path only, deliberately. An edge to config-manifest would make
+# the dependency domain depend on the git-sync domain and carry its 595-line
+# git module into a crate that never calls it (spec 7.1).
+[dependencies]
+dotfiles-path = { path = "../dotfiles-path" }

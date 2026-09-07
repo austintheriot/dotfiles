@@ -1032,7 +1032,7 @@ mod tests {
         )]);
         let narrowed = Selection::named(vec![dependency("zsh-autosuggestions")]);
 
-        let (_built, events) = plan(
+        let (built, events) = plan(
             &manifest,
             PackageManager::Pacman,
             &narrowed,
@@ -1051,6 +1051,32 @@ mod tests {
             }),
             "a prerequisite the manifest has but the selection excludes is deselected, not absent"
         );
+        // The event alone does not prove blocking: first_unsatisfied_prerequisite
+        // could push PrerequisiteDeselected and still fall through instead of
+        // returning Some, in which case plan would go on to plan a real
+        // GitClone into a directory nobody is going to create. Only the
+        // planned step's shape proves the dependent was blocked, and only
+        // naming oh-my-zsh inside it proves which prerequisite did the
+        // blocking.
+        let step = built
+            .steps
+            .iter()
+            .find(|step| step.dependency == dependency("zsh-autosuggestions"))
+            .expect("the narrowed selection plans a step for zsh-autosuggestions");
+        match &step.action {
+            InstallAction::NotAutomatable {
+                reason: NoInstallReason::PrerequisiteNotYetInstalled { dependency: blocker },
+            } => {
+                assert_eq!(
+                    *blocker,
+                    dependency("oh-my-zsh"),
+                    "the blocked step must name oh-my-zsh, not some other prerequisite"
+                );
+            }
+            other => panic!(
+                "a deselected prerequisite must block with PrerequisiteNotYetInstalled, got {other:?}"
+            ),
+        }
     }
 
     // A cycle is RequirementCycle, not ManifestParse: every line parses.

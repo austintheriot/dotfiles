@@ -369,20 +369,18 @@ assert_equals 'config -- does not dispatch to a sibling script' '' \
     "$(printf '%s' "$actual" | grep -F 'probe:' || true)"
 
 # --- reload -----------------------------------------------------------------
-
-printf '#!/bin/sh\nprintf "tmux:%%s\\n" "$@"\n' > "$shim_dir/tmux"
-chmod 755 "$shim_dir/tmux"
+#
+# config-reload is a shim now, like install and deps: every decision moved
+# to config-cli, so this only has to prove the shim delegates and passes
+# arguments through. The tmux and Alacritty behavior itself is config-cli's
+# own contract, asserted against the built binary in
+# crates/config-cli/tests/reload_behavior.rs.
 
 home=$(make_fixture_home reload)
-actual=$(env -u TMUX HOME="$home" PATH="$shim_dir:$PATH" "$CONFIG" reload 2>/dev/null)
-assert_equals 'reload outside tmux only prints the zsh line' 'source ~/.zshrc' "$actual"
-
-actual=$(TMUX=fake HOME="$home" PATH="$shim_dir:$PATH" "$CONFIG" reload 2>/dev/null)
-assert_equals 'reload inside tmux sources the tmux config first' \
-    "tmux:source
-tmux:$home/.config/tmux/tmux.conf
-reloaded tmux config
-source ~/.zshrc" "$actual"
+actual=$(HOME="$home" PATH="$shim_dir:$PATH" "$CONFIG" reload extra-arg)
+assert_equals 'config reload delegates to config-cli reload and passes args through' \
+    'cli:reload
+cli:extra-arg' "$actual"
 
 assert_equals 'the per-shell tmux source is gone from .zshrc' '' \
     "$(grep -n 'tmux source' "$DOTFILES_ROOT/.zshrc" || true)"

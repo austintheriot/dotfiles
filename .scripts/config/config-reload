@@ -3,28 +3,17 @@
 #
 # usage: config reload
 #
-# Re-sources ~/.config/tmux/tmux.conf when run inside tmux, then prints the
-# line to re-source zsh.
+# Re-sources ~/.config/tmux/tmux.conf when run inside tmux, regenerates the
+# Alacritty platform config, then prints the line to re-source zsh.
 #
-# Takes no options. The zsh half is printed rather than done: a child process
-# cannot re-source the shell that called it, so the line has to be run by
-# that shell.
+# A shim, deliberately. Every decision lives in config-cli, and this file
+# exists so `config reload` resolves through the dispatcher rather than
+# falling through to git, which would silently become `git reload` (not a
+# git verb, so it errors, but a differently-named subcommand could silently
+# do something else).
 set -eu
 
 . "$(dirname "$(readlink -f "$0")")/usage.sh"
 usage_if_requested "${1:-}"
 
-if [ -n "${TMUX:-}" ]; then
-    tmux source "$HOME/.config/tmux/tmux.conf"
-    printf 'reloaded tmux config\n'
-fi
-
-# Alacritty has no conditional import, so the file it imports is generated
-# from this machine's variant. Regenerated here because editing a variant is
-# exactly when it goes stale. Alacritty picks the result up on its own.
-if "$HOME/.scripts/alacritty-platform.sh"; then
-    printf 'regenerated alacritty platform config\n'
-fi
-
-printf 'a child process cannot re-source the calling shell; run the line below\n' >&2
-printf 'source ~/.zshrc\n'
+exec config-cli reload "$@"

@@ -15,6 +15,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 mod deps;
+mod reload;
 
 /// The `config-cli` command line: one subcommand, `deps`.
 #[derive(Parser)]
@@ -43,6 +44,9 @@ enum Command {
         #[command(subcommand)]
         verb: DepsVerb,
     },
+    /// Re-source the tmux config and print the line to re-source zsh.
+    #[command(name = "reload")]
+    Reload(reload::ReloadArgs),
 }
 
 /// A `deps` verb: whether to change anything.
@@ -88,6 +92,7 @@ fn main() -> ExitCode {
 
     match cli.command {
         Some(Command::Deps { verb }) => deps::run(verb),
+        Some(Command::Reload(arguments)) => reload::run(arguments),
         None => {
             // A bare invocation is a usage error, so the help goes to
             // stderr and the exit code stays 2, matching every other usage

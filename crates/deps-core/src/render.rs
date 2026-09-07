@@ -130,6 +130,44 @@ mod tests {
         }
     }
 
+    /// The incident shape: a manual-only dependency, so nothing was
+    /// attempted (`install: AllSucceeded`) and the machine is still not
+    /// ready (`check: NotReady`).
+    fn a_report_that_installed_nothing_and_is_not_ready() -> Report {
+        Report {
+            rows: vec![ReportRow {
+                dependency: crate::DependencyName::parse("nvm").expect("a valid name"),
+                outcome: StepOutcome::NotAutomatable {
+                    reason: crate::NoInstallReason::UpstreamPublishesNoStableUrl,
+                },
+                after: crate::Observation::Absent,
+            }],
+            check: CheckStatus::NotReady,
+            install: InstallStatus::AllSucceeded,
+        }
+    }
+
+    /// The regression test for the reported incident: a bootstrap ended "no
+    /// unresolved failures (16 of 18 were already missing)" and exited 0
+    /// with three dependencies absent. That run flowed through `render`,
+    /// not through a hand-built `Verdict`, so this test exercises the
+    /// `Verb::Install` arm directly rather than the exit table in
+    /// `outcome.rs`, which `render` merely calls.
+    #[test]
+    fn an_install_that_leaves_the_machine_not_ready_renders_exit_code_four() {
+        // Positive control: a ready install must still exit 0, or the
+        // assertion below would hold for a renderer that returns nonzero
+        // for every `Verb::Install` call regardless of readiness.
+        assert_eq!(render(&a_ready_report(), Verb::Install).exit_code, 0);
+
+        let rendered = render(&a_report_that_installed_nothing_and_is_not_ready(), Verb::Install);
+        assert_eq!(
+            rendered.exit_code, 4,
+            "every attempt succeeded but the machine is not ready, which is code 4, \
+             not 0 (success) and not 3 (an attempt failed)"
+        );
+    }
+
     /// A ready check reports success on stdout and exits 0.
     #[test]
     fn a_ready_check_renders_to_stdout_and_exits_zero() {

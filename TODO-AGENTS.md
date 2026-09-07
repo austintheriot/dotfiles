@@ -452,6 +452,23 @@ research agent and once independently.
 
 # DEFERRED TODOS
 
+- Bootstrapping from a prebuilt binary instead of a local compile.
+  `config-build` stays shell (see
+  `docs/superpowers/specs/2026-09-07-config-subcommand-ports-design.md`
+  section 3.2) because it would otherwise be a subcommand of the binary it
+  builds, so a machine with no binary could not build one. The more
+  interesting answer is that a fresh machine should get its first binary from
+  a release artifact, which is also what
+  `2026-09-07-config-cli-adapter-design.md` section 8.2 does for the
+  bootstrap Docker images: it injects a prebuilt binary through a seam at
+  `bootstrap-curl-entrypoint.sh:45` rather than adding a Rust toolchain to
+  an image whose bareness is the property under test. If that approach is
+  adopted, `config-build` stops being load-bearing for a fresh machine and
+  the stays-shell decision is worth revisiting. Also relevant: `rustup` is
+  itself a manifest entry (`deps.conf:35`), so anything that installs a
+  toolchain in order to bootstrap pre-satisfies a dependency the run exists
+  to exercise.
+
 - CI warning "aws/tap is not trusted" on macos-latest: investigated,
   no repo-side fix wanted. Recorded so it is not re-researched.
   Cosmetic, and not caused by anything in this repo. The runner image's

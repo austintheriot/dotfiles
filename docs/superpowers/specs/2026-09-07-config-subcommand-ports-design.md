@@ -68,7 +68,7 @@ output byte-for-byte against
 becomes a subcommand of the binary it builds, then a machine with no binary
 cannot build one.
 
-Two ways out, and the plan must pick one explicitly:
+Three ways out, decided below:
 
 - **Keep `config-build` shell**, on the same pre-toolchain reasoning that
   keeps `config-init`. Simplest, and consistent with 7.2's existing entries.
@@ -77,9 +77,19 @@ Two ways out, and the plan must pick one explicitly:
   spec rejects for the deps images on the grounds that a fallback can pass
   having tested the path being deleted.
 
-**Recommendation: keep `config-build` shell** and add it to 7.2's table with
-this reasoning. The circularity is the same shape as `config-stamp`'s, which
-8.1 already resolved the same way.
+**Decision: keep `config-build` shell** and add it to 7.2's table with this
+reasoning. The circularity is the same shape as `config-stamp`'s, which 8.1
+already resolved the same way, and a fallback path would let the gate pass
+having exercised the path being deleted.
+
+**Recorded as a future direction, not part of this step:** the third option
+(port it and have a fresh machine get its first binary from a release
+artifact rather than a local compile) is the more interesting long-term
+answer, and it interacts with the adapter spec's section 8.2, which already
+injects a prebuilt binary into the bootstrap images for exactly this reason.
+If prebuilt-binary bootstrapping is adopted there, `config-build` stops being
+load-bearing for a fresh machine and this decision is worth revisiting.
+Tracked in `TODO-AGENTS.md`.
 
 ### 3.3 `config-doctor` is already a shim and should simply go
 

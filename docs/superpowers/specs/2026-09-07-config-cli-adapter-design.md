@@ -137,6 +137,19 @@ The same rule generalises: every non-interactivity flag the engine depends on
 builds, and its test must run with the environment stripped rather than
 prepared.
 
+**The compensating fixture is still in place today, and this step deletes
+it.** Verified: `check-deps.sh:89-90` exports the variable in the engine, and
+`Dockerfile.ubuntu:46` **still** sets `ENV DEBIAN_FRONTEND=noninteractive`.
+So the image that hid the original hang would hide a regression of it right
+now. Removing that line belongs here rather than as a standalone fix, because
+this step rewrites the apt installer and can land the deletion together with
+the test that proves the engine no longer needs it.
+
+The image is not dead code, which I initially believed: `test-local.sh:61`
+builds it on every local run through a `for image in ubuntu arch` loop, and
+`deps-harness.test.sh:130` pins its `ENTRYPOINT` and `CMD`. It stays; only
+the `ENV` line goes.
+
 ## 5. What changes on disk
 
 | Path | Change |
@@ -309,21 +322,91 @@ the script's:
    disjoint codes, exit 2 for every `PlanError`, and `NotSelected` counting
    as not-ready.
 
-## 10. Open questions
+## 10. Decisions taken after the first draft
 
-**Where does the requirement graph come from?** `Requirements` has no
-production populator; every real caller passes `none()`. The fixpoint's
-ordering evidence *is* a requirement relationship (`oh-my-zsh` before
-`zsh-autosuggestions`), so something must state it. The manifest format is
-`name|check_command|docs_url` with no requires column, and `deps.conf:18-20`
-says in the file itself that no ordering is guaranteed. Three options, none
-chosen here: a fourth manifest column, a separate graph file, or a hardcoded
-table in `config-cli` for the two known pairs. **This is the first question
-the implementation plan must answer.**
+### 10.1 The requirement graph: a hardcoded table, and the platform condition dissolves
 
-**What owns `PathRoot::OhMyZshCustom`?** Unused across the whole conf corpus.
-`check-deps.sh:338-339` is where it would come from, which is this step's
-territory.
+The first draft left this open. A consult plus direct reading of
+`plan.rs` settles it, and the interesting part is that **the question was
+posed wrongly**.
+
+I described the edge as platform-conditional: `node` always needs `nvm`, but
+`zsh-autosuggestions` needs `oh-my-zsh` only on Linux, because on macOS it
+installs through brew. That framing implied a graph format expressive enough
+to hold a platform condition, which is what made options 2 and 3 look
+necessary.
+
+**The edge is unconditional. The manifest selection already carries the
+platform condition.** Verified in `plan.rs:395-401`:
+`first_unsatisfied_prerequisite` treats a prerequisite that is absent from
+the manifest as **not an error**, and its comment names this exact case:
+`oh-my-zsh` lives in `deps-linux.conf:12` and is legitimately absent on
+macOS. So on macOS the edge is simply not blocking, with no condition
+anywhere.
+
+Encoding the platform a second time in the graph would be a redundant
+condition that can disagree with the manifest.
+
+So the production table is two unconditional, platform-blind pairs:
+
+```
+node                 -> [nvm]
+zsh-autosuggestions  -> [oh-my-zsh]
+```
+
+**Decision: `config-cli` holds that table in Rust.**
+
+Three reasons, in order:
+
+1. **The graph is not manifest data.** It is knowledge about install
+   mechanics that already lives in code, beside the install-command table.
+   `check-deps.sh:346-352` decides zsh-autosuggestions' install shape per
+   manager and `:383-386` decides node's per nvm presence; the prerequisite
+   is the same fact those branches already encode. A separate file splits one
+   fact across two artifacts that can drift, with nothing to catch it, which
+   is the failure `deps-ci.conf:8-12` documents about a duplicated list.
+2. **`Requirements` is the contract, and it is already right.** It is
+   opaque and constructor-only, so `plan` cannot tell a hardcoded table from
+   a parsed file. The graph's source is an implementation detail of the
+   caller. The boundary that survives a rewrite is `Requirements`, not the
+   format feeding it, so pick the cheapest producer.
+3. **"A new edge needs a code change" is a feature at this size.** Every
+   existing edge already required a code change to the install-command table.
+   Revisit only past roughly ten edges, or if a manifest ever comes from
+   outside this repo.
+
+**Inference from check strings is rejected on evidence.** `tpm`'s check is
+`[ -d "$HOME/.tmux/plugins/tpm" ]`, and the only thing creating that path is
+`tpm`'s own install at `check-deps.sh:345`. So path matching finds a self
+edge or nothing, while a human sees that `tpm` requires `tmux`. It also fails
+inversely: `alacritty`'s check names `/Applications/Alacritty.app`, which no
+entry installs. And it reverses silently, since fixing a typo in a check
+string would delete an edge with no error. That makes check strings
+load-bearing for ordering, on a field whose documented contract
+(`deps.conf:2`) is "a shell command".
+
+**One correction to my own framing.** I called the requirement graph "dead
+weight" because nothing populates it. That was wrong: `PrerequisiteNotSelected`
+and `RequirementCycle` are contract shape, and `topological_order` is what
+removes the 925-line ordering defect. Only the *producer* was missing.
+
+### 10.2 `PathRoot::OhMyZshCustom` becomes live here
+
+Unconstructed across the whole conf corpus today. `check-deps.sh:338-341`
+clones zsh-autosuggestions into `$ZSH_CUSTOM`, so this step's installer is
+exactly the construction site the variant was added for. It becomes live in
+this step rather than being deleted and re-added.
+
+Contrast with the two variants deleted this session (`22be72be`,
+`628a7f83`): those were unconstructible by the type system or by the grammar.
+This one is merely unconstructed pending its consumer.
+
+### 10.3 Documentation debt this step creates
+
+`deps.conf:17-20` says "no ordering between it and zsh-autosuggestions is
+guaranteed here." Once the Rust planner holds the table, ordering **is**
+guaranteed, and that comment understates the guarantee. It must be updated in
+the same commit that adds the table.
 
 ## 11. Consequences
 

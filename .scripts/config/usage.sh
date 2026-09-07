@@ -29,9 +29,32 @@ usage_if_requested() {
     esac
 }
 
+# Prints the `# usage:` block out of a script, defaulting to the caller's own.
+#
+# The subject is an argument with a default rather than a bare read of $0, so
+# the function is callable against a named file and therefore testable without
+# a second copy of the script under a new name.
+#
+# Unlike the one-line description, this cannot delegate to
+# `<script> --describe`: print_usage runs inside the very script whose block
+# it prints, and reading that script is the point. So the text-file assumption
+# stays, and the guard below is what keeps it from failing silently. A shell
+# subcommand rewritten as a binary that still sources this helper is the
+# mistake worth naming: without the guard, sed writes "RE error: illegal byte
+# sequence" to stderr and the reader gets empty help.
+#
+# `grep -qI ''` is the text-file probe. -I makes grep treat a binary file as a
+# non-match, and the empty pattern matches every line of any file that has
+# lines, so a match means "text and non-empty". LC_ALL=C pins the binary
+# determination so it does not vary with the caller's locale.
 print_usage() {
-    script=$(readlink -f "$0")
-    sed -n '/^# usage:/,/^[^#]/p' "$script" \
+    usage_script=$(readlink -f "${1:-$0}")
+    if ! LC_ALL=C grep -qI '' "$usage_script" 2>/dev/null; then
+        printf '%s: not a text file, so it has no "# usage:" block to print\n' \
+            "$usage_script" >&2
+        return 1
+    fi
+    sed -n '/^# usage:/,/^[^#]/p' "$usage_script" \
         | sed -e '/^[^#]/d' \
         | awk '/^# ---/ { exit } { print }' \
         | sed -e 's/^# \{0,1\}//'
@@ -50,6 +73,6 @@ print_usage() {
 # subcommand carries that comment and the README tells contributors to add
 # one, so a second copy here would be the copy that drifts.
 print_describe() {
-    script=$(readlink -f "${1:-$0}")
-    sed -n 's/^# help: //p' "$script" | head -1
+    describe_script=$(readlink -f "${1:-$0}")
+    sed -n 's/^# help: //p' "$describe_script" | head -1
 }

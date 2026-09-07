@@ -315,4 +315,119 @@ described=$(. "$CONFIG_DIR/usage.sh" && print_describe "$describe_fixture")
 assert_equals 'print_describe reads the file it is given' \
     'A description read from an argument' "$described"
 
+
+# --- the listing consumes --describe -----------------------------------------
+
+# The listing asks each subcommand rather than reading it. A subcommand that is
+# a compiled binary has no `# help:` line to grep, and grepping one anyway put
+# "sed: RE error: illegal byte sequence" on stderr and an empty description in
+# the column.
+listing=$(run_config help 2>/dev/null)
+assert_succeeds 'config help prints a listing' test -n "$listing"
+
+# Every real subcommand's description still reaches the column. This is the
+# regression guard on the switch itself: the listing has to say the same thing
+# it said when it was grepping source.
+undescribed=''
+for sub in $ALL_SUBCOMMANDS; do
+    described=$(run_config "$sub" --describe 2>/dev/null)
+    [ -n "$described" ] || { undescribed="$undescribed $sub"; continue; }
+    printf '%s\n' "$listing" | grep -qF "$described" \
+        || undescribed="$undescribed $sub"
+done
+assert_equals 'config help prints every subcommand description' '' \
+    "$undescribed"
+
+assert_equals 'the listing has no undocumented entries of its own' '' \
+    "$(printf '%s' "$listing" | grep -F '(undocumented)' || true)"
+
+# The odd-shaped siblings run against a copy of the directory rather than the
+# real one. config-help resolves its siblings from its own $0, so a copy is a
+# faithful harness, and a stray config-* in the real .scripts/config would
+# change what every other suite counts there.
+listing_dir="$FIXTURES/listing-dir"
+mkdir -p "$listing_dir"
+cp "$CONFIG_DIR/config-help" "$CONFIG_DIR/usage.sh" "$listing_dir/"
+
+# A binary subcommand, standing in for the first ported one. Not a shell
+# script: the point is that the listing works on a file no sed can read. `cp`
+# of a real binary rather than a crafted file, so the bytes are whatever a
+# compiler actually emits.
+if [ -x /bin/echo ]; then
+    cp /bin/echo "$listing_dir/config-fixturebin"
+    chmod 755 "$listing_dir/config-fixturebin"
+    # /bin/echo answers --describe by printing "--describe", which is one line
+    # on stdout with exit 0. That satisfies the contract, which is what makes
+    # it usable as a stand-in here: the assertion under test is that the
+    # listing reads stdout and emits no sed error, not what the text says.
+    output=$("$listing_dir/config-help" 2>&1)
+    assert_contains 'config help lists a binary subcommand' 'fixturebin' \
+        "$output"
+    assert_equals 'a binary subcommand produces no sed error in the listing' \
+        '' "$(printf '%s' "$output" | grep -F 'illegal byte sequence' || true)"
+    assert_equals 'a binary subcommand produces no sed error at all' '' \
+        "$(printf '%s' "$output" | grep -F 'sed:' || true)"
+    rm -f "$listing_dir/config-fixturebin"
+else
+    skip '/bin/echo is missing, so there is no binary to stand in for a ported subcommand'
+fi
+
+# A config-* sibling that is not executable cannot be reached through the
+# dispatcher (.scripts/config/config requires -x before it execs), so the
+# listing cannot execute it either. It must degrade to (undocumented) rather
+# than emitting a not-found error into the column.
+printf '#!/bin/sh\n# help: never runs\n' > "$listing_dir/config-fixtureinert"
+chmod 644 "$listing_dir/config-fixtureinert"
+output=$("$listing_dir/config-help" 2>&1)
+assert_contains 'config help still lists a non-executable sibling' \
+    'fixtureinert' "$output"
+assert_contains 'a non-executable sibling is marked undocumented' \
+    '(undocumented)' "$output"
+assert_equals 'a non-executable sibling produces no exec error' '' \
+    "$(printf '%s' "$output" | grep -iE 'permission denied|not found' || true)"
+# The `# help:` line is present and would be found by a source grep, so the
+# assertion above only means anything while the description does not come from
+# reading the file.
+assert_equals 'the non-executable sibling is described by asking, not reading' \
+    '' "$(printf '%s' "$output" | grep -F 'never runs' || true)"
+rm -f "$listing_dir/config-fixtureinert"
+
+# --- print_usage does not degrade silently -----------------------------------
+
+# print_usage reads $0, so it cannot delegate to a subprocess the way the
+# listing now does: the whole point is that it prints the block out of the
+# script the reader asked about. What it can stop doing is printing an empty
+# block plus a sed error. A shell subcommand rewritten as a binary without
+# porting its help surface is the mistake this catches.
+#
+# The subject is passed as an argument. $0 for a sourced function is the
+# script it was sourced into, so `sh -c '...' _ ...` gives $0 the value `_`,
+# and an argument is the only way to name a subject at all.
+
+# Positive control: pointed at a text script, print_usage prints that script's
+# block. Without this, the failure assertions below pass when the call is
+# simply broken.
+text_output=$(sh -c '. "$1/usage.sh"; print_usage "$2"' \
+    _ "$CONFIG_DIR" "$CONFIG_DIR/config-help" 2>&1) || true
+assert_contains 'print_usage prints the block of the file it is given' \
+    'usage: config help' "$text_output"
+
+if [ -x /bin/echo ]; then
+    binary_subject="$FIXTURES/binary-usage-subject"
+    cp /bin/echo "$binary_subject"
+    chmod 755 "$binary_subject"
+    binary_output=$(sh -c '. "$1/usage.sh"; print_usage "$2"' \
+        _ "$CONFIG_DIR" "$binary_subject" 2>&1) || true
+    assert_equals 'print_usage on a binary emits no sed error' '' \
+        "$(printf '%s' "$binary_output" | grep -F 'illegal byte sequence' || true)"
+    assert_contains 'print_usage on a binary says what went wrong' \
+        'not a text file' "$binary_output"
+    sh -c '. "$1/usage.sh"; print_usage "$2"' \
+        _ "$CONFIG_DIR" "$binary_subject" >/dev/null 2>&1
+    status=$?
+    assert_equals 'print_usage on a binary returns non-zero' '1' "$status"
+else
+    skip '/bin/echo is missing, so there is no binary to point print_usage at'
+fi
+
 finish

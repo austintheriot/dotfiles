@@ -1,5 +1,5 @@
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use anyhow::Context;
@@ -166,12 +166,12 @@ fn read_pushed_stamps<R: Read>(mut input: R) -> anyhow::Result<Vec<(String, Stri
 /// crate must not enter `verify()` on either side, since entering it only
 /// on the pushed side would render it `NotBuilt` for a crate no binary was
 /// ever going to report.
-fn has_installed_binary(root: &PathBuf, crate_name: &str) -> bool {
+fn has_installed_binary(root: &Path, crate_name: &str) -> bool {
     root.join("crates").join(crate_name).join("src/main.rs").is_file()
 }
 
 /// Probes the installed binary for one crate's build-time stamp.
-fn built_stamp_for(root: &PathBuf, crate_name: &str) -> Option<String> {
+fn built_stamp_for(root: &Path, crate_name: &str) -> Option<String> {
     // Defaults to $HOME/.local/bin, matching config-build:37, which is the
     // script that decides where binaries go. This read used to default to
     // `root.join(".local/bin")`, and $DOTFILES_ROOT is $HOME on a developer

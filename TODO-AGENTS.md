@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- nvim: treesitter is configured for `master` while pinned to `main`, so
+- CLAIMED 2026-09-08. nvim: treesitter is configured for `master` while pinned to `main`, so
   most of it is silently off. Found 2026-09-08 while investigating
   determinism.
   nvim-treesitter is pinned to `main` (the rewrite) in lazy-lock.json, but

@@ -156,20 +156,24 @@ jobs:
               # leg installed the broken tarball and passed on these very
               # assertions.
               #
-              # -u NONE so the answer is about the INSTALL, not this repo's
-              # config: a config error would otherwise read as a broken
-              # runtime, which is the wrong layer and the wrong fix.
+              # -u NONE so the answer is about the INSTALL rather than about
+              # the config in this repo: a config error would otherwise read
+              # as a broken runtime, which is the wrong layer and the wrong
+              # fix.
               #
               # nvim_get_runtime_file is the same lookup every `require` and
               # `:syntax on` performs, so it fails exactly when they would. A
               # plain isdirectory check would pass on a tree that exists but
               # is no longer on runtimepath.
-              facts=$(nvim --headless -u NONE -c 'lua
-                  local rt = vim.env.VIMRUNTIME or ""
-                  local dir = rt ~= "" and vim.fn.isdirectory(rt) == 1
-                  local found = #vim.api.nvim_get_runtime_file("syntax/syntax.vim", false) > 0
-                  io.write(rt .. "|" .. tostring(dir) .. "|" .. tostring(found))
-              ' -c 'qa!' 2>/dev/null)
+              # ONE LINE, and NO APOSTROPHE ANYWHERE BELOW, comments
+              # included. The whole container command is a single-quoted
+              # sh -c argument, so any single quote in here closes it early.
+              # The first version wrapped the Lua in single quotes and the
+              # step died with exit code 127 and no output at all, before
+              # the assertion could run. Local testing missed it because the
+              # snippet was tried with double quotes standalone rather than
+              # nested inside the real command.
+              facts=$(nvim --headless -u NONE -c "lua local rt = vim.env.VIMRUNTIME or \"\"; local dir = rt ~= \"\" and vim.fn.isdirectory(rt) == 1; local found = #vim.api.nvim_get_runtime_file(\"syntax/syntax.vim\", false) > 0; io.write(rt .. \"|\" .. tostring(dir) .. \"|\" .. tostring(found))" -c "qa!" 2>/dev/null)
               echo "runtime facts: $facts"
               case $facts in
                   *"|true|true") ;;

@@ -204,52 +204,6 @@ conversation rather than a commit.
   here is a wall of `present` rows where only the exceptions matter, and
   colouring all 17 green defeats the purpose.
 
-- Switch the deps engine over to reading the TOML manifests, then delete the
-  `.conf` files and `parse_manifest`.
-  Both forms ship today. `deps/*.toml` is the format and `deps/*.conf` is
-  what the engine actually reads; `crates/config-cli/src/deps/catalog.rs`
-  embeds both and its
-  `every_toml_manifest_is_equivalent_to_its_pipe_manifest` test compares all
-  22 entries as PARSED values, so the two cannot drift silently.
-  CORRECTION to the earlier version of this entry, which said the untracked
-  hand-edited `deps-local.conf` was the hard part. It is not a factor:
-  `deps-local.conf` is RETIRED. No Rust source constructs that name (grep
-  confirms), no such file exists on this machine, `variant_file_name()` in
-  `crates/config-cli/src/deps/selection.rs:45-46` returns the TRACKED
-  `deps-mac.conf` / `deps-linux.conf`, and both `tests/deps-docs.test.sh:263`
-  and `tests/deps-harness.test.sh:456` assert the name is gone from the
-  README. `DEPS_LOCAL_CONF` survives as an env override taking a full path,
-  so it is extension-agnostic. The only live traces are stale prose in
-  `deps/deps.conf:5` and `:19`, which the deletion removes anyway, plus one
-  line copied into `deps/deps.toml:4` that should say `.toml`.
-  The functional edits, each verified present:
-    - `catalog.rs:50-53` point `SHIPPED_CONF_FILES` at the `.toml` files and
-      call `parse_manifest_toml`; drop the `#[cfg(test)]` from
-      `SHIPPED_TOML_FILES` (a comment there says so).
-    - `selection.rs:45-46` and `:154` are the three hardcoded stems
-      (`deps.conf`, `deps-mac.conf`, `deps-linux.conf`).
-    - `.github/workflows/test-suite.yml:142` sets `DEPS_CONF: deps-ci.conf`,
-      which `tests/deps-harness.test.sh` asserts.
-  THE REAL WORK is three test suites that parse the manifest format in shell,
-  which TOML has no line-oriented equivalent for:
-    - `tests/deps-docs.test.sh:194` and `tests/deps-manifest.test.sh:151` and
-      `tests/nvim-mason-runtimes.test.sh:91` all get the name list with
-      `cut -d'|' -f1`.
-    - `tests/deps-manifest.test.sh:56` gets ONE entry's check field with
-      `grep "^$1|" | cut -d'|' -f2`. This is the hard one: a check is now a
-      named key, possibly a nested `any_of` list, so there is no field to cut.
-  No production shell parses the manifests -- only these suites -- so the
-  options are all test-side. Prefer adding a read-only reporting subcommand
-  (`config deps list --names`, and a way to ask one entry's check) so the
-  suites ask the engine that already owns the parser, rather than standing up
-  a second parser in shell or python. The pipe format's rules lived in prose
-  and the shell parsers had to be trusted to honour them; that is the shape
-  the TOML move exists to end. Cost to weigh: a CLI subcommand is a contract
-  to keep stable.
-  Once nothing reads them: delete the four `.conf` files, `parse_manifest`,
-  its `WrongFieldCount` and `DuplicateName` variants, and the equivalence
-  test, which has no second side left to compare.
-
 - Latent, no live trigger today: several path-handling gaps share one
   cause, that git quotes unusual paths and the quoted form matches no
   pathspec when fed back. No tracked path currently contains a space or a

@@ -129,6 +129,47 @@ declared_count=$(grep -E '^        [a-z_][a-z_0-9]* = (\{|nil|true|false)' "$LSP
 assert_equals 'every server declared in the file survives the ranged parse' \
     "$declared_count" "$server_count"
 
+# --- no plugin build hook depends on lazy.nvim being set up -------------
+#
+# THE BUG THIS CATCHES, reported 2026-09-08 from a bare ubuntu container:
+#
+#   markdown-preview.nvim ... build failed
+#   Vim:E492: Not an editor command: Lazy load markdown-preview.nvim
+#
+# `:Lazy` is a USER COMMAND that lazy.nvim creates during its own setup. A
+# `build` hook running during the first bootstrap sync can execute before
+# that command exists, so the plugin never builds on a fresh machine. It is
+# silent afterwards: nothing re-runs the hook, so the missing artifact only
+# surfaces when the feature is first used, possibly months later. Confirmed
+# not container-specific -- the build artifact is absent on the mac too.
+#
+# lazy.nvim already loads a plugin before running its build hook, so the
+# command was never needed.
+#
+# Lua comments are stripped before matching. Both specs now EXPLAIN this bug
+# in a comment above the build hook, and a raw grep read that prose as the
+# violation it was describing -- the same trap the alacritty and workflow
+# suites already document.
+plugin_code=$(cat "$NVIM_LUA"/plugins/*.lua 2>/dev/null | sed -e 's/--.*//')
+assert_succeeds 'the plugin specs were read' test -n "$plugin_code"
+assert_equals 'no build hook invokes the :Lazy user command' '' \
+    "$(printf '%s\n' "$plugin_code" | grep -n 'vim\.cmd.*Lazy ' || true)"
+
+# The interactive-terminal half of the same defect. markdown-preview's
+# `mkdp#util#install()` with no argument routes through
+# `mkdp#util#open_terminal` and opens a terminal split, which cannot work in
+# a headless or non-interactive bootstrap. Upstream ships
+# `mkdp#util#install_sync()` for exactly that case.
+#
+# Asserted as "if the install function is called at all, it is the sync
+# variant", so removing the plugin does not leave an assertion that passes
+# by finding nothing.
+mkdp_calls=$(printf '%s\n' "$plugin_code" | grep -n "mkdp#util#install" || true)
+if [ -n "$mkdp_calls" ]; then
+    assert_equals 'the markdown-preview install call is the sync variant' '' \
+        "$(printf '%s\n' "$mkdp_calls" | grep -v 'install_sync' || true)"
+fi
+
 # --- every linter the config invokes actually gets installed ------------
 #
 # THE GAP THIS CLOSES, found 2026-09-08 on a freshly bootstrapped container.

@@ -279,16 +279,50 @@ pub fn packages() -> PackageCatalog {
 ///
 /// Returns every edge that names a dependency absent from `known`, rather
 /// than the first, so one run names every typo.
+/// Every prerequisite edge, as dependent-to-prerequisites pairs.
+///
+/// A pair here says "the dependent's install reads something the
+/// prerequisite creates", which is stronger than "these are related". Both
+/// edges below are that: each dependent's install command names a path the
+/// prerequisite writes.
+const EDGES: &[(&str, &[&str])] = &[
+    // The plugin clones into $HOME/.oh-my-zsh/custom, which does not exist
+    // until oh-my-zsh does. deps.conf:18-20 states in the file that no
+    // ordering between the two is guaranteed there, and this supplies it.
+    ("zsh-autosuggestions", &["oh-my-zsh"]),
+    // node installs by sourcing $HOME/.nvm/nvm.sh. Without the edge the
+    // planner attempted node in the same wave nvm was still missing and the
+    // step failed with `sh: 1: .: cannot open /home/tester/.nvm/nvm.sh`,
+    // reported as an install failure (exit 3) on every bootstrap leg.
+    //
+    // nvm is UpstreamPublishesNoStableUrl, so it is manual-only and never
+    // installs unattended. The edge does not fix that; it makes the
+    // consequence honest. node becomes a blocked step naming nvm rather than
+    // an attempted install that could not have worked, which is the
+    // difference between "this machine needs nvm installed by hand" and "the
+    // node install is broken".
+    ("node", &["nvm"]),
+];
+
 pub fn requirements(
     known: &BTreeSet<DependencyName>,
 ) -> Result<Requirements, Vec<UnknownRequirementEdge>> {
-    let Some(dependent) = dependency_name("zsh-autosuggestions") else {
-        return Ok(Requirements::none());
-    };
-    let Some(prerequisite) = dependency_name("oh-my-zsh") else {
-        return Ok(Requirements::none());
-    };
-    Requirements::validated(vec![(dependent, vec![prerequisite])], known).map_err(|edges| {
+    // A name that will not parse is a typo in this file, not a fact about the
+    // machine, and `validated` below reports an unknown name anyway. Skipping
+    // the edge keeps this function total without inventing a second error
+    // path for a case the constructor already owns.
+    let mut pairs = Vec::new();
+    for (dependent, prerequisites) in EDGES {
+        let Some(dependent) = dependency_name(dependent) else {
+            continue;
+        };
+        let named: Vec<_> = prerequisites.iter().filter_map(|name| dependency_name(name)).collect();
+        if named.len() == prerequisites.len() {
+            pairs.push((dependent, named));
+        }
+    }
+
+    Requirements::validated(pairs, known).map_err(|edges| {
         edges
             .into_iter()
             .map(|edge| UnknownRequirementEdge {
@@ -458,6 +492,30 @@ mod tests {
         assert!(known.contains(&name("pyyaml")), "deps-ci.conf entries are present");
 
         requirements(&known).expect("the production requirement table must validate");
+    }
+
+    /// Every edge the table declares, by content.
+    ///
+    /// `validated` proves the names exist; it cannot prove an edge is
+    /// present. `requirements` skips a pair whose name will not parse, so a
+    /// dropped edge leaves a table that still validates and still plans, and
+    /// the only symptom is a dependent installed before its prerequisite --
+    /// which is what the node/nvm edge was added to stop.
+    #[test]
+    fn the_table_declares_the_edges_the_manifests_need() {
+        let known = every_shipped_dependency();
+        let table = requirements(&known).expect("the production table validates");
+
+        assert_eq!(
+            table.prerequisites(&name("zsh-autosuggestions")),
+            [name("oh-my-zsh")],
+            "the plugin clones into a directory oh-my-zsh creates"
+        );
+        assert_eq!(
+            table.prerequisites(&name("node")),
+            [name("nvm")],
+            "node installs by sourcing nvm.sh"
+        );
     }
 
     /// The union test's own control: a misspelled edge is rejected.

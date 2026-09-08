@@ -2,6 +2,35 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- When running on Pop OS, when I open Alacritty, `zsh` does not get set as the default shell, so I have to open it manually before running `s code`. We should automate this in our pipeline if possible
+- Failure when running in Ubuntu or Debian Docker containers:
+```
+Cloning into bare repository '/root/.cfg'...
+remote: Enumerating objects: 6164, done.
+remote: Counting objects: 100% (2051/2051), done.
+remote: Compressing objects: 100% (1021/1021), done.
+remote: Total 6164 (delta 1265), reused 1710 (delta 976), pack-reused 4113 (from 1)
+Receiving objects: 100% (6164/6164), 3.72 MiB | 7.42 MiB/s, done.
+Resolving deltas: 100% (3594/3594), done.
+setup.sh: moved aside .profile
+setup.sh: 1 pre-existing file(s) kept in /root/.dotfiles-backup-20260908184747
+Already on 'main'
+config init: [1/4] set status.showUntrackedFiles to no
+config init: [2/4] link the git hooks and put config on PATH
+/root/.cfg/hooks/pre-commit -> /root/tests/pre-commit
+/root/.cfg/hooks/pre-push -> /root/tests/pre-push
+/root/.local/bin/config -> /root/.scripts/config/config
+config init: [3/4] install the missing tracked dependencies
+/root/.scripts/config/config-install: 13: exec: config-cli: not found
+
+config init: the install step failed
+config init: the repo is cloned, the hooks are linked, and config is on PATH
+config init: fix the package manager, then run:
+config init:   /root/.scripts/config/config-install && /root/.scripts/config/config-build
+config init: (or `config install` and `config build`, once /root/.local/bin is on your PATH)
+root@7a8865f6f485:/#
+```
+
 Swept 2026-09-08 against live code, checking the exact file:line each entry
 cited rather than trusting the entry. Twelve items were already fixed by the
 2026-09-06 and 2026-09-07 plan work, which resolved them without removing
@@ -15,26 +44,6 @@ Every BLOCKER from that survey pass is now closed. What is left is a mix of
 small mechanical fixes, two latent path-handling gaps with no live trigger,
 two config-manifest design decisions, and several items that need a
 conversation rather than a commit.
-
-- CLAIMED 2026-09-08. Capture stdout on a failed install, not only stderr.
-  `ExecFailure::NonZeroExit` (`crates/deps-core/src/outcome.rs:32-37`) carries
-  `code` and `stderr` and nothing else, so `describe_cause`
-  (`crates/deps-core/src/render.rs:145-151`) can only report
-  "exited 1 with no output on stderr" when a script explains itself on
-  stdout.
-  That cost real time on 2026-09-08. Four bootstrap legs failed with exactly
-  that message, and the actual cause -- oh-my-zsh's installer printing
-  "Zsh is not installed. Please install zsh first." and exiting 1 -- was
-  visible only by running the script by hand in a container. Verified: that
-  script writes zero bytes to stderr. The engine had the explanation and
-  discarded it.
-  Not a big change, but it is not a one-liner either: `NonZeroExit` gains a
-  `stdout: BoundedText` field, which touches the type, every construction
-  site, and every match arm. `BoundedText` already exists for exactly this
-  bounding problem, so the shape is settled.
-  Worth pairing with a decision about precedence in the rendered line: prefer
-  stderr when both are non-empty, fall back to stdout, and say which stream
-  a message came from so a reader knows where to look next.
 
 - Remove the Nord theme from tmux. KEEP the status bar; make its background
   black.

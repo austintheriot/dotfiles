@@ -40,6 +40,21 @@ case ":$PATH:" in
     *) PATH="$HOME/.local/bin:$PATH" ;;
 esac
 
+# rustup installs cargo to ~/.cargo/bin, which a caller with a minimal PATH
+# does not carry. Without this the two cargo suites below report "cargo not
+# found" and skip on a machine that has a toolchain -- a gate that passes
+# because it measured nothing.
+#
+# Guarded on the binary rather than on the directory name, so a machine with
+# no toolchain still takes the skip path instead of prepending a directory
+# that holds nothing.
+if [ -x "$HOME/.cargo/bin/cargo" ]; then
+    case ":$PATH:" in
+        *":$HOME/.cargo/bin:"*) ;;
+        *) PATH="$HOME/.cargo/bin:$PATH" ;;
+    esac
+fi
+
 quiet=0
 only=''
 for arg in "$@"; do

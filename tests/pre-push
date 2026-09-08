@@ -228,6 +228,21 @@ if [ ! -x "$HOME/tests/rust-checks.sh" ]; then
     exit 1
 fi
 
+# git runs a hook with a minimal PATH that omits ~/.cargo/bin, so rust-checks.sh
+# reported "cargo not found" and skipped on machines that do have a toolchain --
+# a gate that passed because it measured nothing. Set here rather than inside
+# rust-checks.sh: that script must keep taking PATH at its word, because
+# rust-gate.test.sh proves the toolchain-less skip by running it with
+# PATH=/nonexistent, and a script that reaches past PATH to $HOME would make
+# that simulation meaningless.
+if [ -x "$HOME/.cargo/bin/cargo" ]; then
+    case ":$PATH:" in
+        *":$HOME/.cargo/bin:"*) ;;
+        *) PATH="$HOME/.cargo/bin:$PATH" ;;
+    esac
+    export PATH
+fi
+
 for ref in $push_refs; do
     if ! "$HOME/tests/rust-checks.sh" "$ref"; then
         printf '\npre-push: Rust checks failed for %s, push blocked.\n' "$ref" >&2

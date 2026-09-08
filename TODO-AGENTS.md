@@ -76,16 +76,7 @@ conversation rather than a commit.
   per-machine) keeps the same format. It is read by the same parser, so it
   converts with everything else, but a human hand-edits it.
 
-- CLAIMED 2026-09-08. `.scripts/tmux-start.sh:26` decides a session exists with
-  `[ "$(tmux ls | rg $SESSION_NAME)" = "" ]`, which substring-matches and
-  treats the name as a regex. `s dev` finds an existing `dev-tool`
-  session, skips creation, then `tmux attach -t $SESSION_NAME` at line 38
-  fails because `dev` does not exist. `$SESSION_NAME` is also unquoted, so
-  a name starting with `-` makes ripgrep error.
-  Fix: `tmux has-session -t`, which `.scripts/tmux-setup.sh:20` already
-  uses correctly.
-
-- `.zshrc:198` sets `plugin=(git)`, which does nothing. oh-my-zsh is never
+- CLAIMED 2026-09-08. `.zshrc:198` sets `plugin=(git)`, which does nothing. oh-my-zsh is never
   sourced anywhere in `.zshrc`, `.zshrc-mac`, `.zshrc-linux` or `.profile`
   (verified by grep; `.zshrc-linux:7` reaches into its custom plugins
   directory by path precisely because the framework is not loaded), and

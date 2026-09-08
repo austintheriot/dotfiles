@@ -633,3 +633,40 @@ labelled name`, `owned window follows branch changes`.
   - Decide whether `have_nerd_font` should stay unconditional in the nvim
     config or become a probe. Leaving it true is right if the font is a
     tracked dependency; it is wrong today, because nothing guarantees it.
+
+- Make `config install-hooks` recoverable when `~/.local/bin` is group- or
+  world-writable.
+  Hit on a real Pop!_OS reinstall 2026-09-07. `setup.sh` cloned and checked
+  out fine, then:
+
+      config init: [2/4] link the git hooks and put config on PATH
+      config install-hooks: refusing, /home/austin/.local/bin is group- or world-writable
+
+  The guard itself is right and must stay: `.scripts/config/config-install-hooks:32-42`
+  refuses to install into a directory anyone else can write, because the hooks
+  and everything in `~/.local/bin` run as this user.
+
+  What is wrong is that the refusal is a dead end. `install-hooks` is step 1
+  of `config init` precisely because it is what puts `config` on PATH, so its
+  `exit 1` leaves the machine with a cloned repo, no `config` command, and no
+  way to run any of the remaining steps. The user's next four commands all
+  failed (`config st`, `config build`, `s code`), and the only escape found
+  was `rm -rf ~/.cfg` and starting over, which hit the same wall.
+
+  The message also does not say what to do. The fix is one command
+  (`chmod go-w ~/.local/bin`), and the tool knows it.
+
+  What to change:
+  - Print the remedy in the error: name the offending mode bits and the exact
+    `chmod go-w <dir>` that clears them.
+  - Decide whether `config init` should offer to fix the permissions itself
+    when the directory is owned by the user (owner-writable is the only safe
+    auto-fix; a directory owned by someone else must still refuse).
+  - Either way `config init` should not leave a machine with no `config` on
+    PATH and no printed path forward. Consider continuing to the later steps
+    and reporting the skipped one at the end, rather than exiting at step 1.
+
+  A test belongs with this: create a fixture `bin` directory with mode 0775,
+  run `install-hooks`, and assert the message names both the directory and
+  the chmod. `tests/config-init.test.sh` and `tests/githooks-installed.test.sh`
+  are the two suites that already drive these paths.

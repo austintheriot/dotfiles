@@ -16,7 +16,7 @@ small mechanical fixes, two latent path-handling gaps with no live trigger,
 two config-manifest design decisions, and several items that need a
 conversation rather than a commit.
 
-- Capture stdout on a failed install, not only stderr.
+- CLAIMED 2026-09-08. Capture stdout on a failed install, not only stderr.
   `ExecFailure::NonZeroExit` (`crates/deps-core/src/outcome.rs:32-37`) carries
   `code` and `stderr` and nothing else, so `describe_cause`
   (`crates/deps-core/src/render.rs:145-151`) can only report

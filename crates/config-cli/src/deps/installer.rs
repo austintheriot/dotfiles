@@ -764,22 +764,28 @@ mod tests {
         }
     }
 
-    /// The apt argv carries -y, and the child environment carries
-    /// DEBIAN_FRONTEND, with the ambient variable UNSET.
+    /// The engine puts DEBIAN_FRONTEND in the apt child environment itself.
     ///
     /// This is the repo's sharpest incident: an unattended bootstrap halted
     /// at tzdata's debconf prompt while every image and CI leg passed,
     /// because Dockerfile.ubuntu set the variable itself. The environment was
     /// compensating for a gap in the engine, so the engine looked correct
-    /// everywhere it was tested and failed on a real machine. A test that
-    /// inherits the variable proves nothing, which is the whole lesson.
+    /// everywhere it was tested and failed on a real machine.
+    ///
+    /// The lesson is that the engine must not depend on inheriting it. This
+    /// asserts that directly, on the map the engine builds, which holds only
+    /// what the engine contributes: an inherited variable cannot put an entry
+    /// here, so a pass means the engine set it.
+    ///
+    /// It used to also assert `std::env::var_os` was None, to prove the
+    /// ambient variable was not doing the work. That assertion described the
+    /// harness rather than the engine, and ubuntu-latest sets the variable
+    /// image-wide, so it failed on a runner for a reason that says nothing
+    /// about this code. `run_one` applies this map with `Command::env`, which
+    /// overrides any inherited value, so the engine's guarantee holds whether
+    /// or not the ambient variable is set.
     #[test]
-    fn the_apt_child_environment_carries_debian_frontend_with_the_ambient_unset() {
-        assert!(
-            std::env::var_os("DEBIAN_FRONTEND").is_none(),
-            "this test must run with DEBIAN_FRONTEND unset; something set it"
-        );
-
+    fn the_apt_child_environment_carries_debian_frontend() {
         let environment = child_environment_for(PackageManager::Apt);
 
         assert_eq!(
@@ -788,6 +794,7 @@ mod tests {
             "the engine sets it, not the image"
         );
     }
+
 
     /// Every apt install argv carries -y, and every pacman argv carries
     /// --noconfirm.

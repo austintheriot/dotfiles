@@ -6,6 +6,8 @@
 
 use std::fmt::Write as _;
 
+use dotfiles_path::BoundedText;
+
 use crate::{Report, StepOutcome};
 
 /// Which verb produced a report.
@@ -135,19 +137,23 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
 /// Returns `None` for an outcome that is not a failure, so the caller can
 /// stay a single `if let` rather than repeating the failure match.
 ///
-/// The child's own stderr is reproduced verbatim rather than summarized: it
+/// The child's own output is reproduced verbatim rather than summarized: it
 /// is the only text that distinguishes "no such package" from "no such
 /// command" from "permission denied", and every paraphrase this function
 /// could write would be a guess about a message it did not produce.
+///
+/// The stream is named alongside the message so a reader who reruns the
+/// command by hand knows which one to watch. stderr wins when both carry
+/// text: a script that writes to both puts its diagnostic there and its
+/// progress chatter on stdout, and concatenating the two buries the
+/// diagnostic under the chatter.
 fn describe_cause(outcome: &StepOutcome) -> Option<String> {
     match outcome {
         StepOutcome::InstallFailed { cause, .. } => Some(match cause {
-            crate::ExecFailure::NonZeroExit { code, stderr } => {
-                let message = stderr.as_str().trim();
-                if message.is_empty() {
-                    format!("exited {code} with no output on stderr")
-                } else {
-                    format!("exited {code}: {message}")
+            crate::ExecFailure::NonZeroExit { code, stdout, stderr } => {
+                match first_non_empty(&[("stderr", stderr), ("stdout", stdout)]) {
+                    Some((stream, message)) => format!("exited {code} ({stream}): {message}"),
+                    None => format!("exited {code} with no output on stdout or stderr"),
                 }
             }
             crate::ExecFailure::AuthenticationRefused => {
@@ -170,6 +176,20 @@ fn describe_cause(outcome: &StepOutcome) -> Option<String> {
     }
 }
 
+/// The first stream that carries a message, with the stream's name.
+///
+/// Trimmed before the emptiness test, because a script that exits nonzero
+/// after printing only a newline has said nothing: reporting a blank cause
+/// reads as a renderer bug rather than as a silent child.
+fn first_non_empty<'text>(
+    streams: &[(&'static str, &'text BoundedText)],
+) -> Option<(&'static str, &'text str)> {
+    streams
+        .iter()
+        .map(|(name, text)| (*name, text.as_str().trim()))
+        .find(|(_, message)| !message.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,7 +208,11 @@ mod tests {
         }
     }
 
-    fn a_report_with_a_failed_install() -> Report {
+    /// One failed row carrying the given cause.
+    ///
+    /// Every failure fixture routes through here so a new `ExecFailure`
+    /// variant has one place to be threaded, rather than one per test.
+    fn a_report_whose_install_failed_with(cause: crate::ExecFailure) -> Report {
         Report {
             rows: vec![ReportRow {
                 dependency: crate::DependencyName::parse("ripgrep").expect("a valid name"),
@@ -196,16 +220,21 @@ mod tests {
                     action: crate::InstallAction::Package {
                         id: PackageId::parse("ripgrep").expect("a test package id parses"),
                     },
-                    cause: crate::ExecFailure::NonZeroExit {
-                        code: 100,
-                        stderr: BoundedText::truncating("E: Unable to locate package"),
-                    },
+                    cause,
                 },
                 after: crate::Observation::Absent,
             }],
             check: CheckStatus::NotReady,
             install: InstallStatus::AttemptFailed,
         }
+    }
+
+    fn a_report_with_a_failed_install() -> Report {
+        a_report_whose_install_failed_with(crate::ExecFailure::NonZeroExit {
+            code: 100,
+            stdout: BoundedText::truncating(""),
+            stderr: BoundedText::truncating("E: Unable to locate package"),
+        })
     }
 
     /// The incident shape: a manual-only dependency, so nothing was
@@ -320,6 +349,117 @@ mod tests {
         assert!(
             rendered.stderr.contains("100"),
             "stderr must carry the exit code the command reported: {}",
+            rendered.stderr
+        );
+    }
+
+    /// A script that explains itself on stdout is still explained.
+    ///
+    /// The incident this pins, 2026-09-08: four bootstrap legs failed with
+    /// `FAILED oh-my-zsh / exited 1 with no output on stderr`. The cause was
+    /// oh-my-zsh's installer printing "Zsh is not installed. Please install
+    /// zsh first." and exiting 1, and that sentence went to STDOUT. The
+    /// engine captured it, discarded it, and told the reader there was no
+    /// output. Diagnosing it took three falsified hypotheses and a hand-run
+    /// container, because the failing run itself disclosed nothing.
+    #[test]
+    fn a_cause_written_only_to_stdout_still_reaches_the_reader() {
+        let ready = render(&a_ready_report(), Verb::Check);
+        assert!(ready.stderr.is_empty(), "the control must leave stderr empty");
+
+        let rendered = render(
+            &a_report_whose_install_failed_with(crate::ExecFailure::NonZeroExit {
+                code: 1,
+                stdout: BoundedText::truncating("Zsh is not installed. Please install zsh first."),
+                stderr: BoundedText::truncating(""),
+            }),
+            Verb::Install,
+        );
+
+        assert!(
+            rendered.stderr.contains("Zsh is not installed"),
+            "a cause on stdout must be reported, not discarded: {}",
+            rendered.stderr
+        );
+        assert!(
+            !rendered.stderr.contains("no output"),
+            "the engine held the explanation, so it must not claim there was \
+             none: {}",
+            rendered.stderr
+        );
+    }
+
+    /// Which stream a message came from is part of the message.
+    ///
+    /// A reader who reruns the command by hand needs to know where to look.
+    /// stderr wins when both carry text, because a script that writes to
+    /// both puts its diagnostic there.
+    #[test]
+    fn the_rendered_cause_names_the_stream_it_came_from() {
+        let both = render(
+            &a_report_whose_install_failed_with(crate::ExecFailure::NonZeroExit {
+                code: 100,
+                stdout: BoundedText::truncating("Reading package lists..."),
+                stderr: BoundedText::truncating("E: Unable to locate package"),
+            }),
+            Verb::Install,
+        );
+
+        assert!(
+            both.stderr.contains("stderr") && both.stderr.contains("E: Unable to locate package"),
+            "with both streams populated, the diagnostic is stderr's and the \
+             line must say so: {}",
+            both.stderr
+        );
+        assert!(
+            !both.stderr.contains("Reading package lists"),
+            "stderr wins outright rather than being concatenated with the \
+             progress chatter on stdout: {}",
+            both.stderr
+        );
+
+        let only_stdout = render(
+            &a_report_whose_install_failed_with(crate::ExecFailure::NonZeroExit {
+                code: 1,
+                stdout: BoundedText::truncating("Zsh is not installed."),
+                stderr: BoundedText::truncating(""),
+            }),
+            Verb::Install,
+        );
+
+        assert!(
+            only_stdout.stderr.contains("stdout"),
+            "a message that came from stdout must say stdout, so a reader \
+             knows which stream to watch on a rerun: {}",
+            only_stdout.stderr
+        );
+    }
+
+    /// The honest case stays honest.
+    ///
+    /// "no output" is the right thing to say when both streams really are
+    /// empty. This is the positive control for the two tests above: without
+    /// it, a renderer that never says "no output" would pass them both.
+    #[test]
+    fn a_silent_failure_still_reports_that_it_was_silent() {
+        let rendered = render(
+            &a_report_whose_install_failed_with(crate::ExecFailure::NonZeroExit {
+                code: 2,
+                stdout: BoundedText::truncating(""),
+                stderr: BoundedText::truncating("   \n  "),
+            }),
+            Verb::Install,
+        );
+
+        assert!(
+            rendered.stderr.contains("no output"),
+            "both streams are empty, so the report must say so rather than \
+             printing a blank cause: {}",
+            rendered.stderr
+        );
+        assert!(
+            rendered.stderr.contains('2'),
+            "the exit code is the only fact a silent failure leaves: {}",
             rendered.stderr
         );
     }

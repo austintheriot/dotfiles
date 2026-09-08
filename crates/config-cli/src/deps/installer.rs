@@ -773,15 +773,22 @@ fn spawn_error(error: &std::io::Error) -> SpawnError {
 /// step 1 of 8 rather than at step 8 is the whole reason
 /// `Elevation::ViaSudo` is documented as a prediction rather than a
 /// guarantee.
+///
+/// Both streams are captured because a failing script picks either one.
+/// oh-my-zsh's installer explains itself on stdout and exits 1 with zero
+/// bytes on stderr, so reading stderr alone reported "no output" while the
+/// explanation sat in the same `Output`.
 fn exec_failure(program: &OsStr, output: &Output) -> ExecFailure {
     let stderr = String::from_utf8_lossy(&output.stderr);
     if program == OsStr::new("sudo") && looks_like_refused_authentication(&stderr) {
         return ExecFailure::AuthenticationRefused;
     }
     match output.status.code() {
-        Some(code) => {
-            ExecFailure::NonZeroExit { code, stderr: BoundedText::truncating(&stderr) }
-        }
+        Some(code) => ExecFailure::NonZeroExit {
+            code,
+            stdout: BoundedText::truncating(&String::from_utf8_lossy(&output.stdout)),
+            stderr: BoundedText::truncating(&stderr),
+        },
         // No code means a signal killed the process. Reporting that as
         // `NonZeroExit { code: -1 }` would invent an exit status the process
         // never reported, so it is a spawn-side failure instead.
@@ -877,6 +884,80 @@ mod tests {
     use super::*;
     use deps_core::{CheckPath, DependencyName, TapName};
     use dotfiles_path::{CheckRelPath, PackageId};
+
+    /// A failed child's stdout reaches the failure value, not only its stderr.
+    ///
+    /// The 2026-09-08 incident lived HERE, not in the renderer: oh-my-zsh's
+    /// installer wrote its explanation to stdout, `exec_failure` read only
+    /// `output.stderr`, and the sentence was dropped at the capture site. A
+    /// renderer that handles stdout perfectly reports nothing if this
+    /// function never passes it on, which is why this test exists beside
+    /// the render-side ones rather than instead of them.
+    #[test]
+    fn a_failed_child_carries_both_of_its_streams() {
+        let output = Output {
+            status: exit_status_of(1),
+            stdout: b"Zsh is not installed. Please install zsh first.\n".to_vec(),
+            stderr: Vec::new(),
+        };
+
+        let failure = exec_failure(OsStr::new("sh"), &output);
+
+        match failure {
+            ExecFailure::NonZeroExit { code, stdout, stderr } => {
+                assert_eq!(code, 1, "the reported code is the child's own");
+                assert!(
+                    stdout.as_str().contains("Zsh is not installed"),
+                    "the capture site must keep stdout: {stdout}"
+                );
+                assert!(
+                    stderr.as_str().trim().is_empty(),
+                    "this child wrote nothing to stderr, and inventing text \
+                     there would misdirect a reader: {stderr}"
+                );
+            }
+            other => panic!("a nonzero exit must classify as NonZeroExit, got {other:?}"),
+        }
+    }
+
+    /// Positive control for the test above: stderr still arrives.
+    ///
+    /// Without this, an `exec_failure` that swapped the two fields would
+    /// pass the stdout assertion while breaking every apt failure message.
+    #[test]
+    fn a_failed_child_that_writes_to_stderr_keeps_it_there() {
+        let output = Output {
+            status: exit_status_of(100),
+            stdout: b"Reading package lists...\n".to_vec(),
+            stderr: b"E: Unable to locate package ripgrep\n".to_vec(),
+        };
+
+        match exec_failure(OsStr::new("apt-get"), &output) {
+            ExecFailure::NonZeroExit { stdout, stderr, .. } => {
+                assert!(
+                    stderr.as_str().contains("E: Unable to locate package"),
+                    "stderr must not be displaced by the stdout field: {stderr}"
+                );
+                assert!(
+                    stdout.as_str().contains("Reading package lists"),
+                    "both streams are carried, so progress chatter is kept \
+                     for the case where it is all there is: {stdout}"
+                );
+            }
+            other => panic!("a nonzero exit must classify as NonZeroExit, got {other:?}"),
+        }
+    }
+
+    /// An `ExitStatus` reporting the given code, built without spawning.
+    ///
+    /// `ExitStatus` has no public constructor, so this goes through the
+    /// unix extension trait. The suite runs on macOS and Linux only, both
+    /// unix, so there is no second branch to write.
+    #[cfg(unix)]
+    fn exit_status_of(code: i32) -> std::process::ExitStatus {
+        use std::os::unix::process::ExitStatusExt as _;
+        std::process::ExitStatus::from_raw(code << 8)
+    }
 
     fn an_apt_action() -> InstallAction {
         InstallAction::Package { id: PackageId::parse("ripgrep").expect("a valid package id") }

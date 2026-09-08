@@ -23,15 +23,24 @@ pub enum SpawnError {
 
 /// Why an install command failed.
 ///
-/// Specified rather than left undefined. `stderr` is `BoundedText` because
-/// an unbounded subprocess string in an error type is how a terminal gets a
-/// control sequence written to it.
+/// Specified rather than left undefined. Both streams are `BoundedText`
+/// because an unbounded subprocess string in an error type is how a
+/// terminal gets a control sequence written to it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecFailure {
     /// The command ran and exited nonzero.
+    ///
+    /// Both streams are carried because a failing script chooses either one
+    /// and neither choice is wrong. oh-my-zsh's installer writes "Zsh is not
+    /// installed. Please install zsh first." to stdout and exits 1 with zero
+    /// bytes on stderr; apt writes "E: Unable to locate package" to stderr.
+    /// Holding only stderr made the first case render as "exited 1 with no
+    /// output on stderr" while the engine had the sentence in hand.
     NonZeroExit {
         /// The exit code the process reported.
         code: i32,
+        /// Captured stdout, bounded and safe to render.
+        stdout: BoundedText,
         /// Captured stderr, bounded and safe to render.
         stderr: BoundedText,
     },
@@ -361,6 +370,7 @@ mod tests {
             action: a_package_action(),
             cause: ExecFailure::NonZeroExit {
                 code: 100,
+                stdout: BoundedText::truncating(""),
                 stderr: BoundedText::truncating("E: Unable to locate package"),
             },
         }];

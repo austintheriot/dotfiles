@@ -202,11 +202,12 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
     # failure that actually happened, and it leaves some files staged.
     #
     # The number moves when a file is added or removed under .scripts/, and
-    # that is the point. It went 41 -> 42 when Dockerfile.pop landed, and
-    #42 -> 21 when the whole deps/ tree moved to the top level. Update it
-    # deliberately, in the same commit as the change that moves it.
-    assert_equals 'all 21 scripts are committed, not only on disk' \
-        '21' "$committed_count"
+    # that is the point. It went 41 -> 42 when Dockerfile.pop landed,
+    # 42 -> 21 when the whole deps/ tree moved to the top level, and
+    # 21 -> 22 when config-prereqs landed. Update it deliberately, in the
+    # same commit as the change that moves it.
+    assert_equals 'all 22 scripts are committed, not only on disk' \
+        '22' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine
@@ -228,6 +229,7 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
         "$NEW_NAME/config/config-help" \
         "$NEW_NAME/config/config-install" \
         "$NEW_NAME/config/config-install-hooks" \
+        "$NEW_NAME/config/config-prereqs" \
         "$NEW_NAME/config/config-reload" \
         "$NEW_NAME/config/config-stamp" \
         "$NEW_NAME/config/config-test" \

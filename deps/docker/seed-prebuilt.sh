@@ -19,14 +19,36 @@
 # while the engine was shell and the run could proceed against whatever
 # was on PATH. That is a fail-open: a gate that falls back can pass having
 # tested a path that no longer ships. An unset variable now fails the run.
+#
+# THE ONE WAY OUT is BOOTSTRAP_NO_PREBUILT=1, which must be set on purpose.
+# `config init` now installs cc and rustup in shell (config-prereqs) before
+# it builds the crate, so a fresh machine compiles its own engine and needs
+# no injected binary at all. A leg that sets this is asserting exactly that,
+# and it is the only leg that tests the path a real user takes.
+#
+# Kept as a separate, explicit variable rather than by letting an unset
+# BOOTSTRAP_PREBUILT_BIN mean "self-build". An absent variable is what a
+# typo, a renamed step, or a dropped `-e` flag also produces, and those must
+# stay loud. Opting out is a sentence someone wrote; forgetting is not.
 
 seed_prebuilt() {
+    if [ "${BOOTSTRAP_NO_PREBUILT:-0}" = 1 ]; then
+        if [ -n "${BOOTSTRAP_PREBUILT_BIN:-}" ]; then
+            printf 'FAIL: BOOTSTRAP_NO_PREBUILT=1 and BOOTSTRAP_PREBUILT_BIN are both set.\n' >&2
+            printf 'These ask for opposite things, so the run would silently test\n' >&2
+            printf 'only one of them. Set exactly one.\n' >&2
+            return 1
+        fi
+        printf 'harness: no prebuilt binary -- the bootstrap must build its own\n'
+        return 0
+    fi
+
     seed_prebuilt_path=${BOOTSTRAP_PREBUILT_BIN:-}
 
     if [ -z "$seed_prebuilt_path" ]; then
         printf 'FAIL: BOOTSTRAP_PREBUILT_BIN is unset.\n' >&2
-        printf 'This image carries no Rust toolchain, so the caller must build\n' >&2
-        printf 'config-cli and mount it into the seed.\n' >&2
+        printf 'Either mount a prebuilt config-cli, or set BOOTSTRAP_NO_PREBUILT=1\n' >&2
+        printf 'to assert that the bootstrap builds its own engine.\n' >&2
         return 1
     fi
 

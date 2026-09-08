@@ -538,3 +538,85 @@ jobs:
             -v /tmp/seed-curl-arch:/seed:ro \
             -e BOOTSTRAP_PREBUILT_BIN=/seed/config-cli \
             dotfiles-bootstrap-curl-arch
+
+  bootstrap-self-built:
+    name: Full bootstrap / no prebuilt engine, self-built
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # THE LEG THAT TESTS WHAT A REAL USER ACTUALLY RUNS. Every other
+      # bootstrap job mounts a host-built config-cli into the image before
+      # setup.sh starts, and seed-prebuilt.sh explains why that seam existed:
+      # the images carry no Rust toolchain, and giving them one would
+      # pre-satisfy the rustup manifest entry the run exists to exercise.
+      #
+      # The consequence went unnoticed for as long as the seam did. Those
+      # legs were all green while the documented one-liner failed on any
+      # fresh machine, because `config init` installed dependencies BEFORE it
+      # built the crate and the install step was `exec config-cli deps
+      # install` -- so the step depended on a binary a later step produced.
+      # Reproduced in clean debian:bookworm and ubuntu:24.04:
+      #
+      #   config init: [3/4] install the missing tracked dependencies
+      #   /root/.scripts/config/config-install: 13: exec: config-cli: not found
+      #
+      # The gate pre-satisfied the exact gap that broke users. That is this
+      # repo's own documented fail-open shape ("a gate that falls back can
+      # pass having tested a path that no longer ships") one level up: the
+      # seam was not a fallback, it was the premise.
+      #
+      # `config prereqs` now installs cc and rustup in shell before the
+      # build, so a fresh machine compiles its own engine. This leg asserts
+      # that, and it is the only leg where nothing is injected. If it is ever
+      # deleted or given a prebuilt binary, the circularity can return with
+      # every other job still green.
+      - name: Build the bare bootstrap image
+        run: |
+          mkdir -p /tmp/empty-context
+          docker build \
+            -f deps/docker/Dockerfile.bootstrap-bare \
+            -t dotfiles-bootstrap-selfbuilt \
+            /tmp/empty-context
+
+      - name: Build the seed repository
+        run: |
+          ref="${GITHUB_REF_NAME:-main}"
+          mkdir -p /tmp/seed-selfbuilt
+          git config --global user.email ci@example.com
+          git config --global user.name CI
+          git init -q -b "$ref" /tmp/staging-selfbuilt
+          tar -c --exclude=.git . | tar -x -C /tmp/staging-selfbuilt
+          git -C /tmp/staging-selfbuilt add -A
+          git -C /tmp/staging-selfbuilt commit -q -m "self-built bootstrap test tree"
+
+          # `main` as well as the pushed ref: the container passes no
+          # --branch, so it takes setup.sh's default.
+          if [ "$ref" != main ]; then
+            git -C /tmp/staging-selfbuilt branch -q main
+          fi
+
+          git clone -q --bare /tmp/staging-selfbuilt /tmp/seed-selfbuilt/repo.git
+          git --git-dir=/tmp/seed-selfbuilt/repo.git symbolic-ref HEAD "refs/heads/$ref"
+          cp deps/docker/bootstrap-bare-entrypoint.sh /tmp/seed-selfbuilt/
+          cp deps/docker/seed-prebuilt.sh /tmp/seed-selfbuilt/
+          # The bare image has no git when setup.sh first runs, so the script
+          # is read from the seed directory rather than out of the clone.
+          cp setup.sh /tmp/seed-selfbuilt/setup.sh
+
+          # Deliberately NO build-seed-binary.sh call. That is the whole
+          # point of this leg: the container gets source and a package
+          # manager, and has to produce its own engine.
+
+      # BOOTSTRAP_NO_PREBUILT=1 rather than simply omitting
+      # BOOTSTRAP_PREBUILT_BIN. An absent variable is also what a typo or a
+      # dropped `-e` produces, and seed-prebuilt.sh fails loudly on that for
+      # good reason. Opting out has to be a sentence someone wrote.
+      - name: Run and verify the self-built bootstrap
+        run: |
+          docker run --rm -v /tmp/seed-selfbuilt:/seed:ro \
+            -e BOOTSTRAP_NO_PREBUILT=1 \
+            dotfiles-bootstrap-selfbuilt

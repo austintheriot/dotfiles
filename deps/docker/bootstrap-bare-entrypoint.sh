@@ -50,8 +50,9 @@ check() {
     unset check_description
 }
 
-# The prebuilt config-cli, required. See seed-prebuilt.sh for why the image
-# cannot compile it and why the variable is not optional.
+# The prebuilt config-cli, unless BOOTSTRAP_NO_PREBUILT=1 says the bootstrap
+# must build its own engine. See seed-prebuilt.sh for why the seam exists,
+# why the variable is not optional, and why opting out has to be explicit.
 . /seed/seed-prebuilt.sh
 seed_prebuilt
 PATH="$HOME/.local/bin:$PATH"

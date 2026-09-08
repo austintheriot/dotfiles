@@ -204,7 +204,13 @@ fn only_narrows_which_steps_a_dry_run_plans() {
 #[test]
 fn only_scopes_the_verdict_to_the_named_dependencies() {
     let fixture = tempfile::tempdir().expect("tempdir");
-    let conf_dir = fixture.path().join(".scripts").join("deps");
+    // Must match SHIPPED_CONF_DIR in config-cli's deps module. Built from
+    // one literal, not joined segment by segment: the segmented form is what
+    // a repo-wide path substitution cannot see, and it survived the move of
+    // this tree out of .scripts/ by silently producing an empty manifest --
+    // "0 entries" rather than a missing-file error, because a conf file that
+    // is absent is tolerated by design.
+    let conf_dir = fixture.path().join("deps");
     std::fs::create_dir_all(&conf_dir).expect("conf dir");
     std::fs::write(
         conf_dir.join("deps.conf"),
@@ -228,11 +234,21 @@ fn only_scopes_the_verdict_to_the_named_dependencies() {
     // report not-ready, or the assertion below would hold for a binary that
     // never reports anything missing.
     let whole = run(&[]);
+    let whole_stdout = String::from_utf8_lossy(&whole.stdout).into_owned();
+    // Checked before the status, because it names the cause rather than the
+    // symptom. A conf file the engine cannot find is tolerated by design, so
+    // a fixture written to the wrong directory yields an EMPTY manifest and
+    // this test then fails on an exit code with no hint why. That is exactly
+    // what happened when the tree moved out of .scripts/ and this fixture's
+    // path did not: "0 entries", and a stared-at status mismatch.
+    assert!(
+        !whole_stdout.contains("0 entries"),
+        "the fixture manifest was not read -- is conf_dir still SHIPPED_CONF_DIR? got: {whole_stdout}"
+    );
     assert_eq!(
         whole.status.code(),
         Some(1),
-        "an absent dependency must fail an unnarrowed check: {}",
-        String::from_utf8_lossy(&whole.stdout)
+        "an absent dependency must fail an unnarrowed check: {whole_stdout}"
     );
 
     let narrowed = run(&["sh"]);

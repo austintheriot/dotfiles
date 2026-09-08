@@ -66,6 +66,57 @@ assert_succeeds 'the import is spelled at top level, not under general' \
 assert_equals 'the 0.14-only general.import spelling is not used' \
     '' "$(grep -n '^general\.import' "$SHARED")"
 
+# --- Linux launches zsh, because its login shell is not zsh -----------------
+
+# A fresh Pop!_OS machine has bash as the login shell, so Alacritty opened
+# there lands in bash. Nothing in `.zshrc` is loaded, which means the `s`
+# alias (`.zshrc:66`) does not exist and `s code` fails until zsh is started
+# by hand. macOS needs no equivalent: its login shell has been zsh since
+# Catalina.
+#
+# Declared here rather than by `chsh` deliberately. `chsh` writes
+# /etc/passwd, which is system state outside $HOME that nothing else in this
+# repo touches, needs a password or root, has no idempotent declaration, and
+# cannot be exercised by this suite. A config key is tracked, platform-
+# selected by machinery that already exists, and reversible by editing a file.
+LINUX_VARIANT="$ALAC_DIR/alacritty-linux.toml"
+
+# Comments stripped before matching, for the same reason the shared config's
+# import assertions do it: the comment block explaining the 0.13-vs-0.14 key
+# names mentions `terminal.shell` by name, and grepping the raw file reads
+# that prose as configuration.
+linux_variant_lines=$(grep -vE '^[[:space:]]*#' "$LINUX_VARIANT")
+
+assert_succeeds 'the linux variant launches zsh' \
+    grep -qE '^program = "/bin/zsh"' "$LINUX_VARIANT"
+assert_succeeds 'the shell program is declared under the 0.13 [shell] table' \
+    grep -qE '^\[shell\]' "$LINUX_VARIANT"
+
+# `terminal.shell` is the 0.14+ spelling. On 0.13 it parses as an unknown key
+# and the shell setting is silently dropped -- Alacritty starts, nothing
+# errors, and the login shell runs anyway. Verified against the installed
+# binary: `strings` on alacritty 0.13.2 contains `shell` and
+# `working_directory` and no `terminal` config section at all. This is the
+# same silent-ignore trap the `general.import` assertion above pins.
+assert_equals 'the 0.14-only terminal.shell spelling is not used' \
+    '' "$(printf '%s' "$linux_variant_lines" | grep -n 'terminal\.shell\|^\[terminal')"
+
+# The mac variant must NOT carry it. Hardcoding /bin/zsh on a mac would
+# override a Homebrew zsh the user chose, and the key is unnecessary there.
+#
+# Matched on the [shell] TABLE HEADER, not on a bare `program =` line. The
+# mac variant already has `program = "open"` under
+# [keyboard.bindings.command], and the looser pattern flagged that unrelated
+# key -- the assertion failed for the wrong reason before this was narrowed.
+assert_equals 'the mac variant declares no shell' \
+    '' "$(grep -n '^\[shell\]\|^shell\.' "$ALAC_DIR/alacritty-mac.toml")"
+
+# The shared file must not carry it either: values in the shared config WIN
+# over an imported variant (alacritty.toml:13), so a shell key there would
+# apply on macOS too and defeat the split.
+assert_equals 'the shared config declares no shell' \
+    '' "$(printf '%s' "$shared_config_lines" | grep -n '^\[shell\]\|^shell\.')"
+
 # --- generating the pointer selects this platform's variant -----------------
 
 run_generator() {

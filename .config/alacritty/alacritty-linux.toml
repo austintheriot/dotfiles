@@ -9,3 +9,30 @@
 #
 # `option_as_alt` is macOS-only and is not needed here: on Linux the Alt key
 # already reports as Alt.
+
+# Launch zsh rather than the login shell.
+#
+# A fresh Pop!_OS machine has bash as its login shell, so Alacritty opened
+# there lands in bash: `.zshrc` never loads, the `s` alias (`.zshrc:66`) does
+# not exist, and `s code` fails until zsh is started by hand. macOS needs no
+# equivalent, because its login shell has been zsh since Catalina.
+#
+# `[shell]` at top level, not `terminal.shell`: the latter is Alacritty 0.14+
+# and on 0.13 it parses as an unknown key, so the setting is silently dropped
+# and the login shell runs anyway. Verified against the installed binary --
+# `strings` on 0.13.2 contains `shell` and `working_directory` and no
+# `terminal` config section. Same trap as the `general.import` note in the
+# shared file.
+#
+# `-l` makes it a login shell, which is what an interactive terminal
+# otherwise gets: `.zprofile` is sourced, so `~/.local/bin` and the rest of
+# the login PATH are present. Without it `config` is missing from PATH in
+# every Alacritty window.
+#
+# /bin/zsh rather than a PATH lookup, because Alacritty execs this directly
+# rather than through a shell. Verified in an ubuntu:24.04 container: apt
+# installs to /usr/bin/zsh, /bin is a symlink to usr/bin so /bin/zsh
+# resolves, and both paths are listed in /etc/shells.
+[shell]
+args = ["-l"]
+program = "/bin/zsh"

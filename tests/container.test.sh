@@ -359,13 +359,17 @@ referenced_root_dirs=$(grep -ohE 'DOTFILES_ROOT/[A-Za-z0-9_.-]+' "$DOTFILES_ROOT
     | grep -E '^[A-Za-z0-9_.-]+$' \
     | sort -u)
 
-# Four directories are referenced by a suite and deliberately NOT in the
-# runtime image. Each is an exemption with a reason, not a lint suppression:
+# Directories a suite references that are deliberately NOT in the runtime
+# image. Each is an exemption with a reason, not a lint suppression:
 #
-#   .cfg      the bare repository. The container's tree comes from
-#             `git archive`, so it has no repository at all -- which is the
-#             documented reason several suites skip in there. Copying it
-#             would defeat that isolation.
+#   .cfg      the bare repository on a developer machine.
+#   .git      the same thing on a CI runner, where DOTFILES_ROOT is the
+#             checkout. Both are probed by config.test.sh:444 and
+#             scripts-dir-name.test.sh:190 to ask "is there a repository
+#             here", which is a question, not a path the image needs. The
+#             container's tree comes from `git archive` and so has no
+#             repository at all -- the documented reason several suites skip
+#             in there. Copying either would defeat that isolation.
 #   .config   copied per subdirectory (.config/tmux, .config/nvim,
 #             .config/alacritty) rather than wholesale, so the image carries
 #             only what a suite reads.
@@ -375,8 +379,16 @@ referenced_root_dirs=$(grep -ohE 'DOTFILES_ROOT/[A-Za-z0-9_.-]+' "$DOTFILES_ROOT
 #             runtime stage takes from it. Checked separately by the
 #             workspace-member assertion below.
 #
+# `.git` is here because CI caught its absence, and that is worth recording:
+# the first version of this list was derived from what happens to exist under
+# $DOTFILES_ROOT on ONE machine. $HOME has no .git there (the repo is bare at
+# ~/.cfg), so the loop skipped it and the list looked complete. On a runner
+# DOTFILES_ROOT is the checkout, .git is a real directory, and both new
+# assertions failed on both platforms. An exemption list built from one
+# environment's filesystem is a list that passes there and nowhere else.
+#
 # Anything else is a real gap, which is how deps/ was caught.
-exempt_from_image=' .cfg .config .local crates '
+exempt_from_image=' .cfg .git .config .local crates '
 
 missing_dirs_from_image=''
 checked_dirs=0
@@ -395,14 +407,18 @@ done <<EOF
 $referenced_root_dirs
 EOF
 
-# Positive control. Every assertion below is inside a loop over a derived
-# list, so a derivation that silently produced nothing would report an empty
-# missing-list and pass having checked no directory at all. That is the same
-# vacuous-pass shape this file already guards against for the COPY prose.
-assert_succeeds 'the directory derivation found something to check' \
-    test "$checked_dirs" -gt 0
+# Positive control, folded INTO the assertion rather than sitting beside it.
+#
+# Both matter, and the difference was measured: with a broken $DOTFILES_ROOT
+# the separate control failed while the two assertions below printed `ok`,
+# because an empty derived list produces an empty missing-list. A control
+# that reports separately still leaves a green tick next to a check that
+# examined nothing, and a green tick is what a reader scans for. Reporting
+# the count in the compared value means the assertion cannot pass without
+# having looked at something.
 assert_equals 'every root-level directory the suites read is COPYed into the image' \
-    '' "$missing_dirs_from_image"
+    'checked>0 missing:' \
+    "$([ "$checked_dirs" -gt 0 ] && printf 'checked>0' || printf 'checked=0') missing:$missing_dirs_from_image"
 
 # And the overlay half, for the same reason the file check has one: a
 # directory in the image but absent from the overlay list means the container
@@ -413,7 +429,7 @@ assert_succeeds 'the overlay tree list is still parseable' test -n "$overlay_tre
 # The same exemptions minus crates, which IS overlaid: an uncommitted crate
 # edit has to reach the builder or the container tests the last commit's
 # binaries.
-exempt_from_overlay=' .cfg .config .local '
+exempt_from_overlay=' .cfg .git .config .local '
 
 missing_dirs_from_overlay=''
 while IFS= read -r root_dir; do
@@ -428,7 +444,8 @@ done <<EOF
 $referenced_root_dirs
 EOF
 assert_equals 'the runner overlays the root-level directories it copies' \
-    '' "$missing_dirs_from_overlay"
+    'checked>0 missing:' \
+    "$([ "$checked_dirs" -gt 0 ] && printf 'checked>0' || printf 'checked=0') missing:$missing_dirs_from_overlay"
 
 # --- the builder stage knows every workspace member -------------------------
 

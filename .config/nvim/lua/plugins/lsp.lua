@@ -94,9 +94,42 @@ return {
         },
       }
 
-      require('mason').setup()
+      -- Versions come from mason-lock.json, so two machines install the
+      -- same tools rather than whatever the registry served that day.
+      --
+      -- The registry pin is the load-bearing half. Without it the same
+      -- package NAME resolves to a different recipe over time, which is
+      -- worse than an unpinned version: the resolution function changes
+      -- with no diff anywhere. The registry release also ships checksums
+      -- for its own payload, so pinning the version pins the bytes.
+      --
+      -- WHAT THIS DOES NOT PIN, stated so nobody reads more into it: the
+      -- downloaded artifacts. Mason has no integrity-hash layer for package
+      -- payloads, and an npm package's transitive tree floats under a
+      -- pinned top-level version. This buys "the same tool versions on both
+      -- machines", not byte-identity.
+      local lock = vim.json.decode(
+        table.concat(vim.fn.readfile(vim.fn.stdpath 'config' .. '/mason-lock.json'), '\n')
+      )
+
+      require('mason').setup { registries = { lock.registry } }
+
+      -- mason-tool-installer takes `name@version` strings. The lock is
+      -- keyed by MASON PACKAGE name, while `servers` is keyed by lspconfig
+      -- name, so the two are joined through the registry's own mapping
+      -- rather than a second hand-written table.
+      local mason_names = require('mason-lspconfig.mappings').get_mason_map().lspconfig_to_package
+      local ensure = {}
+      for _, name in ipairs(vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint', 'cspell', 'tree-sitter-cli' })) do
+        local package_name = mason_names[name] or name
+        local version = lock.packages[package_name]
+        table.insert(ensure, version and (package_name .. '@' .. version) or package_name)
+      end
+
       require('mason-tool-installer').setup {
-        ensure_installed = vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint', 'cspell', 'tree-sitter-cli' }),
+        ensure_installed = ensure,
+        -- Drift-by-default is the enemy of a lockfile.
+        auto_update = false,
       }
       require('mason-lspconfig').setup {
         handlers = {

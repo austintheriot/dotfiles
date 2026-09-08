@@ -84,7 +84,11 @@ assert_succeeds 'the servers table parses' test -n "$servers"
 assert_equals 'the parse takes server names only, not nested config keys' '' \
     "$(printf '%s\n' "$servers" | grep -x 'settings' || true)"
 
-extra_tools=$(sed -n 's/.*ensure_installed = .*vim\.tbl_keys(servers), {\(.*\)}.*/\1/p' "$LSP_CONFIG" \
+# Anchored on `vim.tbl_keys(servers), {` rather than on `ensure_installed`.
+# The list moved inside a `for` when versions started coming from
+# mason-lock.json, and an ensure_installed-anchored parse silently returned
+# nothing -- which the count guard below caught, as designed.
+extra_tools=$(sed -n 's/.*vim\.tbl_keys(servers), {\(.*\)}.*/\1/p' "$LSP_CONFIG" \
     | tr -d " '" | tr ',' '\n' | grep -v '^$' | sort -u)
 assert_succeeds 'the extra tool list parses' test -n "$extra_tools"
 
@@ -116,18 +120,65 @@ assert_succeeds 'the servers table has more than one entry' test "$server_count"
 # ranged parse to find every one of them. A range that stops early now
 # leaves the two numbers different.
 #
-# NOT_A_SERVER is the cost of reading the whole file: `handlers` (lsp.lua:102)
-# sits at the same 8-space depth outside the servers table, and this guard
-# failed on the healthy config until it was excluded. That is the intended
-# behaviour -- a new key at that depth breaks the build and gets classified
-# by a human, rather than silently joining the server list the way `settings`
-# did.
-NOT_A_SERVER='handlers'
+# NOT_A_SERVER is the cost of reading the whole file: `handlers` and
+# `auto_update` sit at the same 8-space depth outside the servers table, and
+# this guard failed on the healthy config until each was excluded. That is
+# the intended behaviour and it has now happened twice -- a new key at that
+# depth breaks the build and gets classified by a human, rather than
+# silently joining the server list the way `settings` did.
+NOT_A_SERVER='handlers
+auto_update'
 declared_count=$(grep -E '^        [a-z_][a-z_0-9]* = (\{|nil|true|false)' "$LSP_CONFIG" \
     | sed -n 's/^        \([a-z_][a-z_0-9]*\) = .*/\1/p' \
     | grep -vxF "$NOT_A_SERVER" | sort -u | grep -c .)
 assert_equals 'every server declared in the file survives the ranged parse' \
     "$declared_count" "$server_count"
+
+# --- mason is pinned by a lockfile --------------------------------------
+#
+# Without this, 14 tools were declared by NAME ONLY and the mason registry
+# was unpinned, so two machines bootstrapped a week apart got different
+# versions with no diff anywhere. The registry pin is the load-bearing half:
+# an unpinned registry changes the RESOLUTION FUNCTION, so the same name
+# means something different over time.
+MASON_LOCK="$DOTFILES_ROOT/.config/nvim/mason-lock.json"
+assert_succeeds 'the mason lockfile exists' test -f "$MASON_LOCK"
+
+if nvim_git rev-parse --verify HEAD >/dev/null 2>&1; then
+    assert_equals 'the mason lockfile is tracked, not local-only state' \
+        '.config/nvim/mason-lock.json' \
+        "$(nvim_git ls-files -- .config/nvim/mason-lock.json 2>/dev/null || true)"
+fi
+
+# The registry must be pinned to a specific release, not left at the moving
+# default. An `@` in the value is what distinguishes the two.
+lock_registry=$("$PYTHON_BIN" -c "
+import json, sys
+print(json.load(open(sys.argv[1])).get('registry', ''))
+" "$MASON_LOCK")
+assert_succeeds 'the lockfile pins the mason registry to a release' \
+    test -n "${lock_registry##*@}" -a "$lock_registry" != "${lock_registry#*@}"
+
+# Every declared tool must have a pin. Compared as a COUNT against the
+# declared set, so a lockfile that silently lost entries fails rather than
+# passing on the subset it still covers.
+declared_tools=$(printf '%s\n%s\n' "$servers" "$extra_tools" | grep -c .)
+locked_tools=$("$PYTHON_BIN" -c "
+import json, sys
+print(len(json.load(open(sys.argv[1])).get('packages', {})))
+" "$MASON_LOCK")
+assert_equals 'every declared tool has a version pin' \
+    "$declared_tools" "$locked_tools"
+
+# The config must READ the lockfile rather than carrying a second copy of
+# the versions. Two sources for one fact is how they drift.
+lsp_code=$(sed -e 's/--.*//' "$LSP_CONFIG")
+assert_succeeds 'the config reads the lockfile' \
+    test -n "$(printf '%s\n' "$lsp_code" | grep 'mason-lock.json' || true)"
+assert_succeeds 'the config pins the registry from the lockfile' \
+    test -n "$(printf '%s\n' "$lsp_code" | grep 'registries' || true)"
+assert_succeeds 'auto_update is disabled, so the lock is not overwritten' \
+    test -n "$(printf '%s\n' "$lsp_code" | grep 'auto_update = false' || true)"
 
 # --- the treesitter spec matches the branch it is pinned to -------------
 #

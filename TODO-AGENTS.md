@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- When running on Pop OS, when I open Alacritty, `zsh` does not get set as the default shell, so I have to open it manually before running `s code`. We should automate this in our pipeline if possible
+- CLAIMED 2026-09-08. When running on Pop OS, when I open Alacritty, `zsh` does not get set as the default shell, so I have to open it manually before running `s code`. We should automate this in our pipeline if possible
 - Failure when running in Ubuntu or Debian Docker containers:
 ```
 Cloning into bare repository '/root/.cfg'...

@@ -187,7 +187,16 @@ pub fn packages() -> PackageCatalog {
         &mut catalog,
         "nvm",
         per_manager(Vec::new()),
-        PackageAvailability::Unavailable(NoInstallReason::UpstreamPublishesNoStableUrl),
+        // Was UpstreamPublishesNoStableUrl, which was true of the URL shape
+        // rather than of nvm: upstream publishes no MOVING url, and every
+        // install command in its README names a version. Pinning one tag is
+        // what the docs actually instruct, so the reason no longer holds.
+        //
+        // The cost of the pin is that it goes stale, which is the tradeoff
+        // taken deliberately: a stale pin is a visible constant somebody
+        // bumps, while manual-only meant node never installed on any
+        // unattended run and the bootstrap reported it every time.
+        PackageAvailability::ViaScript(ScriptInstaller::Nvm),
     );
 
     // node installs through nvm on every manager, so that a brew or apt node
@@ -304,12 +313,9 @@ const EDGES: &[(&str, &[&str])] = &[
     // step failed with `sh: 1: .: cannot open /home/tester/.nvm/nvm.sh`,
     // reported as an install failure (exit 3) on every bootstrap leg.
     //
-    // nvm is UpstreamPublishesNoStableUrl, so it is manual-only and never
-    // installs unattended. The edge does not fix that; it makes the
-    // consequence honest. node becomes a blocked step naming nvm rather than
-    // an attempted install that could not have worked, which is the
-    // difference between "this machine needs nvm installed by hand" and "the
-    // node install is broken".
+    // The edge still carries weight now that nvm installs from a pinned
+    // script: it is what orders the two, so nvm's install runs in an earlier
+    // wave and node's source of nvm.sh finds a file that exists.
     ("node", &["nvm"]),
 ];
 

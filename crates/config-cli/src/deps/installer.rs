@@ -73,6 +73,13 @@ fn script_url(installer: ScriptInstaller) -> &'static str {
         ScriptInstaller::Zoxide => {
             "https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh"
         }
+        // Pinned to a tag, unlike its three neighbours. nvm publishes no
+        // moving install URL: its README's own command names a version, and
+        // that is what made this dependency manual-only. Bumping this
+        // constant is a deliberate, reviewable edit.
+        ScriptInstaller::Nvm => {
+            "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh"
+        }
     }
 }
 
@@ -239,7 +246,23 @@ pub fn argv_sequence_for(
         // `NvmInstall` carries no payload precisely so no manifest text can
         // reach this word (`retired-check-deps:387`).
         InstallAction::NvmInstall => {
-            vec![words(["sh", "-c", ". \"$HOME/.nvm/nvm.sh\" && nvm install --lts"])]
+            // NVM_DIR is set explicitly, not left to nvm.sh's own default.
+            // The script locates itself through $BASH_SOURCE, which dash does
+            // not set, so under /bin/sh on a Debian image NVM_DIR resolved to
+            // "/" and `nvm install --lts` wrote node to //versions/node while
+            // the check read $HOME/.nvm/versions/node. The install printed
+            // "Now using node v24.20.0" and the step still reported "the
+            // install succeeded and the check still fails".
+            //
+            // Still one fixed string with no interpolated data: NvmInstall
+            // carries no payload, so no manifest text reaches this word
+            // (`retired-check-deps:387`).
+            vec![words([
+                "sh",
+                "-c",
+                "NVM_DIR=\"$HOME/.nvm\"; export NVM_DIR; \
+                 . \"$NVM_DIR/nvm.sh\" && nvm install --lts",
+            ])]
         }
         InstallAction::NotAutomatable { .. } => Vec::new(),
     }
@@ -272,6 +295,7 @@ fn script_path(installer: ScriptInstaller) -> OsString {
         ScriptInstaller::Rustup => "rustup-init.sh",
         ScriptInstaller::OhMyZsh => "oh-my-zsh-install.sh",
         ScriptInstaller::Zoxide => "zoxide-install.sh",
+        ScriptInstaller::Nvm => "nvm-install.sh",
     };
     let mut path = std::env::temp_dir();
     path.push(name);
@@ -311,12 +335,25 @@ fn script_argv(installer: ScriptInstaller) -> Vec<Vec<OsString>> {
     //
     // `sh <path> --` rather than `sh -s --`: `-s` reads the script from
     // stdin, which is exactly what no longer arrives.
-    let mut run = words(["sh"]);
+    //
+    // The interpreter is per-installer because nvm's refuses to be anything
+    // else. Its first lines test `BASH_VERSION` and exit 1 with "the install
+    // instructions explicitly say to pipe the install script to `bash`",
+    // and the bootstrap images run dash as sh, so a shared `sh` here would
+    // fail on every Debian leg. Every base image this repo targets ships
+    // bash, verified against debian:bookworm-slim, which is the slimmest.
+    let interpreter = match installer {
+        ScriptInstaller::Nvm => "bash",
+        ScriptInstaller::Rustup | ScriptInstaller::OhMyZsh | ScriptInstaller::Zoxide => "sh",
+    };
+    let mut run = words([interpreter]);
     run.push(path);
     match installer {
         ScriptInstaller::Rustup => run.extend(words(["-y"])),
         ScriptInstaller::OhMyZsh => run.extend(words(["--unattended", "--keep-zshrc"])),
-        ScriptInstaller::Zoxide => {}
+        // The installer takes no flags. It writes into $NVM_DIR, which
+        // defaults to $HOME/.nvm -- the directory deps.conf:36 checks.
+        ScriptInstaller::Zoxide | ScriptInstaller::Nvm => {}
     }
 
     vec![fetch, run]
@@ -1074,6 +1111,66 @@ mod tests {
     ///
     /// The defect this pins: the retired shell wrote `curl ... | sh`, and the
     /// port kept both commands but dropped the pipe, because an effect here
+    /// Every `ScriptInstaller`, for tests that must cover all of them.
+    ///
+    /// The match below is the guard: adding a variant makes it fail to
+    /// compile, which is the only reason this list can be trusted. The
+    /// hand-written list it replaced silently excluded `Nvm`, so the test
+    /// that proves a fetched installer runs the file it fetched did not
+    /// cover the one installer that runs under a different interpreter.
+    const EVERY_SCRIPT_INSTALLER: [ScriptInstaller; 4] = [
+        ScriptInstaller::Rustup,
+        ScriptInstaller::OhMyZsh,
+        ScriptInstaller::Zoxide,
+        ScriptInstaller::Nvm,
+    ];
+
+    #[test]
+    fn the_installer_list_covers_every_variant() {
+        for installer in EVERY_SCRIPT_INSTALLER {
+            match installer {
+                ScriptInstaller::Rustup
+                | ScriptInstaller::OhMyZsh
+                | ScriptInstaller::Zoxide
+                | ScriptInstaller::Nvm => {}
+            }
+        }
+        let mut seen = EVERY_SCRIPT_INSTALLER.to_vec();
+        seen.sort();
+        seen.dedup();
+        assert_eq!(seen.len(), EVERY_SCRIPT_INSTALLER.len(), "the list repeats a variant");
+    }
+
+    /// nvm's installer is fetched from a pinned tag and run under bash.
+    ///
+    /// Two facts, both load-bearing, neither visible in the argv assertions
+    /// that cover the other three installers.
+    ///
+    /// The tag is the whole reason nvm is installable at all: upstream
+    /// publishes no moving URL, so this dependency was manual-only and every
+    /// unattended bootstrap left node uninstallable. A URL that drifted back
+    /// to a branch would 404 rather than go stale quietly.
+    ///
+    /// bash is not interchangeable with sh here. nvm's installer tests
+    /// `BASH_VERSION` in its first lines and exits 1 under dash, which is
+    /// what `/bin/sh` is on every Debian-based image this repo bootstraps.
+    #[test]
+    fn the_nvm_installer_is_pinned_and_runs_under_bash() {
+        let url = script_url(ScriptInstaller::Nvm);
+        assert!(
+            url.contains("/v0.40.7/"),
+            "the nvm installer URL must name a version tag, got {url}"
+        );
+
+        let sequence = script_argv(ScriptInstaller::Nvm);
+        let run = sequence.last().expect("the sequence ends with the run");
+        assert_eq!(
+            run.first().map(OsString::as_os_str),
+            Some(OsStr::new("bash")),
+            "nvm's installer refuses to run under sh: {run:?}"
+        );
+    }
+
     /// is argv and a pipe is not expressible as argv. `curl` then wrote to a
     /// discarded stdout and `sh -s --` read an empty stdin, so the step exited
     /// 0 having installed nothing and the check failed afterwards.
@@ -1083,9 +1180,7 @@ mod tests {
     /// the two argvs are CONNECTED: the path curl writes is the path sh runs.
     #[test]
     fn a_fetched_installer_is_written_to_a_file_and_run_from_it() {
-        for installer in
-            [ScriptInstaller::Rustup, ScriptInstaller::OhMyZsh, ScriptInstaller::Zoxide]
-        {
+        for installer in EVERY_SCRIPT_INSTALLER {
             let sequence = script_argv(installer);
             assert_eq!(sequence.len(), 2, "a fetch and a run: {sequence:?}");
 

@@ -189,6 +189,46 @@ assert_equals 'install-hooks refuses a world-writable tests directory' '1' "$sta
 assert_contains 'the refusal names the tests directory' "$home/tests" "$output"
 chmod o-w "$home/tests"
 
+# The same refusal has to hold when the directory is reached through a
+# symlink, which is the shape the three tests above cannot catch.
+#
+# `find "$dir" -maxdepth 0 -perm -o+w` stats the LINK, and a symlink is always
+# mode lrwxr-xr-x, so the permission test reads the link's own bits and never
+# the target's. Measured: for a symlink pointing at a 0777 directory, that
+# find prints nothing and check_dir passes; `find -L` prints the path and
+# refuses. A synced or restored home is exactly where ~/.local/bin or ~/tests
+# arrives as a link, and the file's header calls these four directories the
+# trust boundary -- anyone who can write to them runs code as this user.
+real_tests=$(readlink -f "$home/tests")
+mv "$home/tests" "$home/tests-real"
+ln -s "$home/tests-real" "$home/tests"
+chmod o+w "$home/tests-real"
+output=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)
+status=$?
+assert_equals 'install-hooks refuses a world-writable tests directory reached through a symlink' \
+    '1' "$status"
+chmod o-w "$home/tests-real"
+rm -f "$home/tests"
+mv "$home/tests-real" "$home/tests"
+# Named so the variable is used and the restore is verifiable, rather than
+# trusting the mv above silently.
+assert_equals 'the tests directory is a real directory again' \
+    "$real_tests" "$(readlink -f "$home/tests")"
+
+# The other direction, which is the one that bites on Linux: a symlink to a
+# SAFE directory must still be accepted. Without -L, GNU find matches the
+# link's own lrwxrwxrwx mode and refuses a correct setup, so a fix that only
+# tightened the check would trade a macOS hole for a Linux false refusal.
+mv "$home/tests" "$home/tests-real"
+ln -s "$home/tests-real" "$home/tests"
+chmod 755 "$home/tests-real"
+output=$(HOME="$home" "$install_dir/config" install-hooks 2>&1)
+status=$?
+assert_equals 'install-hooks accepts a safe tests directory reached through a symlink' \
+    '0' "$status"
+rm -f "$home/tests"
+mv "$home/tests-real" "$home/tests"
+
 # --- thin wrappers ----------------------------------------------------------
 
 shim_dir="$FIXTURES/shims"

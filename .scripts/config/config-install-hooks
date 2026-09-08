@@ -29,13 +29,30 @@ hooks_dir="$HOME/.cfg/hooks"
 
 mkdir -p "$bin_dir"
 
+# `find -L` follows the symlink and tests the directory that will actually be
+# written to. Without -L, find stats the LINK rather than the target, and the
+# two find implementations then get it wrong in OPPOSITE directions. Measured,
+# for a symlink to a 0755 directory and a symlink to a 0777 one:
+#
+#                          BSD find (macOS)      GNU find (Linux)
+#   symlink -> 0755 dir    no match (allows)     MATCHES (refuses)
+#   symlink -> 0777 dir    no match (ALLOWS)     matches (refuses)
+#
+# So on macOS the check lets a world-writable directory through whenever it is
+# reached by a link, and on Linux it refuses a directory that is perfectly
+# safe. `-L` gives the right answer in all four cells, because it asks about
+# the target in every case.
+#
+# That matters because ~/.local/bin and ~/tests both plausibly arrive as
+# symlinks on a synced or restored home, and this function is the whole
+# enforcement of the trust boundary the header describes.
 check_dir() {
     dir=$1
-    if [ -n "$(find "$dir" -maxdepth 0 \( -perm -g+w -o -perm -o+w \))" ]; then
+    if [ -n "$(find -L "$dir" -maxdepth 0 \( -perm -g+w -o -perm -o+w \))" ]; then
         printf 'config install-hooks: refusing, %s is group- or world-writable\n' "$dir" >&2
         exit 1
     fi
-    if [ -z "$(find "$dir" -maxdepth 0 -user "$(id -un)")" ]; then
+    if [ -z "$(find -L "$dir" -maxdepth 0 -user "$(id -un)")" ]; then
         printf 'config install-hooks: refusing, %s is not owned by %s\n' "$dir" "$(id -un)" >&2
         exit 1
     fi

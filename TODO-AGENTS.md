@@ -76,16 +76,7 @@ conversation rather than a commit.
   per-machine) keeps the same format. It is read by the same parser, so it
   converts with everything else, but a human hand-edits it.
 
-- CLAIMED 2026-09-08. `.scripts/config/config-install-hooks:34` uses `find "$dir" -maxdepth 0`
-  without `-L`, so it stats the symlink rather than its target. A
-  world-writable directory reached through a symlink passes the
-  trust-boundary check the file's header (lines 13-18) says these four
-  directories are. `$HOME/.local/bin` and `$HOME/tests` are both plausible
-  symlinks on a synced home.
-  Fix: `find -L`, or resolve with `readlink -f` first (already done at
-  line 21 for `$0`).
-
-- `.scripts/tmux-start.sh:26` decides a session exists with
+- CLAIMED 2026-09-08. `.scripts/tmux-start.sh:26` decides a session exists with
   `[ "$(tmux ls | rg $SESSION_NAME)" = "" ]`, which substring-matches and
   treats the name as a regex. `s dev` finds an existing `dev-tool`
   session, skips creation, then `tmux attach -t $SESSION_NAME` at line 38

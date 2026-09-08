@@ -6,18 +6,18 @@ is the prose version. The manifest in this directory is the executable one.
 
 ## Files
 
-- `deps.conf` -- dependencies shared by every machine, regardless of
+- `deps.toml` -- dependencies shared by every machine, regardless of
   platform. One line per dependency: `name|check_command|docs_url`.
-- `deps-ci.conf` -- dependencies of the test suite itself, not of the
+- `deps-ci.toml` -- dependencies of the test suite itself, not of the
   working environment: `python3`, `pyyaml`, `dash`. Never selected by
   platform detection, so a `depcheck` on a developer machine never asks for
   them. `.github/workflows/test-suite.yml` reads it by setting `DEPS_CONF`.
-- `deps-mac.conf` / `deps-linux.conf` -- dependencies that belong to one
+- `deps-mac.toml` / `deps-linux.toml` -- dependencies that belong to one
   platform only. Same format. Both files ship together; what differs per
-  machine is only which one gets read. `deps-mac.conf` holds `aerospace`;
-  `deps-linux.conf` holds `oh-my-zsh` and `xclip`.
+  machine is only which one gets read. `deps-mac.toml` holds `aerospace`;
+  `deps-linux.toml` holds `oh-my-zsh` and `xclip`.
 - `config deps` -- the engine, a Rust binary built from `crates/`. Reads
-  `deps.conf`, then whichever of `deps-mac.conf` and `deps-linux.conf`
+  `deps.toml`, then whichever of `deps-mac.toml` and `deps-linux.toml`
   matches this machine, if that file exists. The platform is detected the
   same way `~/.scripts/platform.sh` detects it, and the `DEPS_LOCAL_CONF`
   environment variable overrides the choice.
@@ -67,7 +67,7 @@ A shell pipe, a `||`, and a `|&` are all forbidden for the same reason.
 
 ### Checks accept either platform's install shape
 
-`deps.conf` is shared across branches, so a check in it must pass on every
+`deps.toml` is shared across branches, so a check in it must pass on every
 platform that runs it:
 
 - `alacritty` passes on a macOS `.app` bundle under `/Applications`, and on
@@ -76,11 +76,11 @@ platform that runs it:
   oh-my-zsh custom-plugin path.
 
 `oh-my-zsh` itself is not shared, so no ordering between `oh-my-zsh` and
-`zsh-autosuggestions` is guaranteed inside `deps.conf`.
+`zsh-autosuggestions` is guaranteed inside `deps.toml`.
 
 ## Adding a dependency
 
-Add a line to `deps.conf`, or to `deps-mac.conf` / `deps-linux.conf` when
+Add a line to `deps.toml`, or to `deps-mac.toml` / `deps-linux.toml` when
 the dependency belongs to one platform only.
 
 The default install command is `<package manager> install <name>`, which is
@@ -159,7 +159,7 @@ Restricts the run to a comma-separated subset of the manifest.
 This exists for `.github/workflows/test-suite.yml`. That workflow used to
 carry a hand-written apt list and a hand-written brew list naming `tmux`,
 `zsh`, `git`, `fzf`, `ripgrep` and `shellcheck` -- every one of them already a
-`deps.conf` entry. Two copies of the same package names meant the copy in YAML
+`deps.toml` entry. Two copies of the same package names meant the copy in YAML
 was the one that drifted, and nothing checked it. The workflow now names the
 set it wants and the engine resolves each name to the right package for
 whichever manager the runner has.
@@ -223,7 +223,7 @@ on 24.04, the Neovim config in this repo needs 0.10 for `vim.uv`, and the
 manifest's check was a bare `command -v nvim` that both satisfied. The
 bootstrap called the machine ready and the editor then failed at startup.
 
-`deps.conf` now writes that entry as `command -v nvim >=0.10`, which parses
+`deps.toml` now writes that entry as `command -v nvim >=0.10`, which parses
 to `Check::CommandVersion` and compares three numeric components rather than
 strings -- "0.9" sorts above "0.10" lexically and below it as a version. On
 apt the catalog routes `neovim` to a pinned upstream release tarball

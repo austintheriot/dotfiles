@@ -13,7 +13,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use deps_core::{
-    ConfKind, DependencyName, Manifest, ParseError, PlanError, Selection, parse_manifest,
+    ConfKind, DependencyName, Manifest, ParseError, PlanError, Selection, parse_manifest_toml,
 };
 
 /// The platform this run detected.
@@ -25,9 +25,9 @@ use deps_core::{
 /// decides the variant and hands it in through [`Environment`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
-    /// `deps-mac.conf` is the platform variant.
+    /// `deps-mac.toml` is the platform variant.
     MacOs,
-    /// `deps-linux.conf` is the platform variant.
+    /// `deps-linux.toml` is the platform variant.
     Linux,
     /// No known platform, so there is no variant to append.
     Unknown,
@@ -42,8 +42,8 @@ impl Platform {
     /// shared manifest and nothing else.
     fn variant_file_name(self) -> Option<&'static str> {
         match self {
-            Platform::MacOs => Some("deps-mac.conf"),
-            Platform::Linux => Some("deps-linux.conf"),
+            Platform::MacOs => Some("deps-mac.toml"),
+            Platform::Linux => Some("deps-linux.toml"),
             Platform::Unknown => None,
         }
     }
@@ -60,10 +60,10 @@ impl Platform {
 pub struct Environment {
     /// The value of `DEPS_CONF`, if the caller set one.
     ///
-    /// `retired-check-deps:37` defaults this to `deps.conf` beside the script
+    /// `retired-check-deps:37` defaulted this to `deps.toml` beside the script
     /// when unset. An explicit value is a deliberate choice of manifest,
     /// which is what suppresses the platform variant below and is what
-    /// `deps-ci.conf:3` means by "selected only by an explicit `DEPS_CONF`".
+    /// `deps-ci.toml` means by "selected only by an explicit `DEPS_CONF`".
     pub deps_conf: Option<OsString>,
     /// The value of `DEPS_LOCAL_CONF`, if the caller set one.
     ///
@@ -125,23 +125,24 @@ impl ManifestSources {
 
 /// Resolve which conf files a run reads.
 ///
-/// Mirrors `retired-check-deps:15-56`. `DEPS_CONF` defaults to `deps.conf`
+/// Mirrors `retired-check-deps:15-56`, with `deps.toml` where that script
+/// read `deps.toml`. `DEPS_CONF` defaults to `deps.toml`
 /// beside the script; this module has no script directory to resolve
-/// against, so an unset `deps_conf` resolves to the bare name `deps.conf`
+/// against, so an unset `deps_conf` resolves to the bare name `deps.toml`
 /// and the caller (`mod.rs`) is responsible for running from, or
 /// qualifying paths against, the directory that convention assumes.
 ///
 /// The platform variant is appended only when `deps_local_conf` is unset,
 /// exactly like `retired-check-deps:48-56`: an explicit `DEPS_LOCAL_CONF`
 /// (including one pointing at a file that does not exist) suppresses the
-/// variant rather than adding to it. This is the behavior `deps-ci.conf:3`
+/// variant rather than adding to it. This is the behavior `deps-ci.toml`
 /// depends on and the CI leg exercises by setting
 /// `DEPS_LOCAL_CONF=/nonexistent/deps-platform.conf`: a resolver that
 /// appended the variant regardless would pull `aerospace` or `oh-my-zsh`
 /// into a CI run that does not want them.
 ///
 /// An explicit `DEPS_CONF` marks the whole read `ExplicitOnly`, matching
-/// `deps-ci.conf:3-5`'s statement that the file is selected only that way
+/// `deps-ci.toml`'s statement that the file is selected only that way
 /// and permitting the one check (`PythonImport`) that a platform-selected
 /// file may not carry.
 pub fn conf_paths(env: &Environment) -> ManifestSources {
@@ -151,7 +152,7 @@ pub fn conf_paths(env: &Environment) -> ManifestSources {
         .deps_conf
         .clone()
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("deps.conf"));
+        .unwrap_or_else(|| PathBuf::from("deps.toml"));
 
     let deps_local_conf = match &env.deps_local_conf {
         Some(explicit_local) => Some(PathBuf::from(explicit_local)),
@@ -194,11 +195,18 @@ pub enum LoadError {
 ///
 /// Present files' text concatenates in path order before parsing, matching
 /// `retired-check-deps:459`'s `{ read_entries "$DEPS_CONF"; read_entries
-/// "$DEPS_LOCAL_CONF"; }`, then parses as one `deps_core::parse_manifest`
-/// call: `Manifest`'s only constructor takes one `ConfKind` for the whole
-/// text, and every file in one run shares the `ConfKind`
-/// [`ManifestSources::conf_kind`] records, so this does not lose the
-/// platform-selected `PythonImport` restriction by merging files.
+/// "$DEPS_LOCAL_CONF"; }`, then parses as one
+/// `deps_core::parse_manifest_toml` call: `Manifest`'s only constructor
+/// takes one `ConfKind` for the whole text, and every file in one run shares
+/// the `ConfKind` [`ManifestSources::conf_kind`] records, so this does not
+/// lose the platform-selected `PythonImport` restriction by merging files.
+///
+/// Concatenating TOML documents is well defined for this schema and was
+/// measured before relying on it: two files naming distinct tables merge to
+/// their union, and two files declaring the SAME table are refused with
+/// "Cannot declare ('git',) twice". The second is the duplicate-name error
+/// this function's contract already promised, now enforced by the format
+/// rather than by a pass over parsed entries.
 ///
 /// # Errors
 ///
@@ -220,7 +228,8 @@ pub fn load_manifest(sources: &ManifestSources) -> Result<Manifest, LoadError> {
         }
     }
 
-    parse_manifest(&concatenated, sources.conf_kind()).map_err(|detail| LoadError::Parse { detail })
+    parse_manifest_toml(&concatenated, sources.conf_kind())
+        .map_err(|detail| LoadError::Parse { detail })
 }
 
 /// Read a file's text, or `None` if it is not there.
@@ -335,16 +344,18 @@ mod tests {
     fn a_manifest_of(names: &[&str]) -> Manifest {
         let text: String = names
             .iter()
-            .map(|name| format!("{name}|command -v {name}|https://example.invalid/{name}\n"))
+            .map(|name| {
+                format!("[{name}]\ncommand = \"{name}\"\ndocs = \"https://example.invalid/{name}\"\n\n")
+            })
             .collect();
-        parse_manifest(&text, ConfKind::ExplicitOnly).expect("the fixture manifest parses")
+        parse_manifest_toml(&text, ConfKind::ExplicitOnly).expect("the fixture manifest parses")
     }
 
     fn dependency(name: &str) -> DependencyName {
         DependencyName::parse(name).expect("the fixture name is valid")
     }
 
-    /// The default run reads deps.conf plus the platform variant.
+    /// The default run reads deps.toml plus the platform variant.
     #[test]
     fn the_default_run_reads_the_base_and_the_platform_variant() {
         let environment = Environment {
@@ -359,7 +370,7 @@ mod tests {
         // below hold for a resolver that reads nothing.
         assert!(!sources.paths.is_empty(), "a run must read a manifest");
         assert!(
-            sources.paths.iter().any(|path| path.ends_with("deps.conf")),
+            sources.paths.iter().any(|path| path.ends_with("deps.toml")),
             "the base manifest is always read: {:?}",
             sources.paths
         );
@@ -367,7 +378,7 @@ mod tests {
             sources
                 .paths
                 .iter()
-                .any(|path| path.ends_with("deps-mac.conf")),
+                .any(|path| path.ends_with("deps-mac.toml")),
             "the platform variant is appended on macOS: {:?}",
             sources.paths
         );
@@ -375,14 +386,14 @@ mod tests {
 
     /// An explicit DEPS_CONF replaces the base and suppresses the variant.
     ///
-    /// deps-ci.conf documents that it is selected only this way, and the CI
+    /// deps-ci.toml documents that it is selected only this way, and the CI
     /// leg sets DEPS_LOCAL_CONF to a nonexistent path specifically to
     /// exclude the variant. A resolver that appended the variant anyway
     /// would pull in aerospace or oh-my-zsh, which CI does not need.
     #[test]
     fn an_explicit_deps_conf_suppresses_the_platform_variant() {
         let environment = Environment {
-            deps_conf: Some("/somewhere/deps-ci.conf".into()),
+            deps_conf: Some("/somewhere/deps-ci.toml".into()),
             deps_local_conf: Some("/nonexistent/deps-platform.conf".into()),
             platform: Platform::Linux,
         };
@@ -393,7 +404,7 @@ mod tests {
             !sources
                 .paths
                 .iter()
-                .any(|path| path.ends_with("deps-linux.conf")),
+                .any(|path| path.ends_with("deps-linux.toml")),
             "an explicit DEPS_CONF must not drag in the platform variant: {:?}",
             sources.paths
         );
@@ -472,7 +483,7 @@ mod tests {
         // Positive control: the base manifest is still read, or the
         // assertion below holds for a resolver that reads nothing at all.
         assert!(
-            sources.paths.iter().any(|path| path.ends_with("deps.conf")),
+            sources.paths.iter().any(|path| path.ends_with("deps.toml")),
             "the base manifest is always read: {:?}",
             sources.paths
         );

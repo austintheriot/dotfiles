@@ -43,7 +43,7 @@ FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe6
 #
 # python3 is the one addition over the bare image, and it is harness
 # machinery rather than a dependency under test: it serves the seed over
-# HTTP. It is not in deps.conf, so its presence cannot mask a missing
+# HTTP. It is not in deps.toml, so its presence cannot mask a missing
 # dependency. A dedicated web server would be a second thing to pin.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates python3 \

@@ -3,7 +3,7 @@
 # Tests the shared platform-detection helper.
 #
 # Every config file that has a platform variant (.zshrc, tmux.conf,
-# alacritty.toml, deps.conf) needs the same answer to "which platform is
+# alacritty.toml, deps.toml) needs the same answer to "which platform is
 # this". Before this helper existed, each file answered it separately or not
 # at all, which is how the mac and linux branches drifted: a file that never
 # asks the question has to BE two files, and two files drift.

@@ -312,7 +312,7 @@ if [ -d "$git_dir" ]; then
 fi
 
 # One branch. Platform differences are per-platform FILES selected at runtime
-# (.zshrc-mac, tmux-mac.conf, deps-mac.conf) by .scripts/platform.sh, so
+# (.zshrc-mac, tmux-mac.conf, deps-mac.toml) by .scripts/platform.sh, so
 # nothing about this machine's OS implies a ref. --branch stays the only
 # branch selector: it is how a reader reaches `work` or `home`, which no
 # amount of uname implies.

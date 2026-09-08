@@ -249,7 +249,7 @@ pub struct Planning<'inputs> {
     pub manager: PackageManager,
     /// Which dependencies this run is about.
     pub selection: &'inputs Selection,
-    /// The ordering graph. `deps.conf:18-20` says the conf file states no
+    /// The ordering graph. `deps.toml` says the conf file states no
     /// ordering, so this is a separate input rather than a manifest field.
     pub requirements: &'inputs Requirements,
     /// The elevation state, resolved once at the edge.
@@ -386,7 +386,7 @@ mod tests {
     use crate::{
         Check, CheckPath, CheckStatus, ConfKind, Elevation, InstallStatus, KeyringSource,
         NoInstallReason, Observation, ObservationMap, PackageAvailability, PackageManager,
-        PackageMap, PathRoot, Requirements, Selection, SourceListEntry, parse_manifest,
+        PackageMap, PathRoot, Requirements, Selection, SourceListEntry, parse_manifest_toml,
     };
     use dotfiles_path::{CheckRelPath, PackageId};
     use std::cell::RefCell;
@@ -397,16 +397,21 @@ mod tests {
         DependencyName::parse(name).expect("a test dependency name parses")
     }
 
-    // The real Linux pair. `deps-linux.conf:11` holds oh-my-zsh; the
-    // zsh-autosuggestions check is `deps.conf:26` with its brew branch
+    // The real Linux pair. `deps-linux.toml` holds oh-my-zsh; the
+    // zsh-autosuggestions check is `deps.toml`'s with its brew branch
     // dropped, because the brew branch is what makes the pair converge in
     // one pass on macOS and this test is the Linux case.
     fn oh_my_zsh_manifest() -> Manifest {
-        let text = "\
-oh-my-zsh|[ -d \"$HOME/.oh-my-zsh\" ]|https://ohmyz.sh/
-zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh\" ]|https://github.com/zsh-users/zsh-autosuggestions
-";
-        parse_manifest(text, ConfKind::PlatformSelected).expect("the real pair parses")
+        let text = r#"
+[oh-my-zsh]
+dir = "$HOME/.oh-my-zsh"
+docs = "https://ohmyz.sh/"
+
+[zsh-autosuggestions]
+file = "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+docs = "https://github.com/zsh-users/zsh-autosuggestions"
+"#;
+        parse_manifest_toml(text, ConfKind::PlatformSelected).expect("the real pair parses")
     }
 
     fn home_path(rest: &str) -> CheckPath {
@@ -548,7 +553,7 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
         }
     }
 
-    // The ordering evidence, stated as data. `deps.conf:18-20` says no
+    // The ordering evidence, stated as data. `deps.toml` says no
     // ordering exists in the file today, so the graph is a separate input
     // rather than a manifest field, and this is what makes the pair a
     // fixpoint rather than one pass: cloning into a nonexistent

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use dotfiles_path::{CommandName, DocsUrl, GlobPattern, ModuleName, NameError, VersionFloor};
 
@@ -62,7 +62,7 @@ impl std::fmt::Display for DependencyName {
 /// Load-bearing rather than informational: spec 5.2 makes
 /// `PythonImport` a parse error in a platform-selected file, so the sole
 /// interpreter-spawning check can never reach the shell-startup path.
-/// `deps-ci.conf:3-5` states that the file is selected only by an explicit
+/// `deps-ci.toml` states that the file is selected only by an explicit
 /// `DEPS_CONF`; nothing enforced it before.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfKind {
@@ -122,18 +122,17 @@ impl Manifest {
 ///
 /// Every variant carries the 1-based line number, because the caller reports
 /// a file it read and a message with no line is unactionable against a
-/// 45-line conf file.
+/// 45-line manifest.
+///
+/// Every variant below carries `line`, and under the TOML parser it is
+/// always 0: a TOML table has no single line this crate can name without
+/// tracking spans, and reporting a wrong line is worse than reporting none.
+/// The name is in the error instead, which is what a reader searches for.
+/// `MalformedToml` is the exception -- serde's own message carries a real
+/// line and column, which is why that variant keeps the text rather than
+/// re-deriving fields from it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
-    /// The line did not split into the field count an entry needs, which is
-    /// what a missing field or an unescaped separator looks like.
-    WrongFieldCount {
-        /// The 1-based line number, so the reader can open the file at it.
-        line: usize,
-        /// How many fields were actually found, which distinguishes a
-        /// truncated line from one carrying an extra separator.
-        found: usize,
-    },
     /// The name field is not a usable dependency name.
     BadName {
         /// The 1-based line number, so the reader can open the file at it.
@@ -158,16 +157,6 @@ pub enum ParseError {
         /// `BadName` because both fields are validated text, and the variant
         /// around it is what says which field is meant.
         cause: NameError,
-    },
-    /// Two entries claim one name. Rejected at parse rather than resolved by
-    /// precedence, so no lookup can silently see one of two entries.
-    DuplicateName {
-        /// The 1-based line number of the *second* occurrence, which is the
-        /// one to delete.
-        line: usize,
-        /// The repeated name, so the reader can find the first occurrence
-        /// without rereading the file.
-        name: DependencyName,
     },
     /// The text is not valid TOML at all. Distinct from every variant above,
     /// which describe a well-formed document saying something unusable: this
@@ -529,66 +518,6 @@ pub fn parse_manifest_toml(text: &str, kind: ConfKind) -> Result<Manifest, Parse
     Ok(Manifest { entries })
 }
 
-/// Parse pipe-delimited manifest text into typed entries.
-///
-/// The format this crate is migrating OFF: `name|check_command|docs_url`.
-/// Retained so `parse_manifest_toml` can be checked against it entry by
-/// entry, and so a `.conf` file that has not been converted still reads.
-/// New entries go in the TOML form.
-///
-/// Takes `&str`, never a path: the caller reads the file, so this function
-/// makes no syscall and the module holds no capability. It is the boundary
-/// spec 3.6 requires, replacing the `sh -c "$check"` at
-/// `retired-check-deps:524` with a closed enum that has no shell escape hatch.
-///
-/// # Errors
-///
-/// Returns `ParseError` naming the 1-based line and the rule it broke. A
-/// line with more than three pipe-separated fields is `WrongFieldCount`
-/// rather than a silent truncation, which is the failure the pipe format's
-/// own header documented and could not detect.
-pub fn parse_manifest(text: &str, kind: ConfKind) -> Result<Manifest, ParseError> {
-    let mut entries = Vec::new();
-    let mut seen: BTreeSet<DependencyName> = BTreeSet::new();
-
-    for (index, raw_line) in text.lines().enumerate() {
-        let line = index + 1;
-        let trimmed = raw_line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-
-        let fields: Vec<&str> = trimmed.split('|').collect();
-        let [raw_name, raw_check, raw_docs] = fields.as_slice() else {
-            return Err(ParseError::WrongFieldCount { line, found: fields.len() });
-        };
-
-        let name = DependencyName::parse(raw_name)
-            .map_err(|cause| ParseError::BadName { line, cause })?;
-        let check = parse_check(raw_check, kind, line)?;
-        let docs = DocsUrl::parse(raw_docs)
-            .map_err(|cause| ParseError::BadDocs { line, cause })?;
-
-        if !seen.insert(name.clone()) {
-            return Err(ParseError::DuplicateName { line, name });
-        }
-        entries.push(ManifestEntry { name, check, docs });
-    }
-
-    Ok(Manifest { entries })
-}
-
-/// Recognize a check expression, tagging the failure with its line.
-///
-/// The grammar itself lives in `check`, so `parse_manifest` owns the line
-/// accounting and the check module owns the shapes. `ParseError::BadCheck`
-/// wraps the grammar's own error rather than flattening it, because a report
-/// that says which rule broke is what makes a 45-line conf file actionable.
-fn parse_check(raw: &str, kind: ConfKind, line: usize) -> Result<Check, ParseError> {
-    crate::check::parse_check_expression(raw, kind)
-        .map_err(|cause| ParseError::BadCheck { line, cause })
-}
-
 #[cfg(test)]
 mod tests {
     use dotfiles_path::CommandName;
@@ -603,91 +532,71 @@ mod tests {
         CommandName::parse(raw).expect("a test command name parses")
     }
 
-    // The real shared manifest, verbatim from deps.conf. Comment lines and
-    // blank lines are skipped; the format is name|check|docs.
-    const REAL_SHARED_HEAD: &str = "\
+    // The head of the real shared manifest, verbatim from deps.toml.
+    const REAL_SHARED_HEAD: &str = r#"
 # CLI dependencies shared by every machine, regardless of platform.
-# Format: name|check_command|docs_url
 
-git|command -v git|https://git-scm.com/downloads
-gh|command -v gh|https://cli.github.com/
-tpm|[ -d \"$HOME/.tmux/plugins/tpm\" ]|https://github.com/tmux-plugins/tpm
-";
+[git]
+command = "git"
+docs = "https://git-scm.com/downloads"
+
+[gh]
+command = "gh"
+docs = "https://cli.github.com/"
+
+[tpm]
+dir = "$HOME/.tmux/plugins/tpm"
+docs = "https://github.com/tmux-plugins/tpm"
+"#;
 
     #[test]
     fn parses_the_real_shared_manifest_head() {
-        let manifest = parse_manifest(REAL_SHARED_HEAD, ConfKind::PlatformSelected)
-            .expect("the real deps.conf head parses");
+        let manifest = parse_manifest_toml(REAL_SHARED_HEAD, ConfKind::PlatformSelected)
+            .expect("the real deps.toml head parses");
         assert_eq!(manifest.entries().len(), 3);
-        assert_eq!(manifest.entries()[0].name.as_str(), "git");
+        // Sorted by name rather than in file order: the parser walks a
+        // BTreeMap, so `gh` precedes `git` precedes `tpm`. Asserted rather
+        // than left implicit, because a caller that renders the list sees
+        // this order.
+        assert_eq!(manifest.entries()[0].name.as_str(), "gh");
+        assert_eq!(manifest.entries()[1].name.as_str(), "git");
         assert_eq!(
-            manifest.entries()[0].docs.as_str(),
+            manifest.entries()[1].docs.as_str(),
             "https://git-scm.com/downloads"
         );
         assert_eq!(
-            manifest.entries()[0].check,
+            manifest.entries()[1].check,
             Check::Command(CommandName::parse("git").expect("git is a name"))
         );
     }
 
-    // deps.conf:9-13 warns that a literal `|` in the check field truncates
-    // the check and leaks the remainder into docs_url. Under `IFS='|' read`
-    // that is silent. Here it is an error, which is the point of the port.
-    // `found` is 5, not 4: `||` is two pipe bytes, so the line splits into
-    // five fields, one of them the empty string between them. Confirmed
-    // against the shell this replaces: `IFS='|' read -r name check docs` on
-    // this exact line yields check=`command -v gh ` and
-    // docs=`| true|https://cli.github.com/`, which is the silent corruption
-    // deps.conf:9-13 documents and cannot detect.
-    #[test]
-    fn rejects_a_line_with_an_extra_pipe() {
-        let text = "gh|command -v gh || true|https://cli.github.com/\n";
-        assert!(matches!(
-            parse_manifest(text, ConfKind::PlatformSelected),
-            Err(ParseError::WrongFieldCount { line: 1, found: 5 })
-        ));
-    }
+    // The pipe format's four structural failures are gone with it, and are
+    // recorded here rather than ported so nobody re-adds a test with no
+    // subject:
+    //
+    //   WrongFieldCount, three ways (a `||` in a check splitting into five
+    //   fields, one extra `|` splitting into four, a missing field splitting
+    //   into two). All three existed because the check was one positionally
+    //   split string. A pipe in a TOML string is a character in a string.
+    //
+    //   DuplicateName. TOML refuses a repeated table itself, reported as
+    //   MalformedToml -- see `a_duplicate_table_is_refused_by_toml_itself`.
+    //
+    // What replaced them is not a like-for-like: it is
+    // `deny_unknown_fields` plus the exactly-one-check rule, both of which
+    // catch a class the pipe format could not express at all.
 
-    // A single extra pipe, which is the four-field case the `||` line above
-    // is not. Both must be refused, and the count must be the real one.
-    #[test]
-    fn rejects_a_line_with_one_extra_pipe() {
-        let text = "gh|command -v gh | true|https://cli.github.com/\n";
-        assert!(matches!(
-            parse_manifest(text, ConfKind::PlatformSelected),
-            Err(ParseError::WrongFieldCount { line: 1, found: 4 })
-        ));
-    }
-
-    #[test]
-    fn rejects_a_line_with_a_missing_field() {
-        let text = "gh|command -v gh\n";
-        assert!(matches!(
-            parse_manifest(text, ConfKind::PlatformSelected),
-            Err(ParseError::WrongFieldCount { line: 1, found: 2 })
-        ));
-    }
-
-    // A duplicate name means two entries claim one dependency, and the
-    // later one silently wins under the shell loop.
-    #[test]
-    fn rejects_a_duplicate_name() {
-        let text = "\
-git|command -v git|https://git-scm.com/downloads
-git|command -v git|https://git-scm.com/downloads
-";
-        assert!(matches!(
-            parse_manifest(text, ConfKind::PlatformSelected),
-            Err(ParseError::DuplicateName { line: 2, .. })
-        ));
-    }
-
-    // deps-ci.conf:23 uses http://, so a manifest holding it must parse.
+    // deps-ci.toml's dash entry uses http://, so a manifest holding it must
+    // parse. The one plain-http URL in the tracked set.
     #[test]
     fn accepts_the_one_plain_http_docs_url() {
-        let text = "dash|command -v dash|http://gondor.apana.org.au/~herbert/dash/\n";
-        let manifest = parse_manifest(text, ConfKind::ExplicitOnly)
-            .expect("deps-ci.conf:23 must parse");
+        let text = r#"
+[dash]
+command = "dash"
+docs = "http://gondor.apana.org.au/~herbert/dash/"
+"#;
+        let manifest =
+            parse_manifest_toml(text, ConfKind::ExplicitOnly).expect("the dash entry must parse");
         assert_eq!(
             manifest.entries()[0].docs.as_str(),
             "http://gondor.apana.org.au/~herbert/dash/"
@@ -696,8 +605,8 @@ git|command -v git|https://git-scm.com/downloads
 
     #[test]
     fn get_finds_an_entry_by_name() {
-        let manifest = parse_manifest(REAL_SHARED_HEAD, ConfKind::PlatformSelected)
-            .expect("the real deps.conf head parses");
+        let manifest = parse_manifest_toml(REAL_SHARED_HEAD, ConfKind::PlatformSelected)
+            .expect("the real deps.toml head parses");
         let wanted = DependencyName::parse("tpm").expect("tpm is a name");
         assert!(manifest.get(&wanted).is_some());
         let absent = DependencyName::parse("nvm").expect("nvm is a name");
@@ -709,10 +618,10 @@ git|command -v git|https://git-scm.com/downloads
     // in-repo precedent for the shape.
     #[test]
     fn parse_is_a_function_of_text_alone() {
-        let first = parse_manifest(REAL_SHARED_HEAD, ConfKind::PlatformSelected)
-            .expect("the real deps.conf head parses");
-        let second = parse_manifest(REAL_SHARED_HEAD, ConfKind::PlatformSelected)
-            .expect("the real deps.conf head parses");
+        let first = parse_manifest_toml(REAL_SHARED_HEAD, ConfKind::PlatformSelected)
+            .expect("the real deps.toml head parses");
+        let second = parse_manifest_toml(REAL_SHARED_HEAD, ConfKind::PlatformSelected)
+            .expect("the real deps.toml head parses");
         assert_eq!(first.entries(), second.entries());
     }
 
@@ -733,41 +642,90 @@ git|command -v git|https://git-scm.com/downloads
     /// green while the parser could not read the file it exists to read.
     #[test]
     fn every_real_check_shape_parses_and_the_grammar_stays_closed() {
-        // One line per distinct check shape in the four tracked conf files,
-        // verbatim. deps.conf:22, :24, :26, :32, :36, :45, deps-linux.conf:11
-        // and deps-ci.conf:22, which between them cover all seven variants.
-        let real_shapes = "\
-git|command -v git|https://git-scm.com/downloads
-alacritty|if test -d /Applications/Alacritty.app; then true; else command -v alacritty; fi|https://alacritty.org/
-zsh-autosuggestions|test -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh\" -o -f \"$(brew --prefix 2>/dev/null)/share/zsh-autosuggestions/zsh-autosuggestions.zsh\"|https://github.com/zsh-users/zsh-autosuggestions
-tpm|[ -d \"$HOME/.tmux/plugins/tpm\" ]|https://github.com/tmux-plugins/tpm
-nvm|[ -s \"$HOME/.nvm/nvm.sh\" ]|https://github.com/nvm-sh/nvm
-node|if command -v node; then true; else ls -d \"$HOME/.nvm/versions/node\"/v* >/dev/null 2>&1; fi|https://nodejs.org/
-oh-my-zsh|[ -d \"$HOME/.oh-my-zsh\" ]|https://ohmyz.sh/
-pyyaml|python3 -c \"import yaml\"|https://pyyaml.org/
-";
-        let parsed = parse_manifest(real_shapes, ConfKind::ExplicitOnly)
-            .expect("every shape in the tracked conf files parses");
+        // One entry per distinct check shape in the four tracked manifests,
+        // verbatim. Between them these cover every variant of `Check`.
+        //
+        // Entries are looked up by NAME below rather than by index: the
+        // parser walks a BTreeMap, so file order is not result order, and an
+        // index-based assertion would silently check the wrong entry the
+        // moment a name is added.
+        let real_shapes = r#"
+[git]
+command = "git"
+docs = "https://git-scm.com/downloads"
+
+[neovim]
+command = "nvim"
+min_version = "0.10"
+docs = "https://neovim.io/"
+
+[alacritty]
+any_of = [{ dir = "/Applications/Alacritty.app" }, { command = "alacritty" }]
+docs = "https://alacritty.org/"
+
+[zsh-autosuggestions]
+any_of = [
+    { file = "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" },
+    { file = "$(brew --prefix 2>/dev/null)/share/zsh-autosuggestions/zsh-autosuggestions.zsh" },
+]
+docs = "https://github.com/zsh-users/zsh-autosuggestions"
+
+[tpm]
+dir = "$HOME/.tmux/plugins/tpm"
+docs = "https://github.com/tmux-plugins/tpm"
+
+[nvm]
+file_non_empty = "$HOME/.nvm/nvm.sh"
+docs = "https://github.com/nvm-sh/nvm"
+
+[node]
+any_of = [
+    { command = "node" },
+    { glob = { dir = "$HOME/.nvm/versions/node", pattern = "v*" } },
+]
+docs = "https://nodejs.org/"
+
+[pyyaml]
+python_import = "yaml"
+docs = "https://pyyaml.org/"
+"#;
+        let parsed = parse_manifest_toml(real_shapes, ConfKind::ExplicitOnly)
+            .expect("every shape in the tracked manifests parses");
         assert_eq!(parsed.entries.len(), 8);
 
-        // The seven variants, so a future collapse of two into one is a
-        // failure here rather than a silent behavior change.
-        let variants: Vec<&Check> = parsed.entries.iter().map(|entry| &entry.check).collect();
-        assert!(matches!(variants[0], Check::Command(_)));
-        assert!(matches!(variants[1], Check::AnyOf { .. }));
-        assert!(matches!(variants[2], Check::AnyOf { .. }));
-        assert!(matches!(variants[3], Check::DirExists(_)));
-        assert!(matches!(variants[4], Check::FileNonEmpty(_)));
-        assert!(matches!(variants[5], Check::AnyOf { .. }));
-        assert!(matches!(variants[6], Check::DirExists(_)));
-        assert!(matches!(variants[7], Check::PythonImport(_)));
-        // The -o alternation's own branches, because FileExists appears
-        // only inside one and would otherwise go unasserted.
-        let Check::AnyOf { first, rest } = variants[2] else {
-            panic!("deps.conf:26 is an alternation");
+        let check_of = |name: &str| -> Check {
+            let wanted = DependencyName::parse(name).expect("a fixture name parses");
+            parsed
+                .get(&wanted)
+                .unwrap_or_else(|| panic!("{name} is in the fixture"))
+                .check
+                .clone()
+        };
+
+        // Every variant, so a future collapse of two into one is a failure
+        // here rather than a silent behaviour change.
+        assert!(matches!(check_of("git"), Check::Command(_)));
+        assert!(matches!(check_of("neovim"), Check::CommandVersion { .. }));
+        assert!(matches!(check_of("alacritty"), Check::AnyOf { .. }));
+        assert!(matches!(check_of("zsh-autosuggestions"), Check::AnyOf { .. }));
+        assert!(matches!(check_of("tpm"), Check::DirExists(_)));
+        assert!(matches!(check_of("nvm"), Check::FileNonEmpty(_)));
+        assert!(matches!(check_of("node"), Check::AnyOf { .. }));
+        assert!(matches!(check_of("pyyaml"), Check::PythonImport(_)));
+
+        // The alternations' own branches, because FileExists, GlobExists and
+        // MacApplications appear only inside one and would otherwise go
+        // unasserted.
+        let Check::AnyOf { first, rest } = check_of("zsh-autosuggestions") else {
+            panic!("zsh-autosuggestions is an alternation");
         };
         assert!(matches!(first.as_ref(), Check::FileExists(_)));
         assert!(matches!(rest.as_slice(), [Check::FileExists(_)]));
+
+        let Check::AnyOf { rest: node_rest, .. } = check_of("node") else {
+            panic!("node is an alternation");
+        };
+        assert!(matches!(node_rest.as_slice(), [Check::GlobExists { .. }]));
 
         // The boundary that remains. None of these appears in a tracked conf
         // file today, and each must be an error rather than a fallthrough to

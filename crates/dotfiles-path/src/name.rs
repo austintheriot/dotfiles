@@ -333,7 +333,7 @@ impl fmt::Display for VersionFloor {
 /// A documentation URL, printed for a human and never fetched.
 ///
 /// Scheme-agnostic across `http` and `https` because 21 of the 22 manifest
-/// entries are `https://` and `deps-ci.conf:23` is
+/// entries are `https://` and `deps-ci.toml` is
 /// `http://gondor.apana.org.au/~herbert/dash/`. An https-only type cannot
 /// parse the manifest this repo ships.
 ///
@@ -441,14 +441,14 @@ mod tests {
         );
     }
 
-    // deps-ci.conf:23 is http://, not https://, so a scheme-agnostic type
+    // deps-ci.toml is http://, not https://, so a scheme-agnostic type
     // is required. An HttpsUrl cannot parse the manifest this repo ships.
     #[test]
     fn docs_url_accepts_both_schemes_and_rejects_neither() {
         assert!(DocsUrl::parse("https://git-scm.com/downloads").is_ok());
         assert!(
             DocsUrl::parse("http://gondor.apana.org.au/~herbert/dash/").is_ok(),
-            "deps-ci.conf:23 must parse"
+            "deps-ci.toml must parse"
         );
         assert!(matches!(
             DocsUrl::parse("git-scm.com/downloads"),

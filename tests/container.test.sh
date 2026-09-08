@@ -215,7 +215,7 @@ assert_succeeds 'TRIGGER_PATHS matches a platform zshrc variant' \
 # this gate exists for. Asserted per shape rather than once, because the
 # manifests, the Dockerfiles and the harnesses each reach a different suite.
 assert_succeeds 'TRIGGER_PATHS matches a deps manifest edit' \
-    path_matches_trigger 'deps/deps.conf'
+    path_matches_trigger 'deps/deps.toml'
 assert_succeeds 'TRIGGER_PATHS matches a deps Dockerfile edit' \
     path_matches_trigger 'deps/docker/Dockerfile.pop'
 assert_succeeds 'TRIGGER_PATHS matches a deps harness edit' \

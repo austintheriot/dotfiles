@@ -14,7 +14,7 @@ use std::process::{Command, Output};
 ///
 /// `DEPS_LOCAL_CONF` is set to a path that does not exist on purpose. An
 /// explicit value is what suppresses the platform variant, so a fixture run
-/// cannot pull `deps-mac.conf` or `deps-linux.conf` into a manifest the test
+/// cannot pull `deps-mac.toml` or `deps-linux.toml` into a manifest the test
 /// wrote by hand.
 fn run_against(conf: &Path, arguments: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_config-cli"))
@@ -25,11 +25,37 @@ fn run_against(conf: &Path, arguments: &[&str]) -> Output {
         .expect("the binary runs")
 }
 
-/// Write a one-entry manifest into a fresh temporary directory.
-fn fixture_manifest(line: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+/// Write a manifest of command checks into a fresh temporary directory.
+///
+/// Takes `(dependency, command)` pairs and renders the TOML, so no call site
+/// below writes manifest syntax. When the format changed from pipe-delimited
+/// to TOML, this one function absorbed it and the seven call sites did not
+/// move -- which is the point of a fixture builder over a literal.
+fn fixture_manifest(entries: &[(&str, &str)]) -> (tempfile::TempDir, std::path::PathBuf) {
+    use std::fmt::Write;
+
+    let mut text = String::new();
+    for (dependency, command) in entries {
+        // `writeln!` into the buffer rather than push_str(&format!(..)):
+        // formatting straight in skips the intermediate String, and
+        // `Write for String` is infallible so the discarded Err does not
+        // exist. Same shape as render.rs.
+        let _ = write!(
+            text,
+            "[{dependency}]\ncommand = \"{command}\"\ndocs = \"https://example.invalid/{dependency}\"\n\n"
+        );
+    }
+    fixture_manifest_text(&text)
+}
+
+/// Write verbatim manifest text into a fresh temporary directory.
+///
+/// For the one test that needs text which does NOT parse, where a builder
+/// that always emits valid TOML is the wrong tool.
+fn fixture_manifest_text(text: &str) -> (tempfile::TempDir, std::path::PathBuf) {
     let fixture = tempfile::tempdir().expect("tempdir");
-    let conf = fixture.path().join("deps.conf");
-    std::fs::write(&conf, line).expect("write");
+    let conf = fixture.path().join("deps.toml");
+    std::fs::write(&conf, text).expect("write");
     (fixture, conf)
 }
 
@@ -38,7 +64,7 @@ fn fixture_manifest(line: &str) -> (tempfile::TempDir, std::path::PathBuf) {
 fn check_exits_zero_when_everything_is_present() {
     // A check that is true on any machine: `sh` is on PATH everywhere this
     // repo runs, and the test asserts that below rather than assuming it.
-    let (_fixture, conf) = fixture_manifest("sh|command -v sh|https://example.invalid/sh\n");
+    let (_fixture, conf) = fixture_manifest(&[("sh", "sh")]);
 
     let run = run_against(&conf, &["deps", "check"]);
     let stdout = String::from_utf8_lossy(&run.stdout);
@@ -60,9 +86,7 @@ fn check_exits_zero_when_everything_is_present() {
 /// `deps check` on a manifest with an absent dependency exits 1.
 #[test]
 fn check_exits_one_when_something_is_missing() {
-    let (_fixture, conf) = fixture_manifest(
-        "nonexistent-tool|command -v definitely-not-a-real-binary|https://example.invalid/x\n",
-    );
+    let (_fixture, conf) = fixture_manifest(&[("nonexistent-tool", "definitely-not-a-real-binary")]);
 
     let run = run_against(&conf, &["deps", "check"]);
     let stdout = String::from_utf8_lossy(&run.stdout);
@@ -84,9 +108,7 @@ fn check_exits_one_when_something_is_missing() {
 /// an install failure.
 #[test]
 fn dry_run_spawns_nothing() {
-    let (_fixture, conf) = fixture_manifest(
-        "nonexistent-tool|command -v definitely-not-a-real-binary|https://example.invalid/x\n",
-    );
+    let (_fixture, conf) = fixture_manifest(&[("nonexistent-tool", "definitely-not-a-real-binary")]);
 
     let run = run_against(&conf, &["deps", "install", "--dry-run", "--yes"]);
     let stdout = String::from_utf8_lossy(&run.stdout);
@@ -106,7 +128,7 @@ fn dry_run_spawns_nothing() {
 /// nothing about what is about to happen on their machine.
 #[test]
 fn dry_run_discloses_the_command_it_would_run() {
-    let (_fixture, conf) = fixture_manifest("ripgrep|command -v rg|https://example.invalid/rg\n");
+    let (_fixture, conf) = fixture_manifest(&[("ripgrep", "rg")]);
 
     let run = run_against(&conf, &["deps", "install", "--dry-run", "--yes"]);
     let stdout = String::from_utf8_lossy(&run.stdout);
@@ -125,7 +147,7 @@ fn dry_run_discloses_the_command_it_would_run() {
 /// what the caller named.
 #[test]
 fn an_unknown_only_value_is_a_caller_error() {
-    let (_fixture, conf) = fixture_manifest("sh|command -v sh|https://example.invalid/sh\n");
+    let (_fixture, conf) = fixture_manifest(&[("sh", "sh")]);
 
     let run = run_against(&conf, &["deps", "check", "--only", "not-in-this-manifest"]);
     let stderr = String::from_utf8_lossy(&run.stderr);
@@ -144,10 +166,14 @@ fn an_unknown_only_value_is_a_caller_error() {
     );
 }
 
-/// A conf file that does not parse is a caller error, exit 2.
+/// A manifest file that does not parse is a caller error, exit 2.
 #[test]
 fn an_unparsable_manifest_is_a_caller_error() {
-    let (_fixture, conf) = fixture_manifest("this line has no pipes at all\n");
+    // Genuinely broken TOML. The pipe-format version of this test used "this
+    // line has no pipes at all", which TOML would reject too but for the
+    // wrong reason -- it reads as a bare key with no value. An unclosed
+    // table header cannot be mistaken for anything else.
+    let (_fixture, conf) = fixture_manifest_text("[unclosed\ncommand = \"sh\"\n");
 
     let run = run_against(&conf, &["deps", "check"]);
     let stderr = String::from_utf8_lossy(&run.stderr);
@@ -168,10 +194,10 @@ fn an_unparsable_manifest_is_a_caller_error() {
 /// is what a dry run discloses.
 #[test]
 fn only_narrows_which_steps_a_dry_run_plans() {
-    let (_fixture, conf) = fixture_manifest(concat!(
-        "ripgrep|command -v definitely-not-ripgrep|https://example.invalid/rg\n",
-        "fd|command -v definitely-not-fd|https://example.invalid/fd\n",
-    ));
+    let (_fixture, conf) = fixture_manifest(&[
+        ("ripgrep", "definitely-not-ripgrep"),
+        ("fd", "definitely-not-fd"),
+    ]);
 
     // Positive control for the absence asserted below: unnarrowed, the dry
     // run does plan a step for `fd`, so its absence afterwards is the
@@ -213,8 +239,16 @@ fn only_scopes_the_verdict_to_the_named_dependencies() {
     let conf_dir = fixture.path().join("deps");
     std::fs::create_dir_all(&conf_dir).expect("conf dir");
     std::fs::write(
-        conf_dir.join("deps.conf"),
-        "sh|command -v sh|https://example.invalid/sh\n         absent-tool|command -v definitely-not-a-real-binary|https://example.invalid/x\n",
+        conf_dir.join("deps.toml"),
+        r#"
+[sh]
+command = "sh"
+docs = "https://example.invalid/sh"
+
+[absent-tool]
+command = "definitely-not-a-real-binary"
+docs = "https://example.invalid/x"
+"#,
     )
     .expect("write");
 

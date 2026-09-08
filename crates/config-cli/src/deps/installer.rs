@@ -448,7 +448,7 @@ fn script_argv(installer: ScriptInstaller) -> Vec<Vec<OsString>> {
         ScriptInstaller::Rustup => run.extend(words(["-y"])),
         ScriptInstaller::OhMyZsh => run.extend(words(["--unattended", "--keep-zshrc"])),
         // The installer takes no flags. It writes into $NVM_DIR, which
-        // defaults to $HOME/.nvm -- the directory deps.conf:36 checks.
+        // defaults to $HOME/.nvm -- the directory deps.toml checks.
         ScriptInstaller::Zoxide | ScriptInstaller::Nvm => {}
     }
 

@@ -16,6 +16,41 @@ small mechanical fixes, two latent path-handling gaps with no live trigger,
 two config-manifest design decisions, and several items that need a
 conversation rather than a commit.
 
+- Remove the Nord theme from tmux, which is what makes the status bar bluish.
+  Confirmed as the cause: `.config/tmux/tmux.conf:27` declares
+  `set -g @plugin "nordtheme/tmux"`, and the plugin's own README describes it
+  as "an arctic, north-bluish clean and elegant tmux color theme". It is one
+  of three plugins, beside tpm itself and tmux-sensible.
+  THE THING TO DECIDE FIRST, because removal is not just a deletion: this
+  repo has NO status-bar settings of its own. A grep for `status` across
+  `tmux.conf`, `tmux-mac.conf` and `tmux-linux.conf` returns nothing, so
+  Nord is supplying the entire status line (its `nord-status-content.conf`
+  sets `status-right` with the date, the time and the hostname). Deleting the
+  plugin line does not return tmux to a neutral bar -- it returns it to
+  tmux's DEFAULT bar, which is green, shows only the session name and window
+  list, and loses the clock and hostname. So pick one:
+    - accept the stock bar. Simplest, one line deleted, and worth trying for
+      a day before writing any config.
+    - write our own minimal `status-*` settings. More work, but it is the
+      only option where the colours are ours rather than another palette's,
+      and the window-naming script this repo already maintains is the thing
+      the bar exists to display.
+    - swap in a different theme plugin. Cheapest to look at, and it puts us
+      back in the same position with a different palette.
+  Mechanics, verified:
+    - no test asserts the plugin list (grep for `@plugin` and `nordtheme`
+      across `tests/*.test.sh` returns nothing), so nothing goes red on the
+      edit. `tmux-conf-split.test.sh` reads the config but asserts on the
+      platform-variant wiring, not on plugins.
+    - the plugin tree at `.config/tmux/plugins/` is untracked, installed by
+      tpm, so removal is `rm -rf .config/tmux/plugins/tmux` plus the line.
+    - `.config/tmux/tmux.conf.bak.20260821121033` is an untracked backup
+      from 2026-08-21 that still carries the same plugin line. Delete it in
+      the same pass so a future grep for `nordtheme` comes back clean.
+  Also worth a look while in there: whether the bar should show anything the
+  window-naming binary already computes, since that is the one piece of
+  status content this repo actually owns.
+
 - Prettify console output for readability: colour, and surface warnings,
   errors and successes more clearly.
   Verified starting point: this repo emits NO colour at all. A grep for

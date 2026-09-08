@@ -6,7 +6,7 @@
 //! dependencies each carry a [`PackageMap`], and `deps_core::plan` turns a
 //! resolved [`PackageAvailability`] into an action.
 //!
-//! Nothing in this module performs IO. The four conf files reach it through
+//! Nothing in this module performs IO. The four manifests reach it through
 //! `include_str!`, which reads at compile time, so the tests below need no
 //! filesystem and the module holds no capability.
 
@@ -15,47 +15,25 @@ use std::collections::{BTreeMap, BTreeSet};
 use deps_core::{
     CloneSource, ConfKind, DependencyName, KeyringSource, NoInstallReason, PackageAvailability,
     PackageCatalog, PackageManager, PackageMap, PathRoot, Requirements, ScriptInstaller,
-    SourceListEntry, TarballRelease, parse_manifest,
+    SourceListEntry, TarballRelease, parse_manifest_toml,
 };
 use dotfiles_path::{CheckRelPath, PackageId};
 
-/// The four conf files this repository ships, paired with how each is chosen.
+/// The four manifests this repository ships, paired with how each is chosen.
 ///
-/// `deps-ci.conf` is [`ConfKind::ExplicitOnly`] because `deps-ci.conf:3-5`
-/// says it is selected only by an explicit `DEPS_CONF`. That kind is what
-/// permits its `python3 -c "import yaml"` entry, which a platform-selected
-/// file may not carry.
-/// The TOML form of the four shipped manifests, embedded beside the pipe
-/// form so a test can compare them entry by entry.
-///
-/// Both are embedded during the migration. The pipe files are the ones the
-/// engine reads today; these are what it will read once the equivalence test
-/// below has held across a release. Deleting either side without the other
-/// silently drops the only check that the conversion preserved every entry.
-///
-/// `cfg(test)` because nothing in the running binary reads these yet. Without
-/// it the constant is dead code in the release build, and the warning would
-/// be indistinguishable from the real "this is unused because the switchover
-/// was forgotten" it will mean later. When the engine reads the TOML files,
-/// this attribute comes off as part of that change.
-#[cfg(test)]
-const SHIPPED_TOML_FILES: [(&str, ConfKind); 4] = [
+/// `deps-ci.toml` is [`ConfKind::ExplicitOnly`] because its own header says
+/// it is selected only by an explicit `DEPS_CONF`. That kind is what permits
+/// its `python_import` entry, which a platform-selected file may not carry.
+const SHIPPED_MANIFESTS: [(&str, ConfKind); 4] = [
     (include_str!("../../../../deps/deps.toml"), ConfKind::PlatformSelected),
     (include_str!("../../../../deps/deps-linux.toml"), ConfKind::PlatformSelected),
     (include_str!("../../../../deps/deps-mac.toml"), ConfKind::PlatformSelected),
     (include_str!("../../../../deps/deps-ci.toml"), ConfKind::ExplicitOnly),
 ];
 
-const SHIPPED_CONF_FILES: [(&str, ConfKind); 4] = [
-    (include_str!("../../../../deps/deps.conf"), ConfKind::PlatformSelected),
-    (include_str!("../../../../deps/deps-linux.conf"), ConfKind::PlatformSelected),
-    (include_str!("../../../../deps/deps-mac.conf"), ConfKind::PlatformSelected),
-    (include_str!("../../../../deps/deps-ci.conf"), ConfKind::ExplicitOnly),
-];
-
 /// Where the `zsh-autosuggestions` clone lands, relative to `$HOME`.
 ///
-/// The plugin DIRECTORY, matching `retired-check-deps:339`. `deps.conf:26`
+/// The plugin DIRECTORY, matching `retired-check-deps:339`. `deps.toml`
 /// checks the `.zsh` FILE one level inside it, and the clone creates that
 /// file by creating the directory that contains it.
 ///
@@ -77,7 +55,7 @@ const ZSH_AUTOSUGGESTIONS_CLONE_TARGET: &str =
 
 /// Where the `tpm` clone lands, relative to `$HOME`.
 ///
-/// `deps.conf:32` checks the directory and `retired-check-deps:345` clones the
+/// `deps.toml` checks the directory and `retired-check-deps:345` clones the
 /// directory, so this one already agreed in the shell. It is a constant here
 /// for the same reason as the plugin path above: the equality is asserted
 /// against the parsed conf file rather than against a second copy of the
@@ -322,7 +300,7 @@ pub fn packages() -> PackageCatalog {
 /// The prerequisite edges between dependencies, rejected if any edge names a
 /// dependency no shipped conf file holds.
 ///
-/// One edge today. `deps.conf:18-20` states in the file that no ordering
+/// One edge today. `deps.toml` states in the file that no ordering
 /// between `oh-my-zsh` and `zsh-autosuggestions` is guaranteed there, and
 /// that is the ordering this table supplies: on Linux the plugin installs by
 /// cloning into `$HOME/.oh-my-zsh/custom`, which does not exist until
@@ -330,7 +308,7 @@ pub fn packages() -> PackageCatalog {
 ///
 /// `known` must be the union of every shipped conf file rather than one
 /// platform's manifest, because an edge is correct or not independently of
-/// which machine runs it. `oh-my-zsh` is in `deps-linux.conf` and absent on
+/// which machine runs it. `oh-my-zsh` is in `deps-linux.toml` and absent on
 /// macOS, and validating against the macOS manifest alone would reject a
 /// correct edge.
 ///
@@ -346,7 +324,7 @@ pub fn packages() -> PackageCatalog {
 /// prerequisite writes.
 const EDGES: &[(&str, &[&str])] = &[
     // The plugin clones into $HOME/.oh-my-zsh/custom, which does not exist
-    // until oh-my-zsh does. deps.conf:18-20 states in the file that no
+    // until oh-my-zsh does. deps.toml states in the file that no
     // ordering between the two is guaranteed there, and this supplies it.
     ("zsh-autosuggestions", &["oh-my-zsh"]),
     // node installs by sourcing $HOME/.nvm/nvm.sh. Without the edge the
@@ -414,8 +392,8 @@ pub struct UnknownRequirementEdge {
 /// red suite.
 pub fn every_shipped_dependency() -> BTreeSet<DependencyName> {
     let mut names = BTreeSet::new();
-    for (text, kind) in SHIPPED_CONF_FILES {
-        let Ok(manifest) = parse_manifest(text, kind) else {
+    for (text, kind) in SHIPPED_MANIFESTS {
+        let Ok(manifest) = parse_manifest_toml(text, kind) else {
             continue;
         };
         for entry in manifest.entries() {
@@ -542,10 +520,10 @@ mod tests {
         // empty or partial union, so assert the union really spans all four
         // files first, naming one dependency exclusive to each.
         assert_eq!(known.len(), 22, "the union must cover every conf file");
-        assert!(known.contains(&name("git")), "deps.conf entries are present");
-        assert!(known.contains(&name("oh-my-zsh")), "deps-linux.conf entries are present");
-        assert!(known.contains(&name("aerospace")), "deps-mac.conf entries are present");
-        assert!(known.contains(&name("pyyaml")), "deps-ci.conf entries are present");
+        assert!(known.contains(&name("git")), "deps.toml entries are present");
+        assert!(known.contains(&name("oh-my-zsh")), "deps-linux.toml entries are present");
+        assert!(known.contains(&name("aerospace")), "deps-mac.toml entries are present");
+        assert!(known.contains(&name("pyyaml")), "deps-ci.toml entries are present");
 
         requirements(&known).expect("the production requirement table must validate");
     }
@@ -729,11 +707,11 @@ mod tests {
     /// file this repository ships that does not parse is a red suite, not a
     /// quietly smaller union.
     fn shipped_entries() -> Vec<deps_core::ManifestEntry> {
-        SHIPPED_CONF_FILES
+        SHIPPED_MANIFESTS
             .into_iter()
             .flat_map(|(text, kind)| {
                 let manifest: Manifest =
-                    parse_manifest(text, kind).expect("every shipped conf file parses");
+                    parse_manifest_toml(text, kind).expect("every shipped manifest parses");
                 manifest.entries().to_vec()
             })
             .collect()
@@ -776,71 +754,4 @@ mod tests {
         DependencyName::parse(raw).expect("a test dependency name parses")
     }
 
-    /// Every TOML manifest parses to exactly the entries its pipe manifest
-    /// does.
-    ///
-    /// The conversion's only real risk is a silent semantic change in one
-    /// entry, and reading the two files side by side does not catch it: the
-    /// pipe form writes its checks as shell text, so a translation can look
-    /// right and mean something else. Comparing the PARSED values catches it,
-    /// because both formats land in the same closed `Check` sum.
-    ///
-    /// This test found one such change while the conversion was written.
-    /// `node`'s pipe fallback is `ls -d "$HOME/.nvm/versions/node"/v*`, and
-    /// the first TOML draft wrote it as `dir = "$HOME/.nvm/versions/node"`.
-    /// nvm creates that directory when it installs itself, whether or not any
-    /// node version is in it, so the draft would have reported node present
-    /// on a machine with none. The glob is the check that asks the real
-    /// question, and only this comparison said so.
-    #[test]
-    fn every_toml_manifest_is_equivalent_to_its_pipe_manifest() {
-        assert_eq!(
-            SHIPPED_TOML_FILES.len(),
-            SHIPPED_CONF_FILES.len(),
-            "the two embedded sets must stay paired"
-        );
-
-        let mut compared = 0;
-        for ((toml_text, toml_kind), (pipe_text, pipe_kind)) in
-            SHIPPED_TOML_FILES.iter().zip(SHIPPED_CONF_FILES.iter())
-        {
-            assert_eq!(toml_kind, pipe_kind, "a pair disagrees about its ConfKind");
-
-            let pipe = parse_manifest(pipe_text, *pipe_kind).expect("a pipe manifest parses");
-            let converted =
-                deps_core::parse_manifest_toml(toml_text, *toml_kind).expect("a TOML manifest parses");
-
-            // Sorted by name: the pipe parser preserves file order and the
-            // TOML parser walks a sorted map, so comparing positionally would
-            // report a difference for two identical manifests.
-            let mut pipe_entries: Vec<_> = pipe.entries().to_vec();
-            let mut toml_entries: Vec<_> = converted.entries().to_vec();
-            pipe_entries.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
-            toml_entries.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
-
-            assert_eq!(
-                pipe_entries.len(),
-                toml_entries.len(),
-                "entry count differs between the two forms"
-            );
-            for (from_pipe, from_toml) in pipe_entries.iter().zip(toml_entries.iter()) {
-                assert_eq!(from_pipe.name, from_toml.name, "entry names differ");
-                assert_eq!(
-                    from_pipe.check, from_toml.check,
-                    "the check for {:?} differs between the two forms",
-                    from_pipe.name
-                );
-                assert_eq!(
-                    from_pipe.docs, from_toml.docs,
-                    "the docs URL for {:?} differs between the two forms",
-                    from_pipe.name
-                );
-                compared += 1;
-            }
-        }
-
-        // Positive control. Every assertion above is inside a loop, so an
-        // embedded file that came back empty would compare nothing and pass.
-        assert_eq!(compared, 22, "expected all 22 entries to be compared");
-    }
 }

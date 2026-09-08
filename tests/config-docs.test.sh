@@ -38,7 +38,7 @@ EOF
 assert_equals 'every config-<sub> appears in the README section' '' "$undocumented"
 
 # The reverse direction: a bullet naming a subcommand that no longer exists.
-# This is the failure deps-docs.test.sh exists to catch for deps.conf.
+# This is the failure deps-docs.test.sh exists to catch for deps.toml.
 #
 # Only the bulleted list is scanned. The surrounding prose names git verbs on
 # purpose (`config status`, `config commit`) to show that passthrough works,

@@ -97,8 +97,8 @@ straight to git: `config -- help rebase` opens the git manual page.
 
 ### Dependency checking
 
-Tracked dependencies live in `deps/deps.conf`, plus
-`deps/deps-mac.conf` and `deps/deps-linux.conf` for the ones
+Tracked dependencies live in `deps/deps.toml`, plus
+`deps/deps-mac.toml` and `deps/deps-linux.toml` for the ones
 that belong to one platform.
 
 - `config deps check` checks them and reports what is missing.

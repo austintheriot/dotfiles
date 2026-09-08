@@ -38,7 +38,7 @@ const CALLER_ERROR: u8 = 2;
 
 /// Where the shipped conf files live, relative to the dotfiles root.
 ///
-/// `retired-check-deps:37` resolves `deps.conf` against its own directory.
+/// `retired-check-deps:37` resolves `deps.toml` against its own directory.
 /// `selection::conf_paths` has no script directory and yields the bare name,
 /// so this module supplies the directory that convention means. Without it a
 /// run from any working directory but `deps` would read no manifest
@@ -292,7 +292,7 @@ fn dotfiles_root() -> Option<PathBuf> {
 
 /// Load the manifest, qualifying each relative conf path against the root.
 ///
-/// An absolute path is used as given: `DEPS_CONF=/tmp/x/deps.conf` names one
+/// An absolute path is used as given: `DEPS_CONF=/tmp/x/deps.toml` names one
 /// file and must not be reinterpreted. Only the bare defaults
 /// `selection::conf_paths` produces are joined onto `<root>/deps`,
 /// which is the directory `retired-check-deps:37` resolves against.
@@ -321,7 +321,7 @@ fn load_manifest(
     // Measured twice. The Docker images set HOME=/root while the manifest
     // lived at /dotfiles, and the first container run printed "0 entries"
     // and was called a clean bootstrap. Then test-suite.yml passed
-    // DEPS_CONF=deps/deps-ci.conf, which this function roots
+    // DEPS_CONF=deps/deps-ci.toml, which this function roots
     // against DOTFILES_ROOT/deps and so resolved to that directory
     // twice over; the harness installed nothing for months and the macOS leg
     // failed every YAML assertion on a missing pyyaml while Linux passed on

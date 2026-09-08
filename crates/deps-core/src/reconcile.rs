@@ -107,7 +107,7 @@ pub fn reconcile(
 mod tests {
     use super::*;
     use crate::{
-        Check, CheckPath, CheckStatus, ConfKind, InstallStatus, PathRoot, parse_manifest,
+        Check, CheckPath, CheckStatus, ConfKind, InstallStatus, PathRoot, parse_manifest_toml,
     };
     use dotfiles_path::CheckRelPath;
 
@@ -115,16 +115,21 @@ mod tests {
         DependencyName::parse(name).expect("a test dependency name parses")
     }
 
-    // The real Linux pair. `deps-linux.conf:11` holds oh-my-zsh; the
-    // zsh-autosuggestions check is `deps.conf:26` with its brew branch
+    // The real Linux pair. `deps-linux.toml` holds oh-my-zsh; the
+    // zsh-autosuggestions check is `deps.toml`'s with its brew branch
     // dropped, because the brew branch is what lets the pair converge in
     // one pass on macOS and this is the Linux case.
     fn oh_my_zsh_manifest() -> Manifest {
-        let text = "\
-oh-my-zsh|[ -d \"$HOME/.oh-my-zsh\" ]|https://ohmyz.sh/
-zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh\" ]|https://github.com/zsh-users/zsh-autosuggestions
-";
-        parse_manifest(text, ConfKind::PlatformSelected).expect("the real pair parses")
+        let text = r#"
+[oh-my-zsh]
+dir = "$HOME/.oh-my-zsh"
+docs = "https://ohmyz.sh/"
+
+[zsh-autosuggestions]
+file = "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+docs = "https://github.com/zsh-users/zsh-autosuggestions"
+"#;
+        parse_manifest_toml(text, ConfKind::PlatformSelected).expect("the real pair parses")
     }
 
     fn oh_my_zsh_check() -> Check {
@@ -173,9 +178,13 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
     // fact about this world rather than a function that emits nothing.
     #[test]
     fn an_unresolvable_root_produces_an_event() {
-        let text = "zsh-autosuggestions|[ -f \"$(brew --prefix 2>/dev/null)/share/zsh-autosuggestions/zsh-autosuggestions.zsh\" ]|https://github.com/zsh-users/zsh-autosuggestions\n";
+        let text = r#"
+[zsh-autosuggestions]
+file = "$(brew --prefix 2>/dev/null)/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+docs = "https://github.com/zsh-users/zsh-autosuggestions"
+"#;
         let manifest =
-            parse_manifest(text, ConfKind::PlatformSelected).expect("the brew entry parses");
+            parse_manifest_toml(text, ConfKind::PlatformSelected).expect("the brew entry parses");
         let brew_check = Check::FileExists(CheckPath::new(
             PathRoot::BrewPrefix,
             CheckRelPath::parse("share/zsh-autosuggestions/zsh-autosuggestions.zsh")

@@ -158,7 +158,7 @@ assert_equals 'an unknown flag runs no step' '' "$(calls_of "$home")"
 # --- a machine with no Rust toolchain ---------------------------------------
 #
 # The build step is last because it is the only one that needs a compiler, and
-# it must not cost the reader everything above it. rustup is a deps.conf entry
+# it must not cost the reader everything above it. rustup is a deps.toml entry
 # with no automated install on some managers, so "no cargo yet" is a real
 # state on a fresh remote box, and a container can omit the toolchain
 # deliberately.

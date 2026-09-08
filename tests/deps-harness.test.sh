@@ -174,8 +174,8 @@ for dockerfile in "$DOCKERFILE_UBUNTU" "$DOCKERFILE_ARCH" "$DOCKERFILE_POP"; do
 
     # --- DEPS_LOCAL_CONF neutralization ---------------------------------
     #
-    # These images verify the shared deps.conf only. The engine would
-    # otherwise select deps-linux.conf here, whose entries (oh-my-zsh, xclip)
+    # These images verify the shared deps.toml only. The engine would
+    # otherwise select deps-linux.toml here, whose entries (oh-my-zsh, xclip)
     # belong to the linux machine rather than to this container. The manifest
     # reader skips a missing file, so pointing the variable at a path that
     # does not exist is the neutralization.
@@ -425,9 +425,12 @@ assert_contains 'the pop job asserts the second run converges' \
 # The image and the workflow are both downstream of this line. Without it
 # they assert the engine installs a current neovim onto a machine that
 # never asked for one.
-assert_contains 'deps.conf pins a neovim version floor' \
-    'command -v nvim >=0.10' \
-    "$(cat "$DOTFILES_ROOT/deps/deps.conf")"
+# The floor is its own key now, not a suffix on a check string. The pipe
+# format wrote `command -v nvim >=0.10`, which packed two values into one
+# positionally-split field; `min_version` names the second one.
+assert_contains 'deps.toml pins a neovim version floor' \
+    'min_version = "0.10"' \
+    "$(cat "$DOTFILES_ROOT/deps/deps.toml")"
 assert_contains 'the arch job runs the image it built' \
     'depcheck-arch' "$(wf arch_run)"
 
@@ -444,13 +447,13 @@ assert_contains 'the local harness tags images the way the arch job does' \
 
 # --- the deps platform variants both ship --------------------------------
 #
-# deps-local.conf used to hold one branch's own entries. The deps-mac.conf /
-# deps-linux.conf pair replaced it exactly to end that: both ship together
+# deps-local.conf used to hold one branch's own entries. The deps-mac.toml /
+# deps-linux.toml pair replaced it exactly to end that: both ship together
 # and the platform check at runtime decides which one gets read.
 
 for platform in mac linux; do
-    assert_succeeds "deps-$platform.conf ships here" \
-        test -f "$DOTFILES_ROOT/deps/deps-$platform.conf"
+    assert_succeeds "deps-$platform.toml ships here" \
+        test -f "$DOTFILES_ROOT/deps/deps-$platform.toml"
 done
 
 assert_equals 'the retired deps-local.conf is gone' \
@@ -460,7 +463,7 @@ assert_equals 'the retired deps-local.conf is gone' \
 #
 # Same shape as the DOTFILES_ROOT assertion above, at the other call site.
 # The engine roots a relative DEPS_CONF against DOTFILES_ROOT/deps,
-# so the workflow passing `deps/deps-ci.conf` resolved to that
+# so the workflow passing `deps/deps-ci.toml` resolved to that
 # directory twice over. A missing conf file is tolerated by design, which is
 # how DEPS_LOCAL_CONF excludes the platform variant, so the step read an
 # empty manifest, installed nothing and exited 0. The macOS leg then failed
@@ -473,7 +476,7 @@ assert_equals 'the retired deps-local.conf is gone' \
 ci_conf_value=$(grep -E '^ *DEPS_CONF:' "$DOTFILES_ROOT/.github/workflows/test-suite.yml" \
     | head -1 | sed 's/^ *DEPS_CONF: *//')
 assert_equals 'the workflow names the CI manifest by bare file name' \
-    'deps-ci.conf' "$ci_conf_value"
+    'deps-ci.toml' "$ci_conf_value"
 assert_succeeds 'the named CI manifest resolves under the shipped conf dir' \
     test -f "$DOTFILES_ROOT/deps/$ci_conf_value"
 

@@ -87,8 +87,8 @@ assert_succeeds 'the servers table has more than one entry' test "$server_count"
 # satisfied by nvm.sh existing, which says nothing about whether a node
 # version was ever installed through it. The dependency that has to exist is
 # node itself.
-conf_names=$(cat "$DEPS_DIR"/deps.conf "$DEPS_DIR"/deps-mac.conf "$DEPS_DIR"/deps-linux.conf 2>/dev/null \
-    | sed -e 's/#.*//' | cut -d'|' -f1 | grep -E '^[a-z]' | sort -u)
+conf_names=$(cat "$DEPS_DIR"/deps.toml "$DEPS_DIR"/deps-mac.toml "$DEPS_DIR"/deps-linux.toml 2>/dev/null \
+    | sed -e 's/#.*//' | grep -oE '^\[[a-z][a-z0-9-]*\]' | tr -d '[]' | sort -u)
 assert_succeeds 'the dependency manifests parse' test -n "$conf_names"
 
 tracks() { printf '%s\n' "$conf_names" | grep -qx "$1"; }

@@ -4,7 +4,7 @@
 # own shell.
 #
 # Every config file with a platform-specific part (.zshrc, tmux.conf,
-# alacritty.toml, deps.conf) is a shared base file plus a `-mac` / `-linux`
+# alacritty.toml, deps.toml) is a shared base file plus a `-mac` / `-linux`
 # variant beside it. Both variants ship on the single branch; the base file
 # loads whichever this returns, so a machine needs no new files to switch.
 #

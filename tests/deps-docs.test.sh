@@ -6,7 +6,7 @@
 # Scope is deliberately narrow. These assert only the facts that rot
 # silently: a cited file path that gets renamed, a documented flag the
 # argument parser stops accepting, an alias definition that drifts from the
-# hook, a dependency list that falls behind deps.conf. Prose, wording, and
+# hook, a dependency list that falls behind deps.toml. Prose, wording, and
 # section order are not asserted, because freezing those would make every
 # edit to the writing a test failure.
 #
@@ -184,14 +184,16 @@ while IFS= read -r flag; do
 done <<< "$parser_flags"
 assert_equals 'the docs name every flag the parser accepts' '' "$undocumented_flags"
 
-# --- every dependency the docs list is really in deps.conf --------------
+# --- every dependency the docs list is really in deps.toml --------------
 #
 # The docs name specific dependencies when explaining the non-binary and
 # platform-tolerant checks. Those names are the ones that go stale when an
 # entry is renamed or moved to deps-local.conf.
 
-conf_names=$(sed -e 's/#.*//' "$DEPS_DIR/deps.conf" 2>/dev/null \
-    | cut -d'|' -f1 | grep -E '^[a-z]' | sort -u)
+# One table per dependency, so a table header is a name. Comments are
+# stripped first: `# [example]` in prose would otherwise read as an entry.
+conf_names=$(sed -e 's/#.*//' "$DEPS_DIR/deps.toml" 2>/dev/null \
+    | grep -oE '^\[[a-z][a-z0-9-]*\]' | tr -d '[]' | sort -u)
 
 documented_deps=$(printf '%s\n' "$docs_text" \
     | grep -oE '`[a-z][a-z0-9-]+`' \
@@ -213,12 +215,12 @@ while IFS= read -r candidate; do
             ;;
     esac
 done <<< "$documented_deps"
-assert_equals 'every dependency the docs name is in deps.conf' '' "$absent_deps"
+assert_equals 'every dependency the docs name is in deps.toml' '' "$absent_deps"
 
 # A guarded name the docs never mention in backticks is never reached by the
 # loop above, so it contributes nothing while making the guard list look
 # broader than it is. `ripgrep` sat here in bare prose: renaming its
-# deps.conf entry left this suite green. Requiring every guarded name to be
+# deps.toml entry left this suite green. Requiring every guarded name to be
 # extractable is what keeps the list honest as the prose is edited.
 unreached_guards=''
 for guarded in $GUARDED_DEPS; do
@@ -233,17 +235,17 @@ assert_equals 'every guarded dependency name appears in the docs in backticks' \
 assert_contains 'the deps README says oh-my-zsh is not in the shared file' \
     'oh-my-zsh' "$deps_readme"
 oh_my_zsh_shared=$(printf '%s\n' "$conf_names" | grep -cx 'oh-my-zsh')
-assert_equals 'oh-my-zsh is absent from deps.conf, as documented' \
+assert_equals 'oh-my-zsh is absent from deps.toml, as documented' \
     '0' "$oh_my_zsh_shared"
 
 # --- the platform variants both ship ------------------------------------
 #
-# deps-local.conf used to hold one branch's own list. The deps-mac.conf /
-# deps-linux.conf pair replaced it precisely so both variants ship together
+# deps-local.conf used to hold one branch's own list. The deps-mac.toml /
+# deps-linux.toml pair replaced it precisely so both variants ship together
 # and the platform check at runtime decides which one gets read.
 for platform in mac linux; do
-    assert_succeeds "deps-$platform.conf ships here" \
-        test -f "$DEPS_DIR/deps-$platform.conf"
+    assert_succeeds "deps-$platform.toml ships here" \
+        test -f "$DEPS_DIR/deps-$platform.toml"
 done
 
 # Greps the FILE, not the file's contents. This passed
@@ -265,23 +267,28 @@ assert_equals 'the retired deps-local.conf is gone' \
 
 # --- the documented pipe constraint matches the parser ------------------
 #
-# The docs warn that a check_command must not contain a pipe. That warning is
-# only true while the manifest parser still splits fields on one.
+# The docs describe a TOML schema, and that description is only true while
+# the parser actually refuses what the docs say is invalid.
 #
-# Asserted against the parser's behaviour rather than against its source. The
-# shell version grepped for a literal `IFS='|' read` line, which a compiled
-# binary has no equivalent of, and a grep for source text could never have
-# proved the behaviour anyway.
+# Asserted against the parser's behaviour rather than against its source, for
+# the reason the pipe-format version of this pair gave: a grep for source
+# text could never have proved the behaviour, and a compiled binary has no
+# `IFS='|' read` line to grep for anyway.
 #
-# A four-field line is the probe: if `|` is the delimiter, the fourth field
-# makes the line malformed and the engine must reject the manifest. A parser
-# that split on something else would accept it.
-pipe_probe_conf="$FIXTURES/pipe-probe.conf"
-printf 'probe|command -v probe|https://example.invalid|fourth\n' > "$pipe_probe_conf"
-DEPS_CONF="$pipe_probe_conf" DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+# The probe is an entry naming TWO check kinds. That is the rule serde cannot
+# express -- both fields deserialize independently -- so it is the one the
+# crate's own TryFrom has to enforce, and the one most worth pinning from
+# outside. Exit 2 is the caller-error code for a manifest that does not load.
+schema_probe_conf="$FIXTURES/schema-probe.toml"
+cat > "$schema_probe_conf" <<'PROBE'
+[probe]
+command = "sh"
+dir = "$HOME/.config"
+docs = "https://example.invalid"
+PROBE
+DEPS_CONF="$schema_probe_conf" DEPS_LOCAL_CONF="$FIXTURES/no-such-local.toml" \
     "$CHECK_SCRIPT" deps check --dry-run >/dev/null 2>&1
-assert_equals 'a fourth field is rejected, so | is still the delimiter' \
-    '2' "$?"
+assert_equals 'an entry naming two check kinds is rejected' '2' "$?"
 
 # The positive control. Without it the assertion above passes against an
 # engine that rejects every manifest, including a well-formed one.
@@ -290,11 +297,15 @@ assert_equals 'a fourth field is rejected, so | is still the delimiter' \
 # well-formed manifest exits 0. A dependency that is merely absent exits 1,
 # which is not a parse failure and would not distinguish the two outcomes
 # this pair exists to compare.
-pipe_control_conf="$FIXTURES/pipe-control.conf"
-printf 'probe|command -v sh|https://example.invalid\n' > "$pipe_control_conf"
-DEPS_CONF="$pipe_control_conf" DEPS_LOCAL_CONF="$FIXTURES/no-such-local.conf" \
+schema_control_conf="$FIXTURES/schema-control.toml"
+cat > "$schema_control_conf" <<'CONTROL'
+[probe]
+command = "sh"
+docs = "https://example.invalid"
+CONTROL
+DEPS_CONF="$schema_control_conf" DEPS_LOCAL_CONF="$FIXTURES/no-such-local.toml" \
     "$CHECK_SCRIPT" deps check --dry-run >/dev/null 2>&1
-assert_equals 'a three-field line is accepted' '0' "$?"
+assert_equals 'an entry naming exactly one check kind is accepted' '0' "$?"
 
 # The phrase the probe above proves true. Asserting the warning still states
 # the three-field rule is what keeps the prose and the parser in step.

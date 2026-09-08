@@ -86,20 +86,20 @@ jobs:
 
       # Installed through the deps engine rather than a hand-written apt list
       # and a hand-written brew list. Those two lists named tmux, zsh, git,
-      # fzf, ripgrep and shellcheck -- every one already a deps.conf entry --
+      # fzf, ripgrep and shellcheck -- every one already a deps.toml entry --
       # so the package names lived in two places and the YAML copy was the one
       # that drifted, with nothing checking it. The engine already knows each
       # platform's spelling (python3-yaml on apt, python-yaml on pacman, pip
       # elsewhere), which is knowledge that does not belong in a workflow.
       #
       # Two calls, because the two manifests answer different questions.
-      # --only names the deps.conf entries the SUITE needs, which is a subset:
+      # --only names the deps.toml entries the SUITE needs, which is a subset:
       # a test run has no use for neovim, alacritty, aerospace, tpm or nvm, and
       # installing them here would add minutes and more upstream services that
       # can fail a run about a shell script.
       #
-      # deps-ci.conf is the suite's own harness dependencies -- python3, pyyaml,
-      # dash -- which are deliberately absent from deps.conf because nothing in
+      # deps-ci.toml is the suite's own harness dependencies -- python3, pyyaml,
+      # dash -- which are deliberately absent from deps.toml because nothing in
       # the working environment needs them.
       #
       # The full bootstrap is NOT run here. It belongs on deps-check.yml's
@@ -116,37 +116,37 @@ jobs:
       # reads the check command out of the conf file, and the brew branch
       # guards on `command -v brew` rather than on the install. Naming it
       # here only stalled the Linux leg, because on Linux it requires
-      # oh-my-zsh, which lives in deps-linux.conf and so cannot be named on
+      # oh-my-zsh, which lives in deps-linux.toml and so cannot be named on
       # a list this macOS leg also reads. The real install of that pair,
       # prerequisite ordering included, is covered unsubsetted by
       # deps-check.yml.
-      - name: Install the suite's dependencies (from deps.conf)
+      - name: Install the suite's dependencies (from deps.toml)
         env:
           DOTFILES_ROOT: ${{ github.workspace }}
         run: |
           config-cli deps install --yes \
             --only tmux,zsh,git,fzf,ripgrep,shellcheck
 
-      - name: Install the suite's harness dependencies (from deps-ci.conf)
+      - name: Install the suite's harness dependencies (from deps-ci.toml)
         env:
           DOTFILES_ROOT: ${{ github.workspace }}
           # A bare file name, not a path. The engine roots a relative
           # DEPS_CONF against DOTFILES_ROOT/deps, so the fuller
-          # spelling resolved to deps/deps/deps-ci.conf,
+          # spelling resolved to deps/deps/deps-ci.toml,
           # which does not exist. A missing conf file is tolerated by design
           # (that is how DEPS_LOCAL_CONF below excludes the platform
           # variant), so the step parsed an empty manifest, installed
           # nothing, and exited 0. The macOS leg then failed every YAML
           # assertion on a missing pyyaml, and Linux passed only because its
           # runner ships one.
-          DEPS_CONF: deps-ci.conf
-          # Platform detection would otherwise add deps-mac.conf or
-          # deps-linux.conf on top of the CI manifest, pulling in aerospace or
+          DEPS_CONF: deps-ci.toml
+          # Platform detection would otherwise add deps-mac.toml or
+          # deps-linux.toml on top of the CI manifest, pulling in aerospace or
           # oh-my-zsh, which the suite does not need. read_entries skips a
           # missing file, so a path that does not exist excludes the variant
           # without pretending it is empty -- the same technique the Docker
           # images use.
-          DEPS_LOCAL_CONF: /nonexistent/deps-platform.conf
+          DEPS_LOCAL_CONF: /nonexistent/deps-platform.toml
         run: config-cli deps install --yes
 
       # The lint policy lives in crates/Cargo.toml, so this step enforces it

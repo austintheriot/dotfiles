@@ -9,14 +9,14 @@ use crate::manifest::ConfKind;
 /// A root a check path is joined onto.
 ///
 /// A closed sum, which is what deletes all shell expansion from the check
-/// field. `deps.conf:26` embeds `$(brew --prefix 2>/dev/null)`, and on a
+/// field. `deps.toml` embeds `$(brew --prefix 2>/dev/null)`, and on a
 /// machine with no brew that substitution is empty, so the real test runs
 /// against the filesystem root. A root that fails to resolve is
 /// `Observation::Unresolvable`, not false.
 ///
 /// `MacApplications` rather than an open `Absolute` variant: the only
 /// absolute path in the whole corpus is `/Applications/Alacritty.app`
-/// (`deps.conf:24`), and a named variant per need makes each addition a
+/// (`deps.toml`), and a named variant per need makes each addition a
 /// reviewable decision that states its own blast radius.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PathRoot {
@@ -85,7 +85,7 @@ pub enum Check {
     FileExists(CheckPath),
     /// `[ -s <path> ]`: the path is a file with a non-zero size.
     ///
-    /// `deps.conf:36` uses `-s`, not `-f`: a truncated `nvm.sh` passes `-f`
+    /// `deps.toml` uses `-s`, not `-f`: a truncated `nvm.sh` passes `-f`
     /// and sources to nothing.
     FileNonEmpty(CheckPath),
     /// `ls -d <dir>/<pattern>`: at least one entry in `dir` matches.
@@ -190,7 +190,7 @@ impl Observations for ObservationMap {
 /// file and spawns no process. `AnyOf` short-circuits on the first
 /// `Present`, and otherwise prefers a reported `Unresolvable` over `Absent`,
 /// because an unanswerable branch collapsed to `Absent` is exactly the
-/// silent-false bug `deps.conf:26` has today.
+/// silent-false bug `deps.toml` has today.
 pub fn evaluate(check: &Check, observed: &impl Observations) -> Observation {
     let Check::AnyOf { first, rest } = check else {
         return observed.observe(check);
@@ -236,7 +236,7 @@ pub enum CheckParseError {
     /// A recognized `ls -d` listing holding an invalid filename pattern.
     BadGlob(NameError),
     /// A `PythonImport` in a platform-selected conf file. `PythonImport` is
-    /// the one check that spawns an interpreter, and `deps-ci.conf` is
+    /// the one check that spawns an interpreter, and `deps-ci.toml` is
     /// selected only by an explicit `DEPS_CONF`, so this rule keeps the
     /// interpreter off the shell-startup path by construction.
     InterpreterCheck,
@@ -266,7 +266,7 @@ pub fn parse_check_expression(raw: &str, kind: ConfKind) -> Result<Check, CheckP
     parse_leaf(trimmed, kind)
 }
 
-/// `if <a>; then true; else <b>; fi`, the shape at `deps.conf:24` and `:45`.
+/// `if <a>; then true; else <b>; fi`, the shape at `deps.toml` and `:45`.
 fn parse_if_then_else(raw: &str, kind: ConfKind) -> Result<Option<Check>, CheckParseError> {
     let Some(body) = raw.strip_prefix("if ") else {
         return Ok(None);
@@ -290,7 +290,7 @@ fn parse_if_then_else(raw: &str, kind: ConfKind) -> Result<Option<Check>, CheckP
     Ok(Some(Check::AnyOf { first: Box::new(first), rest: vec![second] }))
 }
 
-/// `test -f "A" -o -f "B"`, the shape at `deps.conf:26`.
+/// `test -f "A" -o -f "B"`, the shape at `deps.toml`.
 ///
 /// Takes no `ConfKind`, because every operand a `test` can hold is a file or
 /// directory predicate and none of them spawns an interpreter.
@@ -372,7 +372,7 @@ fn parse_leaf(raw: &str, kind: ConfKind) -> Result<Check, CheckParseError> {
     Err(CheckParseError::Unrecognized)
 }
 
-/// `ls -d "$HOME/.nvm/versions/node"/v* >/dev/null 2>&1`, `deps.conf:45`.
+/// `ls -d "$HOME/.nvm/versions/node"/v* >/dev/null 2>&1`, `deps.toml`.
 ///
 /// The pattern is split off the directory rather than left inside the path,
 /// because `CheckRelPath` would accept `versions/node/v*` as an ordinary path
@@ -515,7 +515,7 @@ mod tests {
         )
     }
 
-    // deps.conf:26, the real zsh-autosuggestions check, as the two-branch
+    // deps.toml, the real zsh-autosuggestions check, as the two-branch
     // AnyOf it decomposes to.
     fn real_zsh_autosuggestions_check() -> Check {
         Check::AnyOf {
@@ -553,7 +553,7 @@ mod tests {
     }
 
     // The bug spec 5.2 fixes. On a machine with no brew the shell
-    // substitution at deps.conf:26 is empty, so the second operand tests
+    // substitution at deps.toml is empty, so the second operand tests
     // /share/... at the filesystem root. Present is the wrong answer and
     // Absent is also wrong: the branch is unanswerable, and the remedy for
     // "brew is missing" differs from the remedy for "the file is missing".
@@ -598,7 +598,7 @@ mod tests {
         assert_eq!(evaluate(&command("git"), &observed), Observation::Absent);
     }
 
-    // deps.conf:36 uses -s, not -f. A truncated nvm.sh passes -f and
+    // deps.toml uses -s, not -f. A truncated nvm.sh passes -f and
     // sources to nothing, so collapsing the two variants would introduce a
     // bug during the port.
     #[test]
@@ -616,7 +616,7 @@ mod tests {
     }
 
     // Every check expression in the four conf files, verbatim. Read from
-    // deps.conf, deps-mac.conf, deps-linux.conf and deps-ci.conf, and each
+    // deps.toml, deps-mac.toml, deps-linux.toml and deps-ci.toml, and each
     // is asserted to the variant spec 5.2's table names for it.
     #[test]
     fn parses_every_real_check_expression() {
@@ -671,7 +671,7 @@ mod tests {
             "test -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh\"",
             ConfKind::PlatformSelected,
         )
-        .expect("the real deps.conf shape parses");
+        .expect("the real deps.toml shape parses");
 
         let subject = match &check {
             Check::FileExists(path) => path.clone(),
@@ -692,7 +692,7 @@ mod tests {
         assert_eq!(subject, clone_target);
     }
 
-    // The alacritty branch of deps.conf:24 is the only absolute path in the
+    // The alacritty branch of deps.toml is the only absolute path in the
     // corpus, and CheckRelPath rejects an absolute remainder, so a named
     // root is the only way it can carry a validated path at all.
     #[test]
@@ -711,7 +711,7 @@ mod tests {
         assert_eq!(rest.len(), 1, "the real entry has exactly two branches");
     }
 
-    // The node fallback of deps.conf:45 is the one glob shape, and the
+    // The node fallback of deps.toml is the one glob shape, and the
     // pattern must land in GlobPattern rather than inside the directory
     // path, because CheckRelPath would accept `versions/node/v*` as an
     // ordinary path and the `*` would then never be treated as a pattern.
@@ -732,7 +732,7 @@ mod tests {
         assert_eq!(pattern.as_str(), "v*");
     }
 
-    // The brew branch of deps.conf:26 must resolve through PathRoot, not
+    // The brew branch of deps.toml must resolve through PathRoot, not
     // through a substitution the core would have to expand.
     #[test]
     fn the_brew_branch_carries_a_brew_prefix_root() {
@@ -751,7 +751,7 @@ mod tests {
 
     // Spec 5.2 makes the sole interpreter-spawning check unreachable from
     // the shell-startup path as a rule rather than a coincidence.
-    // deps-ci.conf:3-5 states the file is selected only by an explicit
+    // deps-ci.toml states the file is selected only by an explicit
     // DEPS_CONF; nothing enforced it before.
     #[test]
     fn rejects_a_python_import_in_a_platform_selected_conf() {

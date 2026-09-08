@@ -33,7 +33,7 @@
 #   there.
 #
 #   install second, because it is what places the Rust toolchain. rustup is a
-#   deps.conf entry, so on a genuinely fresh machine cargo does not exist
+#   deps.toml entry, so on a genuinely fresh machine cargo does not exist
 #   until this step has run.
 #
 #   build last, for the same reason: it compiles the crate with the cargo
@@ -154,7 +154,7 @@ fi
 #
 # Everything above leaves a working shell; the crate is one utility on top of
 # that. A machine with no cargo is a real state, not a broken one: rustup is a
-# deps.conf entry with no automated install on some package managers, and a
+# deps.toml entry with no automated install on some package managers, and a
 # container can omit the toolchain deliberately. Exiting non-zero here would
 # report a usable machine -- hooks linked, dependencies installed, shell
 # working -- as a failed bootstrap, and would turn the CI bootstrap job red

@@ -116,9 +116,10 @@ help "a TOML manifest parse error ... a manifest with a bad
 today. `.sync-manifest` is a **line-oriented custom format** (one rule per
 line, `!` and `~` prefixes), parsed by hand in
 `crates/config-manifest/src/manifest.rs:115-148`. The dependency manifest is
-`~/deps/deps.conf`, a **pipe-delimited shell-read format**
-(`name|check_command|docs_url`). Section 6 evaluates spans against the format
-that actually exists, plus the prospective TOML case.
+`~/deps/deps.toml` (at the time of this research, `deps.conf`, a **pipe-delimited shell-read format**
+spelled `name|check_command|docs_url`). Section 6 evaluated spans against
+the format that existed then, plus the prospective TOML case -- which is now
+the real one, so the prospective column is the one that came true.
 
 ## 2. Non-TTY output: the measurement that decides it
 

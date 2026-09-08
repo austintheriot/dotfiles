@@ -116,7 +116,7 @@ impl Selection {
 ///
 /// A separate argument rather than a manifest field, because no conf file has
 /// a `requires` column: the real format is `name|check_command|docs_url`
-/// (`deps.conf:2`), and `deps.conf:18-20` states in the file itself that "no
+/// (`deps.toml`), and `deps.toml` states in the file itself that "no
 /// ordering between it and zsh-autosuggestions is guaranteed here". Adding
 /// the column is a later decision; the planner does not need to invent it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -292,7 +292,7 @@ pub enum Event {
         on: DependencyName,
     },
     /// The prerequisite is not in this platform's manifest. A legitimate
-    /// platform difference: oh-my-zsh is in `deps-linux.conf:11` and absent
+    /// platform difference: oh-my-zsh is in `deps-linux.toml` and absent
     /// on macOS, where zsh-autosuggestions installs through brew.
     PrerequisiteNotInManifest {
         /// The dependent whose prerequisite is absent.
@@ -719,9 +719,11 @@ mod tests {
     fn manifest_of(names: &[&str]) -> Manifest {
         let text: String = names
             .iter()
-            .map(|name| format!("{name}|command -v {name}|https://example.invalid/{name}\n"))
+            .map(|name| {
+                format!("[{name}]\ncommand = \"{name}\"\ndocs = \"https://example.invalid/{name}\"\n\n")
+            })
             .collect();
-        crate::parse_manifest(&text, crate::ConfKind::PlatformSelected)
+        crate::parse_manifest_toml(&text, crate::ConfKind::PlatformSelected)
             .expect("a synthesized manifest parses")
     }
 
@@ -896,7 +898,7 @@ mod tests {
         assert_eq!(run(), run());
     }
 
-    // deps.conf:36 and :45. node requires nvm, and nvm's own install is
+    // deps.toml and :45. node requires nvm, and nvm's own install is
     // manual-only (retired-check-deps:369-372), so on a machine with neither,
     // node is blocked rather than attempted.
     #[test]
@@ -1025,7 +1027,7 @@ mod tests {
     }
 
     // A prerequisite absent from the selected manifest is not an error.
-    // oh-my-zsh is in deps-linux.conf:11 and legitimately not in the macOS
+    // oh-my-zsh is in deps-linux.toml and legitimately not in the macOS
     // manifest, where zsh-autosuggestions installs through brew, so
     // PlanError::UnknownDependency would be the wrong answer.
     #[test]

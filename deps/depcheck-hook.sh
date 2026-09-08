@@ -1,6 +1,6 @@
 # shellcheck shell=sh
 # Sourced from .zshrc. Nags at most once every 24h if a CLI dependency from
-# deps/deps.conf is missing. Never blocks startup, never
+# deps/deps.toml is missing. Never blocks startup, never
 # prompts -- see deps/README.md for the manual `depcheck`
 # command this also defines.
 

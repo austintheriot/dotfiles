@@ -11,7 +11,7 @@ mac one; only a Linux reader needs it.
   zsh-autosuggestions is installed as an oh-my-zsh custom plugin here, rather
   than from Homebrew the way the mac machine does it. `.zshrc-linux` sources
   it from `~/.oh-my-zsh/custom/plugins`, which is why `oh-my-zsh` is listed in
-  `deps/deps-linux.conf`: drop it and the shell sources a plugin
+  `deps/deps-linux.toml`: drop it and the shell sources a plugin
   nothing installs, losing autosuggestions silently.
 
 - Install xclip: `sudo apt install xclip`

@@ -34,7 +34,7 @@
 
 cd "$DOTFILES_ROOT" || exit 1
 
-# The linter is a tracked dependency (deps/deps.conf), is installed
+# The linter is a tracked dependency (deps/deps.toml), is installed
 # in the test container (tests/docker/Dockerfile) and on both CI runners
 # (.github/workflows/test-suite.yml). Those are the three places the lint has
 # to gate, so a missing binary there is a broken gate, not a soft skip: the
@@ -58,17 +58,17 @@ fi
 # decorative, which is the exact failure this whole item was filed against.
 # Three places have to carry shellcheck, and each is asserted here rather
 # than assumed:
-#   - deps/deps.conf     so `config install` provides it locally
+#   - deps/deps.toml     so `config install` provides it locally
 #   - tests/docker/Dockerfile     so the pre-push gate runs it (container.test.sh
 #                                 also asserts this, from the image's side)
 #   - .github/workflows/test-suite.yml  so both CI runners run it
 
-DEPS_CONF="$DOTFILES_ROOT/deps/deps.conf"
+DEPS_MANIFEST="$DOTFILES_ROOT/deps/deps.toml"
 DOCKERFILE="$DOTFILES_ROOT/tests/docker/Dockerfile"
 CI_WORKFLOW="$DOTFILES_ROOT/.github/workflows/test-suite.yml"
 
 assert_succeeds 'shellcheck is a tracked dependency' \
-    grep -q '^shellcheck|' "$DEPS_CONF"
+    grep -q '^\[shellcheck\]' "$DEPS_MANIFEST"
 
 assert_succeeds 'the test container installs shellcheck' \
     grep -q 'shellcheck' "$DOCKERFILE"
@@ -87,7 +87,7 @@ assert_succeeds 'the deps install step was found in the workflow' \
     test -n "$only_step"
 assert_contains 'CI installs shellcheck through the deps engine' 'shellcheck' "$only_step"
 
-install_step_block=$(awk '/Install the suite.s dependencies \(from deps.conf\)/{found=1} found && /^      - name:/ && ++seen>1{exit} found' "$CI_WORKFLOW")
+install_step_block=$(awk '/Install the suite.s dependencies \(from deps.toml\)/{found=1} found && /^      - name:/ && ++seen>1{exit} found' "$CI_WORKFLOW")
 assert_equals 'the dependency step runs on both runners' '' \
     "$(printf '%s\n' "$install_step_block" | grep 'runner.os' || true)"
 

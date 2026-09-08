@@ -346,7 +346,7 @@ mod tests {
         }
     }
     use super::*;
-    use deps_core::{Manifest, Observations, parse_manifest};
+    use deps_core::{Manifest, Observations, parse_manifest_toml};
     use dotfiles_path::CheckRelPath;
 
     /// The search path leads with the two curl-installer directories.
@@ -435,25 +435,29 @@ mod tests {
         CheckPath::new(PathRoot::Home, CheckRelPath::parse(name).expect("a valid rel path"))
     }
 
-    /// Build a one-entry manifest whose sole check is a `[ -f "$HOME/<name>" ]`
-    /// leaf, the shape `parse_manifest` accepts and `a_path_in` names.
+    /// Build a one-entry manifest whose sole check is a `$HOME/<name>` file
+    /// leaf, the shape `a_path_in` names.
     ///
     /// A manifest string round-tripped through the real parser, rather than
     /// a hand-built `Manifest`, because `Manifest` has no public
-    /// constructor: its only way into existence is `parse_manifest`, which
-    /// is itself part of what this test exercises indirectly.
+    /// constructor: its only way into existence is `parse_manifest_toml`,
+    /// which is itself part of what this test exercises indirectly.
     fn a_manifest_with_leaf(name: &str) -> Manifest {
-        let raw = format!("one_dependency|[ -f \"$HOME/{name}\" ]|https://example.invalid/docs\n");
-        parse_manifest(&raw, deps_core::ConfKind::PlatformSelected).expect("a parseable manifest")
+        let raw = format!(
+            "[one_dependency]\nfile = \"$HOME/{name}\"\ndocs = \"https://example.invalid/docs\"\n"
+        );
+        parse_manifest_toml(&raw, deps_core::ConfKind::PlatformSelected)
+            .expect("a parseable manifest")
     }
 
-    /// Build a one-entry manifest whose sole check is `test -f A -o -f B`,
-    /// the `AnyOf` shape `deps.conf:26` uses.
+    /// Build a one-entry manifest whose sole check is an `any_of` over two
+    /// file leaves, the shape `deps.toml`'s zsh-autosuggestions entry uses.
     fn a_manifest_with_any_of(first_name: &str, second_name: &str) -> Manifest {
         let raw = format!(
-            "one_dependency|test -f \"$HOME/{first_name}\" -o -f \"$HOME/{second_name}\"|https://example.invalid/docs\n"
+            "[one_dependency]\nany_of = [{{ file = \"$HOME/{first_name}\" }}, {{ file = \"$HOME/{second_name}\" }}]\ndocs = \"https://example.invalid/docs\"\n"
         );
-        parse_manifest(&raw, deps_core::ConfKind::PlatformSelected).expect("a parseable manifest")
+        parse_manifest_toml(&raw, deps_core::ConfKind::PlatformSelected)
+            .expect("a parseable manifest")
     }
 
     fn gather_one(manifest: &Manifest, home: &Path) -> ObservationMap {
@@ -539,9 +543,9 @@ mod tests {
             PathRoot::BrewPrefix,
             CheckRelPath::parse("bin/definitely-not-installed").expect("a valid path"),
         ));
-        let raw = "one_dependency|[ -f \"$(brew --prefix 2>/dev/null)/bin/definitely-not-installed\" ]|https://example.invalid/docs\n";
-        let manifest =
-            parse_manifest(raw, deps_core::ConfKind::PlatformSelected).expect("a parseable manifest");
+        let raw = "[one_dependency]\nfile = \"$(brew --prefix 2>/dev/null)/bin/definitely-not-installed\"\ndocs = \"https://example.invalid/docs\"\n";
+        let manifest = parse_manifest_toml(raw, deps_core::ConfKind::PlatformSelected)
+            .expect("a parseable manifest");
 
         let observations = gather_with_unresolvable_brew(&manifest);
 

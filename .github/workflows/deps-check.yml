@@ -86,7 +86,7 @@ jobs:
       # 0.6.1 (22.04) or 0.9.5 (24.04), the nvim config needs 0.10 for
       # `vim.uv`, and the manifest's old bare `command -v nvim` check was
       # satisfied by both. The bootstrap called the machine ready and the
-      # editor then died at startup. deps.conf now carries `>=0.10` and the
+      # editor then died at startup. deps.toml now carries a `min_version` and the
       # catalog routes neovim on apt to a pinned upstream tarball.
       #
       # Measured inside the image: adding Pop's own archive does NOT change

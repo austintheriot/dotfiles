@@ -2,19 +2,55 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED 2026-09-08. Harden the nvim install so a bare image gets a working
-  editor, and add tests that execute nvim rather than grepping its config.
-  ROOT CAUSE VERIFIED: `InstallAction::ReleaseTarball`
-  (crates/config-cli/src/deps/installer.rs:314-336) copies only `bin/nvim`
-  out of the staging directory and discards `share/nvim/runtime/` and `lib/`.
-  Neovim finds $VIMRUNTIME by walking up from its own executable looking for
-  `share/nvim/runtime`, so the orphaned binary looks in
-  ~/.local/share/nvim/runtime, finds nothing, and falls back to the
-  compiled-in upstream build paths. Reproduced in ubuntu:24.04:
-  VIMRUNTIME=/usr/local/share/nvim (nonexistent), `require "nvim.spellfile"`
-  FAIL, `E484: Can't open file .../syntax/syntax.vim`.
-  Full investigation, the 4-lens panel synthesis, and the deferred items are
-  in .superpowers/sdd/nvim-hardening/progress.md.
+- Finish the nvim determinism work. The runtime-tree bug is FIXED (bd38c48f):
+  the release tarball now installs as a versioned prefix
+  (~/.local/opt/nvim-<tag>) with ~/.local/bin/nvim symlinked into it, so
+  $VIMRUNTIME resolves and runtime files load. Verified end to end from a
+  bare ubuntu:24.04 with no prebuilt binary. cspell was also invoked as a
+  linter for 26 filetypes and installed by nothing (7089d6a3).
+  WHAT IS LEFT, in rough priority order:
+    - THE REAL DESIGN DECISION, upstream of any further test work: mason has
+      no lockfile and treesitter parsers are ABI-coupled to the Neovim build,
+      so "as deterministic as the dotfiles setup" is not reachable for those
+      layers without either vendoring the LSP binaries and parsers (into the
+      repo or a release artifact) or accepting them as pinned-by-convention
+      behind a slower, separately-gated leg. Pick one before writing tests
+      for that layer.
+    - No test exercises mason actually installing, LSP attach, or treesitter
+      parsers. The expert panel's tiering: an offline config-correctness tier
+      on every push, a networked tier on a schedule with `workflow_dispatch`,
+      split by "touches the network" rather than by "is slow", so the fast
+      signal is not hostage to npm uptime. Each layer gets its own CI STEP so
+      a red run names the layer (install / runtime tree / plugin manager /
+      mason / LSP) instead of "nvim exited 1".
+    - Do NOT cache the unpacked tree or ~/.local/share/nvim between legs. All
+      four lenses flagged it as this repo's pre-satisfied-path shape again; a
+      cached treesitter parser built against another ABI passes invisibly.
+      Cache the tarball BYTES if anything.
+    - Render snapshots: all four lenses said no as a blocking gate (terminal
+      size, locale, font fallback, colorscheme, plugin version). Assert
+      structured state instead -- nvim_eval_statusline for a statusline,
+      nvim_get_hl for theme groups, buffer lines for a dashboard.
+    - vim.g.have_nerd_font = true is set unconditionally (settings.lua:3)
+      while no font is a tracked dependency, so glyph width varies per
+      machine. Pairs with the DEFERRED font entry below; making it a probe
+      changes rendering on a machine that currently works, so it wants a
+      decision rather than a drive-by.
+    - The tarball download verifies nothing (installer.rs, bare curl -fsSL).
+      Upstream publishes NO checksum asset for the pinned release (verified
+      against the GitHub API for v0.12.5: only the appimage/tar.gz/msi/zip
+      assets and .zsync files), so this means committing our own hash per
+      architecture and updating four values on a bump.
+    - data-flow's structural fix: `TarballLayout` as a closed sum
+      (SingleBinary vs RelocatablePrefix) with an
+      `InstallAction::postconditions()` deriving the checks from the artifact,
+      so the manifest author never states the artifact's shape and a check
+      cannot disagree with what was installed. Same "the type describes less
+      than the artifact" mismatch likely lurks in Script{}, GitClone{} (a
+      DirExists check passes on an empty dir left by an interrupted clone),
+      and AptSource{}.
+  Full four-lens panel synthesis, the sabotage records, and the corrected
+  hypotheses are in .superpowers/sdd/nvim-hardening/progress.md.
 
 - Show child process output while a step runs, rather than only a summary
   after it finishes. Reported 2026-09-08: `config init: [5/5] install the

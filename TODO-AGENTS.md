@@ -16,6 +16,66 @@ small mechanical fixes, two latent path-handling gaps with no live trigger,
 two config-manifest design decisions, and several items that need a
 conversation rather than a commit.
 
+- Move the deps manifests out of `.scripts/deps/` to a top-level home.
+  `.scripts/` is the shell-scripts directory, and after the Rust port the
+  only scripts left there are `depcheck-hook.sh`, `test-bootstrap.sh` and
+  `test-local.sh`; the four `.conf` files are declarative data read by a
+  compiled binary, so they are filed under a directory whose name no longer
+  describes them. Top level (`deps/`, or `dependencies/`) reads correctly and
+  is where someone looks first.
+  What has to move with them, verified by `config ls-files | xargs grep -l`:
+    - `crates/config-cli/src/deps/catalog.rs:29-32` embeds all four with
+      `include_str!("../../../../.scripts/deps/...")`. Four levels up and out
+      of the workspace, which is also why the container builder has to mount
+      the repo root rather than just `crates/` -- see the comment in
+      `.scripts/deps/docker/build-seed-binary.sh`.
+    - `crates/config-cli/src/deps/mod.rs:46` is the single runtime constant
+      (`SHIPPED_CONF_DIR`), so the runtime side is one line. Comments at 44,
+      297 and 324-325 name the path in prose.
+    - 5 Dockerfiles, `build-seed-binary.sh`, `test-bootstrap.sh`,
+      `test-local.sh`, `depcheck-hook.sh`, `config-init`, `platform.sh`,
+      `.zshrc`, both CI workflows, README.md, README-LINUX.md, SETUP.md, and
+      `.claude/CLAUDE.md`.
+    - `tests/pre-push` TRIGGER_PATHS matches `^\.scripts/`, which would stop
+      covering them. A top-level `deps/` needs its own alternative, and
+      `tests/container.test.sh` asserts each pattern against a real example
+      path, so that assertion is where a miss surfaces.
+  Do this BEFORE the TOML conversion below, so the two churns do not overlap
+  in the same files. Mechanical, but wide: worth its own commit with the
+  suite run, not folded into other work.
+
+- Convert the deps manifests from the pipe-delimited format to TOML.
+  The format is `name|check_command|docs_url`, and its own header in
+  `deps.conf:9-13` documents why it is the wrong container: a check command
+  must not contain a literal `|`, because `IFS='|' read -r name check docs`
+  truncates the check and leaks the remainder into `docs_url`. So a shell
+  pipe or a `||` in a check silently corrupts the entry, and the workaround
+  is a documented convention (`test A -o B`, or a one-line `if`) rather than
+  a parser that cannot get it wrong. The `zsh-autosuggestions` entry is
+  already contorted around this.
+  The check grammar has since gained a version floor
+  (`command -v nvim >=0.10`), which is a second field packed into a string
+  the parser splits positionally. TOML gives each part a name:
+    [neovim]
+    command = "nvim"
+    min_version = "0.10"
+    docs = "https://neovim.io/"
+  That also makes the closed `Check` sum in `crates/deps-core/src/check.rs`
+  parse from named keys rather than from `parse_check_expression`'s prefix
+  matching, so `Unrecognized` stops being reachable by a typo in a prefix.
+  Scope, measured: 26 entries total across the four files (19 shared, 2
+  linux, 1 mac, 4 CI). The parser is `crates/deps-core/src/manifest.rs`.
+  Decide the dependency question first: the workspace currently declares
+  three crates (anyhow, clap, tempfile) and no TOML parser, and the crate
+  that needs one is `deps-core`, which is the zero-IO pure core. Adding a
+  parser there is the first third-party dependency in that crate, so it is
+  a deliberate architectural choice rather than a mechanical add. The
+  alternative is parsing the subset by hand, which is how the pipe format
+  got here.
+  Open question worth answering first: whether `deps-local.conf` (untracked,
+  per-machine) keeps the same format. It is read by the same parser, so it
+  converts with everything else, but a human hand-edits it.
+
 - CLAIMED 2026-09-08. `.scripts/alacritty-platform.sh:49` writes the pointer file
   non-atomically (`printf '%s' "$new" > "$pointer"`), and `.zshrc:178`
   backgrounds the script in every shell. The content-equality guard at

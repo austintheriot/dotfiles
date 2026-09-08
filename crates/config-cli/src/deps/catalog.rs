@@ -336,6 +336,26 @@ const EDGES: &[(&str, &[&str])] = &[
     // script: it is what orders the two, so nvm's install runs in an earlier
     // wave and node's source of nvm.sh finds a file that exists.
     ("node", &["nvm"]),
+    // oh-my-zsh's installer refuses to run without zsh: its first check
+    // prints "Zsh is not installed. Please install zsh first." and exits 1.
+    // The message goes to STDOUT, so the engine reported "exited 1 with no
+    // output on stderr" -- a failure naming neither the cause nor the fix.
+    //
+    // This edge was load-bearing and UNDECLARED for as long as the manifest
+    // parser preserved file order, which put zsh (deps.toml) ahead of
+    // oh-my-zsh (deps-linux.toml) by luck rather than by rule. The TOML
+    // parser sorts by name, oh-my-zsh sorts first, and all four full-
+    // bootstrap legs failed while the four package-manager legs passed --
+    // because only a bootstrap installs zsh in the same run.
+    //
+    // Reproduced before fixing: upstream's install.sh in a container with
+    // curl, git and NO zsh exits 1 with zero bytes on stderr, matching CI's
+    // report exactly.
+    //
+    // Same shape as the two edges above: the dependent's install reads
+    // something the prerequisite provides. Here it is the zsh binary rather
+    // than a directory.
+    ("oh-my-zsh", &["zsh"]),
 ];
 
 pub fn requirements(
@@ -549,6 +569,21 @@ mod tests {
             table.prerequisites(&name("node")),
             [name("nvm")],
             "node installs by sourcing nvm.sh"
+        );
+        // oh-my-zsh's installer refuses to run without zsh. Its first check
+        // prints "Zsh is not installed. Please install zsh first." to STDOUT
+        // and exits 1, so the engine reported "exited 1 with no output on
+        // stderr" -- a diagnostic that names neither the cause nor the fix.
+        //
+        // This edge was load-bearing and undeclared for as long as the
+        // manifest parser preserved file order, which happened to put zsh
+        // before oh-my-zsh. The TOML parser sorts by name, oh-my-zsh sorts
+        // first, and four bootstrap legs failed. The ordering was doing the
+        // work an edge should do.
+        assert_eq!(
+            table.prerequisites(&name("oh-my-zsh")),
+            [name("zsh")],
+            "oh-my-zsh's installer exits 1 when zsh is absent"
         );
     }
 

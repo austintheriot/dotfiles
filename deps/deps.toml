@@ -108,6 +108,19 @@ docs = "https://github.com/tmux/tmux"
 dir = "$HOME/.tmux/plugins/tpm"
 docs = "https://github.com/tmux-plugins/tpm"
 
+# nvim-treesitter's `main` branch shells out to this to compile parsers, and
+# it must exist BEFORE nvim first runs. It was a mason package first, which
+# failed: the treesitter build hook runs during the same `Lazy sync` that
+# asks mason to install it, so only 3 of 19 parsers compiled on a fresh
+# machine. Anything the editor needs during its own first run cannot be
+# installed by the editor.
+#
+# The version matches the pin in .config/nvim/mason-lock.json, so the engine
+# and the editor agree on which CLI compiled the parsers.
+[tree-sitter-cli]
+command = "tree-sitter"
+docs = "https://tree-sitter.github.io/tree-sitter/creating-parsers"
+
 [shellcheck]
 command = "shellcheck"
 docs = "https://www.shellcheck.net/"

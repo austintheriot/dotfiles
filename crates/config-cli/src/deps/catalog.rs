@@ -101,6 +101,26 @@ pub fn packages() -> PackageCatalog {
         }),
     );
 
+    // The same gzipped-binary release on every platform, unlike neovim which
+    // comes from brew on a mac. Upstream publishes linux-x64, linux-arm64 and
+    // macos-arm64 assets; the package managers either lack it or lag it, and
+    // the version has to match what compiled the parsers.
+    insert(
+        &mut catalog,
+        "tree-sitter-cli",
+        per_manager(vec![
+            (PackageManager::Apt, PackageAvailability::ViaTarball(TarballRelease::TreeSitterCli)),
+            (PackageManager::Brew, PackageAvailability::ViaTarball(TarballRelease::TreeSitterCli)),
+            (
+                PackageManager::Pacman,
+                PackageAvailability::ViaTarball(TarballRelease::TreeSitterCli),
+            ),
+        ]),
+        PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
+            manager: PackageManager::Unknown,
+        }),
+    );
+
     insert(
         &mut catalog,
         "gh",
@@ -539,7 +559,7 @@ mod tests {
         // Positive control. Validation below passes vacuously against an
         // empty or partial union, so assert the union really spans all four
         // files first, naming one dependency exclusive to each.
-        assert_eq!(known.len(), 22, "the union must cover every conf file");
+        assert_eq!(known.len(), 23, "the union must cover every conf file");
         assert!(known.contains(&name("git")), "deps.toml entries are present");
         assert!(known.contains(&name("oh-my-zsh")), "deps-linux.toml entries are present");
         assert!(known.contains(&name("aerospace")), "deps-mac.toml entries are present");

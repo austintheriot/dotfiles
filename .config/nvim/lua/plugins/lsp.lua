@@ -120,7 +120,7 @@ return {
       -- rather than a second hand-written table.
       local mason_names = require('mason-lspconfig.mappings').get_mason_map().lspconfig_to_package
       local ensure = {}
-      for _, name in ipairs(vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint', 'cspell', 'tree-sitter-cli' })) do
+      for _, name in ipairs(vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint', 'cspell' })) do
         local package_name = mason_names[name] or name
         local version = lock.packages[package_name]
         table.insert(ensure, version and (package_name .. '@' .. version) or package_name)

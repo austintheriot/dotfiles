@@ -92,6 +92,9 @@ fn script_url(installer: ScriptInstaller) -> &'static str {
 fn tarball_tag(release: TarballRelease) -> &'static str {
     match release {
         TarballRelease::Neovim => "v0.12.5",
+        // Matches the version pinned in .config/nvim/mason-lock.json, so the
+        // engine and the editor agree on which CLI compiled the parsers.
+        TarballRelease::TreeSitterCli => "v0.27.0",
     }
 }
 
@@ -107,6 +110,16 @@ fn tarball_asset(release: TarballRelease) -> Option<&'static str> {
         (TarballRelease::Neovim, "x86_64") => Some("nvim-linux-x86_64.tar.gz"),
         (TarballRelease::Neovim, "aarch64") => Some("nvim-linux-arm64.tar.gz"),
         (TarballRelease::Neovim, _) => None,
+        // `x64` rather than `x86_64`, and macOS assets as well: unlike
+        // Neovim, which comes from brew on a mac, this is the same
+        // gzipped-binary path on every platform. Verified against the v0.27.0
+        // release that all three names resolve.
+        (TarballRelease::TreeSitterCli, "x86_64") => Some("tree-sitter-linux-x64.gz"),
+        (TarballRelease::TreeSitterCli, "aarch64") if cfg!(target_os = "macos") => {
+            Some("tree-sitter-macos-arm64.gz")
+        }
+        (TarballRelease::TreeSitterCli, "aarch64") => Some("tree-sitter-linux-arm64.gz"),
+        (TarballRelease::TreeSitterCli, _) => None,
     }
 }
 
@@ -114,6 +127,7 @@ fn tarball_asset(release: TarballRelease) -> Option<&'static str> {
 fn tarball_url(release: TarballRelease) -> Option<String> {
     let project = match release {
         TarballRelease::Neovim => "neovim/neovim",
+        TarballRelease::TreeSitterCli => "tree-sitter/tree-sitter",
     };
     let asset = tarball_asset(release)?;
     Some(format!(
@@ -348,6 +362,37 @@ pub fn argv_sequence_for(
             let staging_path = tarball_staging_dir(*release).to_string_lossy().into_owned();
             let prefix = tarball_prefix(*release);
             let binary = tarball_binary(*release);
+
+            // A BARE GZIPPED EXECUTABLE, not an archive. tree-sitter
+            // publishes `tree-sitter-<platform>.gz`, which `tar -xzf`
+            // rejects with "Unrecognized archive format"; `gunzip -c` yields
+            // the executable directly. Verified against the real v0.27.0
+            // asset.
+            //
+            // No prefix tree, so no versioned directory and no symlink: the
+            // artifact IS one file, and the shape that fits it is a copy
+            // onto the search path. gunzip does not carry an execute bit
+            // through, hence the chmod.
+            if !tarball_is_archive(*release) {
+                let destination = format!("{}/{binary}", home_local_bin());
+                return vec![
+                    words(["rm", "-rf", &staging_path]),
+                    words(["mkdir", "-p", &staging_path]),
+                    words(["curl", "-fsSL", "-o", &format!("{staging_path}/{binary}.gz"), &url]),
+                    words(["mkdir", "-p", &home_local_bin()]),
+                    // `gunzip <file>` in place rather than `sh -c 'gunzip -c
+                    // ... > ...'`. The redirect spelling would put two paths
+                    // inside a shell word, which is the interpolation this
+                    // repo's argv-vector rule exists to prevent; gunzip
+                    // replaces `x.gz` with `x` on its own, so a plain `mv`
+                    // finishes the job with no shell in the sequence at all.
+                    words(["gunzip", "-f", &format!("{staging_path}/{binary}.gz")]),
+                    words(["mv", "-f", &format!("{staging_path}/{binary}"), &destination]),
+                    words(["chmod", "755", &destination]),
+                    words(["rm", "-rf", &staging_path]),
+                ];
+            }
+
             vec![
                 // A stale prefix from an interrupted run must not be merged
                 // with this one. Removing the staging path is safe because it
@@ -386,10 +431,26 @@ pub fn argv_sequence_for(
     }
 }
 
+/// Whether a release's asset is an archive or a single compressed file.
+///
+/// Two shapes ship under one action because both are "fetch a pinned GitHub
+/// release asset and put its executable on PATH". The difference is only how
+/// the bytes are unpacked, and stating it as a predicate keeps that
+/// difference in one place rather than in two argv branches that could drift.
+fn tarball_is_archive(release: TarballRelease) -> bool {
+    match release {
+        // A prefix tree: bin/, lib/, share/nvim/runtime/.
+        TarballRelease::Neovim => true,
+        // One gzipped executable.
+        TarballRelease::TreeSitterCli => false,
+    }
+}
+
 /// The binary a release tarball installs.
 fn tarball_binary(release: TarballRelease) -> &'static str {
     match release {
         TarballRelease::Neovim => "nvim",
+        TarballRelease::TreeSitterCli => "tree-sitter",
     }
 }
 
@@ -406,6 +467,7 @@ fn tarball_binary(release: TarballRelease) -> &'static str {
 fn tarball_staging_dir(release: TarballRelease) -> std::path::PathBuf {
     let name = match release {
         TarballRelease::Neovim => ".nvim-release-staging",
+        TarballRelease::TreeSitterCli => ".tree-sitter-release-staging",
     };
     std::path::PathBuf::from(tarball_prefix_parent(release)).join(name)
 }
@@ -418,6 +480,7 @@ fn tarball_staging_dir(release: TarballRelease) -> std::path::PathBuf {
 fn tarball_prefix(release: TarballRelease) -> String {
     let name = match release {
         TarballRelease::Neovim => "nvim",
+        TarballRelease::TreeSitterCli => "tree-sitter",
     };
     format!("{}/{name}-{}", tarball_prefix_parent(release), tarball_tag(release))
 }
@@ -1031,6 +1094,55 @@ mod tests {
     fn exit_status_of(code: i32) -> std::process::ExitStatus {
         use std::os::unix::process::ExitStatusExt as _;
         std::process::ExitStatus::from_raw(code << 8)
+    }
+
+    /// A gzipped single binary is unpacked with gunzip, never with tar.
+    ///
+    /// THE BUG THIS PREVENTS. `ReleaseTarball` was written for Neovim, whose
+    /// asset is a real `.tar.gz` holding a prefix tree. tree-sitter publishes
+    /// a bare gzipped executable (`tree-sitter-linux-x64.gz`), and `tar -xzf`
+    /// on it fails with "Unrecognized archive format". Verified against the
+    /// real asset: `file` reports gzip data whose original name is
+    /// `tree-sitter`, and `gunzip -c` yields the executable directly.
+    ///
+    /// So the two releases need different unpack commands, and the type has
+    /// to say which. A shared `tar` step would fail on exactly one of them,
+    /// at install time, on a fresh machine.
+    #[test]
+    fn a_gzipped_binary_release_is_gunzipped_not_untarred() {
+        let sequence = argv_sequence_for(
+            &InstallAction::ReleaseTarball { release: TarballRelease::TreeSitterCli },
+            PackageManager::Apt,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
+
+        assert!(!sequence.is_empty(), "the control: this action must plan commands");
+
+        let flattened: Vec<String> = sequence
+            .iter()
+            .flat_map(|command| command.iter())
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+
+        assert!(
+            !flattened.iter().any(|word| word == "tar"),
+            "tar cannot read a bare gzipped binary: {flattened:?}"
+        );
+        assert!(
+            flattened.iter().any(|word| word == "gunzip"),
+            "the asset is a gzipped executable, so gunzip is what unpacks it: \
+             {flattened:?}"
+        );
+        assert!(
+            flattened.iter().any(|word| word.ends_with("/.local/bin/tree-sitter")),
+            "the executable must land on the search path: {flattened:?}"
+        );
+        assert!(
+            flattened.iter().any(|word| word == "chmod"),
+            "gunzip does not preserve the execute bit, so it must be set: \
+             {flattened:?}"
+        );
     }
 
     /// The tarball install must keep the runtime tree with the binary.

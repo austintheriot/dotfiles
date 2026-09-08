@@ -162,7 +162,12 @@ assert_succeeds 'the lockfile pins the mason registry to a release' \
 # Every declared tool must have a pin. Compared as a COUNT against the
 # declared set, so a lockfile that silently lost entries fails rather than
 # passing on the subset it still covers.
-declared_tools=$(printf '%s\n%s\n' "$servers" "$extra_tools" | grep -c .)
+# tree-sitter-cli is pinned in the lock but installed by the deps engine, so
+# it is counted here even though mason does not install it. The pin has to
+# survive the move, or the lockfile silently stops covering the one tool
+# whose version must match what compiled the parsers.
+ENGINE_OWNED_PINS='tree-sitter-cli'
+declared_tools=$(printf '%s\n%s\n%s\n' "$servers" "$extra_tools" "$ENGINE_OWNED_PINS" | grep -c .)
 locked_tools=$("$PYTHON_BIN" -c "
 import json, sys
 print(len(json.load(open(sys.argv[1])).get('packages', {})))
@@ -275,7 +280,15 @@ if [ "$ts_branch" = main ]; then
     #
     # So `cc` alone is not enough any more, and 0 of 19 parsers is a silent
     # outcome: nothing fails at startup, there is simply no highlighting.
-    assert_equals 'tree-sitter-cli is installed by mason' 'tree-sitter-cli' \
+    # THE ENGINE INSTALLS IT, NOT MASON, and the distinction is the whole
+    # fix. It was a mason package first, and that failed on a fresh machine:
+    # the treesitter build hook runs during the same `Lazy sync` that asks
+    # mason to install the CLI, so it was not on PATH yet and only 3 of 19
+    # parsers compiled ("Error during \"tree-sitter build\": ENOENT (cmd):
+    # 'tree-sitter'"). Anything the editor needs during its own first run
+    # cannot be installed by the editor. The manifest half of this pair is
+    # asserted below, where conf_names has been read.
+    assert_equals 'tree-sitter-cli is NOT left in mason ensure_installed' '' \
         "$(printf '%s\n%s\n' "$servers" "$extra_tools" | grep -x 'tree-sitter-cli' || true)"
 fi
 
@@ -392,6 +405,10 @@ conf_names=$(cat "$DEPS_DIR"/deps.toml "$DEPS_DIR"/deps-mac.toml "$DEPS_DIR"/dep
 assert_succeeds 'the dependency manifests parse' test -n "$conf_names"
 
 tracks() { printf '%s\n' "$conf_names" | grep -qx "$1"; }
+
+# The other half of the tree-sitter-cli ownership pair (see the mason section
+# above): the engine must install it, so it has to be a manifest entry.
+assert_succeeds 'tree-sitter-cli is a tracked dependency' tracks 'tree-sitter-cli'
 
 # The npm-backed entries in the ensure_installed list. Named here because the
 # mapping from a server name to its registry backing is Mason's, not this

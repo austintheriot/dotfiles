@@ -109,6 +109,22 @@ pub enum TarballRelease {
     /// not have, so the AppImage route would fail in exactly the
     /// environment that tests it.
     Neovim,
+    /// The tree-sitter CLI, which nvim-treesitter's `main` branch shells out
+    /// to in order to compile parsers.
+    ///
+    /// A DEPS ENTRY RATHER THAN A MASON PACKAGE, and the distinction is the
+    /// whole point. It was a mason package first, which failed: the
+    /// treesitter build hook runs during the same `Lazy sync` that asks
+    /// mason to install this, so the CLI was not on PATH yet and only 3 of
+    /// 19 parsers compiled on a fresh machine ("Error during
+    /// \"tree-sitter build\": ENOENT (cmd): 'tree-sitter'"). Anything the
+    /// editor needs during its own first run cannot be installed by the
+    /// editor.
+    ///
+    /// Upstream publishes a bare gzipped executable, NOT a tar archive, so
+    /// this variant unpacks differently from `Neovim` above. See
+    /// `tarball_url` and the `ReleaseTarball` arm of `argv_sequence_for`.
+    TreeSitterCli,
 }
 
 /// A closed set of APT keyring sources.

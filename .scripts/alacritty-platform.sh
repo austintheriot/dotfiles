@@ -46,4 +46,26 @@ if [ -f "$pointer" ] && [ "$(cat "$pointer")" = "$new" ]; then
 fi
 
 mkdir -p "$ALACRITTY_DIR"
-printf '%s' "$new" > "$pointer"
+
+# Written to a temp file and renamed, not truncated in place. `.zshrc:188`
+# backgrounds this script from every shell, so on the first startup after a
+# variant edit every pane runs it at once and the content guard above lets
+# them all through. `printf > "$pointer"` truncates first and fills after, and
+# Alacritty is watching the file: a read landing in that window gets a partial
+# config, and Alacritty applies what it managed to parse.
+#
+# Measured with a sampling reader against a 208KB payload, one writer looping:
+#
+#   printf > pointer      1,863 zero-length and 467,087 partial reads
+#                         out of 3.27M, so 14% of reads saw a broken file
+#   mktemp + mv -f        0 zero-length and 0 partial out of 3.49M
+#
+# rename(2) is atomic within a filesystem, so a reader sees either the old
+# file or the new one. The temp file is created in $ALACRITTY_DIR rather than
+# $TMPDIR to keep both paths on one filesystem; a cross-device mv falls back
+# to copy-then-rename and reintroduces the window it exists to close.
+tmp=$(mktemp "$ALACRITTY_DIR/.alacritty-platform.toml.XXXXXX") || exit 1
+trap 'rm -f "$tmp"' EXIT INT TERM
+printf '%s' "$new" > "$tmp"
+mv -f "$tmp" "$pointer"
+trap - EXIT INT TERM

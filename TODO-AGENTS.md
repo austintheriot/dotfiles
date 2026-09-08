@@ -76,17 +76,7 @@ conversation rather than a commit.
   per-machine) keeps the same format. It is read by the same parser, so it
   converts with everything else, but a human hand-edits it.
 
-- CLAIMED 2026-09-08. `.scripts/alacritty-platform.sh:49` writes the pointer file
-  non-atomically (`printf '%s' "$new" > "$pointer"`), and `.zshrc:178`
-  backgrounds the script in every shell. The content-equality guard at
-  line 44 suppresses the steady state, but on the first startup after a
-  variant edit every pane races to truncate the same file, and Alacritty
-  watches it. The script's own comment at line 42 names the 107-pane
-  scenario.
-  Fix: write to a temp path and `mv -f`, which is atomic within a
-  filesystem.
-
-- `.scripts/config/config-install-hooks:34` uses `find "$dir" -maxdepth 0`
+- CLAIMED 2026-09-08. `.scripts/config/config-install-hooks:34` uses `find "$dir" -maxdepth 0`
   without `-L`, so it stats the symlink rather than its target. A
   world-writable directory reached through a symlink passes the
   trust-boundary check the file's header (lines 13-18) says these four

@@ -195,8 +195,12 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
 
     # An exact count rather than "more than zero": a partial add is the
     # failure that actually happened, and it leaves some files staged.
-    assert_equals 'all 41 scripts are committed, not only on disk' \
-        '41' "$committed_count"
+    #
+    # The number moves when a file is added under .scripts/, and that is the
+    # point: it went 41 -> 42 when Dockerfile.pop landed, and this assertion
+    # is where that showed up. Update it deliberately, with the addition.
+    assert_equals 'all 42 scripts are committed, not only on disk' \
+        '42' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine

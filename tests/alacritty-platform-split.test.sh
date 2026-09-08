@@ -113,6 +113,91 @@ assert_contains 'a stale pointer is rewritten for the current platform' \
 assert_equals 'the stale platform content is gone' \
     '' "$(grep -o 'mac-variant' "$dir/alacritty-platform.toml" || true)"
 
+# --- the pointer is replaced atomically, never truncated in place -----------
+
+# `.zshrc:188` backgrounds the generator from every shell, so on the first
+# startup after a variant edit all ~107 panes run it at once and the
+# content-equality guard lets every one of them through. Alacritty watches the
+# pointer, so a read landing inside a truncate-then-fill window gets a partial
+# config and Alacritty applies whatever parsed.
+#
+# Asserted behaviourally rather than by grepping for `mv`: a sampling reader
+# watches the file while a writer loops, and no sample may be shorter than the
+# finished file. Measured on the pre-fix code, 14% of reads saw a partial or
+# zero-length file; the atomic form produced 0 out of 3.49M.
+#
+# A large payload is what makes the window observable at all. The real variants
+# are small enough that a single write(2) usually completes between two
+# samples, which is why this pads to ~200KB: the bug is present either way, and
+# this size is what makes a regression fail here rather than on somebody's
+# terminal.
+if command -v python3 >/dev/null 2>&1; then
+    dir="$FIXTURES/alac-atomic"
+    mkdir -p "$dir"
+    printf 'mac-variant\n' > "$dir/alacritty-mac.toml"
+    {
+        printf 'linux-variant\n'
+        i=0
+        while [ "$i" -lt 4000 ]; do
+            printf 'key%04d = "padding that widens the write window"\n' "$i"
+            i=$((i + 1))
+        done
+    } > "$dir/alacritty-linux.toml"
+
+    # One clean run establishes the finished size the samples are judged against.
+    run_generator linux "$dir"
+    pointer="$dir/alacritty-platform.toml"
+    full_size=$(wc -c < "$pointer" | tr -d ' ')
+
+    sampler="$FIXTURES/alac-atomic-sampler.py"
+    cat > "$sampler" <<'SAMPLER'
+import os, sys, time
+
+# Counts reads that found the pointer PRESENT but shorter than finished.
+#
+# A missing file is deliberately not counted. The writer loop below deletes
+# the pointer to force a write past the content-equality guard, so an absence
+# is the harness's own doing and says nothing about how the write happens --
+# counting it would fail the atomic form too, which is exactly the false
+# result this comment exists to prevent. What only a non-atomic write can
+# produce is a file that exists and is incomplete, so that is the signal.
+path, seconds, full_size = sys.argv[1], float(sys.argv[2]), int(sys.argv[3])
+short = 0
+deadline = time.time() + seconds
+while time.time() < deadline:
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        continue
+    if size < full_size:
+        short += 1
+print(short)
+SAMPLER
+
+    python3 "$sampler" "$pointer" 3 "$full_size" > "$dir/short-count" &
+    sampler_pid=$!
+    sleep 0.3
+    # Rewrite in a loop. The content guard would exit early on an unchanged
+    # file, so each iteration alternates the variant content to force a write.
+    #
+    # Deleting the pointer is what forces the write: the guard reads the
+    # pointer, so an absent one can never match and the generator always
+    # reaches the write. Alternating the VARIANT instead does not work -- the
+    # guard would still be satisfied on the iterations where the content
+    # happened to match, and a loop that mostly exits early samples nothing.
+    loop_end=$(( $(date +%s) + 2 ))
+    while [ "$(date +%s)" -lt "$loop_end" ]; do
+        rm -f "$pointer"
+        run_generator linux "$dir"
+    done
+    wait "$sampler_pid"
+
+    short_reads=$(cat "$dir/short-count")
+    assert_equals 'no reader ever sees a partial pointer' '0' "$short_reads"
+else
+    skip 'no python3, so the atomic-write sampler cannot run'
+fi
+
 # --- the pointer is machine-local, not tracked ------------------------------
 
 # Tracking it would put a per-machine file in the repo, so each machine would

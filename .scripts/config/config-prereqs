@@ -1,0 +1,193 @@
+#!/bin/sh
+# help: Install only what is needed to build the Rust engine
+#
+# usage: config prereqs [-y|--yes] [-n|--dry-run]
+#
+# Installs the C toolchain and rustup, and nothing else. These are the two
+# dependencies the deps engine cannot install, because installing anything is
+# what the engine does and the engine has to be compiled first.
+#
+# Everything else belongs in deps.toml and is installed by `config install`,
+# which runs the engine. If you are reaching for this script to add a third
+# dependency, the answer is almost certainly a manifest entry instead.
+#
+# Idempotent. A machine that already has both is left alone, so this is safe
+# to re-run and is what `config init` calls on every run.
+#
+# Options:
+#   -y, --yes      Install without asking. For Docker, CI, and a remote box
+#                  with no one at the terminal.
+#   -n, --dry-run  Print what would be installed and change nothing.
+#
+# ---
+# WHY THIS SCRIPT EXISTS, since it duplicates two installs the engine can
+# also perform.
+#
+# The bootstrap is layered on purpose: a thin shell layer installs the
+# absolutely necessary components, then the Rust engine bootstraps everything
+# else. This script is that layer, and it is deliberately the only one.
+#
+# Without it the bootstrap had a cycle. `config init` installed dependencies
+# before building the crate, on the reasoning that rustup is itself a
+# manifest entry so cargo does not exist until the install step places it.
+# True while the engine was shell. Once the engine became config-cli, the
+# install step was `exec config-cli deps install`
+# (see config-install), and config-cli is what the build step
+# produces -- so the install step depended on the output of a step that ran
+# after it. Reproduced against the README's one-liner in clean
+# debian:bookworm and ubuntu:24.04:
+#
+#   config init: [3/4] install the missing tracked dependencies
+#   /root/.scripts/config/config-install: 13: exec: config-cli: not found
+#
+# The printed recovery path was a dead end in both directions: `config
+# install` repeated the same error, and `config build` said
+# "cargo: not found".
+#
+# The set is exactly cc and rustup, verified rather than assumed. In a clean
+# debian:bookworm with rustup installed and no cc, `cargo build` fails
+# compiling the build scripts of serde_core, quote, proc-macro2 and anyhow,
+# so cc is genuinely required and not merely nominal. With build-essential
+# and rustup and nothing else, config-cli builds and exits 0. Necessary and
+# sufficient.
+#
+# No toolchain pinning here: crates/rust-toolchain.toml pins 1.94.0 and
+# rustup honours it on the first cargo invocation, so this script installs
+# rustup and stops.
+set -eu
+
+self=$(readlink -f "$0")
+here=$(dirname "$self")
+
+. "$here/usage.sh"
+usage_if_requested "${1:-}"
+
+yes=0
+dry_run=0
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes) yes=1 ;;
+        -n|--dry-run) dry_run=1 ;;
+        *)
+            printf 'config prereqs: unknown argument: %s\n' "$arg" >&2
+            printf 'config prereqs: run `config prereqs --help` for usage\n' >&2
+            exit 2
+            ;;
+    esac
+done
+
+# A piped bootstrap has no terminal to answer a prompt, and the documented
+# entry point is `curl ... | sh`. Same decision setup.sh makes, for the same
+# reason: asking a question nobody can answer stalls the install.
+if [ ! -t 0 ]; then
+    yes=1
+fi
+
+# Escalation decided the way setup.sh and the deps engine both decide it. The
+# machine that needs this is often root with no sudo, where a sudo-prefixed
+# command is one the reader cannot run.
+if [ "$(id -u 2>/dev/null || printf 1)" -eq 0 ]; then
+    sudo_prefix=''
+elif command -v sudo >/dev/null 2>&1; then
+    sudo_prefix='sudo '
+else
+    sudo_prefix=''
+fi
+
+# The package name for a C toolchain differs per manager, and the manager is
+# how this is detected. Mirrors setup.sh's git dispatch rather than inventing
+# a second convention.
+#
+# macOS is absent on purpose: clang arrives with the Xcode command line
+# tools, and `xcode-select --install` opens a GUI prompt, so there is no
+# unattended path. The catalog records the same exclusion for the `cc` entry.
+cc_install_cmd=''
+if command -v apt-get >/dev/null 2>&1; then
+    cc_install_cmd="${sudo_prefix}apt-get update && ${sudo_prefix}apt-get install -y build-essential"
+elif command -v pacman >/dev/null 2>&1; then
+    cc_install_cmd="${sudo_prefix}pacman -Sy --noconfirm base-devel"
+elif command -v dnf >/dev/null 2>&1; then
+    cc_install_cmd="${sudo_prefix}dnf group install -y development-tools"
+elif command -v apk >/dev/null 2>&1; then
+    cc_install_cmd="${sudo_prefix}apk add build-base"
+fi
+
+# --proto and --tlsv1.2 are rustup's own documented invocation. Kept because
+# this pipes a remote script into a shell, which is the one place in this
+# repo where the transport is the security boundary.
+rustup_install_cmd="curl -fsSL --proto '=https' --tlsv1.2 https://sh.rustup.rs | sh -s -- -y --no-modify-path"
+
+needs_cc=0
+needs_rustup=0
+command -v cc >/dev/null 2>&1 || needs_cc=1
+command -v rustup >/dev/null 2>&1 || needs_rustup=1
+
+# ~/.cargo/bin is where rustup puts cargo, and a non-login shell does not
+# carry it. Checked here so a machine that has rustup from a previous run is
+# not reported as missing it.
+if [ "$needs_rustup" -eq 1 ] && [ -x "$HOME/.cargo/bin/rustup" ]; then
+    needs_rustup=0
+fi
+
+if [ "$needs_cc" -eq 0 ] && [ "$needs_rustup" -eq 0 ]; then
+    printf 'config prereqs: cc and rustup are both present\n'
+    exit 0
+fi
+
+if [ "$dry_run" -eq 1 ]; then
+    [ "$needs_cc" -eq 1 ] && printf 'config prereqs: would install cc: %s\n' \
+        "${cc_install_cmd:-<no known package manager>}"
+    [ "$needs_rustup" -eq 1 ] && printf 'config prereqs: would install rustup: %s\n' \
+        "$rustup_install_cmd"
+    printf 'config prereqs: dry run, nothing was changed\n'
+    exit 0
+fi
+
+# Ask once for the whole set rather than once per dependency. Two questions
+# to place two halves of one prerequisite is friction with no decision behind
+# it: declining either one leaves a machine that cannot build the engine.
+if [ "$yes" -eq 0 ] && [ -t 0 ]; then
+    printf 'config prereqs: install the build toolchain (cc, rustup)? [y/N] ' >&2
+    read -r reply
+    case "$reply" in
+        y|Y) ;;
+        *)
+            printf 'config prereqs: declined -- the engine cannot be built without these\n' >&2
+            exit 1
+            ;;
+    esac
+fi
+
+if [ "$needs_cc" -eq 1 ]; then
+    if [ -z "$cc_install_cmd" ]; then
+        printf 'config prereqs: no known package manager here, so cc cannot be installed for you\n' >&2
+        if [ "$(uname -s)" = Darwin ]; then
+            printf 'config prereqs: on macOS run `xcode-select --install`, then run this again\n' >&2
+        else
+            printf 'config prereqs: install a C toolchain by hand -- see https://gcc.gnu.org/\n' >&2
+        fi
+        exit 1
+    fi
+    printf 'config prereqs: installing cc: %s\n' "$cc_install_cmd"
+    if ! sh -c "$cc_install_cmd"; then
+        printf 'config prereqs: installing cc failed\n' >&2
+        printf 'config prereqs: fix the package manager, then run this again\n' >&2
+        exit 1
+    fi
+fi
+
+if [ "$needs_rustup" -eq 1 ]; then
+    if ! command -v curl >/dev/null 2>&1; then
+        printf 'config prereqs: curl is not installed, and rustup is fetched with it\n' >&2
+        printf 'config prereqs: install curl, then run this again\n' >&2
+        exit 1
+    fi
+    printf 'config prereqs: installing rustup\n'
+    if ! sh -c "$rustup_install_cmd"; then
+        printf 'config prereqs: installing rustup failed\n' >&2
+        printf 'config prereqs: see https://www.rust-lang.org/tools/install\n' >&2
+        exit 1
+    fi
+fi
+
+printf 'config prereqs: done\n'

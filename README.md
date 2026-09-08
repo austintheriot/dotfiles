@@ -77,10 +77,14 @@ hand-written and can, so `config help` wins on any disagreement:
   `config deps install` installs what is missing.
 - `config doctor` reports installed binaries that no longer match their
   source. Silent when everything is current.
-- `config init` finishes a fresh clone: git config, hooks, dependencies,
-  binary. The post-clone half of the bootstrap; `setup.sh` is the other half.
+- `config init` finishes a fresh clone: git config, hooks, build toolchain,
+  binary, then dependencies. The post-clone half of the bootstrap; `setup.sh`
+  is the other half.
 - `config install` installs any missing tracked dependencies.
 - `config install-hooks` links the git hooks and puts `config` on PATH.
+- `config prereqs` installs only what is needed to build the Rust engine
+  (a C toolchain and rustup). The thin shell layer of the bootstrap;
+  everything else is a `deps.toml` entry installed by `config install`.
 - `config reload` reloads the tmux config.
 - `config stamp` prints the build stamp of each workspace crate.
 - `config test` runs the test suite.

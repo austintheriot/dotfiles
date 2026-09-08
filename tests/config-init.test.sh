@@ -38,7 +38,7 @@ make_init_home() {
     cp "$INIT" "$fixture_home/.scripts/config/config-init"
 
     local sub
-    for sub in install-hooks install build; do
+    for sub in install-hooks prereqs install build; do
         cat > "$fixture_home/.scripts/config/config-$sub" <<STUB
 #!/bin/sh
 # help: stub
@@ -69,13 +69,42 @@ assert_contains 'install-hooks runs' 'install-hooks' "$calls"
 assert_contains 'install runs' 'install' "$calls"
 assert_contains 'build runs' 'build' "$calls"
 
-# Order is the contract, not an accident. install-hooks puts `config` on PATH
-# and must precede anything a later step or a later shell resolves through it;
-# install places the Rust toolchain that build then compiles with, so a build
-# that ran first would fail on a machine with no cargo.
-assert_equals 'the steps run in order: hooks, install, build' \
-    'install-hooks install build' \
+# Order is the contract, not an accident, and it encodes one rule: a thin
+# shell layer installs only what is needed to RUN the Rust engine, then the
+# engine installs everything else.
+#
+#   install-hooks  puts `config` on PATH, so anything a later step or a later
+#                  shell resolves through it can be found.
+#   prereqs        installs cc and rustup, in shell, because these are the two
+#                  things the engine cannot install without already existing.
+#   build          compiles config-cli with the toolchain prereqs just placed.
+#   install        runs the engine, which needs the binary build produced.
+#
+# BUILD BEFORE INSTALL is the correction. The previous order was
+# hooks, install, build, on the stated reasoning that "install places the Rust
+# toolchain that build then compiles with". That was true while the deps
+# engine was shell. It stopped being true when the engine became config-cli:
+# the install step is `exec config-cli deps install`
+# (.scripts/config/config-install:13), and config-cli is what build PRODUCES,
+# so install depended on the output of a step that ran after it.
+#
+# Reproduced against the README one-liner in clean debian:bookworm and
+# ubuntu:24.04 before this changed:
+#   config init: [3/4] install the missing tracked dependencies
+#   /root/.scripts/config/config-install: 13: exec: config-cli: not found
+assert_equals 'the steps run in order: hooks, prereqs, build, install' \
+    'install-hooks prereqs build install' \
     "$(printf '%s\n' "$calls" | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//')"
+
+# The engine cannot be the thing that installs the engine's own toolchain.
+# Asserted as a position, not only as membership: prereqs after build is the
+# bug in a different costume.
+assert_succeeds 'prereqs runs before build' \
+    test "$(printf '%s\n' "$calls" | awk '{print $1}' | grep -n '^prereqs$' | cut -d: -f1)" \
+    -lt "$(printf '%s\n' "$calls" | awk '{print $1}' | grep -n '^build$' | cut -d: -f1)"
+assert_succeeds 'build runs before install' \
+    test "$(printf '%s\n' "$calls" | awk '{print $1}' | grep -n '^build$' | cut -d: -f1)" \
+    -lt "$(printf '%s\n' "$calls" | awk '{print $1}' | grep -n '^install$' | cut -d: -f1)"
 
 # --yes must reach the install step, or an unattended bootstrap stops at the
 # first prompt with no terminal to answer it.
@@ -121,6 +150,7 @@ assert_contains 'dry run accounts for the git setting' 'showUntrackedFiles' "$ou
 assert_contains 'dry run accounts for the hooks step' 'hooks' "$output"
 assert_contains 'dry run accounts for the install step' 'dependencies' "$output"
 assert_contains 'dry run accounts for the build step' 'build' "$output"
+assert_contains 'dry run accounts for the prereqs step' 'toolchain' "$output"
 assert_contains 'dry run says it changed nothing' 'nothing was changed' "$output"
 
 # Every line is marked as hypothetical. A dry run whose output reads like a
@@ -155,43 +185,63 @@ status=$?
 assert_equals 'an unknown flag exits 2' '2' "$status"
 assert_equals 'an unknown flag runs no step' '' "$(calls_of "$home")"
 
-# --- a machine with no Rust toolchain ---------------------------------------
+# --- a failing build step is fatal ------------------------------------------
 #
-# The build step is last because it is the only one that needs a compiler, and
-# it must not cost the reader everything above it. rustup is a deps.toml entry
+# THIS INVERTS AN EARLIER CONTRACT, deliberately, and the old reasoning is
+# kept here because it reads as sound and should not be reinstated by
+# someone who only sees the new assertions.
+#
+# The build step used to run LAST and was the one step allowed to fail
+# without failing the bootstrap. The argument: rustup is a deps.toml entry
 # with no automated install on some managers, so "no cargo yet" is a real
-# state on a fresh remote box, and a container can omit the toolchain
-# deliberately.
+# state on a fresh remote box, a container can omit the toolchain on
+# purpose, and everything above the build step already left a working shell.
+# Exiting non-zero would have reported a usable machine as a failed
+# bootstrap.
 #
-# The contract: report the gap, name the recovery, and still exit 0, because
-# the hooks are linked, the dependencies are installed, and the shell works.
-# A non-zero exit here would turn a usable machine into a failed bootstrap and
-# would make the CI bootstrap job red for something that is not a bootstrap
-# failure.
-home=$(make_init_home nocargo)
+# Two facts changed, and each on its own is enough:
+#   1. `config prereqs` now runs BEFORE the build and installs cc and rustup,
+#      so "no cargo" is no longer a state the build step can be reached in.
+#      A build failure past that point is a compile failure, not a missing
+#      toolchain.
+#   2. The build step now runs BEFORE the install step, because the install
+#      step is `exec config-cli deps install` and config-cli is what the
+#      build produces. Tolerating a build failure would walk straight into
+#      "exec: config-cli: not found", which is the original bug with a worse
+#      message.
+home=$(make_init_home buildfails)
 cat > "$home/.scripts/config/config-build" <<'STUB'
 #!/bin/sh
 # help: stub
 # usage: config build
 printf 'build %s\n' "$*" >> "$HOME/.calls"
-printf 'error: no such command: `cargo`\n' >&2
+printf 'error: could not compile `config-cli`\n' >&2
 exit 1
 STUB
 chmod +x "$home/.scripts/config/config-build"
 
 output=$(cd "$home" && HOME="$home" "$home/.scripts/config/config" init --yes 2>&1)
 status=$?
-assert_equals 'a failing build step still exits 0' '0' "$status"
-assert_contains 'the failure is reported' 'build' "$output"
-assert_contains 'the recovery is named' 'config build' "$output"
+assert_equals 'a failing build step exits non-zero' '1' "$status"
+assert_succeeds 'the failure names the build step' \
+    printf '%s' "$output" | grep -q 'build step failed'
 
-# The steps before it must have completed, which is the whole reason to
-# tolerate this one.
+# The message must not send the reader back to the package manager: prereqs
+# already succeeded, so a compile failure is not a missing dependency.
+assert_succeeds 'the failure says the toolchain is already installed' \
+    printf '%s' "$output" | grep -q 'cc and rustup are installed'
+
+# The steps before it must still have completed.
 calls=$(calls_of "$home")
 assert_contains 'the hooks were still linked' 'install-hooks' "$calls"
-assert_contains 'the dependencies were still installed' 'install --yes' "$calls"
+assert_contains 'the toolchain step still ran' 'prereqs' "$calls"
 actual=$(git --git-dir="$home/.cfg" config --get status.showUntrackedFiles)
 assert_equals 'the git setting was still written' 'no' "$actual"
+
+# And the install step must NOT have run: it execs the binary this step
+# failed to produce.
+assert_equals 'the install step does not run after a failed build' '' \
+    "$(printf '%s\n' "$calls" | awk '{print $1}' | grep -x 'install' || true)"
 
 
 # --- a failing install step is not a success --------------------------------
@@ -332,3 +382,35 @@ assert_equals 'no hint when local bin is already on PATH' '' \
 
 
 finish
+
+# --- prereqs is the one step whose failure is fatal before anything else ----
+
+# A machine with no cc and no rustup cannot build the engine, and every step
+# after prereqs needs the engine. Continuing past a prereqs failure would
+# reach `config-install` and reproduce the original
+# "exec: config-cli: not found", which is a worse message for the same
+# problem.
+home=$(make_init_home prereqfail)
+cat > "$home/.scripts/config/config-prereqs" <<'STUB'
+#!/bin/sh
+# help: stub
+# usage: config prereqs
+printf 'prereqs %s\n' "$*" >> "$FIXTURE_CALLS"
+printf 'config prereqs: no known package manager here\n' >&2
+exit 1
+STUB
+sed -i.bak "s|\$FIXTURE_CALLS|$home/.calls|" "$home/.scripts/config/config-prereqs"
+rm -f "$home/.scripts/config/config-prereqs.bak"
+chmod +x "$home/.scripts/config/config-prereqs"
+
+output=$(cd "$home" && HOME="$home" "$home/.scripts/config/config" init --yes 2>&1)
+status=$?
+
+assert_equals 'a failing prereqs step exits non-zero' '1' "$status"
+assert_succeeds 'the failure names the toolchain step' \
+    printf '%s' "$output" | grep -q 'toolchain'
+
+# Nothing after it may have run: those steps need what prereqs did not place.
+calls=$(calls_of "$home")
+assert_equals 'no step after prereqs runs' '' \
+    "$(printf '%s\n' "$calls" | awk '{print $1}' | grep -E '^(build|install)$' || true)"

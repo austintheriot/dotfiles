@@ -1,5 +1,5 @@
 #!/bin/sh
-# help: Finish a fresh clone: git config, hooks, dependencies, binary
+# help: Finish a fresh clone: git config, hooks, toolchain, binary, deps
 #
 # usage: config init [-y|--yes] [-n|--dry-run]
 #
@@ -25,20 +25,38 @@
 #   DOTFILES_ROOT  Repo root. Default $HOME.
 #
 # ---
-# Step order is a contract, not an accident, and the tests assert it:
+# Step order is a contract, not an accident, and the tests assert it. It
+# encodes one rule: a thin shell layer installs the absolutely necessary
+# components, then the Rust engine bootstraps everything else.
 #
 #   install-hooks first, because it is what puts `config` on PATH. A later
 #   step, a later shell, or the reader's next command resolves `config`
 #   through ~/.local/bin, and on a fresh machine nothing else has put it
 #   there.
 #
-#   install second, because it is what places the Rust toolchain. rustup is a
-#   deps.toml entry, so on a genuinely fresh machine cargo does not exist
-#   until this step has run.
+#   prereqs second. cc and rustup are the two dependencies the engine cannot
+#   install, because installing anything is what the engine does and the
+#   engine has to be compiled first. This is the shell layer, and
+#   config-prereqs is deliberately the only one.
 #
-#   build last, for the same reason: it compiles the crate with the cargo
-#   that install just placed. Running it first fails on exactly the machine
-#   this script exists to serve.
+#   build third, compiling config-cli with the toolchain prereqs just placed.
+#
+#   install last, because it runs the engine, which needs the binary the
+#   build step produced.
+#
+# BUILD BEFORE INSTALL is a correction, recorded because the previous order
+# was hooks, install, build and its stated reasoning reads as sound: "install
+# places the Rust toolchain that build then compiles with". That held while
+# the deps engine was shell. It stopped holding when the engine became
+# config-cli: the install step is `exec config-cli deps install`
+# (config-install), and config-cli is what the build step PRODUCES, so
+# install depended on the output of a step that ran after it. The two halves
+# of the loop were each documented here without anyone noticing they closed.
+#
+# Reproduced against the README one-liner in clean debian:bookworm and
+# ubuntu:24.04:
+#   config init: [3/4] install the missing tracked dependencies
+#   /root/.scripts/config/config-install: 13: exec: config-cli: not found
 #
 # Every step is delegated to the sibling config-<sub> rather than reimplemented
 # here, so there is one place that knows how to install dependencies and one
@@ -97,9 +115,9 @@ step=0
 announce() {
     step=$((step + 1))
     if [ "$dry_run" -eq 1 ]; then
-        printf 'config init: [%d/4] would %s\n' "$step" "$1"
+        printf 'config init: [%d/5] would %s\n' "$step" "$1"
     else
-        printf 'config init: [%d/4] %s\n' "$step" "$1"
+        printf 'config init: [%d/5] %s\n' "$step" "$1"
     fi
 }
 
@@ -125,6 +143,59 @@ if [ "$dry_run" -eq 0 ]; then
     "$here/config-install-hooks"
 fi
 
+# The shell layer. Fatal on failure, and it has to be: every step below
+# needs the engine, and the engine cannot be compiled without these two.
+# Continuing would reach config-install and reproduce
+# "exec: config-cli: not found", which is a worse message for the same
+# problem.
+announce 'install the build toolchain (cc, rustup)'
+if [ "$dry_run" -eq 0 ]; then
+    prereq_status=0
+    if [ "$yes" -eq 1 ]; then
+        "$here/config-prereqs" --yes || prereq_status=$?
+    else
+        "$here/config-prereqs" || prereq_status=$?
+    fi
+
+    if [ "$prereq_status" -ne 0 ]; then
+        printf '\nconfig init: the build toolchain step failed\n' >&2
+        printf 'config init: the repo is cloned, the hooks are linked, and config is on PATH\n' >&2
+        printf 'config init: cc and rustup are what everything below needs, so this stops here\n' >&2
+        printf 'config init: fix that, then run:\n' >&2
+        printf 'config init:   %s/config-prereqs && %s/config-build && %s/config-install\n' \
+            "$here" "$here" "$here" >&2
+        exit "$prereq_status"
+    fi
+
+    # rustup put cargo in ~/.cargo/bin, which was prepended above, but the
+    # prepend happened before rustup existed. Re-resolving here is what lets
+    # the build step below see a toolchain installed seconds ago in this same
+    # process.
+    hash -r 2>/dev/null || true
+fi
+
+# Third, not last. It produces config-cli, which the install step below execs.
+#
+# Fatal, unlike the old trailing build step. That one was allowed to fail
+# because "a machine with no cargo is a real state" and nothing downstream
+# needed the binary. Both halves changed: prereqs now guarantees cargo, and
+# the install step below cannot run without the binary this produces, so a
+# tolerated failure here would only defer the error to a worse message.
+announce 'build and install the stamped binary'
+if [ "$dry_run" -eq 0 ]; then
+    build_status=0
+    DOTFILES_ROOT="$ROOT" "$here/config-build" || build_status=$?
+
+    if [ "$build_status" -ne 0 ]; then
+        printf '\nconfig init: the build step failed\n' >&2
+        printf 'config init: cc and rustup are installed, so this is a compile failure\n' >&2
+        printf 'config init: config-cli is what the install step runs, so this stops here\n' >&2
+        printf 'config init: fix it, then run:\n' >&2
+        printf 'config init:   %s/config-build && %s/config-install\n' "$here" "$here" >&2
+        exit "$build_status"
+    fi
+fi
+
 # set -eu already aborts here on a non-zero install, and that is the right
 # outcome: a bootstrap that installed nothing has not bootstrapped anything.
 # What a bare abort does not do is tell the reader where they stand, and a
@@ -143,48 +214,15 @@ if [ "$dry_run" -eq 0 ]; then
         printf '\nconfig init: the install step failed\n' >&2
         printf 'config init: the repo is cloned, the hooks are linked, and config is on PATH\n' >&2
         printf 'config init: fix the package manager, then run:\n' >&2
-        printf 'config init:   %s/config-install && %s/config-build\n' "$here" "$here" >&2
-        printf 'config init: (or `config install` and `config build`, once %s/.local/bin is on your PATH)\n' \
+        printf 'config init:   %s/config-install\n' "$here" >&2
+        printf 'config init: (or `config install`, once %s/.local/bin is on your PATH)\n' \
             "$HOME" >&2
         exit "$install_status"
     fi
 fi
 
-# Last, and the only step allowed to fail without failing the bootstrap.
-#
-# Everything above leaves a working shell; the crate is one utility on top of
-# that. A machine with no cargo is a real state, not a broken one: rustup is a
-# deps.toml entry with no automated install on some package managers, and a
-# container can omit the toolchain deliberately. Exiting non-zero here would
-# report a usable machine -- hooks linked, dependencies installed, shell
-# working -- as a failed bootstrap, and would turn the CI bootstrap job red
-# for something that is not a bootstrap failure.
-#
-# So the gap is reported with the one command that closes it, and the exit
-# code stays 0. Every step that the reader cannot recover from on their own
-# runs before this one, which is why this is the step that gets the exception
-# and no other does.
-announce 'build and install the stamped binary'
-build_failed=0
-if [ "$dry_run" -eq 0 ]; then
-    if ! DOTFILES_ROOT="$ROOT" "$here/config-build"; then
-        build_failed=1
-    fi
-fi
-
 if [ "$dry_run" -eq 1 ]; then
     printf '\nconfig init: dry run, nothing was changed\n'
-    exit 0
-fi
-
-if [ "$build_failed" -eq 1 ]; then
-    printf '\nconfig init: done, except the build step\n'
-    # The path, not the bare command: a shell that predates install-hooks has
-    # no `config` on PATH, so naming it alone is a dead end. Reported from a
-    # bare container, where "run `config init`" was followed by
-    # "bash: config: command not found".
-    printf 'config init:   %s/config-build\n' "$here"
-    printf 'config init: (or `config build`, once %s/.local/bin is on your PATH)\n' "$HOME"
     exit 0
 fi
 

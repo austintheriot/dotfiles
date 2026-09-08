@@ -6,9 +6,10 @@ Commands:
   deps           Check or install the dependencies the manifest names
   doctor         Report installed binaries that do not match their source
   help           List the config subcommands and what each one does
-  init           Finish a fresh clone: git config, hooks, dependencies, binary
+  init           Finish a fresh clone: git config, hooks, toolchain, binary, deps
   install        Install the dependencies the manifest names
   install-hooks  Link the git hooks and put the dispatcher on PATH
+  prereqs        Install only what is needed to build the Rust engine
   reload         Reload the tmux config and print the line to re-source zsh
   stamp          Print the build stamp of each workspace crate
   test           Run the test suite, optionally in Docker or in a watch loop

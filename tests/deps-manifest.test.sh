@@ -64,9 +64,25 @@ assert_succeeds 'zsh-autosuggestions resolves via the oh-my-zsh plugin path' \
     env HOME="$linux_home" PATH="/usr/bin:/bin" sh -c "$(check_for zsh-autosuggestions)"
 
 # This machine: the plugin comes from brew, and there is no ~/.oh-my-zsh.
-if command -v brew >/dev/null 2>&1; then
+#
+# Guarded on the plugin file, not on brew being installed. `command -v brew`
+# was the wrong question: a macOS CI runner has brew and need not have this
+# package, so the guard passed and the assertion then failed on a machine
+# where the check command is behaving correctly. It broke the moment
+# test-suite.yml stopped naming zsh-autosuggestions in its --only list,
+# which it stopped doing because no test needs the package installed --
+# except this one, which needs it to prove the brew branch of a two-branch
+# check.
+#
+# Skipped rather than silently absent, per the suite's own rule: a check
+# that cannot run must say so, or it is indistinguishable from one that is
+# not there.
+brew_plugin="$(brew --prefix 2>/dev/null)/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+if [ -f "$brew_plugin" ]; then
     assert_succeeds 'zsh-autosuggestions resolves via the brew share path' \
         env HOME="$FIXTURES/empty-home" sh -c "$(check_for zsh-autosuggestions)"
+else
+    skip 'zsh-autosuggestions is not installed through brew here'
 fi
 
 # A machine with neither shape must still report it missing, or the widened

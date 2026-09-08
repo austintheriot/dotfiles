@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- nvim: markdown-preview build fails on every fresh machine.
+- CLAIMED 2026-09-08. nvim: markdown-preview build fails on every fresh machine.
   Reported 2026-09-08 from a bare ubuntu container:
     markdown-preview.nvim ... build failed
     Vim:E492: Not an editor command: Lazy load markdown-preview.nvim

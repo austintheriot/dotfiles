@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- nvim: pin the mason registry to a tag, and pin the 14 tool versions.
+- CLAIMED 2026-09-08. nvim: pin the mason registry to a tag, and pin the 14 tool versions.
   The highest-leverage determinism change available, because pinning the
   registry pins the MEANING of every unversioned package name. Today
   `registries` is unset, so it defaults to the moving

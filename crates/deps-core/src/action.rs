@@ -69,6 +69,16 @@ pub enum ScriptInstaller {
     OhMyZsh,
     /// zoxide's installer, the `*)` fallback at `retired-check-deps:308`.
     Zoxide,
+    /// nvm's installer, pinned to one release tag.
+    ///
+    /// The only pinned entry in this set. The other three fetch a moving
+    /// branch, which nvm's docs do not offer: every install URL upstream
+    /// publishes carries a version, which is why this dependency was
+    /// `UpstreamPublishesNoStableUrl` and manual-only until the tag was
+    /// chosen deliberately. A pin goes stale on purpose rather than by
+    /// accident, and `nvm install --lts` still resolves node versions at run
+    /// time, so the pin fixes the installer, not the node it installs.
+    Nvm,
 }
 
 /// A closed set of git clone sources.
@@ -161,6 +171,16 @@ pub enum NoInstallReason {
     /// is a different claim from "this can never be automated".
     PrerequisiteNotYetInstalled {
         /// The prerequisite that is not yet present.
+        dependency: DependencyName,
+    },
+    /// The prerequisite is selected, and its own step has no automated
+    /// install, so no wave of this run installs it.
+    ///
+    /// The dependent is not broken and neither is the prerequisite: the
+    /// machine needs a documented manual step. Distinct from
+    /// `PrerequisiteNotYetInstalled`, which promises a later wave.
+    PrerequisiteNotAutomatable {
+        /// The prerequisite that has no automated install.
         dependency: DependencyName,
     },
     /// The prerequisite is in this platform's manifest and the run excluded

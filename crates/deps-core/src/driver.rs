@@ -178,8 +178,15 @@ pub fn perform_all(
         // is attempted -- resolved, not performed -- which retires it on
         // this wave and reports a terminal state instead of a `waiting` row
         // that never resolves.
+        // Both permanent cases retire here. A deselected prerequisite is one
+        // the run excluded; a manual-only one is selected but has no
+        // automated install. Neither changes in a later wave, so deferring
+        // either would replan the same step until the no-progress break and
+        // report it as `waiting` -- a claim about time that is false.
         if let InstallAction::NotAutomatable {
-            reason: NoInstallReason::PrerequisiteDeselected { dependency },
+            reason:
+                NoInstallReason::PrerequisiteDeselected { dependency }
+                | NoInstallReason::PrerequisiteNotAutomatable { dependency },
         } = &step.action
         {
             outcomes.push((
@@ -677,6 +684,59 @@ zsh-autosuggestions|[ -f \"$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/z
             "an unsatisfiable step must never reach an installer: {:?}",
             performed.borrow()
         );
+    }
+
+    // The manual-only prerequisite case. nvm was UpstreamPublishesNoStableUrl
+    // for most of this repo's life, so node depended on something no
+    // unattended run could install, and every bootstrap leg printed
+    // `waiting node (needs nvm)` and then failed on an aggregate code.
+    //
+    // `waiting` is a claim about time and it was false: the prerequisite is
+    // ordered before its dependent, so its manual-only verdict is already
+    // known when the dependent is planned, and no later wave revisits it.
+    #[test]
+    fn a_manual_only_prerequisite_is_terminal_on_the_first_wave() {
+        let manifest = oh_my_zsh_manifest();
+        let selection = Selection::all(&manifest);
+        let requirements = autosuggestions_needs_oh_my_zsh();
+        // The prerequisite has no automated install on this manager, which
+        // is what `nvm` looked like before the pinned installer landed.
+        let mut catalog = packages();
+        catalog.insert(
+            dependency("oh-my-zsh"),
+            PackageMap::new(
+                BTreeMap::new(),
+                PackageAvailability::Unavailable(
+                    NoInstallReason::UpstreamPublishesNoStableUrl,
+                ),
+            ),
+        );
+        let planning = linux_pair_planning(&manifest, &selection, &requirements, &catalog);
+        let worlds = ScriptedWorlds::new(vec![ObservationMap::from_pairs(vec![])]);
+        let performed = Rc::new(RefCell::new(Vec::new()));
+        let installers = Installers {
+            ordinary: Box::new(SharedRecorder { performed: Rc::clone(&performed) }),
+            privileged: Some(Box::new(SharedRecorder { performed: Rc::clone(&performed) })),
+        };
+
+        let (report, _events) = run_to_fixpoint(&planning, &installers, || worlds.next())
+            .expect("a manual-only prerequisite still produces a report");
+
+        let row = report
+            .rows
+            .iter()
+            .find(|row| row.dependency == dependency("zsh-autosuggestions"))
+            .expect("the dependent gets a row");
+        match &row.outcome {
+            StepOutcome::Unsatisfiable { on } => assert_eq!(
+                *on,
+                dependency("oh-my-zsh"),
+                "the terminal row must name the prerequisite that cannot install"
+            ),
+            other => panic!(
+                "a manual-only prerequisite must be Unsatisfiable, not {other:?}"
+            ),
+        }
     }
 
     // Termination. Every iteration either performs a step or breaks, and a

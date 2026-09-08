@@ -335,6 +335,10 @@ pub fn plan(
 ) -> Result<(Plan, Vec<Event>), PlanError> {
     let ordered = topological_order(manifest, selection, requirements)?;
     let mut satisfied: BTreeSet<DependencyName> = BTreeSet::new();
+    // Names whose own step has no automated install. Populated as the walk
+    // goes, and readable by a dependent because `ordered` puts every
+    // prerequisite before its dependents.
+    let mut manual_only: BTreeSet<DependencyName> = BTreeSet::new();
     let mut steps = Vec::new();
     let mut events = Vec::new();
 
@@ -362,6 +366,7 @@ pub fn plan(
             selection,
             manifest,
             &satisfied,
+            &manual_only,
             &mut events,
         ) {
             events.push(Event::StepBlocked {
@@ -383,6 +388,9 @@ pub fn plan(
             .get(name)
             .map_or(&unnamed, |per_dependency| per_dependency.resolve(manager));
         let (action, privilege) = action_for(availability, manager, elevation);
+        if matches!(action, InstallAction::NotAutomatable { .. }) {
+            manual_only.insert(name.clone());
+        }
         events.push(Event::StepPlanned { dependency: name.clone(), privilege });
         steps.push(Step { dependency: name.clone(), action, privilege });
     }
@@ -478,6 +486,19 @@ enum PrerequisiteBlock {
         /// The prerequisite the selection excluded.
         dependency: DependencyName,
     },
+    /// Selected and planned, and its own step has no automated install, so
+    /// no wave of this run installs it either.
+    ///
+    /// Distinct from `NotYetInstalled`, whose claim is that a later wave
+    /// changes the answer. Nothing changes this one: the prerequisite is
+    /// ordered before its dependent, so by the time the dependent is
+    /// planned its prerequisite's step is already known to be manual-only.
+    /// Reporting it as "not yet" produced a `waiting` row on every
+    /// unattended bootstrap that never resolved.
+    NotAutomatable {
+        /// The prerequisite that has no automated install.
+        dependency: DependencyName,
+    },
 }
 
 impl PrerequisiteBlock {
@@ -485,7 +506,8 @@ impl PrerequisiteBlock {
     fn prerequisite(&self) -> &DependencyName {
         match self {
             PrerequisiteBlock::NotYetInstalled { dependency }
-            | PrerequisiteBlock::Deselected { dependency } => dependency,
+            | PrerequisiteBlock::Deselected { dependency }
+            | PrerequisiteBlock::NotAutomatable { dependency } => dependency,
         }
     }
 
@@ -497,6 +519,9 @@ impl PrerequisiteBlock {
             }
             PrerequisiteBlock::Deselected { dependency } => {
                 NoInstallReason::PrerequisiteDeselected { dependency }
+            }
+            PrerequisiteBlock::NotAutomatable { dependency } => {
+                NoInstallReason::PrerequisiteNotAutomatable { dependency }
             }
         }
     }
@@ -517,6 +542,7 @@ fn first_unsatisfied_prerequisite(
     selection: &Selection,
     manifest: &Manifest,
     satisfied: &BTreeSet<DependencyName>,
+    manual_only: &BTreeSet<DependencyName>,
     events: &mut Vec<Event>,
 ) -> Option<PrerequisiteBlock> {
     for prerequisite in requirements.prerequisites(name) {
@@ -541,6 +567,14 @@ fn first_unsatisfied_prerequisite(
             });
         }
         if !satisfied.contains(prerequisite) {
+            // Ordered before its dependent, so if its own step was planned
+            // manual-only that verdict is already recorded and no later wave
+            // revisits it.
+            if manual_only.contains(prerequisite) {
+                return Some(PrerequisiteBlock::NotAutomatable {
+                    dependency: prerequisite.clone(),
+                });
+            }
             return Some(PrerequisiteBlock::NotYetInstalled {
                 dependency: prerequisite.clone(),
             });

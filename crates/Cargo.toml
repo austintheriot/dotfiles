@@ -39,3 +39,14 @@ format_push_string = "warn"
 anyhow = "1.0.104"
 clap = { version = "4.6.6", features = ["derive", "env"] }
 tempfile = "3.27.0"
+# No `display`: this is a reader, and a writer would invite a
+# re-serialization path that reformats a hand-edited file.
+#
+# `serde` is required rather than chosen -- `toml::Table` and `toml::Value`
+# are gated behind it, and those are the untyped document types deps-core
+# maps onto its own closed types by hand. Nothing here derives
+# Serialize/Deserialize: a derive would put a second definition of the schema
+# beside the hand-written mapping, and the mapping is where the rules live
+# (exactly one check per entry, unknown keys refused, python imports only in
+# an explicitly named file).
+toml = { version = "0.9.8", default-features = false, features = ["parse", "serde"] }

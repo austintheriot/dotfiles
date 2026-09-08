@@ -1,0 +1,140 @@
+# CLI dependencies shared by every machine, regardless of platform.
+#
+# The deps engine (`config deps`, in crates/) reads this file plus, if
+# present, deps-local.toml in the same directory, for platform-exclusive
+# dependencies. See README.md in this directory for the install-command
+# logic and how to add a new entry.
+#
+# FORMAT
+#
+# One table per dependency, named by the dependency. Each table names exactly
+# one check plus a `docs` URL:
+#
+#   command         a name that must resolve on PATH
+#   min_version     qualifies `command`: the name must also report at least
+#                   this version. Not a check on its own.
+#   file            a file that must exist
+#   dir             a directory that must exist
+#   file_non_empty  a file that must exist and have content
+#   glob            a table of `dir` and `pattern`: at least one entry in
+#                   `dir` matches `pattern`
+#   python_import   a module `python3 -c "import ..."` must find. Permitted
+#                   only in a file named by an explicit DEPS_CONF, because it
+#                   spawns an interpreter.
+#   any_of          a list of inline tables, any one of which satisfies it
+#
+# Paths are written with one of three roots: `$HOME/`, `/Applications/`, or
+# `$(brew --prefix 2>/dev/null)/`. Nothing else is expanded, which is what
+# keeps an arbitrary command substitution out of a check.
+#
+# An unknown key is an error rather than an ignored line. A dropped
+# `min_verison` typo would leave a bare presence check that passes on exactly
+# the versions the floor exists to reject.
+#
+# WHY TOML AND NOT THE PIPE FORMAT THIS REPLACED
+#
+# The old format was `name|check_command|docs_url`, with the check written as
+# one shell-shaped string. Its own header had to document that a check must
+# not contain a literal `|`, because the field split truncated the check and
+# leaked the remainder into the docs URL -- so an either-or check had to be
+# contorted into `test A -o B` or a one-line `if`, and the version floor
+# packed a second value into the same positionally-split string
+# (`command -v nvim >=0.10`). Named keys remove both problems by
+# construction rather than by convention.
+#
+# Checks accept either platform's install shape, because this file is shared:
+# alacritty is a .app bundle on macOS and a binary on PATH on Linux, and
+# zsh-autosuggestions comes from Homebrew's share directory on macOS and from
+# an oh-my-zsh custom plugin on Linux. oh-my-zsh itself is not shared -- it
+# lives in deps-linux.toml, so no ordering between it and zsh-autosuggestions
+# is guaranteed here.
+
+[git]
+command = "git"
+docs = "https://git-scm.com/downloads"
+
+[gh]
+command = "gh"
+docs = "https://cli.github.com/"
+
+[alacritty]
+any_of = [
+    { dir = "/Applications/Alacritty.app" },
+    { command = "alacritty" },
+]
+docs = "https://alacritty.org/"
+
+[zsh]
+command = "zsh"
+docs = "https://www.zsh.org/"
+
+[zsh-autosuggestions]
+any_of = [
+    { file = "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" },
+    { file = "$(brew --prefix 2>/dev/null)/share/zsh-autosuggestions/zsh-autosuggestions.zsh" },
+]
+docs = "https://github.com/zsh-users/zsh-autosuggestions"
+
+# 0.10 is where `vim.uv` arrived. The nvim config calls it during startup, so
+# an older binary aborts init.lua with "attempt to index field 'uv'" -- a
+# message that names a Lua field rather than the actual problem. Ubuntu 22.04
+# and Pop!_OS both ship 0.6/0.9 in their archives, which is why the floor
+# exists and why apt installs this one from an upstream tarball instead.
+[neovim]
+command = "nvim"
+min_version = "0.10"
+docs = "https://neovim.io/"
+
+[fzf]
+command = "fzf"
+docs = "https://github.com/junegunn/fzf"
+
+[ripgrep]
+command = "rg"
+docs = "https://github.com/BurntSushi/ripgrep"
+
+[zoxide]
+command = "zoxide"
+docs = "https://github.com/ajeetdsouza/zoxide"
+
+[tmux]
+command = "tmux"
+docs = "https://github.com/tmux/tmux"
+
+[tpm]
+dir = "$HOME/.tmux/plugins/tpm"
+docs = "https://github.com/tmux-plugins/tpm"
+
+[shellcheck]
+command = "shellcheck"
+docs = "https://www.shellcheck.net/"
+
+[cc]
+command = "cc"
+docs = "https://gcc.gnu.org/"
+
+[rustup]
+command = "rustup"
+docs = "https://www.rust-lang.org/tools/install"
+
+# `file_non_empty` rather than `file`: nvm.sh is sourced, and an empty file
+# sources cleanly while providing no `nvm`, so existence alone is not the
+# question being asked.
+[nvm]
+file_non_empty = "$HOME/.nvm/nvm.sh"
+docs = "https://github.com/nvm-sh/nvm"
+
+# node is installed through nvm, whose shims are not on PATH in a
+# non-interactive shell, so a PATH check alone reports a machine with node
+# installed as missing it.
+#
+# The fallback is a glob and not a `dir` check: nvm creates
+# $HOME/.nvm/versions/node the moment it is installed, whether or not any
+# node version is in it, so a directory check would report node present on a
+# machine that has none. The `v*` pattern is what asks the real question.
+[node]
+any_of = [
+    { command = "node" },
+    { glob = { dir = "$HOME/.nvm/versions/node", pattern = "v*" } },
+]
+docs = "https://nodejs.org/"

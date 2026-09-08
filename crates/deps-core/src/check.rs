@@ -409,7 +409,12 @@ fn split_after_closing_quote(raw: &str) -> Option<(&str, &str)> {
 /// An operand whose prefix is none of the three named roots is `Unrecognized`,
 /// which is what keeps an arbitrary command substitution out: there is no
 /// branch that carries unexpanded text forward.
-fn parse_quoted_path(raw: &str) -> Result<CheckPath, CheckParseError> {
+///
+/// `pub(crate)` so the TOML parser in `manifest` maps its path values through
+/// the SAME root table this one uses. Two root tables would let the formats
+/// disagree about what `$HOME/` means, and a check that resolves one way in
+/// one format is the bug this crate exists to prevent.
+pub(crate) fn parse_quoted_path(raw: &str) -> Result<CheckPath, CheckParseError> {
     let inner = raw
         .strip_prefix('"')
         .and_then(|rest| rest.strip_suffix('"'))

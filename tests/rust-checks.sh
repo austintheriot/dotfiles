@@ -75,8 +75,10 @@ trap 'rm -rf "$snapshot"' EXIT
 
 # crates/ plus every tracked path a crate reads at COMPILE time.
 #
-# config-cli's catalog embeds the four dependency manifests with
-# `include_str!("../../../../deps/*.conf")`, which escapes crates/.
+# config-cli's catalog embeds the dependency manifests with
+# `include_str!("../../../../deps/*.conf")` and `.../*.toml`, which escapes
+# crates/. Whole-directory entries rather than per-file ones, which is why
+# adding the TOML form needed no change here.
 # Archiving crates/ alone left those paths absent and the crate could not
 # compile, while a developer-machine build succeeded because the real files
 # were simply there. That is this repo's dominant bug class, the environment

@@ -16,37 +16,30 @@ small mechanical fixes, two latent path-handling gaps with no live trigger,
 two config-manifest design decisions, and several items that need a
 conversation rather than a commit.
 
-- Convert the deps manifests from the pipe-delimited format to TOML.
-  The format is `name|check_command|docs_url`, and its own header in
-  `deps.conf:9-13` documents why it is the wrong container: a check command
-  must not contain a literal `|`, because `IFS='|' read -r name check docs`
-  truncates the check and leaks the remainder into `docs_url`. So a shell
-  pipe or a `||` in a check silently corrupts the entry, and the workaround
-  is a documented convention (`test A -o B`, or a one-line `if`) rather than
-  a parser that cannot get it wrong. The `zsh-autosuggestions` entry is
-  already contorted around this.
-  The check grammar has since gained a version floor
-  (`command -v nvim >=0.10`), which is a second field packed into a string
-  the parser splits positionally. TOML gives each part a name:
-    [neovim]
-    command = "nvim"
-    min_version = "0.10"
-    docs = "https://neovim.io/"
-  That also makes the closed `Check` sum in `crates/deps-core/src/check.rs`
-  parse from named keys rather than from `parse_check_expression`'s prefix
-  matching, so `Unrecognized` stops being reachable by a typo in a prefix.
-  Scope, measured: 26 entries total across the four files (19 shared, 2
-  linux, 1 mac, 4 CI). The parser is `crates/deps-core/src/manifest.rs`.
-  Decide the dependency question first: the workspace currently declares
-  three crates (anyhow, clap, tempfile) and no TOML parser, and the crate
-  that needs one is `deps-core`, which is the zero-IO pure core. Adding a
-  parser there is the first third-party dependency in that crate, so it is
-  a deliberate architectural choice rather than a mechanical add. The
-  alternative is parsing the subset by hand, which is how the pipe format
-  got here.
-  Open question worth answering first: whether `deps-local.conf` (untracked,
-  per-machine) keeps the same format. It is read by the same parser, so it
-  converts with everything else, but a human hand-edits it.
+- Switch the deps engine over to reading the TOML manifests, then delete the
+  `.conf` files and `parse_manifest`.
+  Both forms ship today. `deps/*.toml` is the new format and
+  `deps/*.conf` is what the engine actually reads;
+  `crates/config-cli/src/deps/catalog.rs` embeds both and its
+  `every_toml_manifest_is_equivalent_to_its_pipe_manifest` test compares all
+  22 entries as PARSED values, so the two cannot drift silently.
+  Left as two commits on purpose: the parser and the converted files are
+  verifiable on their own, and the switchover changes what a real machine
+  installs from. What it takes:
+    - point `SHIPPED_CONF_FILES` at the `.toml` files and call
+      `parse_manifest_toml`, and drop the `#[cfg(test)]` from
+      `SHIPPED_TOML_FILES` (a comment there says so).
+    - `conf_paths` in `crates/config-cli/src/deps/selection.rs` names the
+      file stems the engine looks for on disk, including
+      `deps-local.conf`. That last one is untracked and hand-edited per
+      machine, so switching it renames a file no commit can carry: decide
+      whether the engine reads either extension during a transition, or
+      whether the machine-local file is converted by hand.
+    - the `DEPS_CONF: deps-ci.conf` value in
+      `.github/workflows/test-suite.yml`, which deps-harness asserts.
+    - once nothing reads them: delete the four `.conf` files,
+      `parse_manifest`, its `WrongFieldCount`/`DuplicateName` variants and
+      the equivalence test, which has no second side left to compare.
 
 - Latent, no live trigger today: several path-handling gaps share one
   cause, that git quotes unusual paths and the quoted form matches no

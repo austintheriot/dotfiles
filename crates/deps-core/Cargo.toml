@@ -4,11 +4,23 @@ edition = "2024"
 version = "0.1.0"
 publish = false
 
-# dotfiles-path only, deliberately. An edge to config-manifest would make
-# the dependency domain depend on the git-sync domain and carry its 595-line
-# git module into a crate that never calls it (spec 7.1).
+# dotfiles-path only among the local crates, deliberately. An edge to
+# config-manifest would make the dependency domain depend on the git-sync
+# domain and carry its 595-line git module into a crate that never calls it
+# (spec 7.1).
+#
+# `toml` is the one third-party dependency, and it is here rather than in
+# config-cli on purpose: this crate owns the `Manifest` type and the closed
+# `Check` sum the manifest parses into, so the parser belongs beside them.
+# What stays out is the IO. Nothing here opens a file or knows a path --
+# `parse_manifest` takes a `&str` and config-cli is what reads it. Parsing in
+# the core, IO in the shell.
+#
+# The workspace pin drops `display`, so this is a reader with no writer. See
+# that pin for why `serde` is on despite nothing here deriving anything.
 [dependencies]
 dotfiles-path = { path = "../dotfiles-path" }
+toml = { workspace = true }
 
 [lints]
 workspace = true

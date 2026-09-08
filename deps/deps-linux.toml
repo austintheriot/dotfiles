@@ -1,0 +1,18 @@
+# Linux/WSL-exclusive CLI dependencies. Selected by platform from
+# the deps engine; the mac equivalent is deps-mac.toml beside this file. Both
+# ship on the single branch, selected at runtime. Format matches deps.toml --
+# see that file's header for the schema.
+#
+# oh-my-zsh lives here rather than in the shared deps.toml because the mac
+# machine does not use it. It must stay listed: the linux
+# zsh-autosuggestions check points into $HOME/.oh-my-zsh/custom/plugins, so
+# dropping oh-my-zsh would leave that check depending on a directory nothing
+# installs.
+
+[oh-my-zsh]
+dir = "$HOME/.oh-my-zsh"
+docs = "https://ohmyz.sh/"
+
+[xclip]
+command = "xclip"
+docs = "https://github.com/astrand/xclip"

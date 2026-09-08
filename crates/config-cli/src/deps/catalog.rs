@@ -25,6 +25,27 @@ use dotfiles_path::{CheckRelPath, PackageId};
 /// says it is selected only by an explicit `DEPS_CONF`. That kind is what
 /// permits its `python3 -c "import yaml"` entry, which a platform-selected
 /// file may not carry.
+/// The TOML form of the four shipped manifests, embedded beside the pipe
+/// form so a test can compare them entry by entry.
+///
+/// Both are embedded during the migration. The pipe files are the ones the
+/// engine reads today; these are what it will read once the equivalence test
+/// below has held across a release. Deleting either side without the other
+/// silently drops the only check that the conversion preserved every entry.
+///
+/// `cfg(test)` because nothing in the running binary reads these yet. Without
+/// it the constant is dead code in the release build, and the warning would
+/// be indistinguishable from the real "this is unused because the switchover
+/// was forgotten" it will mean later. When the engine reads the TOML files,
+/// this attribute comes off as part of that change.
+#[cfg(test)]
+const SHIPPED_TOML_FILES: [(&str, ConfKind); 4] = [
+    (include_str!("../../../../deps/deps.toml"), ConfKind::PlatformSelected),
+    (include_str!("../../../../deps/deps-linux.toml"), ConfKind::PlatformSelected),
+    (include_str!("../../../../deps/deps-mac.toml"), ConfKind::PlatformSelected),
+    (include_str!("../../../../deps/deps-ci.toml"), ConfKind::ExplicitOnly),
+];
+
 const SHIPPED_CONF_FILES: [(&str, ConfKind); 4] = [
     (include_str!("../../../../deps/deps.conf"), ConfKind::PlatformSelected),
     (include_str!("../../../../deps/deps-linux.conf"), ConfKind::PlatformSelected),
@@ -753,5 +774,73 @@ mod tests {
     /// Parse a dependency name a test wrote as a literal.
     fn name(raw: &str) -> DependencyName {
         DependencyName::parse(raw).expect("a test dependency name parses")
+    }
+
+    /// Every TOML manifest parses to exactly the entries its pipe manifest
+    /// does.
+    ///
+    /// The conversion's only real risk is a silent semantic change in one
+    /// entry, and reading the two files side by side does not catch it: the
+    /// pipe form writes its checks as shell text, so a translation can look
+    /// right and mean something else. Comparing the PARSED values catches it,
+    /// because both formats land in the same closed `Check` sum.
+    ///
+    /// This test found one such change while the conversion was written.
+    /// `node`'s pipe fallback is `ls -d "$HOME/.nvm/versions/node"/v*`, and
+    /// the first TOML draft wrote it as `dir = "$HOME/.nvm/versions/node"`.
+    /// nvm creates that directory when it installs itself, whether or not any
+    /// node version is in it, so the draft would have reported node present
+    /// on a machine with none. The glob is the check that asks the real
+    /// question, and only this comparison said so.
+    #[test]
+    fn every_toml_manifest_is_equivalent_to_its_pipe_manifest() {
+        assert_eq!(
+            SHIPPED_TOML_FILES.len(),
+            SHIPPED_CONF_FILES.len(),
+            "the two embedded sets must stay paired"
+        );
+
+        let mut compared = 0;
+        for ((toml_text, toml_kind), (pipe_text, pipe_kind)) in
+            SHIPPED_TOML_FILES.iter().zip(SHIPPED_CONF_FILES.iter())
+        {
+            assert_eq!(toml_kind, pipe_kind, "a pair disagrees about its ConfKind");
+
+            let pipe = parse_manifest(pipe_text, *pipe_kind).expect("a pipe manifest parses");
+            let converted =
+                deps_core::parse_manifest_toml(toml_text, *toml_kind).expect("a TOML manifest parses");
+
+            // Sorted by name: the pipe parser preserves file order and the
+            // TOML parser walks a sorted map, so comparing positionally would
+            // report a difference for two identical manifests.
+            let mut pipe_entries: Vec<_> = pipe.entries().to_vec();
+            let mut toml_entries: Vec<_> = converted.entries().to_vec();
+            pipe_entries.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
+            toml_entries.sort_by(|left, right| left.name.as_str().cmp(right.name.as_str()));
+
+            assert_eq!(
+                pipe_entries.len(),
+                toml_entries.len(),
+                "entry count differs between the two forms"
+            );
+            for (from_pipe, from_toml) in pipe_entries.iter().zip(toml_entries.iter()) {
+                assert_eq!(from_pipe.name, from_toml.name, "entry names differ");
+                assert_eq!(
+                    from_pipe.check, from_toml.check,
+                    "the check for {:?} differs between the two forms",
+                    from_pipe.name
+                );
+                assert_eq!(
+                    from_pipe.docs, from_toml.docs,
+                    "the docs URL for {:?} differs between the two forms",
+                    from_pipe.name
+                );
+                compared += 1;
+            }
+        }
+
+        // Positive control. Every assertion above is inside a loop, so an
+        // embedded file that came back empty would compare nothing and pass.
+        assert_eq!(compared, 22, "expected all 22 entries to be compared");
     }
 }

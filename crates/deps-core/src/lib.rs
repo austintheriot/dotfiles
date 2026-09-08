@@ -36,7 +36,7 @@ pub use action::{
     PackageManager, PackageMap, ScriptInstaller, SourceListEntry, TapName, TarballRelease,
 };
 pub use manifest::{
-    ConfKind, DependencyName, Manifest, ManifestEntry, ParseError, parse_manifest,
+    ConfKind, DependencyName, Manifest, ManifestEntry, ParseError, parse_manifest, parse_manifest_toml,
 };
 pub use outcome::{
     CheckStatus, ExecFailure, ExitStatus, InstallStatus, SpawnError, StepOutcome, Verdict,

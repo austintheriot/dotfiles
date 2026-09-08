@@ -1,0 +1,35 @@
+# Dependencies of the test suite itself, not of the working environment.
+#
+# Selected only by an explicit DEPS_CONF, never by platform detection, so a
+# `depcheck` on a developer machine never asks for these. The suite's own
+# harness needs them; nothing in the shell setup does, which is why they are
+# not in deps.toml.
+#
+# .github/workflows/test-suite.yml reads this file plus a named subset of
+# deps.toml, so the package names for CI live in a manifest rather than in a
+# hand-written apt list and a hand-written brew list. Those two lists named
+# tmux, zsh, git, fzf, ripgrep and shellcheck -- every one already a deps.toml
+# entry -- and the YAML copy was the one that drifted with nothing to catch it.
+#
+# Format matches deps.toml; see that file's header for the schema.
+#
+# This is the one file permitted to carry a `python_import`. That check spawns
+# an interpreter, so the parser refuses it in any platform-selected file: a
+# platform-selected file is chosen by the machine, and only a caller naming a
+# manifest explicitly can grant that.
+#
+# python3 is checked rather than assumed: both GitHub runners ship it, but the
+# Docker images and a bare remote box do not, and the suite's YAML assertions
+# import yaml through it.
+
+[python3]
+command = "python3"
+docs = "https://www.python.org/downloads/"
+
+[pyyaml]
+python_import = "yaml"
+docs = "https://pyyaml.org/"
+
+[dash]
+command = "dash"
+docs = "http://gondor.apana.org.au/~herbert/dash/"

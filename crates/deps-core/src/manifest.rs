@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
-use dotfiles_path::{DocsUrl, NameError};
+use dotfiles_path::{CommandName, DocsUrl, GlobPattern, ModuleName, NameError, VersionFloor};
 
-use crate::check::{Check, CheckParseError};
+use crate::check::{Check, CheckParseError, parse_quoted_path};
 
 /// The maximum byte length of a parsed dependency name.
 ///
@@ -169,21 +169,270 @@ pub enum ParseError {
         /// without rereading the file.
         name: DependencyName,
     },
+    /// The text is not valid TOML at all. Distinct from every variant above,
+    /// which describe a well-formed document saying something unusable: this
+    /// one means the document did not parse, so no entry was reached.
+    ///
+    /// A repeated table (`[git]` twice) lands here rather than in
+    /// `DuplicateName`, because TOML refuses it before this crate looks. The
+    /// guarantee moved into the format, and the variant that carries it
+    /// moved with it.
+    MalformedToml {
+        /// The parser's own message, which carries the line and column. Kept
+        /// as text because the shape of a TOML syntax error is not something
+        /// this crate models.
+        message: String,
+    },
+    /// An entry carries a key this crate does not know.
+    ///
+    /// Refused rather than ignored, which is the whole reason to name the
+    /// fields: `min_verison = "0.10"` silently dropped leaves a bare
+    /// presence check that passes on exactly the versions the floor exists
+    /// to reject.
+    UnknownKey {
+        /// The entry the key appeared in, so the report names a table rather
+        /// than a line the reader has to count to.
+        name: String,
+        /// The key as written, so a typo is visible beside the correct
+        /// spelling.
+        key: String,
+    },
 }
 
-/// Parse manifest text into typed entries.
+/// Parse a TOML manifest into typed entries.
+///
+/// Takes `&str`, never a path, for the same reason [`parse_manifest`] does:
+/// the caller reads the file, so this function makes no syscall and the
+/// module holds no capability.
+///
+/// # The schema
+///
+/// One table per dependency, named by the dependency. Each table names
+/// exactly one check plus a `docs` URL:
+///
+/// ```toml
+/// [git]
+/// command = "git"
+/// docs = "https://git-scm.com/downloads"
+///
+/// [neovim]
+/// command = "nvim"
+/// min_version = "0.10"
+/// docs = "https://neovim.io/"
+///
+/// [alacritty]
+/// any_of = [{ dir = "/Applications/Alacritty.app" }, { command = "alacritty" }]
+/// docs = "https://alacritty.org/"
+/// ```
+///
+/// Check keys: `command`, `file`, `dir`, `file_non_empty`, `python_import`,
+/// and `any_of` for an alternation. `min_version` qualifies `command` and is
+/// not a check on its own.
+///
+/// # Why named keys
+///
+/// The pipe format wrote the check as one shell-shaped string, and its own
+/// header documented the consequence: a check must not contain a literal
+/// `|`, because the field split truncates it and leaks the remainder into
+/// the docs URL. The version floor then packed a second value into that
+/// same positionally-split string (`command -v nvim >=0.10`). Naming the
+/// fields removes both problems by construction rather than by convention.
+///
+/// # Errors
+///
+/// Returns `ParseError`. `MalformedToml` means the document did not parse.
+/// `UnknownKey` means an entry carried a key this crate does not know, which
+/// is refused rather than ignored so a typo cannot silently drop a check.
+/// `BadCheck` covers an entry naming no check, naming two, or naming one
+/// whose argument is unusable.
+pub fn parse_manifest_toml(text: &str, kind: ConfKind) -> Result<Manifest, ParseError> {
+    let document: toml::Table = text
+        .parse()
+        .map_err(|error: toml::de::Error| ParseError::MalformedToml {
+            message: error.to_string(),
+        })?;
+
+    let mut entries = Vec::new();
+    for (raw_name, value) in &document {
+        let name = DependencyName::parse(raw_name)
+            // Line 0 rather than a real number: a TOML table has no single
+            // line this crate can name without tracking spans, and reporting
+            // a wrong line is worse than reporting none. The name is in the
+            // error, which is what the reader searches for.
+            .map_err(|cause| ParseError::BadName { line: 0, cause })?;
+
+        let table = value
+            .as_table()
+            .ok_or(ParseError::BadCheck { line: 0, cause: CheckParseError::Unrecognized })?;
+
+        let mut docs_field = None;
+        let mut check_keys: Vec<&str> = Vec::new();
+        for key in table.keys() {
+            match key.as_str() {
+                "docs" => docs_field = table.get(key).and_then(toml::Value::as_str),
+                // `min_version` qualifies `command`; it is not a check of its
+                // own, so it is not counted among the check keys. An entry
+                // carrying only `min_version` therefore reports "no check"
+                // rather than a confusing partial one.
+                "min_version" => {}
+                "command" | "file" | "dir" | "file_non_empty" | "glob" | "python_import"
+                | "any_of" => {
+                    check_keys.push(key.as_str());
+                }
+                other => {
+                    return Err(ParseError::UnknownKey {
+                        name: raw_name.clone(),
+                        key: other.to_owned(),
+                    });
+                }
+            }
+        }
+
+        // Exactly one, checked before anything is built. Two check keys is a
+        // question with no answer -- resolving it by precedence would let a
+        // lookup silently see one of two stated intents -- and zero means the
+        // entry declares a dependency with no way to tell whether it is met.
+        if check_keys.len() != 1 {
+            return Err(ParseError::BadCheck { line: 0, cause: CheckParseError::Unrecognized });
+        }
+
+        let check = parse_toml_check(table, check_keys[0], kind)
+            .map_err(|cause| ParseError::BadCheck { line: 0, cause })?;
+
+        let raw_docs = docs_field.ok_or(ParseError::BadDocs { line: 0, cause: NameError::Empty })?;
+        let docs = DocsUrl::parse(raw_docs)
+            .map_err(|cause| ParseError::BadDocs { line: 0, cause })?;
+
+        entries.push(ManifestEntry { name, check, docs });
+    }
+
+    // No DuplicateName pass. TOML refuses a repeated table itself, so the
+    // document never reaches here carrying two entries for one name, and a
+    // second check would be unreachable code asserting a guarantee the
+    // format already gives.
+    Ok(Manifest { entries })
+}
+
+/// One check, from the single check key its entry named.
+fn parse_toml_check(
+    table: &toml::Table,
+    key: &str,
+    kind: ConfKind,
+) -> Result<Check, CheckParseError> {
+    if key == "any_of" {
+        let items = table
+            .get("any_of")
+            .and_then(toml::Value::as_array)
+            .ok_or(CheckParseError::Unrecognized)?;
+        // Two operands minimum. A one-item `any_of` is a leaf wearing an
+        // alternation's clothes, and building `AnyOf` with an empty `rest`
+        // would misreport the structure to every reader of the type.
+        let (head, tail) = items.split_first().ok_or(CheckParseError::Unrecognized)?;
+        if tail.is_empty() {
+            return Err(CheckParseError::Unrecognized);
+        }
+        let first = parse_toml_branch(head, kind)?;
+        let mut rest = Vec::new();
+        for item in tail {
+            rest.push(parse_toml_branch(item, kind)?);
+        }
+        return Ok(Check::AnyOf { first: Box::new(first), rest });
+    }
+
+    // `glob` is the one check carrying two values (a directory and a pattern
+    // matched inside it), so it takes a table where the others take a string.
+    // Handled before the string extraction below rather than inside it.
+    if key == "glob" {
+        let spec = table.get("glob").and_then(toml::Value::as_table).ok_or(CheckParseError::Unrecognized)?;
+        for spec_key in spec.keys() {
+            if spec_key != "dir" && spec_key != "pattern" {
+                return Err(CheckParseError::Unrecognized);
+            }
+        }
+        let raw_dir = spec.get("dir").and_then(toml::Value::as_str).ok_or(CheckParseError::Unrecognized)?;
+        let raw_pattern =
+            spec.get("pattern").and_then(toml::Value::as_str).ok_or(CheckParseError::Unrecognized)?;
+        let dir = parse_quoted_path(raw_dir)?;
+        let pattern = GlobPattern::parse(raw_pattern).map_err(CheckParseError::BadGlob)?;
+        return Ok(Check::GlobExists { dir, pattern });
+    }
+
+    let value = table.get(key).and_then(toml::Value::as_str).ok_or(CheckParseError::Unrecognized)?;
+
+    match key {
+        "command" => match table.get("min_version") {
+            Some(floor_value) => {
+                let raw_floor =
+                    floor_value.as_str().ok_or(CheckParseError::Unrecognized)?;
+                let name =
+                    CommandName::parse(value).map_err(CheckParseError::BadCommandName)?;
+                let floor =
+                    VersionFloor::parse(raw_floor).map_err(CheckParseError::BadVersionFloor)?;
+                Ok(Check::CommandVersion { name, floor })
+            }
+            None => Ok(Check::Command(
+                CommandName::parse(value).map_err(CheckParseError::BadCommandName)?,
+            )),
+        },
+        "file" => Ok(Check::FileExists(parse_quoted_path(value)?)),
+        "dir" => Ok(Check::DirExists(parse_quoted_path(value)?)),
+        "file_non_empty" => Ok(Check::FileNonEmpty(parse_quoted_path(value)?)),
+        "python_import" => {
+            // The rule the pipe parser enforced, carried across formats
+            // unchanged: a python import spawns an interpreter, so it is
+            // permitted only in a file a caller named explicitly. A
+            // platform-selected file is chosen by the machine, not by the
+            // caller, so it may not grant that.
+            if kind != ConfKind::ExplicitOnly {
+                return Err(CheckParseError::InterpreterCheck);
+            }
+            Ok(Check::PythonImport(ModuleName::parse(value).map_err(CheckParseError::BadModuleName)?))
+        }
+        _ => Err(CheckParseError::Unrecognized),
+    }
+}
+
+/// One branch of an `any_of`, which is an inline table naming one check.
+fn parse_toml_branch(value: &toml::Value, kind: ConfKind) -> Result<Check, CheckParseError> {
+    let table = value.as_table().ok_or(CheckParseError::Unrecognized)?;
+    let mut check_keys: Vec<&str> = Vec::new();
+    for key in table.keys() {
+        match key.as_str() {
+            "min_version" => {}
+            "command" | "file" | "dir" | "file_non_empty" | "glob" | "python_import" => {
+                check_keys.push(key.as_str());
+            }
+            // No nested `any_of`, and no `docs` on a branch. Flat by design:
+            // every real alternation in these manifests is one level deep,
+            // and a nested one would be an alternation of alternations,
+            // which reads worse than the flat list it is equivalent to.
+            _ => return Err(CheckParseError::Unrecognized),
+        }
+    }
+    if check_keys.len() != 1 {
+        return Err(CheckParseError::Unrecognized);
+    }
+    parse_toml_check(table, check_keys[0], kind)
+}
+
+/// Parse pipe-delimited manifest text into typed entries.
+///
+/// The format this crate is migrating OFF: `name|check_command|docs_url`.
+/// Retained so `parse_manifest_toml` can be checked against it entry by
+/// entry, and so a `.conf` file that has not been converted still reads.
+/// New entries go in the TOML form.
 ///
 /// Takes `&str`, never a path: the caller reads the file, so this function
-/// makes no syscall and the module holds no capability. `parse_manifest` is
-/// the boundary spec 3.6 requires, replacing the `sh -c "$check"` at
+/// makes no syscall and the module holds no capability. It is the boundary
+/// spec 3.6 requires, replacing the `sh -c "$check"` at
 /// `retired-check-deps:524` with a closed enum that has no shell escape hatch.
 ///
 /// # Errors
 ///
 /// Returns `ParseError` naming the 1-based line and the rule it broke. A
-/// line with more than three pipe-separated fields is
-/// `WrongFieldCount` rather than a silent truncation, which is the failure
-/// `deps.conf:9-13` documents and cannot detect.
+/// line with more than three pipe-separated fields is `WrongFieldCount`
+/// rather than a silent truncation, which is the failure the pipe format's
+/// own header documented and could not detect.
 pub fn parse_manifest(text: &str, kind: ConfKind) -> Result<Manifest, ParseError> {
     let mut entries = Vec::new();
     let mut seen: BTreeSet<DependencyName> = BTreeSet::new();
@@ -231,6 +480,14 @@ mod tests {
     use dotfiles_path::CommandName;
 
     use super::*;
+
+    fn name(raw: &str) -> DependencyName {
+        DependencyName::parse(raw).expect("a test dependency name parses")
+    }
+
+    fn command_name(raw: &str) -> CommandName {
+        CommandName::parse(raw).expect("a test command name parses")
+    }
 
     // The real shared manifest, verbatim from deps.conf. Comment lines and
     // blank lines are skipped; the format is name|check|docs.
@@ -425,4 +682,208 @@ pyyaml|python3 -c \"import yaml\"|https://pyyaml.org/
             );
         }
     }
+
+// --- TOML manifest parsing --------------------------------------------
+
+    #[test]
+    fn a_command_entry_parses_from_toml() {
+    let manifest = parse_manifest_toml(
+        r#"
+[git]
+command = "git"
+docs = "https://git-scm.com/downloads"
+"#,
+        ConfKind::PlatformSelected,
+    )
+    .expect("a command entry parses");
+    let entry = manifest.get(&name("git")).expect("git is present");
+    assert_eq!(entry.check, Check::Command(command_name("git")));
+}
+
+    #[test]
+    fn a_version_floor_is_its_own_key_rather_than_packed_into_a_string() {
+    // The pipe format wrote `command -v nvim >=0.10`, so the floor was a
+    // second field inside a positionally-split string. Named keys are the
+    // whole point of the conversion.
+    let manifest = parse_manifest_toml(
+        r#"
+[neovim]
+command = "nvim"
+min_version = "0.10"
+docs = "https://neovim.io/"
+"#,
+        ConfKind::PlatformSelected,
+    )
+    .expect("a floor entry parses");
+    let entry = manifest.get(&name("neovim")).expect("neovim is present");
+    match &entry.check {
+        Check::CommandVersion { name: command, floor } => {
+            assert_eq!(command, &command_name("nvim"));
+            assert_eq!(floor.components(), (0, 10, 0));
+        }
+        other => panic!("expected CommandVersion, got {other:?}"),
+    }
+}
+
+    #[test]
+    fn a_check_may_not_name_two_kinds_at_once() {
+    // The failure the pipe format could not express, let alone reject: an
+    // entry that is both a command check and a directory check. Refused
+    // rather than resolved by precedence, so no lookup silently sees one of
+    // two intents.
+    let error = parse_manifest_toml(
+        r#"
+[confused]
+command = "git"
+dir = "$HOME/.config"
+docs = "https://example.invalid/"
+"#,
+        ConfKind::PlatformSelected,
+    )
+    .expect_err("two check kinds in one entry are refused");
+    assert!(
+        matches!(error, ParseError::BadCheck { .. }),
+        "expected BadCheck, got {error:?}"
+    );
+}
+
+    #[test]
+    fn an_entry_naming_no_check_is_refused() {
+    let error = parse_manifest_toml(
+        r#"
+[empty]
+docs = "https://example.invalid/"
+"#,
+        ConfKind::PlatformSelected,
+    )
+    .expect_err("an entry with no check is refused");
+    assert!(
+        matches!(error, ParseError::BadCheck { .. }),
+        "expected BadCheck, got {error:?}"
+    );
+}
+
+    #[test]
+    fn a_pipe_in_a_check_is_now_expressible() {
+    // The defect the format's own header documented: a literal `|` in a
+    // check truncated the field and leaked the remainder into docs_url. In
+    // TOML it is just a character in a string, so the value survives.
+    //
+    // A shell pipe is not a check this crate performs, so the assertion is
+    // that the parser REPORTS the unknown kind rather than corrupting the
+    // entry. Refusing an unsupported check and silently mangling one are
+    // different outcomes, and only the first is safe.
+    let error = parse_manifest_toml(
+        r#"
+[piped]
+command = "a | b"
+docs = "https://example.invalid/"
+"#,
+        ConfKind::PlatformSelected,
+    )
+    .expect_err("a pipe is not a command name");
+    assert!(
+        matches!(error, ParseError::BadCheck { .. }),
+        "expected BadCheck naming the bad command name, got {error:?}"
+    );
+}
+
+    #[test]
+    fn an_any_of_check_parses_from_a_list() {
+    // The `if ...; then true; else ...; fi` and `test A -o B` shapes both
+    // encoded one proposition: any of these. A list says it directly.
+    let manifest = parse_manifest_toml(
+        r#"
+[alacritty]
+any_of = [
+    { dir = "/Applications/Alacritty.app" },
+    { command = "alacritty" },
+]
+docs = "https://alacritty.org/"
+"#,
+        ConfKind::PlatformSelected,
+    )
+    .expect("an any_of entry parses");
+    let entry = manifest.get(&name("alacritty")).expect("alacritty is present");
+    match &entry.check {
+        Check::AnyOf { rest, .. } => assert_eq!(rest.len(), 1),
+        other => panic!("expected AnyOf, got {other:?}"),
+    }
+}
+
+    #[test]
+    fn a_python_import_is_refused_in_a_platform_selected_file() {
+    // The rule the pipe parser already enforced, preserved across formats:
+    // a PythonImport spawns an interpreter, so it is permitted only in a
+    // file selected by an explicit DEPS_CONF.
+    let error = parse_manifest_toml(
+        r#"
+[pyyaml]
+python_import = "yaml"
+docs = "https://pyyaml.org/"
+"#,
+        ConfKind::PlatformSelected,
+    )
+    .expect_err("a python import needs an explicit conf file");
+    assert!(
+        matches!(error, ParseError::BadCheck { .. }),
+        "expected BadCheck, got {error:?}"
+    );
+
+    parse_manifest_toml(
+        r#"
+[pyyaml]
+python_import = "yaml"
+docs = "https://pyyaml.org/"
+"#,
+        ConfKind::ExplicitOnly,
+    )
+    .expect("an explicit-only file may carry a python import");
+}
+
+    #[test]
+    fn a_duplicate_table_is_refused_by_toml_itself() {
+    // The pipe parser needed its own DuplicateName check because two lines
+    // could name one dependency. TOML rejects a repeated table before this
+    // crate sees it, so the guarantee moves into the format.
+    let error = parse_manifest_toml(
+        r#"
+[git]
+command = "git"
+docs = "https://example.invalid/a"
+
+[git]
+command = "git"
+docs = "https://example.invalid/b"
+"#,
+        ConfKind::PlatformSelected,
+    )
+    .expect_err("a duplicate table is refused");
+    assert!(
+        matches!(error, ParseError::MalformedToml { .. }),
+        "expected MalformedToml, got {error:?}"
+    );
+}
+
+    #[test]
+    fn an_unknown_key_is_refused_rather_than_ignored() {
+    // A typo in a key name must not silently drop the check it meant to
+    // declare. `min_verison = "0.10"` ignored would leave a bare presence
+    // check that passes on the version the floor exists to reject, which is
+    // the exact bug the floor was added for.
+    let error = parse_manifest_toml(
+        r#"
+[neovim]
+command = "nvim"
+min_verison = "0.10"
+docs = "https://neovim.io/"
+"#,
+        ConfKind::PlatformSelected,
+    )
+    .expect_err("an unknown key is refused");
+    assert!(
+        matches!(error, ParseError::UnknownKey { .. }),
+        "expected UnknownKey, got {error:?}"
+    );
+}
 }

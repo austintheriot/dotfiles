@@ -26,10 +26,10 @@ use dotfiles_path::{CheckRelPath, PackageId};
 /// permits its `python3 -c "import yaml"` entry, which a platform-selected
 /// file may not carry.
 const SHIPPED_CONF_FILES: [(&str, ConfKind); 4] = [
-    (include_str!("../../../../.scripts/deps/deps.conf"), ConfKind::PlatformSelected),
-    (include_str!("../../../../.scripts/deps/deps-linux.conf"), ConfKind::PlatformSelected),
-    (include_str!("../../../../.scripts/deps/deps-mac.conf"), ConfKind::PlatformSelected),
-    (include_str!("../../../../.scripts/deps/deps-ci.conf"), ConfKind::ExplicitOnly),
+    (include_str!("../../../../deps/deps.conf"), ConfKind::PlatformSelected),
+    (include_str!("../../../../deps/deps-linux.conf"), ConfKind::PlatformSelected),
+    (include_str!("../../../../deps/deps-mac.conf"), ConfKind::PlatformSelected),
+    (include_str!("../../../../deps/deps-ci.conf"), ConfKind::ExplicitOnly),
 ];
 
 /// Where the `zsh-autosuggestions` clone lands, relative to `$HOME`.

@@ -208,6 +208,19 @@ assert_succeeds 'TRIGGER_PATHS matches a .zshrc edit' \
 assert_succeeds 'TRIGGER_PATHS matches a platform zshrc variant' \
     path_matches_trigger '.zshrc-mac'
 
+# deps/ became a top-level directory, out from under `^\.scripts/`. Six
+# suites read that tree (deps-harness, deps-docs, deps-manifest,
+# bootstrap-harness, depcheck-hook, nvim-mason-runtimes) and the conf files
+# are what `config deps` installs from, so an edit there is exactly the kind
+# this gate exists for. Asserted per shape rather than once, because the
+# manifests, the Dockerfiles and the harnesses each reach a different suite.
+assert_succeeds 'TRIGGER_PATHS matches a deps manifest edit' \
+    path_matches_trigger 'deps/deps.conf'
+assert_succeeds 'TRIGGER_PATHS matches a deps Dockerfile edit' \
+    path_matches_trigger 'deps/docker/Dockerfile.pop'
+assert_succeeds 'TRIGGER_PATHS matches a deps harness edit' \
+    path_matches_trigger 'deps/test-local.sh'
+
 # And the negative control: a docs-only push must still run no suite, or the
 # broadened pattern has made the gate meaningless. lib.sh has no assert_fails,
 # so the match is captured as a value and compared.

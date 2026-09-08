@@ -4,7 +4,7 @@
 # `config init` can be iterated on without waiting on GitHub Actions.
 #
 # Sibling to test-local.sh, and deliberately separate. test-local.sh runs
-# `config deps install` directly against two images that COPY .scripts/deps;
+# `config deps install` directly against two images that COPY deps;
 # this runs the real entry point against an image that clones from a bare
 # repo and has nothing but git, curl and sudo installed. Different subject,
 # different image, different failure modes.
@@ -14,7 +14,7 @@
 # repo is bind-mounted read-only rather than copied into the image, which
 # keeps the build context empty and makes the clone a real clone.
 #
-# Usage: ~/.scripts/deps/test-bootstrap.sh [setup.sh flags]
+# Usage: ~/deps/test-bootstrap.sh [setup.sh flags]
 #
 # Any flag is passed to setup.sh inside the container. The default is --yes.
 
@@ -46,12 +46,12 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # The binary the containers run is built by one shared script, not by a copy
-# per harness. See .scripts/deps/docker/build-seed-binary.sh for why it must
+# per harness. See deps/docker/build-seed-binary.sh for why it must
 # be a container build and why the builder image is pinned to bookworm: the
 # glibc floor of the build host becomes the floor of the binary, and three
 # bootstrap images are older than the CI runner.
 build_seed_binary() {
-    "$HOME/.scripts/deps/docker/build-seed-binary.sh" "$1" "$HOME" "$2"
+    "$HOME/deps/docker/build-seed-binary.sh" "$1" "$HOME" "$2"
 }
 
 workdir=$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-bootstrap-XXXXXX")
@@ -70,7 +70,7 @@ git_cmd archive "$branch" | tar -x -C "$staging"
 
 # Overlay the working tree's copy of everything this bootstrap actually
 # drives, so a local edit is under test rather than the last commit.
-for path in setup.sh .scripts/deps .scripts/config .scripts/platform.sh; do
+for path in setup.sh deps .scripts/config .scripts/platform.sh; do
     if [ -e "$HOME/$path" ]; then
         # ${path:?} rather than $path: an empty value here would expand to
         # "$staging/" and recursively delete the staging tree. The loop list
@@ -110,11 +110,11 @@ git clone -q --bare "$staging" "$seed/repo.git"
 # omits one, but leaving HEAD on the host's branch would make the default
 # behave differently depending on which machine ran the harness.
 git --git-dir="$seed/repo.git" symbolic-ref HEAD "refs/heads/$branch"
-cp "$HOME/.scripts/deps/docker/bootstrap-entrypoint.sh" "$seed/bootstrap-entrypoint.sh"
-cp "$HOME/.scripts/deps/docker/bootstrap-bare-entrypoint.sh" "$seed/bootstrap-bare-entrypoint.sh"
+cp "$HOME/deps/docker/bootstrap-entrypoint.sh" "$seed/bootstrap-entrypoint.sh"
+cp "$HOME/deps/docker/bootstrap-bare-entrypoint.sh" "$seed/bootstrap-bare-entrypoint.sh"
 # The seam both entrypoints source. The engine is a Rust binary and neither
 # image carries a toolchain, so it arrives through this mount.
-cp "$HOME/.scripts/deps/docker/seed-prebuilt.sh" "$seed/seed-prebuilt.sh"
+cp "$HOME/deps/docker/seed-prebuilt.sh" "$seed/seed-prebuilt.sh"
 # The bare image has no git when setup.sh first runs, so it reads the script
 # from the seed directory rather than out of the repository.
 cp "$staging/setup.sh" "$seed/setup.sh"
@@ -132,13 +132,13 @@ printf '=== building %s ===\n' "$IMAGE"
 # An empty build context: the Dockerfile copies nothing, by design. Passing
 # the staging tree would quietly re-enable a COPY someone adds later.
 if ! docker build --platform=linux/amd64 \
-    -f "$HOME/.scripts/deps/docker/Dockerfile.bootstrap" \
+    -f "$HOME/deps/docker/Dockerfile.bootstrap" \
     -t "$IMAGE" \
     "$workdir/empty-context" 2>/dev/null
 then
     mkdir -p "$workdir/empty-context"
     if ! docker build --platform=linux/amd64 \
-        -f "$HOME/.scripts/deps/docker/Dockerfile.bootstrap" \
+        -f "$HOME/deps/docker/Dockerfile.bootstrap" \
         -t "$IMAGE" \
         "$workdir/empty-context"
     then
@@ -168,7 +168,7 @@ fi
 printf '\n=== building %s-bare ===\n' "$IMAGE"
 
 if ! docker build --platform=linux/amd64 \
-    -f "$HOME/.scripts/deps/docker/Dockerfile.bootstrap-bare" \
+    -f "$HOME/deps/docker/Dockerfile.bootstrap-bare" \
     -t "$IMAGE-bare" \
     "$workdir/empty-context"
 then

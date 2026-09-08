@@ -61,7 +61,7 @@ branch carries every machine:
 
 - [SETUP.md](./SETUP.md) -- bootstrap options and how `setup.sh` and
   `config init` divide the work.
-- [.scripts/deps/README.md](./.scripts/deps/README.md) -- the dependency
+- [deps/README.md](./deps/README.md) -- the dependency
   manifest, how to add a dependency, and the startup check.
 - [DOTFILES.md](./DOTFILES.md) -- the bare-repo technique this is built on.
 
@@ -97,8 +97,8 @@ straight to git: `config -- help rebase` opens the git manual page.
 
 ### Dependency checking
 
-Tracked dependencies live in `.scripts/deps/deps.conf`, plus
-`.scripts/deps/deps-mac.conf` and `.scripts/deps/deps-linux.conf` for the ones
+Tracked dependencies live in `deps/deps.conf`, plus
+`deps/deps-mac.conf` and `deps/deps-linux.conf` for the ones
 that belong to one platform.
 
 - `config deps check` checks them and reports what is missing.
@@ -107,5 +107,5 @@ that belong to one platform.
 - A shell-startup hook prints one line at most once every 24 hours when
   something has gone missing. It never installs and never blocks startup.
 
-See [.scripts/deps/README.md](./.scripts/deps/README.md) for the manifest
+See [deps/README.md](./deps/README.md) for the manifest
 format and how to add a dependency.

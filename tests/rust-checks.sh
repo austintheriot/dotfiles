@@ -76,7 +76,7 @@ trap 'rm -rf "$snapshot"' EXIT
 # crates/ plus every tracked path a crate reads at COMPILE time.
 #
 # config-cli's catalog embeds the four dependency manifests with
-# `include_str!("../../../../.scripts/deps/*.conf")`, which escapes crates/.
+# `include_str!("../../../../deps/*.conf")`, which escapes crates/.
 # Archiving crates/ alone left those paths absent and the crate could not
 # compile, while a developer-machine build succeeded because the real files
 # were simply there. That is this repo's dominant bug class, the environment
@@ -87,7 +87,7 @@ trap 'rm -rf "$snapshot"' EXIT
 # One entry today. Kept as a list because the next crate that embeds a
 # tracked file will add to it, and a list makes that a one-word change
 # rather than a restructure.
-COMPILE_TIME_PATHS='.scripts/deps'
+COMPILE_TIME_PATHS='deps'
 
 archive_paths='crates'
 for compile_time_path in $COMPILE_TIME_PATHS; do

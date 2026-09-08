@@ -12,7 +12,7 @@
 //! # Reading the `retired-check-deps:NNN` citations
 //!
 //! Comments throughout this crate and `config-cli` cite line numbers in the
-//! shell engine this code replaced. That engine lived under `.scripts/deps/`
+//! shell engine this code replaced. That engine lived under `deps/`
 //! and was deleted when the port completed, so its line numbers resolve
 //! through git history rather than the working tree. The citations are kept
 //! because they carry the reasoning: each one names the behaviour a decision

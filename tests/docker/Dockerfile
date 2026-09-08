@@ -7,7 +7,7 @@
 # ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions on a machine that does not
 # use oh-my-zsh. Every one of those lands in the container instead.
 #
-# Debian rather than the Ubuntu image used by .scripts/deps/docker: this
+# Debian rather than the Ubuntu image used by deps/docker: this
 # image tests the dotfiles suite, not the dependency manifest, so it wants a
 # small base with the tooling available in one apt index. Digest-pinned so a
 # base-image republish cannot change a passing suite underneath us.
@@ -19,10 +19,10 @@
 FROM rust:1.94-slim-bookworm@sha256:cf9dd0ec73e75f827fe59123fff9dc65af1a1c8363c3c31ee8d7f8ad0b6a5fb2 AS builder
 # /build/crates, not /build, so the builder's directory depth matches the
 # real repository's. config-cli's catalog embeds the dependency manifests
-# with `include_str!("../../../../.scripts/deps/*.conf")`, and that escape
-# resolves relative to the crate. Under /build it landed on /.scripts at the
+# with `include_str!("../../../../deps/*.conf")`, and that escape
+# resolves relative to the crate. Under /build it landed on /deps at the
 # filesystem root and the crate could not compile; under /build/crates it
-# lands on /build/.scripts, which is inside the build context and mirrors
+# lands on /build/deps, which is inside the build context and mirrors
 # how the path resolves from ~/crates. Matching the layout is what makes one
 # relative path correct in both places, rather than each consumer carrying a
 # different fix.
@@ -65,8 +65,8 @@ RUN mkdir config-cli/src config-manifest/src dotfiles-path/src deps-core/src tmu
         target/release/deps/libconfig_manifest* target/release/deps/libdotfiles_path* \
         target/release/deps/libdeps_core* target/release/deps/libtmux_core*
 # The tracked files the catalog embeds at compile time. Copied to
-# /build/.scripts so the crate-relative escape above resolves.
-COPY .scripts/deps ../.scripts/deps
+# /build/deps so the crate-relative escape above resolves.
+COPY deps ../deps
 
 COPY crates/config-cli/src ./config-cli/src
 COPY crates/config-manifest/src ./config-manifest/src

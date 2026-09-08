@@ -17,21 +17,21 @@
 
 . "$(dirname "$0")/lib.sh"
 
-HOOK="$DOTFILES_ROOT/.scripts/deps/depcheck-hook.sh"
+HOOK="$DOTFILES_ROOT/deps/depcheck-hook.sh"
 
 # A fresh isolated HOME with a stub `config` whose exit status is fixed by
 # the caller. Prints the HOME path.
 make_home() {
     local exit_status=$1 home
     home=$(mktemp -d "$FIXTURES/home-XXXXXX")
-    mkdir -p "$home/.scripts/deps" "$home/.local/bin" "$home/.cache"
+    mkdir -p "$home/deps" "$home/.local/bin" "$home/.cache"
     cat > "$home/.local/bin/config" <<EOF
 #!/bin/sh
 printf 'invoked\n' >> "$home/invocations.log"
 exit $exit_status
 EOF
     chmod +x "$home/.local/bin/config"
-    cp "$HOOK" "$home/.scripts/deps/depcheck-hook.sh"
+    cp "$HOOK" "$home/deps/depcheck-hook.sh"
     : > "$home/invocations.log"
     printf '%s' "$home"
 }
@@ -39,7 +39,7 @@ EOF
 # Sources the hook in a non-interactive zsh under the given HOME. Stdout only.
 run_hook() {
     local home=$1
-    env HOME="$home" zsh -c ". '$home/.scripts/deps/depcheck-hook.sh'" 2>/dev/null
+    env HOME="$home" zsh -c ". '$home/deps/depcheck-hook.sh'" 2>/dev/null
 }
 
 # Sources the hook and returns only what it wrote to stderr, which must always
@@ -49,7 +49,7 @@ run_hook() {
 # one of these fixtures is deliberately 200KB long.
 run_hook_stderr() {
     local home=$1
-    env HOME="$home" zsh -c ". '$home/.scripts/deps/depcheck-hook.sh'" 2>&1 >/dev/null \
+    env HOME="$home" zsh -c ". '$home/deps/depcheck-hook.sh'" 2>&1 >/dev/null \
         | cut -c1-120
 }
 
@@ -153,7 +153,7 @@ rm -f "$home/.cache"
 
 home=$(make_home 0)
 output=$(env HOME="$home" zsh -ic \
-    ". '$home/.scripts/deps/depcheck-hook.sh'; alias depcheck" 2>/dev/null)
+    ". '$home/deps/depcheck-hook.sh'; alias depcheck" 2>/dev/null)
 assert_contains 'defines the depcheck alias' 'config deps install' "$output"
 
 # --- the hook is portable to a POSIX shell --------------------------------

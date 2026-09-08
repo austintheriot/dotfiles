@@ -53,15 +53,20 @@ assert_succeeds 'the .my-scripts directory is gone' \
 # them executable would suggest a way of running them that does not work:
 # executing tmux-split.sh in a subshell changes that subshell and exits.
 
-EXECUTED_SCRIPTS='deps/test-local.sh deps/test-bootstrap.sh
-alacritty-platform.sh
+# Paths are relative to $NEW_NAME. The three deps scripts that used to be
+# listed here (test-local.sh, test-bootstrap.sh, depcheck-hook.sh) left when
+# deps/ became a top-level directory: this suite guards the name of the user
+# scripts directory, so a script that is no longer inside it is not this
+# suite's invariant to hold. deps-harness.test.sh and depcheck-hook.test.sh
+# read them at their new paths.
+EXECUTED_SCRIPTS='alacritty-platform.sh
 tmux-update-window-names.sh tmux-worktree-config.sh
 config/config-stamp config/config-build config/config
 config/config-install-hooks
 config/config-install config/config-test config/config-reload'
 
 SOURCED_SCRIPTS='tmux-close.sh tmux-setup.sh tmux-split.sh tmux-start.sh
-zsh-git-widgets.sh deps/depcheck-hook.sh platform.sh'
+zsh-git-widgets.sh platform.sh'
 
 missing_scripts=''
 non_executable=''
@@ -196,15 +201,23 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
     # An exact count rather than "more than zero": a partial add is the
     # failure that actually happened, and it leaves some files staged.
     #
-    # The number moves when a file is added under .scripts/, and that is the
-    # point: it went 41 -> 42 when Dockerfile.pop landed, and this assertion
-    # is where that showed up. Update it deliberately, with the addition.
-    assert_equals 'all 42 scripts are committed, not only on disk' \
-        '42' "$committed_count"
+    # The number moves when a file is added or removed under .scripts/, and
+    # that is the point. It went 41 -> 42 when Dockerfile.pop landed, and
+    #42 -> 21 when the whole deps/ tree moved to the top level. Update it
+    # deliberately, in the same commit as the change that moves it.
+    assert_equals 'all 21 scripts are committed, not only on disk' \
+        '21' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine
     # that has the bit set locally, which is the worst shape for this bug.
+    #
+    # Scoped to $NEW_NAME, so the seven deps scripts that used to be listed
+    # here left with the deps/ tree. Their bits are asserted by
+    # deps-harness.test.sh instead, at their real paths -- which is the point
+    # of scoping the ls-tree call: an entry naming a path outside $NEW_NAME
+    # would compare an empty left side against an empty right side and pass
+    # while asserting nothing.
     committed_exec=$(git_cmd ls-tree -r HEAD "$NEW_NAME" 2>/dev/null \
         | awk '$1 == "100755" { print $4 }' | sort)
     expected_exec=$(printf '%s\n' \
@@ -220,13 +233,6 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
         "$NEW_NAME/config/config-test" \
         "$NEW_NAME/config/config-init" \
         "$NEW_NAME/alacritty-platform.sh" \
-        "$NEW_NAME/deps/test-local.sh" \
-        "$NEW_NAME/deps/test-bootstrap.sh" \
-        "$NEW_NAME/deps/docker/build-seed-binary.sh" \
-        "$NEW_NAME/deps/docker/bootstrap-entrypoint.sh" \
-        "$NEW_NAME/deps/docker/bootstrap-bare-entrypoint.sh" \
-        "$NEW_NAME/deps/docker/bootstrap-curl-entrypoint.sh" \
-        "$NEW_NAME/deps/docker/deps-image-entrypoint.sh" \
         "$NEW_NAME/tmux-update-window-names.sh" \
         "$NEW_NAME/tmux-worktree-config.sh" | sort)
     assert_equals 'the committed execute bits match the executed scripts' \
@@ -258,7 +264,7 @@ else
 fi
 
 assert_succeeds 'the CI path filter watches .scripts' \
-    grep -qF "'.scripts/deps/**'" \
+    grep -qF "'deps/**'" \
     "$DOTFILES_ROOT/.github/workflows/deps-check.yml"
 
 finish

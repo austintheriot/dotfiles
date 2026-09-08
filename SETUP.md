@@ -78,11 +78,11 @@ config init --dry-run  # print every step, change nothing
 
 A bootstrap can only automate what a package manager will install unattended.
 Alacritty on macOS and `nvm` still need a human. The tracked manifest in
-`.scripts/deps/` is the list of what is covered; `depcheck` reports what is
+`deps/` is the list of what is covered; `depcheck` reports what is
 missing at any time.
 
 ## Tests
 
-`.scripts/deps/test-bootstrap.sh` runs the whole bootstrap in a container that
+`deps/test-bootstrap.sh` runs the whole bootstrap in a container that
 starts with git, curl and sudo and nothing else. The `bootstrap` job in
 `.github/workflows/deps-check.yml` runs it in CI.

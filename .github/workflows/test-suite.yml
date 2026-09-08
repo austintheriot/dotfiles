@@ -108,7 +108,7 @@ jobs:
       # server is down. See the bootstrap job in that workflow.
       # DOTFILES_ROOT roots the shipped conf files. The engine falls back to
       # HOME, which on a runner is not the checkout, so without this it looks
-      # in /home/runner/.scripts/deps, finds nothing, parses an empty
+      # in /home/runner/deps, finds nothing, parses an empty
       # manifest, and rejects every --only name as unknown.
       #
       # zsh-autosuggestions is deliberately absent. No test needs it
@@ -131,8 +131,8 @@ jobs:
         env:
           DOTFILES_ROOT: ${{ github.workspace }}
           # A bare file name, not a path. The engine roots a relative
-          # DEPS_CONF against DOTFILES_ROOT/.scripts/deps, so the fuller
-          # spelling resolved to .scripts/deps/.scripts/deps/deps-ci.conf,
+          # DEPS_CONF against DOTFILES_ROOT/deps, so the fuller
+          # spelling resolved to deps/deps/deps-ci.conf,
           # which does not exist. A missing conf file is tolerated by design
           # (that is how DEPS_LOCAL_CONF below excludes the platform
           # variant), so the step parsed an empty manifest, installed

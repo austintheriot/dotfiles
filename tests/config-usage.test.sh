@@ -69,7 +69,7 @@ fi
 printf "deps:%s\\n" "\$@"
 STUB
 chmod 755 "$shim_dir/config-cli"
-mkdir -p "$home/.scripts/deps" "$home/tests"
+mkdir -p "$home/deps" "$home/tests"
 
 run_config() {
     HOME="$home" PATH="$shim_dir:$PATH" "$CONFIG" "$@"

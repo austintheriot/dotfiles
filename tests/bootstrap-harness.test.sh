@@ -15,9 +15,9 @@
 
 . "$(dirname "$0")/lib.sh"
 
-DOCKERFILE="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.bootstrap"
-ENTRYPOINT="$DOTFILES_ROOT/.scripts/deps/docker/bootstrap-entrypoint.sh"
-HARNESS="$DOTFILES_ROOT/.scripts/deps/test-bootstrap.sh"
+DOCKERFILE="$DOTFILES_ROOT/deps/docker/Dockerfile.bootstrap"
+ENTRYPOINT="$DOTFILES_ROOT/deps/docker/bootstrap-entrypoint.sh"
+HARNESS="$DOTFILES_ROOT/deps/test-bootstrap.sh"
 WORKFLOW="$DOTFILES_ROOT/.github/workflows/deps-check.yml"
 SETUP="$DOTFILES_ROOT/setup.sh"
 
@@ -179,8 +179,8 @@ assert_contains 'the documented URL ends at setup.sh' 'setup.sh' "$documented_ur
 #
 # This leg varies exactly those axes and nothing else, so the coverage cannot
 # quietly drift back to the comfortable shape.
-BARE_DOCKERFILE="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.bootstrap-bare"
-BARE_ENTRYPOINT="$DOTFILES_ROOT/.scripts/deps/docker/bootstrap-bare-entrypoint.sh"
+BARE_DOCKERFILE="$DOTFILES_ROOT/deps/docker/Dockerfile.bootstrap-bare"
+BARE_ENTRYPOINT="$DOTFILES_ROOT/deps/docker/bootstrap-bare-entrypoint.sh"
 
 assert_succeeds 'the bare Dockerfile exists' test -f "$BARE_DOCKERFILE"
 assert_succeeds 'the bare entrypoint is executable' test -x "$BARE_ENTRYPOINT"
@@ -286,9 +286,9 @@ fi
 # local file, and says so in its own comment, so the documented
 # `curl -fsSL ... | sh` shape was untested until these legs existed.
 
-CURL_DOCKERFILE="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.bootstrap-curl"
-CURL_ARCH_DOCKERFILE="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.bootstrap-curl-arch"
-CURL_ENTRYPOINT="$DOTFILES_ROOT/.scripts/deps/docker/bootstrap-curl-entrypoint.sh"
+CURL_DOCKERFILE="$DOTFILES_ROOT/deps/docker/Dockerfile.bootstrap-curl"
+CURL_ARCH_DOCKERFILE="$DOTFILES_ROOT/deps/docker/Dockerfile.bootstrap-curl-arch"
+CURL_ENTRYPOINT="$DOTFILES_ROOT/deps/docker/bootstrap-curl-entrypoint.sh"
 
 assert_succeeds 'the curl-pipe Dockerfile exists' test -f "$CURL_DOCKERFILE"
 assert_succeeds 'the Arch curl-pipe Dockerfile exists' test -f "$CURL_ARCH_DOCKERFILE"
@@ -350,10 +350,10 @@ fi
 #
 # The deps engine IS a Rust binary, so it must exist before the dependency
 # install that places rustup. The images cannot compile it themselves: the
-# build context is only .scripts/deps and there is no toolchain, and adding
+# build context is only deps and there is no toolchain, and adding
 # one would pre-satisfy the rustup entry the run exists to exercise. So the
 # binary arrives through the /seed mount instead.
-SEED_HELPER="$DOTFILES_ROOT/.scripts/deps/docker/seed-prebuilt.sh"
+SEED_HELPER="$DOTFILES_ROOT/deps/docker/seed-prebuilt.sh"
 
 assert_succeeds 'the seam helper ships' test -f "$SEED_HELPER"
 assert_succeeds 'the seam helper has content' test -s "$SEED_HELPER"

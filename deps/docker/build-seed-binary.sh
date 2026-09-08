@@ -70,10 +70,11 @@ mkdir -p "$seed_dir"
 printf '=== building config-cli for the containers (rust %s) ===\n' "$toolchain"
 
 # The repo ROOT is mounted, not just crates/. config-cli embeds the four conf
-# files with include_str! at `../../../../.scripts/deps/`, four levels up and
-# out of the workspace, so a crates-only context fails to compile with
-# "couldn't read ... No such file or directory". Measured: this is what the
-# first run of the extracted builder did, and how the coupling was found.
+# files with include_str! at `../../../../deps/`, four levels up from
+# crates/config-cli/src/deps/ and so out of the workspace, which is why a
+# crates-only context fails to compile with "couldn't read ... No such file
+# or directory". Measured: this is what the first run of the extracted
+# builder did, and how the coupling was found.
 #
 # --locked, matching every other build gate in this repo: a harness that
 # silently updates the lockfile tests a dependency set that was never
@@ -93,7 +94,7 @@ docker run --rm $seed_platform \
     --user "$(id -u):$(id -g)" \
     -e HOME=/tmp \
     -v "$repo_root/crates:/src/crates:ro" \
-    -v "$repo_root/.scripts:/src/.scripts:ro" \
+    -v "$repo_root/deps:/src/deps:ro" \
     -v "$seed_dir:/out" \
     -w /src/crates \
     "rust:$toolchain-bookworm" \

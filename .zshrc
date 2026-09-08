@@ -370,4 +370,4 @@ bindkey -M viins '^W' backward-kill-word
 bindkey -M viins '^U' backward-kill-line
 
 # DEPENDENCY CHECK #########################################################################################
-[ -f ~/.scripts/deps/depcheck-hook.sh ] && source ~/.scripts/deps/depcheck-hook.sh
+[ -f ~/deps/depcheck-hook.sh ] && source ~/deps/depcheck-hook.sh

@@ -26,7 +26,7 @@
 
 . "$(dirname "$0")/lib.sh"
 
-DEPS_DIR="$DOTFILES_ROOT/.scripts/deps"
+DEPS_DIR="$DOTFILES_ROOT/deps"
 DEPS_CONF_REAL="$DEPS_DIR/deps.conf"
 CI_CONF="$DEPS_DIR/deps-ci.conf"
 
@@ -146,8 +146,8 @@ assert_equals 'every docs url survives parsing' '' "$malformed_docs"
 # which is what lets a mac machine's suite catch a dependency dropped from
 # the linux variant.
 all_tracked=$(cat "$DEPS_CONF_REAL" \
-        "$DOTFILES_ROOT"/.scripts/deps/deps-mac.conf \
-        "$DOTFILES_ROOT"/.scripts/deps/deps-linux.conf 2>/dev/null \
+        "$DOTFILES_ROOT"/deps/deps-mac.conf \
+        "$DOTFILES_ROOT"/deps/deps-linux.conf 2>/dev/null \
     | sed -e 's/#.*//' | cut -d'|' -f1 | grep -E '^[a-z]' | sort -u)
 
 sources_from_oh_my_zsh=0

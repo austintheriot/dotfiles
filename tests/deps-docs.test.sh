@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Tests for the dependency-checking documentation: .scripts/deps/README.md
+# Tests for the dependency-checking documentation: deps/README.md
 # and the "Dependency checking" section of ~/README.md.
 #
 # Scope is deliberately narrow. These assert only the facts that rot
@@ -17,7 +17,7 @@
 
 . "$(dirname "$0")/lib.sh"
 
-DEPS_DIR="$DOTFILES_ROOT/.scripts/deps"
+DEPS_DIR="$DOTFILES_ROOT/deps"
 DEPS_README="$DEPS_DIR/README.md"
 HOME_README="$DOTFILES_ROOT/README.md"
 # Overridable so the oracles below can be exercised against a program that

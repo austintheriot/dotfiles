@@ -17,7 +17,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.scripts/deps/**'
+      - 'deps/**'
       - '.github/workflows/deps-check.yml'
       # The bootstrap job below runs setup.sh and `config init`, so a change
       # to either is a change to what this workflow verifies. Without these
@@ -98,7 +98,7 @@ jobs:
       - name: Build the Pop!_OS test image
         run: |
           docker build \
-            -f .scripts/deps/docker/Dockerfile.pop \
+            -f deps/docker/Dockerfile.pop \
             -t depcheck-pop \
             .
 
@@ -108,10 +108,10 @@ jobs:
       # pre-satisfy the very dependency the run exists to exercise.
       - name: Build the deps engine for the container
         run: |
-          .scripts/deps/docker/build-seed-binary.sh \
+          deps/docker/build-seed-binary.sh \
             /tmp/seed-pop "$GITHUB_WORKSPACE"
-          cp .scripts/deps/docker/seed-prebuilt.sh /tmp/seed-pop/
-          cp .scripts/deps/docker/deps-image-entrypoint.sh /tmp/seed-pop/
+          cp deps/docker/seed-prebuilt.sh /tmp/seed-pop/
+          cp deps/docker/deps-image-entrypoint.sh /tmp/seed-pop/
 
       - name: Bootstrap and check dependencies (apt, Pop archive)
         run: |
@@ -185,12 +185,12 @@ jobs:
 
       # No --platform here: ubuntu-latest is amd64, which is the only
       # architecture upstream publishes an archlinux image for. The local
-      # harness (.scripts/deps/test-local.sh) passes --platform
+      # harness (deps/test-local.sh) passes --platform
       # linux/amd64 because it also runs on Apple Silicon.
       - name: Build the Arch test image
         run: |
           docker build \
-            -f .scripts/deps/docker/Dockerfile.arch \
+            -f deps/docker/Dockerfile.arch \
             -t depcheck-arch \
             .
 
@@ -207,10 +207,10 @@ jobs:
       # the same script the local harnesses call, so the two cannot drift.
       - name: Build the deps engine for the container
         run: |
-          .scripts/deps/docker/build-seed-binary.sh \
+          deps/docker/build-seed-binary.sh \
             /tmp/seed-arch "$GITHUB_WORKSPACE" --platform=linux/amd64
-          cp .scripts/deps/docker/seed-prebuilt.sh /tmp/seed-arch/
-          cp .scripts/deps/docker/deps-image-entrypoint.sh /tmp/seed-arch/
+          cp deps/docker/seed-prebuilt.sh /tmp/seed-arch/
+          cp deps/docker/deps-image-entrypoint.sh /tmp/seed-arch/
 
       - name: Bootstrap and check dependencies (pacman)
         run: |
@@ -243,7 +243,7 @@ jobs:
         run: |
           mkdir -p /tmp/empty-context
           docker build \
-            -f .scripts/deps/docker/Dockerfile.bootstrap \
+            -f deps/docker/Dockerfile.bootstrap \
             -t dotfiles-bootstrap \
             /tmp/empty-context
 
@@ -272,8 +272,8 @@ jobs:
 
           git clone -q --bare /tmp/staging /tmp/seed/repo.git
           git --git-dir=/tmp/seed/repo.git symbolic-ref HEAD "refs/heads/$ref"
-          cp .scripts/deps/docker/bootstrap-entrypoint.sh /tmp/seed/
-          cp .scripts/deps/docker/seed-prebuilt.sh /tmp/seed/
+          cp deps/docker/bootstrap-entrypoint.sh /tmp/seed/
+          cp deps/docker/seed-prebuilt.sh /tmp/seed/
 
           # The engine itself. It arrives through the /seed mount rather
           # than a build stage in the image: rustup is a manifest entry,
@@ -285,7 +285,7 @@ jobs:
           # runner-built binary dies before main with "GLIBC_2.39 not found".
           # build-seed-binary.sh owns that rule for CI and the local
           # harnesses alike.
-          .scripts/deps/docker/build-seed-binary.sh \
+          deps/docker/build-seed-binary.sh \
             /tmp/seed "$GITHUB_WORKSPACE" --platform=linux/amd64
 
       # The entrypoint runs the bootstrap and then asserts the state a
@@ -326,7 +326,7 @@ jobs:
         run: |
           mkdir -p /tmp/empty-context
           docker build \
-            -f .scripts/deps/docker/Dockerfile.bootstrap-bare \
+            -f deps/docker/Dockerfile.bootstrap-bare \
             -t dotfiles-bootstrap-bare \
             /tmp/empty-context
 
@@ -350,8 +350,8 @@ jobs:
 
           git clone -q --bare /tmp/staging-bare /tmp/seed-bare/repo.git
           git --git-dir=/tmp/seed-bare/repo.git symbolic-ref HEAD "refs/heads/$ref"
-          cp .scripts/deps/docker/bootstrap-bare-entrypoint.sh /tmp/seed-bare/
-          cp .scripts/deps/docker/seed-prebuilt.sh /tmp/seed-bare/
+          cp deps/docker/bootstrap-bare-entrypoint.sh /tmp/seed-bare/
+          cp deps/docker/seed-prebuilt.sh /tmp/seed-bare/
 
           # The engine itself. It arrives through the /seed mount rather
           # than a build stage in the image: rustup is a manifest entry,
@@ -363,7 +363,7 @@ jobs:
           # runner-built binary dies before main with "GLIBC_2.39 not found".
           # build-seed-binary.sh owns that rule for CI and the local
           # harnesses alike.
-          .scripts/deps/docker/build-seed-binary.sh \
+          deps/docker/build-seed-binary.sh \
             /tmp/seed-bare "$GITHUB_WORKSPACE" --platform=linux/amd64
           # The bare image has no git when setup.sh first runs, so the script
           # is read from the seed directory rather than out of the clone.
@@ -410,7 +410,7 @@ jobs:
         run: |
           mkdir -p /tmp/empty-context
           docker build \
-            -f .scripts/deps/docker/Dockerfile.bootstrap-curl \
+            -f deps/docker/Dockerfile.bootstrap-curl \
             -t dotfiles-bootstrap-curl \
             /tmp/empty-context
 
@@ -434,8 +434,8 @@ jobs:
 
           git clone -q --bare /tmp/staging-curl /tmp/seed-curl/repo.git
           git --git-dir=/tmp/seed-curl/repo.git symbolic-ref HEAD "refs/heads/$ref"
-          cp .scripts/deps/docker/bootstrap-curl-entrypoint.sh /tmp/seed-curl/
-          cp .scripts/deps/docker/seed-prebuilt.sh /tmp/seed-curl/
+          cp deps/docker/bootstrap-curl-entrypoint.sh /tmp/seed-curl/
+          cp deps/docker/seed-prebuilt.sh /tmp/seed-curl/
 
           # The engine itself. It arrives through the /seed mount rather
           # than a build stage in the image: rustup is a manifest entry,
@@ -447,7 +447,7 @@ jobs:
           # runner-built binary dies before main with "GLIBC_2.39 not found".
           # build-seed-binary.sh owns that rule for CI and the local
           # harnesses alike.
-          .scripts/deps/docker/build-seed-binary.sh \
+          deps/docker/build-seed-binary.sh \
             /tmp/seed-curl "$GITHUB_WORKSPACE" --platform=linux/amd64
 
           # Served over HTTP by the container, not read from the mount. The
@@ -494,7 +494,7 @@ jobs:
         run: |
           mkdir -p /tmp/empty-context
           docker build --platform linux/amd64 \
-            -f .scripts/deps/docker/Dockerfile.bootstrap-curl-arch \
+            -f deps/docker/Dockerfile.bootstrap-curl-arch \
             -t dotfiles-bootstrap-curl-arch \
             /tmp/empty-context
 
@@ -515,8 +515,8 @@ jobs:
 
           git clone -q --bare /tmp/staging-curl-arch /tmp/seed-curl-arch/repo.git
           git --git-dir=/tmp/seed-curl-arch/repo.git symbolic-ref HEAD "refs/heads/$ref"
-          cp .scripts/deps/docker/bootstrap-curl-entrypoint.sh /tmp/seed-curl-arch/
-          cp .scripts/deps/docker/seed-prebuilt.sh /tmp/seed-curl-arch/
+          cp deps/docker/bootstrap-curl-entrypoint.sh /tmp/seed-curl-arch/
+          cp deps/docker/seed-prebuilt.sh /tmp/seed-curl-arch/
 
           # The engine itself. It arrives through the /seed mount rather
           # than a build stage in the image: rustup is a manifest entry,
@@ -528,7 +528,7 @@ jobs:
           # runner-built binary dies before main with "GLIBC_2.39 not found".
           # build-seed-binary.sh owns that rule for CI and the local
           # harnesses alike.
-          .scripts/deps/docker/build-seed-binary.sh \
+          deps/docker/build-seed-binary.sh \
             /tmp/seed-curl-arch "$GITHUB_WORKSPACE" --platform=linux/amd64
           cp setup.sh /tmp/seed-curl-arch/setup.sh
 

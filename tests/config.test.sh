@@ -235,7 +235,7 @@ shim_dir="$FIXTURES/shims"
 mkdir -p "$shim_dir"
 
 home=$(make_fixture_home wrappers)
-mkdir -p "$home/.scripts/deps" "$home/tests"
+mkdir -p "$home/deps" "$home/tests"
 printf '#!/bin/sh\nprintf "cli:%%s\\n" "$@"\n' > "$shim_dir/config-cli"
 printf '#!/bin/sh\n[ "$#" -eq 0 ] && printf "all:(none)\\n" || printf "all:%%s\\n" "$@"\n' > "$home/tests/run-all.sh"
 printf '#!/bin/sh\n[ "$#" -eq 0 ] && printf "docker:(none)\\n" || printf "docker:%%s\\n" "$@"\n' > "$home/tests/run-in-docker.sh"

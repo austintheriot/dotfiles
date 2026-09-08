@@ -41,9 +41,9 @@ const CALLER_ERROR: u8 = 2;
 /// `retired-check-deps:37` resolves `deps.conf` against its own directory.
 /// `selection::conf_paths` has no script directory and yields the bare name,
 /// so this module supplies the directory that convention means. Without it a
-/// run from any working directory but `.scripts/deps` would read no manifest
+/// run from any working directory but `deps` would read no manifest
 /// and report an empty, passing check.
-const SHIPPED_CONF_DIR: &str = ".scripts/deps";
+const SHIPPED_CONF_DIR: &str = "deps";
 
 /// Run one `deps` verb.
 ///
@@ -294,7 +294,7 @@ fn dotfiles_root() -> Option<PathBuf> {
 ///
 /// An absolute path is used as given: `DEPS_CONF=/tmp/x/deps.conf` names one
 /// file and must not be reinterpreted. Only the bare defaults
-/// `selection::conf_paths` produces are joined onto `<root>/.scripts/deps`,
+/// `selection::conf_paths` produces are joined onto `<root>/deps`,
 /// which is the directory `retired-check-deps:37` resolves against.
 fn load_manifest(
     sources: &selection::ManifestSources,
@@ -321,8 +321,8 @@ fn load_manifest(
     // Measured twice. The Docker images set HOME=/root while the manifest
     // lived at /dotfiles, and the first container run printed "0 entries"
     // and was called a clean bootstrap. Then test-suite.yml passed
-    // DEPS_CONF=.scripts/deps/deps-ci.conf, which this function roots
-    // against DOTFILES_ROOT/.scripts/deps and so resolved to that directory
+    // DEPS_CONF=deps/deps-ci.conf, which this function roots
+    // against DOTFILES_ROOT/deps and so resolved to that directory
     // twice over; the harness installed nothing for months and the macOS leg
     // failed every YAML assertion on a missing pyyaml while Linux passed on
     // a runner that happened to ship one.

@@ -48,7 +48,7 @@ NVIM_LUA="$DOTFILES_ROOT/.config/nvim/lua"
 # all. That is what this repo shipped: init.lua did `require "health"`, which
 # returns the table and registers nothing.
 HEALTH=$(find "$NVIM_LUA" -mindepth 2 -name health.lua 2>/dev/null | head -1)
-DEPS_DIR="$DOTFILES_ROOT/.scripts/deps"
+DEPS_DIR="$DOTFILES_ROOT/deps"
 
 assert_succeeds 'the lsp plugin config exists' test -f "$LSP_CONFIG"
 assert_succeeds 'the health module is under a named directory, so checkhealth can find it' \

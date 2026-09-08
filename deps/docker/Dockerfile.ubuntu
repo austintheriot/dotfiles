@@ -31,7 +31,7 @@ RUN apt-get update \
 # Only the dependency-checking tree, not the whole dotfiles repo. The repo
 # root carries .claude/ and other machine-local content with no business in
 # a build context.
-COPY .scripts/deps /dotfiles/.scripts/deps
+COPY deps /dotfiles/deps
 WORKDIR /dotfiles
 
 ENV HOME=/root
@@ -46,7 +46,7 @@ ENV DEPS_LOCAL_CONF=/nonexistent/deps-platform.conf
 
 # The engine resolves the manifest against DOTFILES_ROOT, falling back to
 # HOME. This image COPYs the deps tree to /dotfiles while HOME is /root, so
-# without this line the engine looks for /root/.scripts/deps/deps.conf, finds
+# without this line the engine looks for /root/deps/deps.conf, finds
 # nothing, and reports a PASSING check of zero entries. Measured: the first
 # run after the port printed "0 entries" and the harness called it a clean
 # bootstrap.

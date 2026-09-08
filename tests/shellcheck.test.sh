@@ -34,7 +34,7 @@
 
 cd "$DOTFILES_ROOT" || exit 1
 
-# The linter is a tracked dependency (.scripts/deps/deps.conf), is installed
+# The linter is a tracked dependency (deps/deps.conf), is installed
 # in the test container (tests/docker/Dockerfile) and on both CI runners
 # (.github/workflows/test-suite.yml). Those are the three places the lint has
 # to gate, so a missing binary there is a broken gate, not a soft skip: the
@@ -58,12 +58,12 @@ fi
 # decorative, which is the exact failure this whole item was filed against.
 # Three places have to carry shellcheck, and each is asserted here rather
 # than assumed:
-#   - .scripts/deps/deps.conf     so `config install` provides it locally
+#   - deps/deps.conf     so `config install` provides it locally
 #   - tests/docker/Dockerfile     so the pre-push gate runs it (container.test.sh
 #                                 also asserts this, from the image's side)
 #   - .github/workflows/test-suite.yml  so both CI runners run it
 
-DEPS_CONF="$DOTFILES_ROOT/.scripts/deps/deps.conf"
+DEPS_CONF="$DOTFILES_ROOT/deps/deps.conf"
 DOCKERFILE="$DOTFILES_ROOT/tests/docker/Dockerfile"
 CI_WORKFLOW="$DOTFILES_ROOT/.github/workflows/test-suite.yml"
 
@@ -109,7 +109,7 @@ tests/leak-check.sh'
 # depcheck-hook.sh is sourced from .zshrc but is portable POSIX shell, not
 # zsh-specific, so it is linted rather than excluded.
 SOURCED_BASH='tests/lib.sh
-.scripts/deps/depcheck-hook.sh'
+deps/depcheck-hook.sh'
 
 # Every excluded name must still exist. A rename would otherwise leave a dead
 # entry here and silently drop a real script from the lint.

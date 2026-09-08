@@ -116,7 +116,7 @@ help "a TOML manifest parse error ... a manifest with a bad
 today. `.sync-manifest` is a **line-oriented custom format** (one rule per
 line, `!` and `~` prefixes), parsed by hand in
 `crates/config-manifest/src/manifest.rs:115-148`. The dependency manifest is
-`~/.scripts/deps/deps.conf`, a **pipe-delimited shell-read format**
+`~/deps/deps.conf`, a **pipe-delimited shell-read format**
 (`name|check_command|docs_url`). Section 6 evaluates spans against the format
 that actually exists, plus the prospective TOML case.
 

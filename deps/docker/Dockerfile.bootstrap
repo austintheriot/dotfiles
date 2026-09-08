@@ -4,7 +4,7 @@
 #
 # This is the image that actually tests the claim "ssh into a box, get my
 # whole setup from a bare git URL". The other two images in this directory
-# cannot: they COPY .scripts/deps and run the deps engine directly, so they
+# cannot: they COPY deps and run the deps engine directly, so they
 # never clone, never check out, never run setup.sh or `config init`, and never
 # see a $HOME that already has a .zshrc in it.
 #

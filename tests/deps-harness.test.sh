@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Tests for the Docker harness (.scripts/deps/test-local.sh, the two
+# Tests for the Docker harness (deps/test-local.sh, the two
 # Dockerfiles) and the CI workflow (.github/workflows/deps-check.yml) that
 # together run `config deps install --yes` against throwaway Linux and macOS
 # environments.
@@ -41,10 +41,10 @@
 # across a `.` source, so it reads the first use as a possible misspelling.
 # This became the FIRST use when the retired engine's path was removed.
 # shellcheck disable=SC2153
-HARNESS="$DOTFILES_ROOT/.scripts/deps/test-local.sh"
-DOCKERFILE_UBUNTU="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.ubuntu"
-DOCKERFILE_ARCH="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.arch"
-DOCKERFILE_POP="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.pop"
+HARNESS="$DOTFILES_ROOT/deps/test-local.sh"
+DOCKERFILE_UBUNTU="$DOTFILES_ROOT/deps/docker/Dockerfile.ubuntu"
+DOCKERFILE_ARCH="$DOTFILES_ROOT/deps/docker/Dockerfile.arch"
+DOCKERFILE_POP="$DOTFILES_ROOT/deps/docker/Dockerfile.pop"
 WORKFLOW="$DOTFILES_ROOT/.github/workflows/deps-check.yml"
 
 # `case` inside a command substitution trips bash's parser on the `)` of a
@@ -86,8 +86,8 @@ fi
 # `branch --show-current` and `git archive` see.
 
 fake_home="$FIXTURES/home"
-mkdir -p "$fake_home/.scripts/deps"
-cp "$DOTFILES_ROOT/.scripts/deps/test-local.sh" "$fake_home/.scripts/deps/"
+mkdir -p "$fake_home/deps"
+cp "$DOTFILES_ROOT/deps/test-local.sh" "$fake_home/deps/"
 git init -q --bare "$fake_home/.cfg"
 
 home_git() { git --git-dir="$fake_home/.cfg" --work-tree="$fake_home" "$@"; }
@@ -193,7 +193,7 @@ for dockerfile in "$DOCKERFILE_UBUNTU" "$DOCKERFILE_ARCH" "$DOCKERFILE_POP"; do
     # Every image copies in the deps tree and runs from /dotfiles, so the
     # ENTRYPOINT path has to be the copied one, not a $HOME-relative guess.
     assert_contains "$image copies the deps tree into the image" \
-        'COPY .scripts/deps' "$contents"
+        'COPY deps' "$contents"
 done
 
 # --- the two base images are pinned in deliberately opposite ways --------
@@ -320,7 +320,7 @@ assert_equals 'the workflow triggers on push, schedule and workflow_dispatch' \
 # not touch them cannot break the bootstrap.
 assert_equals 'the push trigger is path-filtered' 'yes' "$(wf push_is_filtered)"
 assert_contains 'the push filter covers the deps directory' \
-    '.scripts/deps/' "$(wf push_paths)"
+    'deps/' "$(wf push_paths)"
 assert_contains 'the push filter covers the workflow itself' \
     'deps-check.yml' "$(wf push_paths)"
 
@@ -369,7 +369,7 @@ assert_contains 'the macos job builds the engine first' \
 assert_equals 'the macos job runs on a macOS runner' 'macos-latest' "$(wf macos_runner)"
 
 assert_contains 'the arch job builds the arch Dockerfile' \
-    '.scripts/deps/docker/Dockerfile.arch' "$(wf arch_run)"
+    'deps/docker/Dockerfile.arch' "$(wf arch_run)"
 
 # --- the Pop!_OS leg -----------------------------------------------------
 #
@@ -397,7 +397,7 @@ assert_contains 'the pop image adds the Pop archive' \
     'apt.pop-os.org' "$pop_dockerfile"
 
 assert_contains 'the pop job builds the pop Dockerfile' \
-    '.scripts/deps/docker/Dockerfile.pop' "$(wf pop_run)"
+    'deps/docker/Dockerfile.pop' "$(wf pop_run)"
 
 # The install step reporting "installed neovim" is not the claim: the engine
 # reports that for apt's 0.9.5 too. The workflow has to assert the VERSION
@@ -427,7 +427,7 @@ assert_contains 'the pop job asserts the second run converges' \
 # never asked for one.
 assert_contains 'deps.conf pins a neovim version floor' \
     'command -v nvim >=0.10' \
-    "$(cat "$DOTFILES_ROOT/.scripts/deps/deps.conf")"
+    "$(cat "$DOTFILES_ROOT/deps/deps.conf")"
 assert_contains 'the arch job runs the image it built' \
     'depcheck-arch' "$(wf arch_run)"
 
@@ -450,17 +450,17 @@ assert_contains 'the local harness tags images the way the arch job does' \
 
 for platform in mac linux; do
     assert_succeeds "deps-$platform.conf ships here" \
-        test -f "$DOTFILES_ROOT/.scripts/deps/deps-$platform.conf"
+        test -f "$DOTFILES_ROOT/deps/deps-$platform.conf"
 done
 
 assert_equals 'the retired deps-local.conf is gone' \
-    '' "$(grep -rn 'deps-local\.conf' "$DOTFILES_ROOT/.scripts/deps/README.md")"
+    '' "$(grep -rn 'deps-local\.conf' "$DOTFILES_ROOT/deps/README.md")"
 
 # --- the CI harness manifest is findable ---------------------------------
 #
 # Same shape as the DOTFILES_ROOT assertion above, at the other call site.
-# The engine roots a relative DEPS_CONF against DOTFILES_ROOT/.scripts/deps,
-# so the workflow passing `.scripts/deps/deps-ci.conf` resolved to that
+# The engine roots a relative DEPS_CONF against DOTFILES_ROOT/deps,
+# so the workflow passing `deps/deps-ci.conf` resolved to that
 # directory twice over. A missing conf file is tolerated by design, which is
 # how DEPS_LOCAL_CONF excludes the platform variant, so the step read an
 # empty manifest, installed nothing and exited 0. The macOS leg then failed
@@ -475,7 +475,49 @@ ci_conf_value=$(grep -E '^ *DEPS_CONF:' "$DOTFILES_ROOT/.github/workflows/test-s
 assert_equals 'the workflow names the CI manifest by bare file name' \
     'deps-ci.conf' "$ci_conf_value"
 assert_succeeds 'the named CI manifest resolves under the shipped conf dir' \
-    test -f "$DOTFILES_ROOT/.scripts/deps/$ci_conf_value"
+    test -f "$DOTFILES_ROOT/deps/$ci_conf_value"
 
+# --- the executed scripts in deps/ carry their execute bit ----------------
+#
+# These seven are invoked as commands, by CI steps, by the harnesses, and by
+# a Dockerfile ENTRYPOINT. A script committed 100644 works on the machine
+# that has the bit set locally and fails on every fresh clone, which is the
+# worst shape this bug takes.
+#
+# The list used to live in scripts-dir-name.test.sh, whose ls-tree call is
+# scoped to `.scripts`. When deps/ moved to the top level, entries there
+# would have compared an empty left side against an empty right side and
+# passed while asserting nothing, so the coverage moved here with the tree.
+#
+# An exact set, not a subset: a new executed script that nobody adds here is
+# a script whose bit nothing checks.
+EXECUTED_DEPS_SCRIPTS='test-local.sh
+test-bootstrap.sh
+docker/build-seed-binary.sh
+docker/bootstrap-entrypoint.sh
+docker/bootstrap-bare-entrypoint.sh
+docker/bootstrap-curl-entrypoint.sh
+docker/deps-image-entrypoint.sh'
+
+non_executable=''
+for script in $EXECUTED_DEPS_SCRIPTS; do
+    [ -x "$DOTFILES_ROOT/deps/$script" ] || non_executable="$non_executable $script"
+done
+assert_equals 'every executed script in deps/ is executable' '' "$non_executable"
+
+if git --git-dir="$DOTFILES_ROOT/.cfg" --work-tree="$DOTFILES_ROOT" \
+        rev-parse --verify HEAD >/dev/null 2>&1; then
+    committed_exec=$(git --git-dir="$DOTFILES_ROOT/.cfg" \
+        --work-tree="$DOTFILES_ROOT" ls-tree -r HEAD deps 2>/dev/null \
+        | awk '$1 == "100755" { print $4 }' | sed 's|^deps/||' | sort)
+    # Unquoted on purpose: the list is newline-separated and each entry is
+    # one argument to printf.
+    # shellcheck disable=SC2086
+    expected_exec=$(printf '%s\n' $EXECUTED_DEPS_SCRIPTS | sort)
+    assert_equals 'the committed execute bits in deps/ match the executed scripts' \
+        "$expected_exec" "$committed_exec"
+else
+    skip 'no repository here, so the committed deps execute bits cannot be inspected'
+fi
 
 finish

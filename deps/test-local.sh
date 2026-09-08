@@ -16,7 +16,7 @@
 # does not fail the run. This script exits non-zero if either container
 # does.
 #
-# Usage: ~/.scripts/deps/test-local.sh
+# Usage: ~/deps/test-local.sh
 
 set -eu
 
@@ -45,12 +45,12 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # The binary the containers run is built by one shared script, not by a copy
-# per harness. See .scripts/deps/docker/build-seed-binary.sh for why it must
+# per harness. See deps/docker/build-seed-binary.sh for why it must
 # be a container build and why the builder image is pinned to bookworm: the
 # glibc floor of the build host becomes the floor of the binary, and three
 # bootstrap images are older than the CI runner.
 build_seed_binary() {
-    "$HOME/.scripts/deps/docker/build-seed-binary.sh" "$1" "$HOME" "$2"
+    "$HOME/deps/docker/build-seed-binary.sh" "$1" "$HOME" "$2"
 }
 
 workdir=$(mktemp -d "${TMPDIR:-/tmp}/depcheck-docker-XXXXXX")
@@ -61,14 +61,13 @@ trap 'rm -rf "$workdir"' EXIT INT TERM HUP
 # last commit instead of the edit under test, which defeats the point of a
 # local iteration loop.
 git_cmd archive "$branch" | tar -x -C "$workdir"
-rm -rf "$workdir/.scripts/deps"
-mkdir -p "$workdir/.scripts"
-cp -R "$HOME/.scripts/deps" "$workdir/.scripts/deps"
+rm -rf "$workdir/deps"
+cp -R "$HOME/deps" "$workdir/deps"
 
 seed="$workdir/seed"
 mkdir -p "$seed"
-cp "$HOME/.scripts/deps/docker/seed-prebuilt.sh" "$seed/seed-prebuilt.sh"
-cp "$HOME/.scripts/deps/docker/deps-image-entrypoint.sh" \
+cp "$HOME/deps/docker/seed-prebuilt.sh" "$seed/seed-prebuilt.sh"
+cp "$HOME/deps/docker/deps-image-entrypoint.sh" \
     "$seed/deps-image-entrypoint.sh"
 
 # Both images are linux/amd64 in practice -- archlinux publishes no arm64
@@ -97,7 +96,7 @@ for image in ubuntu pop arch; do
     # exactly the output needed to diagnose it.
     # shellcheck disable=SC2086
     if ! docker build $platform_args \
-        -f "$workdir/.scripts/deps/docker/Dockerfile.$image" \
+        -f "$workdir/deps/docker/Dockerfile.$image" \
         -t "depcheck-$image" \
         "$workdir"
     then

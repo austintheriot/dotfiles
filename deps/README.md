@@ -148,8 +148,8 @@ config deps install --yes             # check, then install without prompting
 config deps install --dry-run         # print what install would run
 config deps check --only tmux,fzf     # restrict the run to a subset
 depcheck                              # alias for `config deps install`
-~/.scripts/deps/test-local.sh         # bootstrap fresh containers
-~/.scripts/deps/test-bootstrap.sh     # full bootstrap in a container
+~/deps/test-local.sh         # bootstrap fresh containers
+~/deps/test-bootstrap.sh     # full bootstrap in a container
 ```
 
 ### `--only <names>`

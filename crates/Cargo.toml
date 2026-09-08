@@ -42,11 +42,13 @@ tempfile = "3.27.0"
 # No `display`: this is a reader, and a writer would invite a
 # re-serialization path that reformats a hand-edited file.
 #
-# `serde` is required rather than chosen -- `toml::Table` and `toml::Value`
-# are gated behind it, and those are the untyped document types deps-core
-# maps onto its own closed types by hand. Nothing here derives
-# Serialize/Deserialize: a derive would put a second definition of the schema
-# beside the hand-written mapping, and the mapping is where the rules live
-# (exactly one check per entry, unknown keys refused, python imports only in
-# an explicitly named file).
+# `serde` carries the manifest schema's shape layer: deps-core derives
+# `Deserialize` with `deny_unknown_fields` for field names and types, then
+# converts into its own closed types, where the rules a derive cannot state
+# live (exactly one check per entry, `min_version` requiring `command`,
+# python imports only in an explicitly named file).
 toml = { version = "0.9.8", default-features = false, features = ["parse", "serde"] }
+# Derive only, for the manifest schema. `serde_core` and `serde_derive` are
+# already in the lockfile transitively via `toml`, so naming serde directly
+# makes an existing edge explicit rather than adding a crate to the graph.
+serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }

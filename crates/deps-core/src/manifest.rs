@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use dotfiles_path::{CommandName, DocsUrl, GlobPattern, ModuleName, NameError, VersionFloor};
 
@@ -173,30 +173,272 @@ pub enum ParseError {
     /// which describe a well-formed document saying something unusable: this
     /// one means the document did not parse, so no entry was reached.
     ///
-    /// A repeated table (`[git]` twice) lands here rather than in
-    /// `DuplicateName`, because TOML refuses it before this crate looks. The
-    /// guarantee moved into the format, and the variant that carries it
-    /// moved with it.
+    /// Four failures land here rather than in a variant of their own,
+    /// because serde refuses all four during deserialization, before this
+    /// crate looks at an entry:
+    ///
+    ///   - a syntax error.
+    ///   - a repeated table (`[git]` twice). The pipe parser needed its own
+    ///     `DuplicateName` pass because two lines could name one dependency;
+    ///     that guarantee now lives in the format.
+    ///   - an unknown key, via `deny_unknown_fields`. The message names the
+    ///     offending key AND lists every valid one, which is more than the
+    ///     hand-written check it replaced managed.
+    ///   - a value of the wrong type (`command = 42`), reported as
+    ///     ``invalid type: integer `42`, expected a string``.
+    ///
+    /// Carrying serde's message rather than re-deriving these as variants is
+    /// the deliberate trade: the message already names the field, the line
+    /// and the column, and a variant per case would state less.
     MalformedToml {
         /// The parser's own message, which carries the line and column. Kept
         /// as text because the shape of a TOML syntax error is not something
         /// this crate models.
         message: String,
     },
-    /// An entry carries a key this crate does not know.
+}
+
+/// One manifest entry as it appears in the file, before validation.
+///
+/// Shape only. serde owns this layer: field names, field types, and
+/// `deny_unknown_fields`. What it deliberately does NOT express is any rule
+/// relating two fields to each other, because a derive cannot -- every field
+/// here is independently optional, so "two checks named" and "no check
+/// named" both deserialize cleanly. [`TryFrom`] below is where those rules
+/// live.
+///
+/// The division is worth stating because it decides where a future rule
+/// goes: if the rule is about one field's spelling or type, it belongs in an
+/// attribute here; if it relates fields, or needs the `ConfKind`, it belongs
+/// in the conversion.
+///
+/// Measured, on why `deny_unknown_fields` earns its place: for a
+/// `min_verison = "0.10"` typo it reports
+/// ``unknown field `min_verison`, expected one of `command`, `min_version`,
+/// ...`` with a line and column, and for `command = 42` it reports
+/// ``invalid type: integer `42`, expected a string``. The hand-written
+/// mapping this replaced returned a bare `Unrecognized` for the second and
+/// named no alternatives for the first.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawEntry {
+    /// A command that must resolve on PATH.
+    command: Option<String>,
+    /// Qualifies `command` with a version floor. Not a check by itself, so
+    /// an entry carrying only this one reports "no check named" rather than
+    /// a confusing partial.
+    min_version: Option<String>,
+    /// A file that must exist.
+    file: Option<String>,
+    /// A directory that must exist.
+    dir: Option<String>,
+    /// A file that must exist and hold content.
+    file_non_empty: Option<String>,
+    /// At least one entry in a directory matching a pattern.
+    glob: Option<RawGlob>,
+    /// A module `python3 -c "import ..."` must find.
+    python_import: Option<String>,
+    /// An alternation: any one branch satisfies the entry.
+    any_of: Option<Vec<RawBranch>>,
+    /// Where a human reads about the dependency.
+    docs: String,
+}
+
+/// A `glob` check's two values.
+///
+/// The one check carrying more than a single string, so it is a table where
+/// the others are plain values.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawGlob {
+    /// The directory the pattern is matched inside.
+    dir: String,
+    /// The filename pattern, which cannot itself contain a separator.
+    pattern: String,
+}
+
+/// One branch of an `any_of`.
+///
+/// Deliberately not `RawEntry`: a branch carries no `docs` and no nested
+/// `any_of`. Every real alternation in these manifests is one level deep,
+/// and an alternation of alternations reads worse than the flat list it is
+/// equivalent to. Making it a separate type means `deny_unknown_fields`
+/// rejects both at the shape layer rather than leaving it to a runtime
+/// check.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawBranch {
+    /// A command that must resolve on PATH.
+    command: Option<String>,
+    /// Qualifies `command` with a version floor.
+    min_version: Option<String>,
+    /// A file that must exist.
+    file: Option<String>,
+    /// A directory that must exist.
+    dir: Option<String>,
+    /// A file that must exist and hold content.
+    file_non_empty: Option<String>,
+    /// At least one entry in a directory matching a pattern.
+    glob: Option<RawGlob>,
+    /// A module `python3 -c "import ..."` must find.
+    python_import: Option<String>,
+}
+
+/// The check fields of a raw entry or branch, as borrowed options.
+///
+/// One shape for both types so the exactly-one rule and the check
+/// construction below are written once. Without it, `RawEntry` and
+/// `RawBranch` would each need their own copy of both, and the two copies
+/// are exactly the kind that drift when a check kind is added.
+struct CheckFields<'a> {
+    command: Option<&'a String>,
+    min_version: Option<&'a String>,
+    file: Option<&'a String>,
+    dir: Option<&'a String>,
+    file_non_empty: Option<&'a String>,
+    glob: Option<&'a RawGlob>,
+    python_import: Option<&'a String>,
+    any_of: Option<&'a Vec<RawBranch>>,
+}
+
+impl CheckFields<'_> {
+    /// How many check kinds this names.
     ///
-    /// Refused rather than ignored, which is the whole reason to name the
-    /// fields: `min_verison = "0.10"` silently dropped leaves a bare
-    /// presence check that passes on exactly the versions the floor exists
-    /// to reject.
-    UnknownKey {
-        /// The entry the key appeared in, so the report names a table rather
-        /// than a line the reader has to count to.
-        name: String,
-        /// The key as written, so a typo is visible beside the correct
-        /// spelling.
-        key: String,
-    },
+    /// `min_version` is excluded: it qualifies `command` rather than being a
+    /// check, so an entry holding only `min_version` counts zero and reports
+    /// "no check named".
+    fn named_count(&self) -> usize {
+        [
+            self.command.is_some(),
+            self.file.is_some(),
+            self.dir.is_some(),
+            self.file_non_empty.is_some(),
+            self.glob.is_some(),
+            self.python_import.is_some(),
+            self.any_of.is_some(),
+        ]
+        .into_iter()
+        .filter(|named| *named)
+        .count()
+    }
+
+    /// The check these fields describe.
+    ///
+    /// # Errors
+    ///
+    /// `Unrecognized` when the count is not exactly one, and the specific
+    /// `CheckParseError` from the refined type when a value is unusable.
+    fn to_check(&self, kind: ConfKind) -> Result<Check, CheckParseError> {
+        // Exactly one, checked before anything is built. Two is a question
+        // with no answer -- resolving it by precedence would let a lookup
+        // silently see one of two stated intents -- and zero means the entry
+        // declares a dependency with no way to tell whether it is met.
+        if self.named_count() != 1 {
+            return Err(CheckParseError::Unrecognized);
+        }
+
+        if let Some(branches) = self.any_of {
+            // Two operands minimum. A one-item `any_of` is a leaf wearing an
+            // alternation's clothes, and an `AnyOf` with an empty `rest`
+            // would misreport the structure to every reader of the type.
+            let (head, tail) = branches.split_first().ok_or(CheckParseError::Unrecognized)?;
+            if tail.is_empty() {
+                return Err(CheckParseError::Unrecognized);
+            }
+            let first = head.check_fields().to_check(kind)?;
+            let mut rest = Vec::with_capacity(tail.len());
+            for branch in tail {
+                rest.push(branch.check_fields().to_check(kind)?);
+            }
+            return Ok(Check::AnyOf { first: Box::new(first), rest });
+        }
+
+        if let Some(name) = self.command {
+            let parsed = CommandName::parse(name).map_err(CheckParseError::BadCommandName)?;
+            return match self.min_version {
+                Some(floor) => {
+                    let parsed_floor =
+                        VersionFloor::parse(floor).map_err(CheckParseError::BadVersionFloor)?;
+                    Ok(Check::CommandVersion { name: parsed, floor: parsed_floor })
+                }
+                None => Ok(Check::Command(parsed)),
+            };
+        }
+
+        // `min_version` beside anything but `command` is a rule serde cannot
+        // state: both fields deserialize independently. Reported here rather
+        // than ignored, because a floor silently dropped leaves a check that
+        // passes on the versions the floor exists to reject.
+        if self.min_version.is_some() {
+            return Err(CheckParseError::Unrecognized);
+        }
+
+        if let Some(path) = self.file {
+            return Ok(Check::FileExists(parse_quoted_path(path)?));
+        }
+        if let Some(path) = self.dir {
+            return Ok(Check::DirExists(parse_quoted_path(path)?));
+        }
+        if let Some(path) = self.file_non_empty {
+            return Ok(Check::FileNonEmpty(parse_quoted_path(path)?));
+        }
+        if let Some(spec) = self.glob {
+            let dir = parse_quoted_path(&spec.dir)?;
+            let pattern = GlobPattern::parse(&spec.pattern).map_err(CheckParseError::BadGlob)?;
+            return Ok(Check::GlobExists { dir, pattern });
+        }
+        if let Some(module) = self.python_import {
+            // The one rule that needs the caller's argument, which is why no
+            // serde attribute can express it: a python import spawns an
+            // interpreter, so it is permitted only in a file a caller named
+            // explicitly. A platform-selected file is chosen by the machine.
+            if kind != ConfKind::ExplicitOnly {
+                return Err(CheckParseError::InterpreterCheck);
+            }
+            let parsed = ModuleName::parse(module).map_err(CheckParseError::BadModuleName)?;
+            return Ok(Check::PythonImport(parsed));
+        }
+
+        // Unreachable: named_count() is 1 and every kind is handled above.
+        // Returned rather than panicked so a future kind added to the count
+        // without a branch here is a parse error, not a crash in a binary
+        // that runs before the shell prompt.
+        Err(CheckParseError::Unrecognized)
+    }
+}
+
+impl RawEntry {
+    /// This entry's check fields.
+    fn check_fields(&self) -> CheckFields<'_> {
+        CheckFields {
+            command: self.command.as_ref(),
+            min_version: self.min_version.as_ref(),
+            file: self.file.as_ref(),
+            dir: self.dir.as_ref(),
+            file_non_empty: self.file_non_empty.as_ref(),
+            glob: self.glob.as_ref(),
+            python_import: self.python_import.as_ref(),
+            any_of: self.any_of.as_ref(),
+        }
+    }
+}
+
+impl RawBranch {
+    /// This branch's check fields. `any_of` is always `None`: a branch may
+    /// not nest an alternation, which the absent field enforces at the shape
+    /// layer.
+    fn check_fields(&self) -> CheckFields<'_> {
+        CheckFields {
+            command: self.command.as_ref(),
+            min_version: self.min_version.as_ref(),
+            file: self.file.as_ref(),
+            dir: self.dir.as_ref(),
+            file_non_empty: self.file_non_empty.as_ref(),
+            glob: self.glob.as_ref(),
+            python_import: self.python_import.as_ref(),
+            any_of: None,
+        }
+    }
 }
 
 /// Parse a TOML manifest into typed entries.
@@ -225,9 +467,19 @@ pub enum ParseError {
 /// docs = "https://alacritty.org/"
 /// ```
 ///
-/// Check keys: `command`, `file`, `dir`, `file_non_empty`, `python_import`,
-/// and `any_of` for an alternation. `min_version` qualifies `command` and is
-/// not a check on its own.
+/// Check keys: `command`, `file`, `dir`, `file_non_empty`, `glob`,
+/// `python_import`, and `any_of` for an alternation. `min_version` qualifies
+/// `command` and is not a check on its own.
+///
+/// # How the layers divide
+///
+/// serde deserializes into [`RawEntry`], which owns the shape: field names,
+/// field types, and `deny_unknown_fields`. The conversion below owns every
+/// rule serde cannot state -- exactly one check kind per entry,
+/// `min_version` requiring `command`, `python_import` requiring an
+/// explicitly named file, and validation into the refined types
+/// (`CommandName`, `VersionFloor`, `CheckPath`). A future rule goes in
+/// whichever layer can express it.
 ///
 /// # Why named keys
 ///
@@ -240,179 +492,41 @@ pub enum ParseError {
 ///
 /// # Errors
 ///
-/// Returns `ParseError`. `MalformedToml` means the document did not parse.
-/// `UnknownKey` means an entry carried a key this crate does not know, which
-/// is refused rather than ignored so a typo cannot silently drop a check.
+/// Returns `ParseError`. `MalformedToml` carries serde's own message, which
+/// names the offending field or type with a line and column, and covers a
+/// syntax error, an unknown key, a wrong value type and a repeated table.
 /// `BadCheck` covers an entry naming no check, naming two, or naming one
-/// whose argument is unusable.
+/// whose argument is unusable. `BadName` and `BadDocs` cover the table name
+/// and the `docs` value.
 pub fn parse_manifest_toml(text: &str, kind: ConfKind) -> Result<Manifest, ParseError> {
-    let document: toml::Table = text
-        .parse()
-        .map_err(|error: toml::de::Error| ParseError::MalformedToml {
+    // BTreeMap, not HashMap: a repeated table is refused by TOML itself, and
+    // a sorted map makes the entry order deterministic for a caller that
+    // renders it. The pipe parser needed its own DuplicateName pass because
+    // two lines could name one dependency; that guarantee now lives in the
+    // format.
+    let raw: BTreeMap<String, RawEntry> =
+        toml::from_str(text).map_err(|error: toml::de::Error| ParseError::MalformedToml {
             message: error.to_string(),
         })?;
 
-    let mut entries = Vec::new();
-    for (raw_name, value) in &document {
+    let mut entries = Vec::with_capacity(raw.len());
+    for (raw_name, entry) in &raw {
+        // Line 0 rather than a real number: a TOML table has no single line
+        // this crate can name without tracking spans, and reporting a wrong
+        // line is worse than reporting none. The name is in the error, which
+        // is what a reader searches for.
         let name = DependencyName::parse(raw_name)
-            // Line 0 rather than a real number: a TOML table has no single
-            // line this crate can name without tracking spans, and reporting
-            // a wrong line is worse than reporting none. The name is in the
-            // error, which is what the reader searches for.
             .map_err(|cause| ParseError::BadName { line: 0, cause })?;
-
-        let table = value
-            .as_table()
-            .ok_or(ParseError::BadCheck { line: 0, cause: CheckParseError::Unrecognized })?;
-
-        let mut docs_field = None;
-        let mut check_keys: Vec<&str> = Vec::new();
-        for key in table.keys() {
-            match key.as_str() {
-                "docs" => docs_field = table.get(key).and_then(toml::Value::as_str),
-                // `min_version` qualifies `command`; it is not a check of its
-                // own, so it is not counted among the check keys. An entry
-                // carrying only `min_version` therefore reports "no check"
-                // rather than a confusing partial one.
-                "min_version" => {}
-                "command" | "file" | "dir" | "file_non_empty" | "glob" | "python_import"
-                | "any_of" => {
-                    check_keys.push(key.as_str());
-                }
-                other => {
-                    return Err(ParseError::UnknownKey {
-                        name: raw_name.clone(),
-                        key: other.to_owned(),
-                    });
-                }
-            }
-        }
-
-        // Exactly one, checked before anything is built. Two check keys is a
-        // question with no answer -- resolving it by precedence would let a
-        // lookup silently see one of two stated intents -- and zero means the
-        // entry declares a dependency with no way to tell whether it is met.
-        if check_keys.len() != 1 {
-            return Err(ParseError::BadCheck { line: 0, cause: CheckParseError::Unrecognized });
-        }
-
-        let check = parse_toml_check(table, check_keys[0], kind)
+        let check = entry
+            .check_fields()
+            .to_check(kind)
             .map_err(|cause| ParseError::BadCheck { line: 0, cause })?;
-
-        let raw_docs = docs_field.ok_or(ParseError::BadDocs { line: 0, cause: NameError::Empty })?;
-        let docs = DocsUrl::parse(raw_docs)
+        let docs = DocsUrl::parse(&entry.docs)
             .map_err(|cause| ParseError::BadDocs { line: 0, cause })?;
-
         entries.push(ManifestEntry { name, check, docs });
     }
 
-    // No DuplicateName pass. TOML refuses a repeated table itself, so the
-    // document never reaches here carrying two entries for one name, and a
-    // second check would be unreachable code asserting a guarantee the
-    // format already gives.
     Ok(Manifest { entries })
-}
-
-/// One check, from the single check key its entry named.
-fn parse_toml_check(
-    table: &toml::Table,
-    key: &str,
-    kind: ConfKind,
-) -> Result<Check, CheckParseError> {
-    if key == "any_of" {
-        let items = table
-            .get("any_of")
-            .and_then(toml::Value::as_array)
-            .ok_or(CheckParseError::Unrecognized)?;
-        // Two operands minimum. A one-item `any_of` is a leaf wearing an
-        // alternation's clothes, and building `AnyOf` with an empty `rest`
-        // would misreport the structure to every reader of the type.
-        let (head, tail) = items.split_first().ok_or(CheckParseError::Unrecognized)?;
-        if tail.is_empty() {
-            return Err(CheckParseError::Unrecognized);
-        }
-        let first = parse_toml_branch(head, kind)?;
-        let mut rest = Vec::new();
-        for item in tail {
-            rest.push(parse_toml_branch(item, kind)?);
-        }
-        return Ok(Check::AnyOf { first: Box::new(first), rest });
-    }
-
-    // `glob` is the one check carrying two values (a directory and a pattern
-    // matched inside it), so it takes a table where the others take a string.
-    // Handled before the string extraction below rather than inside it.
-    if key == "glob" {
-        let spec = table.get("glob").and_then(toml::Value::as_table).ok_or(CheckParseError::Unrecognized)?;
-        for spec_key in spec.keys() {
-            if spec_key != "dir" && spec_key != "pattern" {
-                return Err(CheckParseError::Unrecognized);
-            }
-        }
-        let raw_dir = spec.get("dir").and_then(toml::Value::as_str).ok_or(CheckParseError::Unrecognized)?;
-        let raw_pattern =
-            spec.get("pattern").and_then(toml::Value::as_str).ok_or(CheckParseError::Unrecognized)?;
-        let dir = parse_quoted_path(raw_dir)?;
-        let pattern = GlobPattern::parse(raw_pattern).map_err(CheckParseError::BadGlob)?;
-        return Ok(Check::GlobExists { dir, pattern });
-    }
-
-    let value = table.get(key).and_then(toml::Value::as_str).ok_or(CheckParseError::Unrecognized)?;
-
-    match key {
-        "command" => match table.get("min_version") {
-            Some(floor_value) => {
-                let raw_floor =
-                    floor_value.as_str().ok_or(CheckParseError::Unrecognized)?;
-                let name =
-                    CommandName::parse(value).map_err(CheckParseError::BadCommandName)?;
-                let floor =
-                    VersionFloor::parse(raw_floor).map_err(CheckParseError::BadVersionFloor)?;
-                Ok(Check::CommandVersion { name, floor })
-            }
-            None => Ok(Check::Command(
-                CommandName::parse(value).map_err(CheckParseError::BadCommandName)?,
-            )),
-        },
-        "file" => Ok(Check::FileExists(parse_quoted_path(value)?)),
-        "dir" => Ok(Check::DirExists(parse_quoted_path(value)?)),
-        "file_non_empty" => Ok(Check::FileNonEmpty(parse_quoted_path(value)?)),
-        "python_import" => {
-            // The rule the pipe parser enforced, carried across formats
-            // unchanged: a python import spawns an interpreter, so it is
-            // permitted only in a file a caller named explicitly. A
-            // platform-selected file is chosen by the machine, not by the
-            // caller, so it may not grant that.
-            if kind != ConfKind::ExplicitOnly {
-                return Err(CheckParseError::InterpreterCheck);
-            }
-            Ok(Check::PythonImport(ModuleName::parse(value).map_err(CheckParseError::BadModuleName)?))
-        }
-        _ => Err(CheckParseError::Unrecognized),
-    }
-}
-
-/// One branch of an `any_of`, which is an inline table naming one check.
-fn parse_toml_branch(value: &toml::Value, kind: ConfKind) -> Result<Check, CheckParseError> {
-    let table = value.as_table().ok_or(CheckParseError::Unrecognized)?;
-    let mut check_keys: Vec<&str> = Vec::new();
-    for key in table.keys() {
-        match key.as_str() {
-            "min_version" => {}
-            "command" | "file" | "dir" | "file_non_empty" | "glob" | "python_import" => {
-                check_keys.push(key.as_str());
-            }
-            // No nested `any_of`, and no `docs` on a branch. Flat by design:
-            // every real alternation in these manifests is one level deep,
-            // and a nested one would be an alternation of alternations,
-            // which reads worse than the flat list it is equivalent to.
-            _ => return Err(CheckParseError::Unrecognized),
-        }
-    }
-    if check_keys.len() != 1 {
-        return Err(CheckParseError::Unrecognized);
-    }
-    parse_toml_check(table, check_keys[0], kind)
 }
 
 /// Parse pipe-delimited manifest text into typed entries.
@@ -881,9 +995,17 @@ docs = "https://neovim.io/"
         ConfKind::PlatformSelected,
     )
     .expect_err("an unknown key is refused");
-    assert!(
-        matches!(error, ParseError::UnknownKey { .. }),
-        "expected UnknownKey, got {error:?}"
-    );
+    // Reported through `MalformedToml` because serde's `deny_unknown_fields`
+    // refuses it during deserialization, before this crate looks at the
+    // entry. That is strictly better than the hand-written check it
+    // replaced: the message names the offending key, lists every valid one,
+    // and carries a line and column. All three are asserted, because "it is
+    // refused somehow" is a weaker guarantee than the one this gives.
+    let ParseError::MalformedToml { message } = &error else {
+        panic!("expected MalformedToml, got {error:?}");
+    };
+    assert!(message.contains("min_verison"), "names the typo: {message}");
+    assert!(message.contains("min_version"), "names the correct spelling: {message}");
+    assert!(message.contains("line 4"), "names the line: {message}");
 }
 }

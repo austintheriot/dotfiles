@@ -1,9 +1,12 @@
 # CLI dependencies shared by every machine, regardless of platform.
 #
-# The deps engine (`config deps`, in crates/) reads this file plus, if
-# present, deps-local.toml in the same directory, for platform-exclusive
-# dependencies. See README.md in this directory for the install-command
-# logic and how to add a new entry.
+# The deps engine (`config deps`, in crates/) reads this file plus whichever
+# of deps-mac.toml and deps-linux.toml matches the machine. See README.md in
+# this directory for the install-command logic and how to add a new entry.
+#
+# `DEPS_LOCAL_CONF` overrides the platform choice with a full path, and
+# `DEPS_CONF` replaces this file. A retired `deps-local.conf` is named in the
+# pipe-format header beside this one; nothing constructs that name any more.
 #
 # FORMAT
 #

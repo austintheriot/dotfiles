@@ -2,6 +2,70 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- Show child process output while a step runs, rather than only a summary
+  after it finishes. Reported 2026-09-08: `config init: [5/5] install the
+  missing tracked dependencies` prints nothing at all until every install is
+  done, so a bootstrap that is working looks identical to one that has hung.
+  On a fresh machine that silence lasts minutes, across an apt update, a
+  rustup download, several git clones and a neovim tarball.
+
+  CONFIRMED CAUSE, one line: `crates/config-cli/src/deps/installer.rs:750`
+  runs each install with `command.output()`. That captures stdout and stderr
+  into memory and returns only when the child has exited, so nothing the
+  child writes can reach the terminal while it runs. The report is then
+  printed once at the end by `render()`
+  (`crates/deps-core/src/render.rs`), which is a pure function over the
+  finished `Report` and correctly knows nothing about progress.
+
+  THE DESIGN TENSION, and the reason this is not a one-line change to
+  `Stdio::inherit()`. The captured bytes are load-bearing as of today's
+  commit 2ee309fa: `exec_failure` reads BOTH streams to build
+  `ExecFailure::NonZeroExit { code, stdout, stderr }`, and that exists
+  because a script which explains itself on stdout (oh-my-zsh's installer)
+  otherwise rendered as "exited 1 with no output on stderr". So the two goals
+  pull against each other: inheriting the streams shows progress and throws
+  away the diagnosis; capturing them keeps the diagnosis and hides progress.
+  A fix has to do both, which means teeing rather than choosing.
+
+  Options, none implemented:
+    - Tee in the CLI: spawn with `Stdio::piped()`, read both pipes on their
+      own threads, write each line through to the real stdout/stderr as it
+      arrives AND accumulate it into the `BoundedText` the failure value
+      needs. Keeps every existing failure message intact. Costs two threads
+      per install and a small amount of care so the two streams do not
+      interleave mid-line.
+    - `Stdio::inherit()` plus a `BoundedText::empty()` failure value. One
+      line, and it silently un-fixes 2ee309fa -- the oh-my-zsh class of
+      failure goes back to "exited 1 with no output". Cheap and wrong.
+    - Print the argv before each step and keep the streams captured. Not
+      progress, but it converts "hung" into "hung on THIS command", which is
+      most of the diagnostic value for a fraction of the work. Worth
+      considering as a first increment even if teeing is the real answer.
+
+  CONSTRAINTS that apply whichever option is chosen:
+    - `BoundedText` bounds the captured text on purpose, so a child that
+      writes megabytes must not be accumulated without a cap. Streaming
+      through is unbounded by nature; the retained copy must stay bounded.
+    - Every gate in this repo greps engine output. `tests/run-all.sh:133`
+      parses the summary with sed, the deps-check workflow greps for
+      `present   neovim`, and `tests/container.test.sh` matches assertion
+      text. Interleaving raw child output into stdout can break those, so
+      child output probably belongs on stderr with the report staying on
+      stdout, and a test must assert the summary line is still greppable.
+    - The engine runs under `--yes` in eight CI legs with no terminal.
+      Progress output that assumes a tty (carriage returns, spinners,
+      cursor moves) turns a CI log into unreadable escape soup. apt already
+      handles this itself via DEBIAN_FRONTEND=noninteractive, which the
+      engine sets.
+    - `run_to_fixpoint` installs in waves, so "step 3 of 8" is not knowable
+      up front. Any counter has to be per-wave or omitted rather than
+      invented.
+
+  Pairs naturally with the console-colour entry below, since both are about
+  what the engine tells a human while it works, and both have to answer the
+  same "is stdout a tty, and is anything grepping it" question. Worth doing
+  in one pass.
+
 - Remove the Nord theme from tmux. KEEP the status bar; make its background
   black.
   Confirmed cause: `.config/tmux/tmux.conf:27` declares

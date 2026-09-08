@@ -148,6 +148,37 @@ jobs:
               # a floor the installer cannot satisfy would loop here.
               config-cli deps install --yes 2>&1 | grep -q "present   neovim" \
                   || { echo "FAIL: neovim did not converge to present" >&2; exit 1; }
+
+              # The version above is NOT evidence the install works. A binary
+              # separated from its share/nvim/runtime tree runs, prints its
+              # version, and satisfies the manifest check, while every runtime
+              # file lookup fails. That is what shipped until 2026-09-08: this
+              # leg installed the broken tarball and passed on these very
+              # assertions.
+              #
+              # -u NONE so the answer is about the INSTALL, not this repo's
+              # config: a config error would otherwise read as a broken
+              # runtime, which is the wrong layer and the wrong fix.
+              #
+              # nvim_get_runtime_file is the same lookup every `require` and
+              # `:syntax on` performs, so it fails exactly when they would. A
+              # plain isdirectory check would pass on a tree that exists but
+              # is no longer on runtimepath.
+              facts=$(nvim --headless -u NONE -c 'lua
+                  local rt = vim.env.VIMRUNTIME or ""
+                  local dir = rt ~= "" and vim.fn.isdirectory(rt) == 1
+                  local found = #vim.api.nvim_get_runtime_file("syntax/syntax.vim", false) > 0
+                  io.write(rt .. "|" .. tostring(dir) .. "|" .. tostring(found))
+              ' -c 'qa!' 2>/dev/null)
+              echo "runtime facts: $facts"
+              case $facts in
+                  *"|true|true") ;;
+                  *)
+                      echo "FAIL: nvim cannot reach its runtime tree ($facts)" >&2
+                      echo "The binary is probably installed without its share/nvim/runtime sibling." >&2
+                      exit 1 ;;
+              esac
+
               config-cli deps check >/dev/null
             '
 

@@ -15,6 +15,55 @@ return {
     local uv = vim.uv or vim.loop
     vim.health.info('System: ' .. vim.inspect(uv.os_uname()))
 
+    -- Can Neovim find its own runtime? Reported 2026-09-08 as a require()
+    -- traceback listing upstream's build-machine paths plus
+    -- `E484: Can't open file .../syntax/syntax.vim`.
+    --
+    -- The cause was an install that copied `bin/nvim` out of the release
+    -- tarball and discarded `share/nvim/runtime/` beside it. Neovim finds
+    -- $VIMRUNTIME by walking up from its own executable, so the orphaned
+    -- binary searched a directory nothing had created.
+    --
+    -- Checked here because every other signal available to a reader passes on
+    -- that install: `nvim --version` prints normally, the deps manifest check
+    -- (`command = "nvim"`) resolves, and the version guard above is satisfied.
+    -- The first symptom was a wall of Lua stack traces on an unrelated action.
+    --
+    -- KNOWN LIMIT, measured rather than assumed. This block catches a
+    -- PARTIALLY broken runtime (a runtimepath that no longer reaches the
+    -- files, a moved or half-extracted tree). It cannot catch a FULLY
+    -- orphaned binary: with no runtime at all, Neovim fails to load its own
+    -- Lua standard library, so `require 'dotfiles.health'` raises before
+    -- this function is ever called and :checkhealth reports nothing.
+    -- Verified in ubuntu:24.04 against a binary copied away from its
+    -- share/ tree -- the traceback is upstream's `vim/_init_packages:71`,
+    -- which is exactly what the 2026-09-08 report showed.
+    -- The assertion that survives that case lives outside the process, in
+    -- crates/config-cli/tests/nvim_runtime.rs.
+    local runtime = vim.env.VIMRUNTIME or ''
+    if runtime == '' then
+      vim.health.error('$VIMRUNTIME is unset, so no runtime file can be found')
+    elseif vim.fn.isdirectory(runtime) ~= 1 then
+      vim.health.error(
+        string.format(
+          "$VIMRUNTIME points at '%s', which is not a directory. The nvim binary is "
+            .. 'probably separated from its share/nvim/runtime tree -- reinstall with '
+            .. '`config install`',
+          runtime
+        )
+      )
+    elseif #vim.api.nvim_get_runtime_file('syntax/syntax.vim', false) == 0 then
+      -- Asked through nvim_get_runtime_file rather than by joining paths,
+      -- because that is the same lookup every `require` and `:syntax on`
+      -- performs. A directory that exists but is not on runtimepath fails
+      -- here and would pass a plain isdirectory check.
+      vim.health.error(
+        string.format("runtime files are not reachable through runtimepath (VIMRUNTIME='%s')", runtime)
+      )
+    else
+      vim.health.ok(string.format("Runtime files found: '%s'", runtime))
+    end
+
     for _, exe in ipairs { 'git', 'make', 'unzip', 'rg' } do
       if vim.fn.executable(exe) == 1 then
         vim.health.ok(string.format("Found: '%s'", exe))

@@ -303,21 +303,56 @@ pub fn argv_sequence_for(
                  . \"$NVM_DIR/nvm.sh\" && nvm install --lts",
             ])]
         }
-        // Fetched, unpacked, and linked as three spawns rather than one
+        // Fetched, unpacked, and linked as separate spawns rather than one
         // `sh -c` pipeline. The pipeline spelling would put a URL and two
         // paths into a shell word, which is the interpolation spec 3.6
         // closes; these are argv vectors with no shell between them.
         //
-        // Installed into ~/.local/bin, which `search_path` already prepends
-        // for exactly this reason: the check that runs right after this
-        // install has to see the binary without a login shell.
+        // THE WHOLE TREE IS INSTALLED, not the executable alone. This
+        // sequence used to end with `cp <staging>/bin/nvim ~/.local/bin/nvim`
+        // and discard everything else the tarball carried. Neovim locates
+        // $VIMRUNTIME by walking up from its own executable looking for
+        // `share/nvim/runtime`, so the orphaned binary searched
+        // `~/.local/share/nvim/runtime`, found nothing, and fell back to the
+        // paths compiled in on upstream's build machine. Reproduced in
+        // ubuntu:24.04: `VIMRUNTIME=/usr/local/share/nvim` (nonexistent),
+        // `require 'nvim.spellfile'` failed, and every runtime lookup raised
+        // `E484: Can't open file .../syntax/syntax.vim`.
+        //
+        // A VERSIONED PREFIX plus a symlink, rather than merging into
+        // ~/.local directly. Three properties that shape buys:
+        //   - the artifact tree stays separate from the state trees that
+        //     live under ~/.local/share/nvim (lazy, mason, shada), so an
+        //     uninstall or a version bump cannot delete a plugin directory;
+        //   - a version bump is a symlink swap, and the old prefix stays
+        //     until it is removed deliberately;
+        //   - the executable and its `share/` are siblings by construction,
+        //     so there is no second command that could forget one of them.
+        //
+        // Verified in ubuntu:24.04 that Neovim resolves the symlink BEFORE
+        // the walk-up, so `~/.local/bin/nvim -> ~/.local/opt/nvim-<v>/bin/nvim`
+        // yields `VIMRUNTIME=~/.local/opt/nvim-<v>/share/nvim/runtime`. The
+        // link target is what makes ~/.local/bin work as the search path
+        // entry `search_path` already prepends.
+        //
+        // `mv` of the staging directory rather than `cp -R` of its contents:
+        // a rename is atomic on one filesystem, so a killed run cannot leave
+        // a half-populated prefix that a later `DirExists` check would accept.
+        // The staging directory is therefore created INSIDE the destination
+        // root, not in /tmp, because a cross-device /tmp would silently
+        // degrade the rename into a copy.
         InstallAction::ReleaseTarball { release } => {
             let Some(url) = tarball_url(*release) else {
                 return Vec::new();
             };
-            let staging = tarball_staging_dir(*release);
-            let staging_path = staging.to_string_lossy().into_owned();
+            let staging_path = tarball_staging_dir(*release).to_string_lossy().into_owned();
+            let prefix = tarball_prefix(*release);
+            let binary = tarball_binary(*release);
             vec![
+                // A stale prefix from an interrupted run must not be merged
+                // with this one. Removing the staging path is safe because it
+                // is this action's own scratch directory.
+                words(["rm", "-rf", &staging_path]),
                 words(["mkdir", "-p", &staging_path]),
                 words(["curl", "-fsSL", "-o", &format!("{staging_path}/release.tar.gz"), &url]),
                 words([
@@ -328,11 +363,22 @@ pub fn argv_sequence_for(
                     &staging_path,
                     "--strip-components=1",
                 ]),
+                words(["rm", "-f", &format!("{staging_path}/release.tar.gz")]),
+                // Replacing an existing prefix for the same version, so a
+                // re-run converges rather than failing on a non-empty target.
+                words(["rm", "-rf", &prefix]),
+                words(["mkdir", "-p", &tarball_prefix_parent(*release)]),
+                words(["mv", &staging_path, &prefix]),
                 words(["mkdir", "-p", &home_local_bin()]),
+                // -s symbolic, -f replace an existing link, -n treat an
+                // existing link to a directory as a file rather than
+                // descending into it, which would nest the link one level
+                // deeper on every re-run.
                 words([
-                    "cp",
-                    &format!("{staging_path}/bin/{}", tarball_binary(*release)),
-                    &format!("{}/{}", home_local_bin(), tarball_binary(*release)),
+                    "ln",
+                    "-sfn",
+                    &format!("{prefix}/bin/{binary}"),
+                    &format!("{}/{}", home_local_bin(), binary),
                 ]),
             ]
         }
@@ -347,15 +393,43 @@ fn tarball_binary(release: TarballRelease) -> &'static str {
     }
 }
 
-/// Where a release tarball is unpacked before its binary is copied out.
+/// Where a release tarball is unpacked before it is promoted to its prefix.
 ///
 /// One directory per release, so two tarballs in the same run cannot
 /// overwrite each other, matching `script_path`'s rule.
+///
+/// Deliberately NOT under `std::env::temp_dir()`. The promote step is a
+/// `mv`, which is atomic only within one filesystem; on a machine where
+/// /tmp is a separate mount (a tmpfs, a container volume) the rename would
+/// degrade into a copy and a killed run could leave a partially populated
+/// prefix. Staging beside the destination keeps the rename a rename.
 fn tarball_staging_dir(release: TarballRelease) -> std::path::PathBuf {
     let name = match release {
-        TarballRelease::Neovim => "neovim-release",
+        TarballRelease::Neovim => ".nvim-release-staging",
     };
-    std::env::temp_dir().join(name)
+    std::path::PathBuf::from(tarball_prefix_parent(release)).join(name)
+}
+
+/// The versioned prefix a release tarball is installed into.
+///
+/// Versioned so a bump leaves the previous tree in place: the symlink in
+/// `~/.local/bin` is the only thing that moves, so a rollback is one
+/// `ln -sfn` rather than a re-download.
+fn tarball_prefix(release: TarballRelease) -> String {
+    let name = match release {
+        TarballRelease::Neovim => "nvim",
+    };
+    format!("{}/{name}-{}", tarball_prefix_parent(release), tarball_tag(release))
+}
+
+/// `~/.local/opt`, which holds the versioned prefixes.
+///
+/// Separate from `~/.local/share`, where Neovim keeps its own state (lazy,
+/// mason, shada). Installing the artifact tree into the state tree would
+/// mean a version bump or an uninstall could remove a plugin directory.
+fn tarball_prefix_parent(_release: TarballRelease) -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| String::from("/root"));
+    format!("{home}/.local/opt")
 }
 
 /// `~/.local/bin`, the directory `search_path` prepends.
@@ -957,6 +1031,106 @@ mod tests {
     fn exit_status_of(code: i32) -> std::process::ExitStatus {
         use std::os::unix::process::ExitStatusExt as _;
         std::process::ExitStatus::from_raw(code << 8)
+    }
+
+    /// The tarball install must keep the runtime tree with the binary.
+    ///
+    /// THE BUG THIS PINS, reported 2026-09-08 and reproduced in
+    /// ubuntu:24.04. The sequence copied `bin/nvim` out of the staging
+    /// directory and left `share/nvim/runtime/` behind, where the next run's
+    /// `mkdir -p` or a reboot removed it. Neovim locates $VIMRUNTIME by
+    /// walking up from its own executable looking for `share/nvim/runtime`,
+    /// so an orphaned `~/.local/bin/nvim` searched
+    /// `~/.local/share/nvim/runtime`, found nothing, and fell back to the
+    /// paths compiled in on upstream's build machine. Measured on the broken
+    /// install: `VIMRUNTIME=/usr/local/share/nvim` (nonexistent),
+    /// `require 'nvim.spellfile'` failed, and every runtime file lookup
+    /// raised `E484: Can't open file .../syntax/syntax.vim`.
+    ///
+    /// Asserted as "no command copies the executable ALONE" rather than as a
+    /// literal expected sequence. A literal-sequence assertion would need
+    /// rewriting for any change to staging paths, and the invariant that
+    /// actually matters is relational: the executable and `share/` must
+    /// arrive at the same prefix, so nothing may move one without the other.
+    #[test]
+    fn the_tarball_install_never_relocates_the_binary_alone() {
+        let sequence = argv_sequence_for(
+            &InstallAction::ReleaseTarball { release: TarballRelease::Neovim },
+            PackageManager::Apt,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
+
+        assert!(!sequence.is_empty(), "the control: this action must plan commands");
+
+        // A command that names the executable as its SOURCE and a directory
+        // that is not the prefix as its destination is the defect. The
+        // executable may only move as part of its whole tree.
+        for command in &sequence {
+            let words: Vec<String> = command
+                .iter()
+                .map(|word| word.to_string_lossy().into_owned())
+                .collect();
+            let is_copy = words.first().is_some_and(|first| first == "cp" || first == "mv");
+            if !is_copy {
+                continue;
+            }
+            let copies_the_bare_executable = words
+                .iter()
+                .any(|word| word.ends_with("/bin/nvim") || word.ends_with("/nvim"));
+            let copies_a_tree = words.iter().any(|word| {
+                word == "-R" || word == "-r" || word == "-a" || word.ends_with("/share")
+            });
+            let relocates_the_executable_alone = copies_the_bare_executable && !copies_a_tree;
+            assert!(
+                !relocates_the_executable_alone,
+                "this command relocates the executable without its runtime tree, \
+                 which is the $VIMRUNTIME bug: {words:?}"
+            );
+        }
+    }
+
+    /// The installed prefix keeps `bin` and `share` as siblings.
+    ///
+    /// The positive half of the assertion above: proving no command copies
+    /// the binary alone does not prove the runtime arrives at all. Without
+    /// this, a sequence that fetched the tarball and installed nothing would
+    /// satisfy the negative test.
+    #[test]
+    fn the_tarball_install_places_the_runtime_beside_the_binary() {
+        let sequence = argv_sequence_for(
+            &InstallAction::ReleaseTarball { release: TarballRelease::Neovim },
+            PackageManager::Apt,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
+
+        let flattened: Vec<String> = sequence
+            .iter()
+            .flat_map(|command| command.iter())
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+
+        // The final destination has to be a prefix that will hold both, and
+        // the executable has to be reachable on PATH from it. `search_path`
+        // prepends ~/.local/bin, so a prefix elsewhere needs a link there.
+        let names_a_versioned_prefix = flattened
+            .iter()
+            .any(|word| word.contains("/.local/opt/nvim-"));
+        assert!(
+            names_a_versioned_prefix,
+            "the install must land in a versioned prefix that holds bin/ and \
+             share/ together: {flattened:?}"
+        );
+
+        let links_onto_the_search_path = flattened
+            .iter()
+            .any(|word| word.ends_with("/.local/bin/nvim"));
+        assert!(
+            links_onto_the_search_path,
+            "the executable must be reachable at ~/.local/bin/nvim, which is \
+             what search_path prepends: {flattened:?}"
+        );
     }
 
     fn an_apt_action() -> InstallAction {

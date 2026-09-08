@@ -134,10 +134,6 @@ conversation rather than a commit.
   Either archive them under a name that reads as archived and correct
   those two comments, or delete them.
 
-- `.scripts:q/` is a stray untracked directory from a mistyped vim `:q`.
-  Three of its files are byte-identical to their `.scripts/` counterparts.
-  Delete it.
-
 - Migrate the rest of the `config ...` scripts to Rust
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so

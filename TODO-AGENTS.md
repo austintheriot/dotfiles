@@ -2,36 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED 2026-09-08. nvim: pin the mason registry to a tag, and pin the 14 tool versions.
-  The highest-leverage determinism change available, because pinning the
-  registry pins the MEANING of every unversioned package name. Today
-  `registries` is unset, so it defaults to the moving
-  `github:mason-org/mason-registry` and the same config resolves differently
-  over time with no diff anywhere.
-  The version data already exists locally and does not need inventing: every
-  installed package writes `mason-receipt.json` carrying a purl with the
-  exact resolved version. Verified across all 19 installed packages and three
-  backends: `pkg:github/johnnymorganz/stylua@v2.4.1`,
-  `pkg:npm/cspell@10.0.0`, `pkg:pypi/python-lsp-server@1.14.0?extra=all`.
-  THREE TRAPS for whoever generates the lock, each verified:
-    - TWO RECEIPT SCHEMAS COEXIST. 6 packages use `source.id`, 13 use
-      `primary_source.id`. A generator reading one key silently drops the
-      other 13.
-    - npm scopes are URL-encoded: `pkg:npm/%40astrojs/language-server@...`.
-      A naive parser mangles them.
-    - 19 packages are installed but only 14 are declared. Five are leftovers
-      from earlier configs (graphql, html-lsp, prettier, prettierd,
-      python-lsp-server, ruff-lsp), so a lock generated from the INSTALLED
-      set would pin things the config no longer asks for. Generate from the
-      DECLARED set, resolved through receipts.
-  `pkg@version` is honored in ensure_installed (mason-lspconfig threads the
-  parsed version into pkg:install). mason-tool-installer takes
-  `{ 'stylua', version = '...' }` and should get `auto_update = false`.
-  WHAT MASON CANNOT PIN, so do not claim it: the downloaded bytes. Registry
-  pinning fixes the recipe, not the artifact. There is no integrity-hash
-  layer, and an unpinned npm transitive tree floats under a pinned top-level
-  version. State that boundary rather than implying byte-identity.
-
 - nvim: `ensure_installed` NEVER RUNS HEADLESS, which invalidates the
   obvious CI test for it. Verified verbatim at
   mason-lspconfig/lua/mason-lspconfig/init.lua:31:

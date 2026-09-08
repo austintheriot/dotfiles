@@ -2,28 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED 2026-09-08. nvim: markdown-preview build fails on every fresh machine.
-  Reported 2026-09-08 from a bare ubuntu container:
-    markdown-preview.nvim ... build failed
-    Vim:E492: Not an editor command: Lazy load markdown-preview.nvim
-  CAUSE, read from the code. `.config/nvim/lua/plugins/markdown-preview.lua`
-  runs `vim.cmd [[Lazy load markdown-preview.nvim]]` in its build hook.
-  `:Lazy` is a user command lazy.nvim creates during its own setup, so a
-  build hook during the first bootstrap sync can run before it exists.
-  Upstream's README suggests this snippet; it is timing-dependent.
-  SECOND DEFECT in the same two lines: `mkdp#util#install()` with no
-  argument goes through `mkdp#util#open_terminal` (autoload/mkdp/util.vim:153)
-  and opens an interactive terminal split, which cannot work in a
-  non-interactive bootstrap. Upstream ships `mkdp#util#install_sync()`
-  (util.vim:162) for exactly this.
-  NOT a toolchain gap: app/install.sh downloads a prebuilt binary with curl
-  (install.sh:30-44, wget fallback).
-  NOT container-only: `app/bin` does not exist on the mac either, so the
-  build has never completed here. It is silent because nothing has opened a
-  preview.
-  FIX: drop the `vim.cmd [[Lazy load ...]]` line (lazy.nvim already loads the
-  plugin before running its build hook) and call the sync variant.
-
 - nvim: treesitter is configured for `master` while pinned to `main`, so
   most of it is silently off. Found 2026-09-08 while investigating
   determinism.

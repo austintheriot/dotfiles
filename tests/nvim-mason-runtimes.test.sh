@@ -148,7 +148,33 @@ assert_equals 'every server declared in the file survives the ranged parse' \
 TS_SPEC="$NVIM_LUA/plugins/treesitter.lua"
 LAZY_LOCK="$DOTFILES_ROOT/.config/nvim/lazy-lock.json"
 assert_succeeds 'the treesitter spec exists' test -f "$TS_SPEC"
+# THE LOCKFILE MUST BE TRACKED, not merely present. It was gitignored from
+# the original config import until 2026-09-08, which meant the 37 exact
+# plugin commits it records existed ONLY on the machine that wrote them: a
+# fresh clone got no lockfile and resolved every plugin to whatever was
+# current that day. The pinning everyone assumed was in place was local
+# state.
+#
+# Caught by the pre-push container, where this file's absence made the
+# assertions below fail while they passed on the host -- the one shape this
+# repo's gates are built to notice.
 assert_succeeds 'the lazy lockfile exists' test -f "$LAZY_LOCK"
+# Both repo shapes: the host is a bare repo over $HOME, the container has a
+# normal .git. Matching scripts-dir-name.test.sh rather than inventing a
+# third spelling.
+if [ -d "$DOTFILES_ROOT/.cfg" ]; then
+    nvim_git() { git --git-dir="$DOTFILES_ROOT/.cfg" --work-tree="$DOTFILES_ROOT" "$@"; }
+elif [ -d "$DOTFILES_ROOT/.git" ]; then
+    nvim_git() { git -C "$DOTFILES_ROOT" "$@"; }
+else
+    nvim_git() { return 1; }
+fi
+
+if nvim_git rev-parse --verify HEAD >/dev/null 2>&1; then
+    assert_equals 'the lazy lockfile is tracked, not local-only state' \
+        '.config/nvim/lazy-lock.json' \
+        "$(nvim_git ls-files -- .config/nvim/lazy-lock.json 2>/dev/null || true)"
+fi
 
 ts_branch=$("$PYTHON_BIN" -c "
 import json, sys

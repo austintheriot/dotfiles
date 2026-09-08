@@ -129,6 +129,79 @@ declared_count=$(grep -E '^        [a-z_][a-z_0-9]* = (\{|nil|true|false)' "$LSP
 assert_equals 'every server declared in the file survives the ranged parse' \
     "$declared_count" "$server_count"
 
+# --- the treesitter spec matches the branch it is pinned to -------------
+#
+# THE BUG THIS CATCHES, found 2026-09-08. nvim-treesitter is pinned to the
+# `main` branch (the rewrite) in lazy-lock.json, but the spec was written for
+# `master` and passed `ensure_installed`, `auto_install`, `highlight`,
+# `indent` and `incremental_selection`. On `main`,
+# `require('nvim-treesitter').setup()` forwards to nvim-treesitter.config,
+# whose default table accepts ONLY `install_dir`, so every other key is
+# absorbed and ignored. No error, no warning.
+#
+# MEASURED CONSEQUENCE: 1 of 19 declared parsers installed, and treesitter
+# highlighting did not auto-start on a .ts buffer. `main` ships no FileType
+# handler, so starting the highlighter is config work now.
+#
+# Asserted against the PINNED BRANCH rather than assumed, so switching back
+# to `master` deliberately makes these assertions flip rather than lie.
+TS_SPEC="$NVIM_LUA/plugins/treesitter.lua"
+LAZY_LOCK="$DOTFILES_ROOT/.config/nvim/lazy-lock.json"
+assert_succeeds 'the treesitter spec exists' test -f "$TS_SPEC"
+assert_succeeds 'the lazy lockfile exists' test -f "$LAZY_LOCK"
+
+ts_branch=$("$PYTHON_BIN" -c "
+import json, sys
+lock = json.load(open(sys.argv[1]))
+print(lock.get('nvim-treesitter', {}).get('branch', ''))
+" "$LAZY_LOCK")
+assert_succeeds 'the lockfile records a branch for nvim-treesitter' \
+    test -n "$ts_branch"
+
+ts_code=$(sed -e 's/--.*//' "$TS_SPEC")
+assert_succeeds 'the treesitter spec was read' test -n "$ts_code"
+
+if [ "$ts_branch" = main ]; then
+    # Options that only exist on master. Each one is silently discarded on
+    # main, which is why their presence is a defect rather than a style
+    # question.
+    for option in ensure_installed auto_install highlight incremental_selection; do
+        assert_equals "the spec does not pass the master-only '$option' option" '' \
+            "$(printf '%s\n' "$ts_code" | grep -n "$option" || true)"
+    done
+
+    # `:TSUpdate` only updates ALREADY-INSTALLED parsers on main, so a fresh
+    # machine converges to nothing. The build has to install explicitly.
+    assert_equals 'the build step does not rely on :TSUpdate' '' \
+        "$(printf '%s\n' "$ts_code" | grep -n "TSUpdate" || true)"
+
+    # main ships no FileType autocmd, so the spec must start the highlighter.
+    #
+    # Written as compared VALUES, not as `assert_succeeds ... | grep -q`. A
+    # pipeline there pipes assert_succeeds's own output into grep, so the
+    # assertion never runs and never reports -- which is exactly what
+    # happened while writing this block: three assertions were silently
+    # absent from the output and the suite still said 33 passed.
+    assert_succeeds 'the spec starts treesitter itself' \
+        test -n "$(printf '%s\n' "$ts_code" | grep 'vim\.treesitter\.start' || true)"
+    assert_succeeds 'the spec guards the parser load' \
+        test -n "$(printf '%s\n' "$ts_code" | grep 'pcall.*language\.add' || true)"
+
+    # THE TREE-SITTER CLI IS A HARD REQUIREMENT ON `main`, and this is the
+    # assertion that would have saved a container round. `master` compiled
+    # parsers by invoking cc directly; `main` shells out to
+    # `tree-sitter build`. Measured in ubuntu:24.04 with gcc present and the
+    # CLI absent:
+    #
+    #   error: Error during "tree-sitter build": ENOENT (cmd): 'tree-sitter'
+    #   [nvim-treesitter]: Installed 0/19 languages
+    #
+    # So `cc` alone is not enough any more, and 0 of 19 parsers is a silent
+    # outcome: nothing fails at startup, there is simply no highlighting.
+    assert_equals 'tree-sitter-cli is installed by mason' 'tree-sitter-cli' \
+        "$(printf '%s\n%s\n' "$servers" "$extra_tools" | grep -x 'tree-sitter-cli' || true)"
+fi
+
 # --- no plugin build hook depends on lazy.nvim being set up -------------
 #
 # THE BUG THIS CATCHES, reported 2026-09-08 from a bare ubuntu container:

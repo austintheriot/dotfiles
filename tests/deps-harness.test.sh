@@ -396,5 +396,26 @@ done
 assert_equals 'the retired deps-local.conf is gone' \
     '' "$(grep -rn 'deps-local\.conf' "$DOTFILES_ROOT/.scripts/deps/README.md")"
 
+# --- the CI harness manifest is findable ---------------------------------
+#
+# Same shape as the DOTFILES_ROOT assertion above, at the other call site.
+# The engine roots a relative DEPS_CONF against DOTFILES_ROOT/.scripts/deps,
+# so the workflow passing `.scripts/deps/deps-ci.conf` resolved to that
+# directory twice over. A missing conf file is tolerated by design, which is
+# how DEPS_LOCAL_CONF excludes the platform variant, so the step read an
+# empty manifest, installed nothing and exited 0. The macOS leg then failed
+# every YAML assertion on a missing pyyaml; Linux passed only because its
+# runner ships one.
+#
+# The engine now refuses an explicitly named manifest that holds nothing, so
+# this cannot recur silently. This assertion is the cheaper gate: it names
+# the mistake at the spelling rather than at the run.
+ci_conf_value=$(grep -E '^ *DEPS_CONF:' "$DOTFILES_ROOT/.github/workflows/test-suite.yml" \
+    | head -1 | sed 's/^ *DEPS_CONF: *//')
+assert_equals 'the workflow names the CI manifest by bare file name' \
+    'deps-ci.conf' "$ci_conf_value"
+assert_succeeds 'the named CI manifest resolves under the shipped conf dir' \
+    test -f "$DOTFILES_ROOT/.scripts/deps/$ci_conf_value"
+
 
 finish

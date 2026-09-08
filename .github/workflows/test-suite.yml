@@ -130,7 +130,16 @@ jobs:
       - name: Install the suite's harness dependencies (from deps-ci.conf)
         env:
           DOTFILES_ROOT: ${{ github.workspace }}
-          DEPS_CONF: .scripts/deps/deps-ci.conf
+          # A bare file name, not a path. The engine roots a relative
+          # DEPS_CONF against DOTFILES_ROOT/.scripts/deps, so the fuller
+          # spelling resolved to .scripts/deps/.scripts/deps/deps-ci.conf,
+          # which does not exist. A missing conf file is tolerated by design
+          # (that is how DEPS_LOCAL_CONF below excludes the platform
+          # variant), so the step parsed an empty manifest, installed
+          # nothing, and exited 0. The macOS leg then failed every YAML
+          # assertion on a missing pyyaml, and Linux passed only because its
+          # runner ships one.
+          DEPS_CONF: deps-ci.conf
           # Platform detection would otherwise add deps-mac.conf or
           # deps-linux.conf on top of the CI manifest, pulling in aerospace or
           # oh-my-zsh, which the suite does not need. read_entries skips a

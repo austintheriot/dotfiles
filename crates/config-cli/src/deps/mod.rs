@@ -308,7 +308,40 @@ fn load_manifest(
     for path in &mut qualified.paths {
         *path = qualify(path, root);
     }
-    selection::load_manifest(&qualified).map_err(|error| describe_load_error(&error))
+    let manifest =
+        selection::load_manifest(&qualified).map_err(|error| describe_load_error(&error))?;
+
+    // A named manifest that yields nothing is a caller error, not a clean
+    // run of zero dependencies. The reader tolerates a missing file on
+    // purpose -- that is how a DEPS_LOCAL_CONF pointing at a nonexistent
+    // path excludes the platform variant -- so a mistyped or misrooted
+    // DEPS_CONF reads as an empty manifest and every verb reports success
+    // over an empty list.
+    //
+    // Measured twice. The Docker images set HOME=/root while the manifest
+    // lived at /dotfiles, and the first container run printed "0 entries"
+    // and was called a clean bootstrap. Then test-suite.yml passed
+    // DEPS_CONF=.scripts/deps/deps-ci.conf, which this function roots
+    // against DOTFILES_ROOT/.scripts/deps and so resolved to that directory
+    // twice over; the harness installed nothing for months and the macOS leg
+    // failed every YAML assertion on a missing pyyaml while Linux passed on
+    // a runner that happened to ship one.
+    //
+    // Both were fixed at the call site. This is the same fix at the one
+    // place that cannot be bypassed.
+    if qualified.explicitly_chosen() && manifest.entries().is_empty() {
+        let listed = qualified
+            .paths
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!(
+            "the named manifest holds no dependencies, so this run would report \
+ success over an empty list. Looked in: {listed}"
+        ));
+    }
+    Ok(manifest)
 }
 
 /// Root one conf path against the shipped conf directory, if it needs it.

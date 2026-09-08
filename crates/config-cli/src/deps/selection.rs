@@ -110,6 +110,17 @@ impl ManifestSources {
             ConfKind::PlatformSelected
         }
     }
+
+    /// Whether `DEPS_CONF` named this run's manifest.
+    ///
+    /// A caller that names a manifest is asserting it exists. Absence is
+    /// tolerated for the platform variant, which is how `DEPS_LOCAL_CONF`
+    /// pointed at a nonexistent path excludes it, so the reader cannot
+    /// distinguish "excluded on purpose" from "named and missing" without
+    /// this.
+    pub fn explicitly_chosen(&self) -> bool {
+        self.explicit
+    }
 }
 
 /// Resolve which conf files a run reads.

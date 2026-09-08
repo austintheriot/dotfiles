@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- BOOTSTRAP IS BROKEN ON ANY FRESH MACHINE WITH NO RUST TOOLCHAIN. Reported
+- CLAIMED 2026-09-08. BOOTSTRAP IS BROKEN ON ANY FRESH MACHINE WITH NO RUST TOOLCHAIN. Reported
   as a Docker failure; it is not Docker-specific. Investigated 2026-09-08,
   cause found and reproduced, NOT fixed: the fix is a design decision, not a
   mechanical edit.

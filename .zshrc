@@ -203,10 +203,6 @@ export EDITOR=nvim
 export VISUAL=nvim
 export GIT_EDITOR=nvim
 
-# ZSH PLUGINS ################################################################################################
-# git - comes with zsh
-plugin=(git)
-
 # CLAUDE #####################################################################################################
 export PATH="$HOME/.local/bin:$PATH"
 export CLAUDE_CODE_DISABLE_MOUSE=1

@@ -76,13 +76,6 @@ conversation rather than a commit.
   per-machine) keeps the same format. It is read by the same parser, so it
   converts with everything else, but a human hand-edits it.
 
-- CLAIMED 2026-09-08. `.zshrc:198` sets `plugin=(git)`, which does nothing. oh-my-zsh is never
-  sourced anywhere in `.zshrc`, `.zshrc-mac`, `.zshrc-linux` or `.profile`
-  (verified by grep; `.zshrc-linux:7` reaches into its custom plugins
-  directory by path precisely because the framework is not loaded), and
-  the variable oh-my-zsh reads is `plugins`, plural. Delete the assignment
-  and its two comment lines.
-
 - Latent, no live trigger today: several path-handling gaps share one
   cause, that git quotes unusual paths and the quoted form matches no
   pathspec when fed back. No tracked path currently contains a space or a

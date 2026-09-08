@@ -133,4 +133,24 @@ for variant in "$ZSHRC_MAC" "$ZSHRC_LINUX"; do
         '' "$(grep -nE '^[[:space:]]*export NVM_DIR=' "$variant")"
 done
 
+# --- no configuration for a framework that is not loaded --------------------
+
+# .zshrc carried `plugin=(git)` for years and it did nothing. oh-my-zsh is
+# never sourced -- .zshrc-linux reaches into ~/.oh-my-zsh/custom/plugins by
+# absolute path precisely BECAUSE the framework is not loaded -- and the
+# variable oh-my-zsh reads is `plugins`, plural. So the line was a
+# misspelled setting for an absent framework, and its comment claimed the git
+# plugin "comes with zsh", which is a third wrong thing: the git aliases in
+# this repo are installed into git config by the block at .zshrc:101.
+#
+# Asserted rather than just deleted, because the line is the kind that gets
+# re-added from memory of how a normal oh-my-zsh setup looks. If oh-my-zsh is
+# ever genuinely sourced, the first assertion is what says so and this block
+# is what gets revisited.
+assert_equals 'no zshrc sources the oh-my-zsh framework' \
+    '' "$(grep -nE '^[[:space:]]*(\.|source)[[:space:]]+.*oh-my-zsh/oh-my-zsh\.sh' \
+        "$ZSHRC" "$ZSHRC_MAC" "$ZSHRC_LINUX")"
+assert_equals 'the shared zshrc declares no oh-my-zsh plugin list' \
+    '' "$(grep -nE '^[[:space:]]*plugins?=\(' "$ZSHRC" "$ZSHRC_MAC" "$ZSHRC_LINUX")"
+
 finish

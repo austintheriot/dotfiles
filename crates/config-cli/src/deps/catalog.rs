@@ -34,16 +34,25 @@ const SHIPPED_CONF_FILES: [(&str, ConfKind); 4] = [
 
 /// Where the `zsh-autosuggestions` clone lands, relative to `$HOME`.
 ///
-/// Written once because it must equal the subject of that dependency's own
-/// check byte for byte. `deps.conf:26` reads the plugin's `.zsh` FILE, while
-/// `retired-check-deps:339` clones into the plugin DIRECTORY one level above it.
-/// Cloning to the directory would give a non-converging fixpoint: the clone
-/// succeeds, the re-gather still reports the file absent, and the driver has
-/// already retired the step as attempted. The catalog therefore names the
-/// file, and `every_clone_target_equals_its_check_subject` proves the two
-/// agree.
+/// The plugin DIRECTORY, matching `retired-check-deps:339`. `deps.conf:26`
+/// checks the `.zsh` FILE one level inside it, and the clone creates that
+/// file by creating the directory that contains it.
+///
+/// This used to name the file, on the reasoning that a clone target must
+/// equal its check subject byte for byte. That reasoning holds for `tpm`,
+/// whose check is `-d`, and inverts here: `git clone <url> <path>` makes
+/// `<path>` a DIRECTORY, so cloning to the file path produced a directory
+/// named `zsh-autosuggestions.zsh` and the `-f` check could never pass. The
+/// Arch bootstrap leg reported "the install succeeded and the check still
+/// fails" on every run, which is exactly the non-converging fixpoint the old
+/// comment was trying to avoid, reached by the other road.
+///
+/// The invariant is not equality. It is that the clone must CREATE the check
+/// subject, which for a `-d` check means the target is the subject and for a
+/// `-f` check means the target is its parent.
+/// `every_clone_target_creates_its_check_subject` holds that.
 const ZSH_AUTOSUGGESTIONS_CLONE_TARGET: &str =
-    ".oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh";
+    ".oh-my-zsh/custom/plugins/zsh-autosuggestions";
 
 /// Where the `tpm` clone lands, relative to `$HOME`.
 ///
@@ -545,7 +554,7 @@ mod tests {
     /// fixpoint, where the clone succeeds, the re-gather still reports
     /// absent, and the step has already been retired as attempted.
     #[test]
-    fn every_clone_target_equals_its_check_subject() {
+    fn every_clone_target_creates_its_check_subject() {
         let catalog = packages();
 
         let mut checked = 0;
@@ -557,12 +566,39 @@ mod tests {
                 let PackageAvailability::Clone { into, .. } = package_map.resolve(manager) else {
                     continue;
                 };
-                let subjects = check_subjects(&entry.check);
+                // The clone must CREATE the subject, which is not the same
+                // as equalling it. `git clone <url> <path>` makes <path> a
+                // DIRECTORY, so it satisfies a directory subject by being it
+                // and a file subject by being that file's parent -- and it
+                // can never satisfy a file subject by equalling it.
+                //
+                // The old rule was plain equality, which admitted exactly
+                // that impossible case: the zsh-autosuggestions target named
+                // the .zsh file, the clone made a directory by that name,
+                // and the -f check failed forever while the install reported
+                // success. Pairing each subject with the kind of check it
+                // came from is what makes the rule able to say no.
+                let satisfiable = subjects_by_kind(&entry.check).into_iter().any(
+                    |(subject, is_file)| {
+                        if is_file {
+                            subject.root == into.root
+                                && subject
+                                    .rest
+                                    .as_str()
+                                    .rsplit_once('/')
+                                    .is_some_and(|(parent, _)| parent == into.rest.as_str())
+                        } else {
+                            &subject == into
+                        }
+                    },
+                );
                 assert!(
-                    subjects.contains(into),
-                    "the clone target {into:?} for {:?} on {manager:?} is not a subject of its \
-                     own check, whose subjects are {subjects:?}",
-                    entry.name
+                    satisfiable,
+                    "the clone target {into:?} for {:?} on {manager:?} cannot create any subject \
+                     of its own check. A clone makes a directory, so it must equal a directory \
+                     subject or be the parent of a file subject. Subjects: {:?}",
+                    entry.name,
+                    subjects_by_kind(&entry.check)
                 );
                 checked += 1;
             }
@@ -661,22 +697,28 @@ mod tests {
     /// A clone target must equal one of these. `zsh-autosuggestions` has two
     /// branches, the oh-my-zsh plugin file and the Homebrew share directory,
     /// and only the first is a clone destination.
-    fn check_subjects(check: &Check) -> Vec<CheckPath> {
+    /// Every subject of `check`, paired with whether it names a FILE.
+    ///
+    /// The kind is what decides whether a clone can satisfy the subject at
+    /// all: a clone creates a directory, so it can BE a directory subject
+    /// but only ever CONTAIN a file subject.
+    fn subjects_by_kind(check: &Check) -> Vec<(CheckPath, bool)> {
         match check {
-            Check::DirExists(path)
-            | Check::FileExists(path)
-            | Check::FileNonEmpty(path)
-            | Check::GlobExists { dir: path, .. } => vec![path.clone()],
+            Check::DirExists(path) => vec![(path.clone(), false)],
+            Check::FileExists(path) | Check::FileNonEmpty(path) => vec![(path.clone(), true)],
+            // A glob names the directory it searches, which a clone creates.
+            Check::GlobExists { dir, .. } => vec![(dir.clone(), false)],
             Check::Command(_) | Check::PythonImport(_) => Vec::new(),
             Check::AnyOf { first, rest } => {
-                let mut subjects = check_subjects(first);
+                let mut subjects = subjects_by_kind(first);
                 for branch in rest {
-                    subjects.extend(check_subjects(branch));
+                    subjects.extend(subjects_by_kind(branch));
                 }
                 subjects
             }
         }
     }
+
 
     /// Parse a dependency name a test wrote as a literal.
     fn name(raw: &str) -> DependencyName {

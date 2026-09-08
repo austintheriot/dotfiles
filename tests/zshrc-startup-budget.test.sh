@@ -128,13 +128,28 @@ printf 'startup: bare %dms, full %dms, config %dms (budget %dms)\n' \
 # gate -- reports PASS having measured nothing. Verified by running the
 # arithmetic both ways: 7ms with the zmodload, 0ms without it.
 #
-# The floor is on the ABSOLUTE measurements, not on the config cost. A
-# config_ms of zero is a legitimate result (see the negative clamp above: it
-# means the two measurements overlapped in noise), so a floor there would fail
-# on the good outcome. A `full_ms` of zero is not a possible cost for spawning
-# a process and sourcing this config; it can only mean the clock is broken.
-[ "$bare_ms" -gt 0 ] && [ "$full_ms" -gt 0 ] && measured=yes \
-    || measured="no (bare ${bare_ms}ms, full ${full_ms}ms -- the clock read as zero)"
+# The floor is on `full_ms` ALONE, and the two exclusions are both mistakes
+# this assertion already made:
+#
+#   config_ms is excluded because zero is a legitimate result there. The
+#   negative clamp above says why: the two measurements can overlap in noise
+#   when the config costs almost nothing, so a floor would fail on the good
+#   outcome.
+#
+#   bare_ms is excluded because zero is legitimate there too, which the first
+#   version of this floor got wrong. A bare `zsh -f` inside the test
+#   container measures 0-1ms, so the minimum of five samples is genuinely 0,
+#   and the container run reported "the clock read as zero" while printing
+#   `full 19ms` -- a number that could only have come from a working clock.
+#   Measured in the image: bare samples of 1 1 0 0 0 against full samples of
+#   288 21 21.
+#
+# What remains is the real signal. A full interactive shell that spawns a
+# process and sources this entire config cannot cost zero milliseconds, so a
+# zero there means every sample came back empty -- which is exactly what
+# happens when the `zmodload` in elapsed_ms goes missing.
+[ "$full_ms" -gt 0 ] && measured=yes \
+    || measured="no (full ${full_ms}ms -- the clock read as zero)"
 
 assert_equals 'the harness measured a non-zero startup time' 'yes' "$measured"
 

@@ -156,6 +156,15 @@ COPY .config/alacritty /root/.config/alacritty
 # health module. No nvim binary is needed -- the assertions are about which
 # runtimes the config asks for and whether the health module is discoverable.
 COPY .config/nvim /root/.config/nvim
+# Six suites read this tree: deps-harness (the harness scripts and every
+# Dockerfile), deps-docs (its README), deps-manifest and nvim-mason-runtimes
+# (the manifests), depcheck-hook (the hook), and doc-links (paths the docs
+# cite). It needs its own COPY line because deps/ is a top-level directory:
+# before the move it lived under .scripts/ and rode along on that COPY, and
+# taking it out from under there silently emptied all six suites in this
+# image while the host suite stayed green. container.test.sh now asserts
+# this line exists.
+COPY deps /root/deps
 # deps-harness.test.sh asserts on the workflow's triggers, permissions, and
 # job definitions by parsing this file.
 COPY .github /root/.github

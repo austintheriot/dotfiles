@@ -259,6 +259,21 @@ assert_succeeds 'TRIGGER_PATHS still matches a tests edit' \
 # above it named the file -- a guard that cannot fail.
 dockerfile_copies=$(grep -E '^COPY ' "$DOCKERFILE" | sed 's/^COPY //')
 
+# The RUNTIME stage's COPY lines only, which is a different question from the
+# one above. This file is multi-stage: the builder compiles the binaries and
+# the runtime stage runs the suite, and a path present in the builder is NOT
+# present at /root unless the runtime stage copies it too.
+#
+# Measured, and it mattered: `COPY deps ../deps` in the builder (for the
+# crate's include_str!) made the whole-file scan report deps/ as covered
+# while /root/deps did not exist, so the guard passed on the exact bug it was
+# being written for. Everything from the last FROM onward is the runtime
+# stage.
+runtime_stage_start=$(grep -nE '^FROM ' "$DOCKERFILE" | tail -1 | cut -d: -f1)
+assert_succeeds 'the runtime stage boundary was found' test -n "$runtime_stage_start"
+runtime_copies=$(sed -n "${runtime_stage_start},\$p" "$DOCKERFILE" \
+    | grep -E '^COPY ' | sed 's/^COPY //')
+
 referenced_root_files=$(grep -ohE 'DOTFILES_ROOT/[A-Za-z0-9_.-]+' "$DOTFILES_ROOT"/tests/*.test.sh 2>/dev/null \
     | sed 's|.*DOTFILES_ROOT/||' \
     | grep -E '^[A-Za-z0-9_.-]+$' \
@@ -267,6 +282,21 @@ referenced_root_files=$(grep -ohE 'DOTFILES_ROOT/[A-Za-z0-9_.-]+' "$DOTFILES_ROO
 # A COPY source can be a literal path or a glob (.zshrc* covers .zshrc-linux),
 # so each candidate is matched against the sources with shell globbing rather
 # than by substring.
+copied_by_runtime_stage() {
+    copied_target=$1
+    for copy_line in $runtime_copies; do
+        case $copy_line in
+            /*|--*) continue ;;
+        esac
+        # shellcheck disable=SC2254  # the pattern is a glob on purpose
+        case $copied_target in
+            $copy_line) unset copied_target copy_line; return 0 ;;
+        esac
+    done
+    unset copied_target copy_line
+    return 1
+}
+
 copied_by_image() {
     copied_target=$1
     for copy_line in $dockerfile_copies; do
@@ -311,6 +341,94 @@ for root_file in setup.sh README.md; do
 done
 assert_equals 'the runner overlays the root-level files it copies' \
     '' "$missing_from_overlay"
+
+# --- every root-level DIRECTORY a suite reads is in the image --------------
+#
+# The check above tests `-f`, so it covers files only and a top-level
+# directory passes it without ever being looked at. That gap shipped: when
+# the deps tree moved out from under .scripts/ to a top-level deps/, it
+# stopped riding along on `COPY .scripts` and no line replaced it. Six suites
+# read that tree, all six passed on the host, and all six failed in the
+# container with "exited 1" on their first existence assertion -- the exact
+# shape the file check exists to prevent, one directory level up.
+#
+# Derived the same way and from the same reference set, so a future top-level
+# directory is caught without anyone remembering this test.
+referenced_root_dirs=$(grep -ohE 'DOTFILES_ROOT/[A-Za-z0-9_.-]+' "$DOTFILES_ROOT"/tests/*.test.sh 2>/dev/null \
+    | sed 's|.*DOTFILES_ROOT/||' \
+    | grep -E '^[A-Za-z0-9_.-]+$' \
+    | sort -u)
+
+# Four directories are referenced by a suite and deliberately NOT in the
+# runtime image. Each is an exemption with a reason, not a lint suppression:
+#
+#   .cfg      the bare repository. The container's tree comes from
+#             `git archive`, so it has no repository at all -- which is the
+#             documented reason several suites skip in there. Copying it
+#             would defeat that isolation.
+#   .config   copied per subdirectory (.config/tmux, .config/nvim,
+#             .config/alacritty) rather than wholesale, so the image carries
+#             only what a suite reads.
+#   .local    a runtime artifact (installed binaries), untracked, built
+#             inside the image by its own stage.
+#   crates    copied into the BUILDER stage, which compiles the binaries the
+#             runtime stage takes from it. Checked separately by the
+#             workspace-member assertion below.
+#
+# Anything else is a real gap, which is how deps/ was caught.
+exempt_from_image=' .cfg .config .local crates '
+
+missing_dirs_from_image=''
+checked_dirs=0
+while IFS= read -r root_dir; do
+    [ -n "$root_dir" ] || continue
+    # Directories only. A path that is a file was already covered above, and
+    # one that is neither is a fixture path a suite creates for itself.
+    [ -d "$DOTFILES_ROOT/$root_dir" ] || continue
+    case $exempt_from_image in
+        *" $root_dir "*) continue ;;
+    esac
+    checked_dirs=$((checked_dirs + 1))
+    copied_by_runtime_stage "$root_dir" \
+        || missing_dirs_from_image="$missing_dirs_from_image $root_dir"
+done <<EOF
+$referenced_root_dirs
+EOF
+
+# Positive control. Every assertion below is inside a loop over a derived
+# list, so a derivation that silently produced nothing would report an empty
+# missing-list and pass having checked no directory at all. That is the same
+# vacuous-pass shape this file already guards against for the COPY prose.
+assert_succeeds 'the directory derivation found something to check' \
+    test "$checked_dirs" -gt 0
+assert_equals 'every root-level directory the suites read is COPYed into the image' \
+    '' "$missing_dirs_from_image"
+
+# And the overlay half, for the same reason the file check has one: a
+# directory in the image but absent from the overlay list means the container
+# tests the last commit of it rather than the edit under test.
+overlay_trees=$(sed -n 's/^ *for tree in \(.*\); do$/\1/p' "$RUNNER")
+assert_succeeds 'the overlay tree list is still parseable' test -n "$overlay_trees"
+
+# The same exemptions minus crates, which IS overlaid: an uncommitted crate
+# edit has to reach the builder or the container tests the last commit's
+# binaries.
+exempt_from_overlay=' .cfg .config .local '
+
+missing_dirs_from_overlay=''
+while IFS= read -r root_dir; do
+    [ -n "$root_dir" ] || continue
+    [ -d "$DOTFILES_ROOT/$root_dir" ] || continue
+    case $exempt_from_overlay in
+        *" $root_dir "*) continue ;;
+    esac
+    printf '%s\n' "$overlay_trees" | tr ' ' '\n' | grep -qxF "$root_dir" \
+        || missing_dirs_from_overlay="$missing_dirs_from_overlay $root_dir"
+done <<EOF
+$referenced_root_dirs
+EOF
+assert_equals 'the runner overlays the root-level directories it copies' \
+    '' "$missing_dirs_from_overlay"
 
 # --- the builder stage knows every workspace member -------------------------
 

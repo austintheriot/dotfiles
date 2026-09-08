@@ -2,6 +2,127 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- nvim: markdown-preview build fails on every fresh machine.
+  Reported 2026-09-08 from a bare ubuntu container:
+    markdown-preview.nvim ... build failed
+    Vim:E492: Not an editor command: Lazy load markdown-preview.nvim
+  CAUSE, read from the code. `.config/nvim/lua/plugins/markdown-preview.lua`
+  runs `vim.cmd [[Lazy load markdown-preview.nvim]]` in its build hook.
+  `:Lazy` is a user command lazy.nvim creates during its own setup, so a
+  build hook during the first bootstrap sync can run before it exists.
+  Upstream's README suggests this snippet; it is timing-dependent.
+  SECOND DEFECT in the same two lines: `mkdp#util#install()` with no
+  argument goes through `mkdp#util#open_terminal` (autoload/mkdp/util.vim:153)
+  and opens an interactive terminal split, which cannot work in a
+  non-interactive bootstrap. Upstream ships `mkdp#util#install_sync()`
+  (util.vim:162) for exactly this.
+  NOT a toolchain gap: app/install.sh downloads a prebuilt binary with curl
+  (install.sh:30-44, wget fallback).
+  NOT container-only: `app/bin` does not exist on the mac either, so the
+  build has never completed here. It is silent because nothing has opened a
+  preview.
+  FIX: drop the `vim.cmd [[Lazy load ...]]` line (lazy.nvim already loads the
+  plugin before running its build hook) and call the sync variant.
+
+- nvim: treesitter is configured for `master` while pinned to `main`, so
+  most of it is silently off. Found 2026-09-08 while investigating
+  determinism.
+  nvim-treesitter is pinned to `main` (the rewrite) in lazy-lock.json, but
+  `.config/nvim/lua/plugins/treesitter.lua` passes `master`-branch options:
+  ensure_installed, auto_install, highlight, indent, incremental_selection.
+  On `main`, `require('nvim-treesitter').setup()` forwards to
+  nvim-treesitter.config whose default table accepts ONLY `install_dir`, so
+  every other option is absorbed and ignored. No error, no warning.
+  MEASURED CONSEQUENCE on this machine:
+    - 1 of 19 declared parsers installed (typescript.so only)
+    - treesitter highlighting does NOT auto-start on a .ts buffer
+      (vim.treesitter.highlighter.active[buf] is nil after :edit)
+    - the parser itself is fine: language.add('typescript') and
+      vim.treesitter.start(buf,'typescript') both succeed when called
+  So highlighting, indent and incremental selection are all off, and 18
+  parsers are missing.
+  ALSO: `build = ':TSUpdate'` only updates ALREADY-INSTALLED parsers on
+  `main`, so a fresh machine converges to nothing. The build step has to
+  install an explicit list.
+  ON `main` THE AUTOCMD IS OURS TO WRITE: `main` ships no FileType handler,
+  so starting the highlighter and setting indentexpr is now config work.
+  Guard it with `pcall(vim.treesitter.language.add, lang)` so a missing or
+  ABI-stale parser degrades to regex highlighting rather than erroring on
+  every buffer open.
+  STAY ON `main`: its `lua/nvim-treesitter/parsers.lua` ships an exact
+  `revision` SHA per parser (318 parsers, all 19 of ours present), so the
+  plugin pin we already have transitively locks every parser source
+  revision. `master` is in maintenance and its lockfile has looser cadence.
+
+- nvim: pin the mason registry to a tag, and pin the 14 tool versions.
+  The highest-leverage determinism change available, because pinning the
+  registry pins the MEANING of every unversioned package name. Today
+  `registries` is unset, so it defaults to the moving
+  `github:mason-org/mason-registry` and the same config resolves differently
+  over time with no diff anywhere.
+  The version data already exists locally and does not need inventing: every
+  installed package writes `mason-receipt.json` carrying a purl with the
+  exact resolved version. Verified across all 19 installed packages and three
+  backends: `pkg:github/johnnymorganz/stylua@v2.4.1`,
+  `pkg:npm/cspell@10.0.0`, `pkg:pypi/python-lsp-server@1.14.0?extra=all`.
+  THREE TRAPS for whoever generates the lock, each verified:
+    - TWO RECEIPT SCHEMAS COEXIST. 6 packages use `source.id`, 13 use
+      `primary_source.id`. A generator reading one key silently drops the
+      other 13.
+    - npm scopes are URL-encoded: `pkg:npm/%40astrojs/language-server@...`.
+      A naive parser mangles them.
+    - 19 packages are installed but only 14 are declared. Five are leftovers
+      from earlier configs (graphql, html-lsp, prettier, prettierd,
+      python-lsp-server, ruff-lsp), so a lock generated from the INSTALLED
+      set would pin things the config no longer asks for. Generate from the
+      DECLARED set, resolved through receipts.
+  `pkg@version` is honored in ensure_installed (mason-lspconfig threads the
+  parsed version into pkg:install). mason-tool-installer takes
+  `{ 'stylua', version = '...' }` and should get `auto_update = false`.
+  WHAT MASON CANNOT PIN, so do not claim it: the downloaded bytes. Registry
+  pinning fixes the recipe, not the artifact. There is no integrity-hash
+  layer, and an unpinned npm transitive tree floats under a pinned top-level
+  version. State that boundary rather than implying byte-identity.
+
+- nvim: `ensure_installed` NEVER RUNS HEADLESS, which invalidates the
+  obvious CI test for it. Verified verbatim at
+  mason-lspconfig/lua/mason-lspconfig/init.lua:31:
+      if not platform.is_headless and #settings.current.ensure_installed > 0
+  So any CI or Rust test that runs `nvim --headless` and then asserts the
+  servers installed is asserting THE GATE, not the install: nothing was
+  attempted. That assertion passes on a machine where mason is entirely
+  broken. A headless test has to drive the install directly (pkg:install or
+  :MasonInstall) instead.
+  Record this beside any mason test work so the trap is not rediscovered.
+
+- Decide the macOS Neovim ABI question. The version is exactly pinned on apt
+  and completely unpinned on brew and pacman: catalog.rs:93-98 maps
+  Apt -> ViaTarball(TarballRelease::Neovim) (the v0.12.5 pin) but
+  Brew -> named("neovim") and Pacman -> named("neovim"). The manifest states
+  only `min_version = "0.10"` as a floor.
+  So the ABI that treesitter parsers are compiled against is pinned on Linux
+  and floats on macOS, where a `brew upgrade` moves it silently. Two machines
+  are guaranteed to differ on the one value every parser artifact is keyed
+  to. (Verified: this mac runs Homebrew's 0.12.4, not the pinned 0.12.5, and
+  that is correct behaviour for the brew path rather than a bug.)
+  Either pin the mac too, or document that the ABI is only pinned on Linux.
+  A parser lock keyed to a floating ABI has one leg in the air, so this is
+  upstream of any lock design.
+
+- nvim: the tarball download verifies nothing, and we have to be our own
+  checksum authority. installer.rs fetches with a bare `curl -fsSL`.
+  Upstream publishes NO checksum asset for the pinned release (verified
+  against the GitHub API for v0.12.5: only the appimage/tar.gz/msi/zip assets
+  and .zsync files), so "verify against upstream" is not available.
+  The remaining option is committing our own SHA-256 per architecture:
+  trust-on-first-use, weaker than upstream provenance, but it converts a
+  silent substitution into a loud failure and makes the digest reviewable in
+  a diff. Cost: two values (x86_64 and arm64) to update on every bump, and a
+  wrong one bricks the install on one architecture only.
+  A prior panel called this the highest-severity item in the determinism
+  picture. Earlier notes in this file were more dismissive of it; that was
+  wrong.
+
 - Finish the nvim determinism work. The runtime-tree bug is FIXED (bd38c48f):
   the release tarball now installs as a versioned prefix
   (~/.local/opt/nvim-<tag>) with ~/.local/bin/nvim symlinked into it, so

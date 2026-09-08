@@ -68,6 +68,89 @@ jobs:
         run: |
           "$HOME/.local/bin/config-cli" deps install --yes
 
+  pop:
+    name: Pop!_OS / apt
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # A separate leg from `ubuntu` above, though both are apt. Pop!_OS is
+      # one of the machines this repo is deployed to, and the property that
+      # differs is not the package MANAGER but the package VERSIONS its
+      # archive resolves to.
+      #
+      # This leg exists because of a real failure: apt's neovim on Pop is
+      # 0.6.1 (22.04) or 0.9.5 (24.04), the nvim config needs 0.10 for
+      # `vim.uv`, and the manifest's old bare `command -v nvim` check was
+      # satisfied by both. The bootstrap called the machine ready and the
+      # editor then died at startup. deps.conf now carries `>=0.10` and the
+      # catalog routes neovim on apt to a pinned upstream tarball.
+      #
+      # Measured inside the image: adding Pop's own archive does NOT change
+      # the neovim candidate -- System76 does not override that package, so
+      # it stays 0.9.5 from Ubuntu universe. The image asserts the archive
+      # loaded (a NO_PUBKEY failure would otherwise leave this leg quietly
+      # testing plain Ubuntu) and the engine has to satisfy the floor
+      # without apt's help.
+      - name: Build the Pop!_OS test image
+        run: |
+          docker build \
+            -f .scripts/deps/docker/Dockerfile.pop \
+            -t depcheck-pop \
+            .
+
+      # The engine reaches this image through a /seed mount rather than a
+      # build stage. A build stage would install a Rust toolchain into the
+      # image, and rustup is itself a manifest entry -- so the image would
+      # pre-satisfy the very dependency the run exists to exercise.
+      - name: Build the deps engine for the container
+        run: |
+          .scripts/deps/docker/build-seed-binary.sh \
+            /tmp/seed-pop "$GITHUB_WORKSPACE"
+          cp .scripts/deps/docker/seed-prebuilt.sh /tmp/seed-pop/
+          cp .scripts/deps/docker/deps-image-entrypoint.sh /tmp/seed-pop/
+
+      - name: Bootstrap and check dependencies (apt, Pop archive)
+        run: |
+          docker run --rm \
+            -v /tmp/seed-pop:/seed:ro \
+            -e BOOTSTRAP_PREBUILT_BIN=/seed/config-cli \
+            depcheck-pop
+
+      # The install reporting "installed neovim" is not the claim under
+      # test: the engine would report that for apt's 0.9.5 too. What has to
+      # hold is the VERSION on the machine afterwards, which is the fact the
+      # old bare presence check could not express.
+      - name: Assert the installed Neovim satisfies the floor
+        run: |
+          docker run --rm \
+            -v /tmp/seed-pop:/seed:ro \
+            -e BOOTSTRAP_PREBUILT_BIN=/seed/config-cli \
+            --entrypoint /bin/sh \
+            depcheck-pop -c '
+              set -eu
+              . /seed/seed-prebuilt.sh
+              seed_prebuilt >/dev/null 2>&1
+              PATH="$HOME/.local/bin:$PATH"
+              export PATH
+              config-cli deps install --yes >/dev/null 2>&1
+              version=$(nvim --version | head -1)
+              echo "installed: $version"
+              case $version in
+                  *v0.6.*|*v0.7.*|*v0.8.*|*v0.9.*)
+                      echo "FAIL: apt vintage Neovim satisfied the floor" >&2
+                      exit 1 ;;
+              esac
+              # A second run must converge rather than reinstall forever:
+              # a floor the installer cannot satisfy would loop here.
+              config-cli deps install --yes 2>&1 | grep -q "present   neovim" \
+                  || { echo "FAIL: neovim did not converge to present" >&2; exit 1; }
+              config-cli deps check >/dev/null
+            '
+
   macos:
     name: macOS / Homebrew
     runs-on: macos-latest

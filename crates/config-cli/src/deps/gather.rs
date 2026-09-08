@@ -78,6 +78,7 @@ fn observe_check(check: &Check, resolver: &impl RootResolver) -> Vec<(Check, Obs
 fn observe_one(check: &Check, resolver: &impl RootResolver) -> Observation {
     match check {
         Check::Command(name) => probe_command(name.as_str()),
+        Check::CommandVersion { name, floor } => probe_command_version(name.as_str(), *floor),
         Check::DirExists(path) => probe_path(path, resolver, |candidate| candidate.is_dir()),
         Check::FileExists(path) => probe_path(path, resolver, |candidate| candidate.is_file()),
         Check::FileNonEmpty(path) => probe_path(path, resolver, |candidate| {
@@ -180,6 +181,81 @@ fn probe_command(name: &str) -> Observation {
     to_observation(found)
 }
 
+/// The first `MAJOR.MINOR[.PATCH]` triple in a `--version` banner.
+///
+/// Separated from the spawn so the parsing is testable against real banner
+/// text without running anything. The tools this is used on print a version
+/// on the first line, but none of them agree on the surrounding words:
+/// `NVIM v0.12.4`, `git version 2.50.0`, `ripgrep 14.1.1`,
+/// `zsh 5.9 (arm64-apple-darwin25.0)`. Scanning for the first triple rather
+/// than matching a per-tool layout is what keeps this one function instead
+/// of a table of formats.
+///
+/// What this does NOT solve is a tool that rejects `--version` itself:
+/// macOS tmux answers it with a usage message and wants `-V`. Such a tool
+/// reads as `Unresolvable`, which is honest, and putting a floor on one
+/// would mean teaching the probe a second flag first.
+///
+/// A leading `v` is skipped because Neovim writes one. A two-component
+/// version gets a zero patch, matching `VersionFloor`'s own rule.
+fn parse_version_banner(banner: &str) -> Option<(u32, u32, u32)> {
+    for token in banner.split(|character: char| {
+        !character.is_ascii_digit() && character != '.'
+    }) {
+        let mut parts = token.split('.');
+        let (Some(major), Some(minor)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let (Ok(major), Ok(minor)) = (major.parse::<u32>(), minor.parse::<u32>()) else {
+            continue;
+        };
+        let patch = match parts.next() {
+            Some(component) => component.parse::<u32>().unwrap_or(0),
+            None => 0,
+        };
+        if parts.next().is_some() {
+            continue;
+        }
+        return Some((major, minor, patch));
+    }
+    None
+}
+
+/// `command -v <name> >=<floor>`: present, and reporting at least `floor`.
+///
+/// Three outcomes rather than two, and the third is the point:
+///
+///   - the command is missing: `Absent`, the same as a bare presence check.
+///   - the command runs and reports a version below the floor: `Absent`.
+///     The dependency is genuinely not satisfied, so the planner installs
+///     over it exactly as it would for a missing one.
+///   - the command runs and its banner cannot be parsed: `Unresolvable`.
+///     Reporting `Absent` there would make the engine reinstall a tool that
+///     may well be current on every run, and reporting `Present` would
+///     restore the presence-only check this variant replaced. Neither is
+///     honest about "the tool is here and I could not read its version".
+fn probe_command_version(name: &str, floor: dotfiles_path::VersionFloor) -> Observation {
+    let Some(binary) = search_path().iter().map(|directory| directory.join(name)).find(|candidate| candidate.is_file())
+    else {
+        return Observation::Absent;
+    };
+    let output = std::process::Command::new(&binary)
+        .arg("--version")
+        .stdin(std::process::Stdio::null())
+        .output();
+    let Ok(output) = output else {
+        return Observation::Unresolvable { root: PathRoot::Home };
+    };
+    // Some tools write the banner to stderr, so both streams are read.
+    let mut banner = String::from_utf8_lossy(&output.stdout).into_owned();
+    banner.push('\n');
+    banner.push_str(&String::from_utf8_lossy(&output.stderr));
+    match parse_version_banner(&banner) {
+        Some((major, minor, patch)) => to_observation(floor.is_satisfied_by(major, minor, patch)),
+        None => Observation::Unresolvable { root: PathRoot::Home },
+    }
+}
+
 /// `python3 -c "import <module>"`: present if the interpreter imports it.
 ///
 /// A missing `python3` interpreter and a missing module are the same
@@ -206,6 +282,69 @@ fn to_observation(present: bool) -> Observation {
 
 #[cfg(test)]
 mod tests {
+
+    /// Real `--version` first lines, copied from the tools themselves.
+    ///
+    /// The formats disagree on everything except carrying a version, which
+    /// is why the parser scans for a triple instead of matching a layout.
+    #[test]
+    fn the_banner_parser_reads_every_format_these_tools_print() {
+        let cases = [
+            ("NVIM v0.12.4", (0, 12, 4)),
+            ("NVIM v0.9.5", (0, 9, 5)),
+            ("NVIM v0.6.1", (0, 6, 1)),
+            ("git version 2.39.5", (2, 39, 5)),
+            // tmux's banner shape. NOT reachable through `--version` on
+            // every platform: macOS tmux answers that with a usage error
+            // and wants `-V`. The parser handles the text; a floor on a
+            // tool like that needs a probe change nothing asks for yet.
+            ("tmux 3.4", (3, 4, 0)),
+            ("ripgrep 14.1.1", (14, 1, 1)),
+            ("zsh 5.9 (arm-apple-darwin24.0)", (5, 9, 0)),
+        ];
+        for (banner, expected) in cases {
+            assert_eq!(
+                parse_version_banner(banner),
+                Some(expected),
+                "failed to read {banner:?}"
+            );
+        }
+    }
+
+    // The floor exists for this comparison specifically: 0.9.5 is above
+    // 0.10 as a string and below it as a version, and the string answer is
+    // what shipped a broken editor to a machine the bootstrap called ready.
+    #[test]
+    fn the_floor_rejects_the_version_pop_os_actually_ships() {
+        let floor = dotfiles_path::VersionFloor::parse("0.10").expect("the floor parses");
+        let (major, minor, patch) =
+            parse_version_banner("NVIM v0.9.5").expect("the banner parses");
+        assert!(
+            !floor.is_satisfied_by(major, minor, patch),
+            "Ubuntu 24.04's nvim 0.9.5 must not satisfy a 0.10 floor"
+        );
+
+        let (major, minor, patch) =
+            parse_version_banner("NVIM v0.6.1").expect("the banner parses");
+        assert!(
+            !floor.is_satisfied_by(major, minor, patch),
+            "Pop!_OS 22.04's nvim 0.6.1 must not satisfy a 0.10 floor"
+        );
+    }
+
+    // A banner with no version at all must not read as zero. Returning
+    // (0,0,0) would compare below every floor and make the engine reinstall
+    // the tool on every run forever.
+    #[test]
+    fn an_unreadable_banner_is_none_rather_than_zero() {
+        for banner in ["", "command not found", "no version here"] {
+            assert_eq!(
+                parse_version_banner(banner),
+                None,
+                "{banner:?} produced a version"
+            );
+        }
+    }
     use super::*;
     use deps_core::{Manifest, Observations, parse_manifest};
     use dotfiles_path::CheckRelPath;

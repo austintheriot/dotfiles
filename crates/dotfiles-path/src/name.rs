@@ -53,6 +53,10 @@ pub enum NameError {
     /// A documentation URL carries no `http://` or `https://` scheme, so it
     /// is a bare string a browser would resolve against nothing.
     NoScheme,
+    /// A version floor is not `MAJOR.MINOR` or `MAJOR.MINOR.PATCH` in
+    /// decimal. A floor that parsed loosely would gate on a version nobody
+    /// chose, which is worse than refusing the line.
+    NotAVersion,
 }
 
 impl fmt::Display for NameError {
@@ -78,6 +82,9 @@ impl fmt::Display for NameError {
             }
             NameError::NotPrintable => write!(formatter, "the name contains a non-printable byte"),
             NameError::NoScheme => write!(formatter, "the URL has no `http://` or `https://` scheme"),
+            NameError::NotAVersion => {
+                write!(formatter, "the version floor is not MAJOR.MINOR or MAJOR.MINOR.PATCH")
+            }
         }
     }
 }
@@ -256,6 +263,73 @@ impl fmt::Display for PackageId {
     }
 }
 
+/// A minimum acceptable version, written `MAJOR.MINOR` or `MAJOR.MINOR.PATCH`.
+///
+/// Three numeric components rather than a string, because the comparison
+/// this exists for is the one a string gets wrong: "0.9" sorts above "0.10"
+/// lexically and below it as a version. That is not hypothetical. Neovim
+/// 0.9.5 is what Ubuntu 24.04 ships and 0.10 is what the nvim config needs,
+/// so a string comparison would report the machine satisfied.
+///
+/// A missing patch component means zero, so `0.10` and `0.10.0` are the same
+/// floor. Pre-release suffixes are rejected rather than ordered: `0.10-dev`
+/// has no total order against `0.10` that everyone agrees on, and a manifest
+/// is not the place to litigate it.
+///
+/// # Errors
+///
+/// Returns `NameError::NotAVersion` for anything that is not two or three
+/// decimal components separated by `.`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct VersionFloor {
+    major: u32,
+    minor: u32,
+    patch: u32,
+}
+
+impl VersionFloor {
+    /// # Errors
+    ///
+    /// See the type's documentation for the rules and their variants.
+    pub fn parse(raw: &str) -> Result<Self, NameError> {
+        reject_common(raw, MAX_NAME_LEN)?;
+        let mut parts = raw.split('.');
+        let mut next_component = || -> Result<u32, NameError> {
+            parts
+                .next()
+                .ok_or(NameError::NotAVersion)?
+                .parse::<u32>()
+                .map_err(|_| NameError::NotAVersion)
+        };
+        let major = next_component()?;
+        let minor = next_component()?;
+        let patch = match parts.next() {
+            Some(component) => component.parse::<u32>().map_err(|_| NameError::NotAVersion)?,
+            None => 0,
+        };
+        if parts.next().is_some() {
+            return Err(NameError::NotAVersion);
+        }
+        Ok(VersionFloor { major, minor, patch })
+    }
+
+    /// The floor's three components, patch defaulted to zero.
+    pub fn components(&self) -> (u32, u32, u32) {
+        (self.major, self.minor, self.patch)
+    }
+
+    /// Whether an observed version is at or above this floor.
+    pub fn is_satisfied_by(&self, major: u32, minor: u32, patch: u32) -> bool {
+        (major, minor, patch) >= (self.major, self.minor, self.patch)
+    }
+}
+
+impl fmt::Display for VersionFloor {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
 /// A documentation URL, printed for a human and never fetched.
 ///
 /// Scheme-agnostic across `http` and `https` because 21 of the 22 manifest
@@ -380,6 +454,43 @@ mod tests {
             DocsUrl::parse("git-scm.com/downloads"),
             Err(NameError::NoScheme)
         ));
+    }
+
+    #[test]
+    fn a_version_floor_parses_two_and_three_component_forms() {
+        assert_eq!(
+            VersionFloor::parse("0.10").expect("two components parse").components(),
+            (0, 10, 0)
+        );
+        assert_eq!(
+            VersionFloor::parse("0.10.4").expect("three components parse").components(),
+            (0, 10, 4)
+        );
+    }
+
+    // The manifest field is written by hand, so a floor that silently
+    // parsed to something else would gate on a version nobody chose.
+    #[test]
+    fn a_version_floor_rejects_what_is_not_a_version() {
+        for raw in ["", "0", "v0.10", "0.10.4.1", "0.x", "0.10-dev", "latest"] {
+            assert!(
+                VersionFloor::parse(raw).is_err(),
+                "{raw:?} parsed as a version floor"
+            );
+        }
+    }
+
+    // A floor is compared against a version read out of `<tool> --version`,
+    // and comparing those component-wise as numbers is the whole point:
+    // "0.9" is greater than "0.10" as a string and lower as a version.
+    #[test]
+    fn a_version_floor_orders_by_number_not_by_string() {
+        let floor = VersionFloor::parse("0.10").expect("the floor parses");
+        assert!(!floor.is_satisfied_by(0, 9, 5), "0.9.5 must not satisfy 0.10");
+        assert!(floor.is_satisfied_by(0, 10, 0), "0.10.0 satisfies 0.10");
+        assert!(floor.is_satisfied_by(0, 12, 4), "0.12.4 satisfies 0.10");
+        assert!(floor.is_satisfied_by(1, 0, 0), "1.0.0 satisfies 0.10");
+        assert!(!floor.is_satisfied_by(0, 6, 1), "0.6.1 must not satisfy 0.10");
     }
 
     // An error string reaches a terminal and the input is untrusted, which

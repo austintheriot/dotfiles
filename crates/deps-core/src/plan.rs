@@ -428,6 +428,13 @@ fn action_for(
         PackageAvailability::ViaScript(installer) => {
             (InstallAction::Script { installer: *installer }, false)
         }
+        // Unpacks to a temporary directory and copies one binary into
+        // ~/.local/bin, so no root. That is the reason to prefer a tarball
+        // over the distribution package here at all: satisfying the version
+        // floor costs the user nothing they have to be root to grant.
+        PackageAvailability::ViaTarball(release) => {
+            (InstallAction::ReleaseTarball { release: *release }, false)
+        }
         PackageAvailability::Unavailable(reason) => {
             (InstallAction::NotAutomatable { reason: reason.clone() }, false)
         }

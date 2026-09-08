@@ -33,7 +33,7 @@ pub use check::{
 };
 pub use action::{
     BrewKind, CloneSource, InstallAction, KeyringSource, NoInstallReason, PackageAvailability,
-    PackageManager, PackageMap, ScriptInstaller, SourceListEntry, TapName,
+    PackageManager, PackageMap, ScriptInstaller, SourceListEntry, TapName, TarballRelease,
 };
 pub use manifest::{
     ConfKind, DependencyName, Manifest, ManifestEntry, ParseError, parse_manifest,

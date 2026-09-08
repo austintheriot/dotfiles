@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Builds and runs `config deps install --yes` against fresh ubuntu and
-# archlinux containers, so the manifest and the engine can be iterated on
+# Builds and runs `config deps install --yes` against fresh ubuntu, Pop!_OS
+# and archlinux containers, so the manifest and the engine can be iterated on
 # without waiting on GitHub Actions. Mirrors .github/workflows/deps-check.yml's
 # arch leg: same Dockerfile, same command, same exit-code contract. The CI
 # ubuntu leg runs on a native runner rather than in this image.
@@ -80,7 +80,7 @@ fi
 
 status=0
 
-for image in ubuntu arch; do
+for image in ubuntu pop arch; do
     printf '\n=== %s ===\n' "$image"
 
     # archlinux publishes no arm64 image, so the arch leg needs an explicit
@@ -152,4 +152,4 @@ if [ "$status" -ne 0 ]; then
     exit 1
 fi
 
-printf 'test-local: ubuntu and arch both bootstrapped cleanly.\n'
+printf 'test-local: ubuntu, pop and arch all bootstrapped cleanly.\n'

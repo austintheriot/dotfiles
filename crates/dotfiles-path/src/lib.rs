@@ -12,5 +12,7 @@ mod name;
 mod rel;
 
 pub use bounded::BoundedText;
-pub use name::{CommandName, DocsUrl, GlobPattern, ModuleName, NameError, PackageId};
+pub use name::{
+    CommandName, DocsUrl, GlobPattern, ModuleName, NameError, PackageId, VersionFloor,
+};
 pub use rel::{CheckRelPath, PathError};

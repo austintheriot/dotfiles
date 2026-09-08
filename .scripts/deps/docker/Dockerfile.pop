@@ -1,0 +1,128 @@
+# Pop!_OS environment for exercising `config deps install --yes` from
+# scratch. Used by ../test-local.sh and by the `pop` leg of
+# .github/workflows/deps-check.yml.
+#
+# WHY A SEPARATE IMAGE FROM Dockerfile.ubuntu
+#
+# Pop!_OS is Ubuntu LTS plus System76's archive, so the engine's apt path is
+# already the right one: `resolve_manager` finds apt-get and every install
+# command is identical. A leg that only re-ran the Ubuntu assertions against
+# an Ubuntu base would be a second copy of the ubuntu leg.
+#
+# What this image exists to test is the thing that is NOT identical: package
+# VERSIONS. Pop!_OS is one of the machines this repo is actually deployed
+# to, and its apt archive is what shipped the failure this leg guards:
+#
+#   E5113: ... attempt to index field 'uv' (a nil value)
+#
+# Neovim's `vim.uv` arrived in 0.10. Pop!_OS 22.04 ships 0.6.1 and 24.04
+# ships 0.9.5, and the manifest check used to be a bare `command -v nvim`,
+# so apt's too-old package satisfied the bootstrap and the editor then
+# failed to start. deps.conf now reads `command -v nvim >=0.10`, and the
+# catalog routes neovim on apt to a pinned upstream tarball rather than to
+# the archive package. This image is what proves both halves against a real
+# Pop archive rather than against a reasoned argument about one.
+#
+# WHY IT IS BUILT RATHER THAN PULLED
+#
+# System76 publishes no Pop!_OS container image. Verified: there is no
+# `system76/pop-os`, `popos/pop-os`, or library image, and no third-party
+# one worth trusting a bootstrap gate to. So the image is assembled the way
+# Pop itself is: an Ubuntu LTS base with Pop's apt archive added on top.
+#
+# That reproduces the property under test -- what `apt-get install` resolves
+# to on a Pop machine -- without pretending to be a full Pop desktop
+# install, which a container could not be anyway (no systemd, no COSMIC, no
+# System76 firmware stack). The claim this image supports is "the engine
+# bootstraps correctly against Pop's package archive", and that is the claim
+# the failure came from.
+#
+# Pinned by digest for the reason Dockerfile.ubuntu states: ubuntu:24.04 is
+# republished for every point release, so a tag-only reference makes this
+# image silently change under a passing test. 24.04 is `noble`, which is the
+# suite Pop's own archive serves for its current release.
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
+
+# The bootstrap's own prerequisites, not dependencies under test. Identical
+# to Dockerfile.ubuntu's list and for the same reasons: the engine's install
+# commands invoke sudo, curl, wget and git, and ca-certificates is what
+# makes the https fetches work at all.
+#
+# gnupg is the one addition, needed to dearmor Pop's signing key below.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        sudo curl git wget ca-certificates gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pop's archive, added the way apt now wants it: a dearmored key in
+# /etc/apt/keyrings and a `signed-by` source entry, rather than the retired
+# `apt-key add` that trusts a key for every repository on the machine.
+#
+# The key comes from a keyserver by fingerprint, not from a URL in a
+# System76 repository. Two earlier attempts failed and both failure modes
+# are worth naming, because each one produced a container that looked fine:
+#
+#   - The commonly-cited pop-os/repo-release keyring path is a 404 now. A
+#     build that fetches a moved URL is a broken gate, not a caught
+#     regression.
+#   - Dearmoring dists/noble/Release.gpg "works" and installs nothing
+#     usable: that file is a SIGNATURE over the release, not the public key
+#     that verifies it. apt then reported NO_PUBKEY 204DD8AEC33A7AFF and
+#     skipped the repository, and `apt-cache policy` showed no Pop entries
+#     at all. The image built green while testing plain Ubuntu.
+#
+# So the fingerprint is pinned here as the identity, which is the same rule
+# ScriptInstaller follows: an identity in a diff rather than a URL that can
+# move under it.
+#
+# --batch --yes and a file argument rather than a stdin pipe: gpg opens
+# /dev/tty when it reads a key from stdin, which does not exist in a build
+# container, and the pipe form fails with "cannot open '/dev/tty'".
+#
+# WHAT THIS DOES AND DOES NOT CHANGE
+#
+# Measured inside this image: adding Pop's release archive does NOT change
+# the neovim candidate. It stays 0.9.5-6ubuntu2 from Ubuntu's universe,
+# because System76 does not override that package. That is the finding this
+# leg exists to hold in place -- a Pop machine really cannot apt-install a
+# Neovim the config can run, which is why the catalog routes neovim on apt
+# to a pinned upstream tarball instead.
+RUN set -eu; \
+    install -d -m 755 /etc/apt/keyrings; \
+    curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x204DD8AEC33A7AFF" \
+        -o /tmp/pop-archive.asc; \
+    gpg --batch --yes --dearmor -o /etc/apt/keyrings/pop-archive.gpg /tmp/pop-archive.asc; \
+    rm -f /tmp/pop-archive.asc; \
+    printf 'deb [signed-by=/etc/apt/keyrings/pop-archive.gpg] http://apt.pop-os.org/release noble main\n' \
+        > /etc/apt/sources.list.d/pop-os-release.list; \
+    apt-get update; \
+    apt-cache policy | grep -q apt.pop-os.org \
+        || { echo "pop archive did not load; see the NO_PUBKEY note above" >&2; exit 1; }
+
+# Only the dependency-checking tree, not the whole dotfiles repo. The repo
+# root carries .claude/ and other machine-local content with no business in
+# a build context.
+COPY .scripts/deps /dotfiles/.scripts/deps
+WORKDIR /dotfiles
+
+ENV HOME=/root
+# These images verify the shared, cross-platform deps.conf only.
+#
+# The engine would otherwise select deps-linux.conf here, which lists
+# oh-my-zsh and xclip: real dependencies of the linux machine, but not of
+# this container, whose job is the shared manifest. Point DEPS_LOCAL_CONF at
+# a path that does not exist -- read_entries() skips a missing file -- so the
+# platform variant is excluded without pretending it is empty.
+ENV DEPS_LOCAL_CONF=/nonexistent/deps-platform.conf
+
+# The engine resolves the manifest against DOTFILES_ROOT, falling back to
+# HOME. This image COPYs the deps tree to /dotfiles while HOME is /root, so
+# without this line the engine looks for /root/.scripts/deps/deps.conf, finds
+# nothing, and reports a PASSING check of zero entries.
+ENV DOTFILES_ROOT=/dotfiles
+
+# The wrapper, not the engine: the engine is a Rust binary this image
+# carries no toolchain for, so it arrives through the /seed mount the
+# wrapper reads. See deps-image-entrypoint.sh.
+ENTRYPOINT ["/bin/sh", "/seed/deps-image-entrypoint.sh"]
+CMD ["install", "--yes"]

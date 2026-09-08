@@ -44,6 +44,7 @@ use std::process::{Command, Output};
 use deps_core::{
     ActionDescription, BrewKind, CloneSource, Elevation, ExecFailure, InstallAction, Installer,
     Installers, KeyringSource, NoInstallReason, PackageManager, PathRoot, PrivilegeRequirement,
+    TarballRelease,
     ScriptInstaller, SourceListEntry, SpawnError, Step, StepOutcome,
 };
 use dotfiles_path::BoundedText;
@@ -81,6 +82,44 @@ fn script_url(installer: ScriptInstaller) -> &'static str {
             "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh"
         }
     }
+}
+
+/// The release tag each pinned tarball names.
+///
+/// Bumping this is a deliberate, reviewable edit, matching the rule
+/// `ScriptInstaller::Nvm` already states: a pin goes stale on purpose
+/// rather than by accident.
+fn tarball_tag(release: TarballRelease) -> &'static str {
+    match release {
+        TarballRelease::Neovim => "v0.12.5",
+    }
+}
+
+/// The asset name for a release on this machine's architecture.
+///
+/// Two architectures because both are real here: the Linux machines are
+/// x86_64 and upstream also publishes arm64, which is what an arm64
+/// container or an ARM server needs. An unrecognized architecture is
+/// `None`, which the caller turns into "no automated install" rather than
+/// guessing an asset that would 404 halfway through a bootstrap.
+fn tarball_asset(release: TarballRelease) -> Option<&'static str> {
+    match (release, std::env::consts::ARCH) {
+        (TarballRelease::Neovim, "x86_64") => Some("nvim-linux-x86_64.tar.gz"),
+        (TarballRelease::Neovim, "aarch64") => Some("nvim-linux-arm64.tar.gz"),
+        (TarballRelease::Neovim, _) => None,
+    }
+}
+
+/// The full download URL for a pinned release on this architecture.
+fn tarball_url(release: TarballRelease) -> Option<String> {
+    let project = match release {
+        TarballRelease::Neovim => "neovim/neovim",
+    };
+    let asset = tarball_asset(release)?;
+    Some(format!(
+        "https://github.com/{project}/releases/download/{}/{asset}",
+        tarball_tag(release)
+    ))
 }
 
 /// The repository each clone source names.
@@ -264,8 +303,65 @@ pub fn argv_sequence_for(
                  . \"$NVM_DIR/nvm.sh\" && nvm install --lts",
             ])]
         }
+        // Fetched, unpacked, and linked as three spawns rather than one
+        // `sh -c` pipeline. The pipeline spelling would put a URL and two
+        // paths into a shell word, which is the interpolation spec 3.6
+        // closes; these are argv vectors with no shell between them.
+        //
+        // Installed into ~/.local/bin, which `search_path` already prepends
+        // for exactly this reason: the check that runs right after this
+        // install has to see the binary without a login shell.
+        InstallAction::ReleaseTarball { release } => {
+            let Some(url) = tarball_url(*release) else {
+                return Vec::new();
+            };
+            let staging = tarball_staging_dir(*release);
+            let staging_path = staging.to_string_lossy().into_owned();
+            vec![
+                words(["mkdir", "-p", &staging_path]),
+                words(["curl", "-fsSL", "-o", &format!("{staging_path}/release.tar.gz"), &url]),
+                words([
+                    "tar",
+                    "-xzf",
+                    &format!("{staging_path}/release.tar.gz"),
+                    "-C",
+                    &staging_path,
+                    "--strip-components=1",
+                ]),
+                words(["mkdir", "-p", &home_local_bin()]),
+                words([
+                    "cp",
+                    &format!("{staging_path}/bin/{}", tarball_binary(*release)),
+                    &format!("{}/{}", home_local_bin(), tarball_binary(*release)),
+                ]),
+            ]
+        }
         InstallAction::NotAutomatable { .. } => Vec::new(),
     }
+}
+
+/// The binary a release tarball installs.
+fn tarball_binary(release: TarballRelease) -> &'static str {
+    match release {
+        TarballRelease::Neovim => "nvim",
+    }
+}
+
+/// Where a release tarball is unpacked before its binary is copied out.
+///
+/// One directory per release, so two tarballs in the same run cannot
+/// overwrite each other, matching `script_path`'s rule.
+fn tarball_staging_dir(release: TarballRelease) -> std::path::PathBuf {
+    let name = match release {
+        TarballRelease::Neovim => "neovim-release",
+    };
+    std::env::temp_dir().join(name)
+}
+
+/// `~/.local/bin`, the directory `search_path` prepends.
+fn home_local_bin() -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| String::from("/root"));
+    format!("{home}/.local/bin")
 }
 
 /// The argv that installs, which is the last command in the sequence.
@@ -721,6 +817,13 @@ fn summarize(action: &InstallAction) -> String {
                 None => format!("brew {shape} {id}"),
             }
         }
+        InstallAction::ReleaseTarball { release } => match tarball_url(*release) {
+            Some(url) => format!("{} from the pinned release tarball {url}", tarball_binary(*release)),
+            None => format!(
+                "{}: no release tarball for this architecture",
+                tarball_binary(*release)
+            ),
+        },
         InstallAction::AptSource { .. } => {
             "gh, after adding a third-party APT trust root".to_string()
         }

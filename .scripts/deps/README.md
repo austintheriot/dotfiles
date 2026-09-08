@@ -23,8 +23,8 @@ is the prose version. The manifest in this directory is the executable one.
   environment variable overrides the choice.
 - `depcheck-hook.sh` -- sourced from `.zshrc`. Defines the `depcheck` alias
   and a startup check that runs at most once every 24 hours.
-- `docker/Dockerfile.ubuntu`, `docker/Dockerfile.arch` -- minimal images for
-  exercising a bootstrap from scratch. Used by `test-local.sh` and by
+- `docker/Dockerfile.ubuntu`, `docker/Dockerfile.pop`, `docker/Dockerfile.arch`
+  -- minimal images for exercising a bootstrap from scratch. Used by `test-local.sh` and by
   `.github/workflows/deps-check.yml`. Neither carries a Rust toolchain, so
   the engine arrives through a `/seed` mount that
   `docker/deps-image-entrypoint.sh` reads. Installing a toolchain into
@@ -210,9 +210,27 @@ bootstrap on the 1st and the 15th of each month, and on demand through
 packages over the network, and an upstream outage would then fail unrelated
 commits.
 
-Three jobs cover the three package managers: `ubuntu-latest` for apt,
-`macos-latest` for brew, and an Arch container built from
-`docker/Dockerfile.arch` for pacman.
+Four jobs cover the package managers and the one distribution whose
+package versions differ from its parent's: `ubuntu-latest` for apt,
+`macos-latest` for brew, an Arch container built from
+`docker/Dockerfile.arch` for pacman, and a Pop!_OS container built from
+`docker/Dockerfile.pop`.
+
+The Pop!_OS leg is apt, like the Ubuntu one, so what it covers is not the
+package manager but the package VERSIONS the archive resolves to. It exists
+because of a real failure: apt's Neovim is 0.6.1 on Pop!_OS 22.04 and 0.9.5
+on 24.04, the Neovim config in this repo needs 0.10 for `vim.uv`, and the
+manifest's check was a bare `command -v nvim` that both satisfied. The
+bootstrap called the machine ready and the editor then failed at startup.
+
+`deps.conf` now writes that entry as `command -v nvim >=0.10`, which parses
+to `Check::CommandVersion` and compares three numeric components rather than
+strings -- "0.9" sorts above "0.10" lexically and below it as a version. On
+apt the catalog routes `neovim` to a pinned upstream release tarball
+installed into `~/.local/bin`, because System76 does not override that
+package: measured inside the image, adding Pop's own archive leaves the
+candidate at 0.9.5 from Ubuntu universe. brew and pacman both ship a current
+Neovim, so only the apt arm differs.
 
 `docker/Dockerfile.ubuntu` pins `ubuntu:24.04` by digest.
 `docker/Dockerfile.arch` is deliberately unpinned, because `archlinux:base`

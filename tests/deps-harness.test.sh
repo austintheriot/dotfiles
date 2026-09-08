@@ -44,6 +44,7 @@
 HARNESS="$DOTFILES_ROOT/.scripts/deps/test-local.sh"
 DOCKERFILE_UBUNTU="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.ubuntu"
 DOCKERFILE_ARCH="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.arch"
+DOCKERFILE_POP="$DOTFILES_ROOT/.scripts/deps/docker/Dockerfile.pop"
 WORKFLOW="$DOTFILES_ROOT/.github/workflows/deps-check.yml"
 
 # `case` inside a command substitution trips bash's parser on the `)` of a
@@ -131,7 +132,7 @@ home_git checkout -q mac
 # lost --yes would hang on a prompt and a CMD that lost the install verb
 # would report missing dependencies it never tried to install.
 
-for dockerfile in "$DOCKERFILE_UBUNTU" "$DOCKERFILE_ARCH"; do
+for dockerfile in "$DOCKERFILE_UBUNTU" "$DOCKERFILE_ARCH" "$DOCKERFILE_POP"; do
     image=${dockerfile##*Dockerfile.}
     contents=$(cat "$dockerfile")
 
@@ -286,6 +287,7 @@ facts = {
     'ubuntu_run': run_text('ubuntu'),
     'macos_run': run_text('macos'),
     'arch_run': run_text('arch'),
+    'pop_run': run_text('pop'),
 }
 
 with open(sys.argv[2], 'w') as handle:
@@ -368,6 +370,64 @@ assert_equals 'the macos job runs on a macOS runner' 'macos-latest' "$(wf macos_
 
 assert_contains 'the arch job builds the arch Dockerfile' \
     '.scripts/deps/docker/Dockerfile.arch' "$(wf arch_run)"
+
+# --- the Pop!_OS leg -----------------------------------------------------
+#
+# Pop!_OS is apt, like the ubuntu leg, so the reason this image exists is
+# not the package manager but the package VERSIONS its archive resolves to.
+# The failure it guards was real: apt's neovim is 0.6.1 on Pop 22.04 and
+# 0.9.5 on 24.04, `vim.uv` needs 0.10, and the manifest's old bare
+# `command -v nvim` was satisfied by both.
+pop_dockerfile=$(cat "$DOCKERFILE_POP")
+
+# The trap this assertion exists for was hit while writing the image, and
+# it is silent. Dearmoring dists/noble/Release.gpg looks right and installs
+# nothing usable -- that file is a signature, not a public key -- so apt
+# reported NO_PUBKEY, skipped the repository, and the image built green
+# while testing plain Ubuntu. The build has to FAIL in that case, not warn.
+assert_contains 'the pop image fails the build when its archive does not load' \
+    'apt-cache policy | grep -q apt.pop-os.org' "$pop_dockerfile"
+
+# A `|| true` on the repository setup would restore exactly that silence.
+apt_update_line=$(printf '%s\n' "$pop_dockerfile" | grep -c 'apt-get update; *\\$' || true)
+assert_succeeds 'the pop image runs apt-get update without swallowing its failure' \
+    test "$apt_update_line" -ge 1
+
+assert_contains 'the pop image adds the Pop archive' \
+    'apt.pop-os.org' "$pop_dockerfile"
+
+assert_contains 'the pop job builds the pop Dockerfile' \
+    '.scripts/deps/docker/Dockerfile.pop' "$(wf pop_run)"
+
+# The install step reporting "installed neovim" is not the claim: the engine
+# reports that for apt's 0.9.5 too. The workflow has to assert the VERSION
+# on the machine afterwards, which is the fact the old check could not
+# express.
+assert_contains 'the pop job asserts the installed neovim version' \
+    'nvim --version' "$(wf pop_run)"
+
+# Convergence, not just success. A floor the installer cannot satisfy would
+# reinstall every wave forever while still exiting 0 on each one.
+#
+# Matched with single-space spacing because `run_text` collapses whitespace
+# when it flattens the YAML block into one fact line. The workflow itself
+# greps for the engine's real three-space column spacing, which is
+# `present   neovim`; verified against a live container, where an install
+# prints `installed neovim` with one space and a converged run prints
+# `present   neovim` with three. Asserting the collapsed form here checks
+# that the job looks for convergence at all, and the container run is what
+# proves the spacing.
+assert_contains 'the pop job asserts the second run converges' \
+    'present neovim' "$(wf pop_run)"
+
+# --- the manifest carries the floor at all -------------------------------
+#
+# The image and the workflow are both downstream of this line. Without it
+# they assert the engine installs a current neovim onto a machine that
+# never asked for one.
+assert_contains 'deps.conf pins a neovim version floor' \
+    'command -v nvim >=0.10' \
+    "$(cat "$DOTFILES_ROOT/.scripts/deps/deps.conf")"
 assert_contains 'the arch job runs the image it built' \
     'depcheck-arch' "$(wf arch_run)"
 

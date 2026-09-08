@@ -90,6 +90,27 @@ pub enum CloneSource {
     ZshAutosuggestions,
 }
 
+/// A closed set of pinned upstream release tarballs.
+///
+/// Identities rather than URLs, for the reason `ScriptInstaller` already
+/// states: the adapter maps each to a hardcoded URL, so adding one is a
+/// code change that appears in a diff.
+///
+/// Every entry is pinned to an exact tag. A moving "latest" URL would make
+/// the installed version depend on the day the bootstrap ran, and the whole
+/// point of the version floor is that the version is a stated fact rather
+/// than an accident.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TarballRelease {
+    /// Neovim's official Linux release tarball.
+    ///
+    /// The tarball rather than the AppImage that upstream also publishes:
+    /// an AppImage needs FUSE to execute, which the bootstrap containers do
+    /// not have, so the AppImage route would fail in exactly the
+    /// environment that tests it.
+    Neovim,
+}
+
 /// A closed set of APT keyring sources.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum KeyringSource {
@@ -257,6 +278,24 @@ pub enum InstallAction {
         /// Where the clone lands.
         into: CheckPath,
     },
+    /// A pinned upstream release tarball, unpacked into `~/.local/bin`.
+    ///
+    /// Separate from `Script` because the two are different shapes, not two
+    /// spellings of one. `Script` fetches text and pipes it to an
+    /// interpreter; this fetches a binary artifact, picks an asset for the
+    /// machine's architecture, and installs a file. Folding it into
+    /// `Script` would make `describe` print "run the upstream installer"
+    /// for an action that runs no installer at all.
+    ///
+    /// This exists because a distribution's package can be too old to
+    /// satisfy a `Check::CommandVersion` floor while still being the
+    /// newest thing its apt offers. Pop!_OS 22.04 ships Neovim 0.6.1 and
+    /// 24.04 ships 0.9.5, against a config that needs 0.10, so on those
+    /// machines the manager has no answer and this is the fallback.
+    ReleaseTarball {
+        /// Which pinned release to fetch.
+        release: TarballRelease,
+    },
     /// No payload: there is one node entry, no conf file pins a version, and
     /// the only value is `--lts` (`retired-check-deps:388`). A `String` payload
     /// would reopen spec 3.6 by admitting shell-adjacent text as data.
@@ -297,6 +336,13 @@ pub enum PackageAvailability {
     /// zoxide needs this: apt, brew and pacman all have packages, and any
     /// other manager gets the installer script (`retired-check-deps:308`).
     ViaScript(ScriptInstaller),
+    /// Installed from a pinned upstream release tarball.
+    ///
+    /// Used where the manager's own package exists but cannot satisfy the
+    /// entry's version floor, which is not the same as the package being
+    /// absent: `Unavailable` would report "no install for neovim on apt"
+    /// when apt has one and it is merely too old.
+    ViaTarball(TarballRelease),
     /// The manager cannot install it, and the reason says why.
     Unavailable(NoInstallReason),
     /// `gh` on apt. Not a package install: `retired-check-deps:236` adds a

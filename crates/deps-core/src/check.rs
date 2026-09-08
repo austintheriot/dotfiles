@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use dotfiles_path::{
-    CheckRelPath, CommandName, GlobPattern, ModuleName, NameError, PathError,
+    CheckRelPath, CommandName, GlobPattern, ModuleName, NameError, PathError, VersionFloor,
 };
 
 use crate::manifest::ConfKind;
@@ -46,9 +46,16 @@ impl CheckPath {
 
 /// A presence check.
 ///
-/// There is no `Shell` variant. All 22 real checks fit these seven, verified
+/// There is no `Shell` variant. All 22 real checks fit these eight, verified
 /// by reading the four conf files, and a named variant per need is strictly
 /// better than an escape hatch that grants all future blast radius at once.
+///
+/// `CommandVersion` is the one variant no conf file needed when this type
+/// was written. It was added because presence and adequacy are different
+/// facts and the type could only express the first: `command -v nvim` is
+/// satisfied by the Neovim 0.6.1 that Pop!_OS 22.04's apt ships, and the
+/// config in this repo needs 0.10, so the bootstrap reported a machine
+/// ready and the editor then failed to start on it.
 ///
 /// `AnyOf` carries `first` and `rest` rather than one `Vec`, because
 /// `AnyOf(vec![])` is a well-typed value that evaluates false under any
@@ -59,6 +66,19 @@ impl CheckPath {
 pub enum Check {
     /// `command -v <name>`: the name resolves on `PATH`.
     Command(CommandName),
+    /// `command -v <name> >=<floor>`: the name resolves AND reports a
+    /// version at or above `floor`.
+    ///
+    /// Distinct from `Command` rather than an `Option<VersionFloor>` on it,
+    /// so that every match arm in the crate has to decide what a floor
+    /// means for it. An optional field defaults to "no floor" at each site
+    /// that forgets, which is the failure this variant exists to prevent.
+    CommandVersion {
+        /// The command whose version is read.
+        name: CommandName,
+        /// The lowest version that satisfies the check.
+        floor: VersionFloor,
+    },
     /// `[ -d <path> ]`: the path is a directory.
     DirExists(CheckPath),
     /// `[ -f <path> ]`: the path is a file.
@@ -204,6 +224,11 @@ pub enum CheckParseError {
     Unrecognized,
     /// A recognized `command -v` shape holding an invalid command name.
     BadCommandName(NameError),
+    /// A recognized `command -v <name> >=<floor>` shape holding a floor
+    /// that is not a version. Refused rather than degraded to a bare
+    /// presence check: degrading would silently restore the behaviour the
+    /// floor was written to replace.
+    BadVersionFloor(NameError),
     /// A recognized file or directory test holding an invalid path.
     BadPath(PathError),
     /// A recognized `python3 -c "import ..."` holding an invalid module name.
@@ -309,8 +334,18 @@ fn parse_test_operand(raw: &str) -> Result<Check, CheckParseError> {
 
 /// One non-alternating check expression.
 fn parse_leaf(raw: &str, kind: ConfKind) -> Result<Check, CheckParseError> {
-    if let Some(name) = raw.strip_prefix("command -v ") {
-        let parsed = CommandName::parse(name.trim()).map_err(CheckParseError::BadCommandName)?;
+    if let Some(rest) = raw.strip_prefix("command -v ") {
+        // The floor is split off before the name is parsed, because
+        // `CommandName::parse` rejects the space and the `>=` and would
+        // report BadCommandName for a well-formed floor expression.
+        if let Some((name, floor)) = rest.split_once(">=") {
+            let parsed_name =
+                CommandName::parse(name.trim()).map_err(CheckParseError::BadCommandName)?;
+            let parsed_floor =
+                VersionFloor::parse(floor.trim()).map_err(CheckParseError::BadVersionFloor)?;
+            return Ok(Check::CommandVersion { name: parsed_name, floor: parsed_floor });
+        }
+        let parsed = CommandName::parse(rest.trim()).map_err(CheckParseError::BadCommandName)?;
         return Ok(Check::Command(parsed));
     }
     if let Some(module) = raw
@@ -413,6 +448,52 @@ mod tests {
 
     fn command(name: &str) -> Check {
         Check::Command(CommandName::parse(name).expect("a test command name parses"))
+    }
+
+    // The shape the manifest writes for a floor. Chosen to read as an
+    // extension of the `command -v` it sits beside rather than as a new
+    // syntax, so the conf file stays one grammar.
+    #[test]
+    fn a_command_version_floor_parses() {
+        let parsed = parse_check_expression("command -v nvim >=0.10", ConfKind::PlatformSelected)
+            .expect("a floor expression parses");
+        match parsed {
+            Check::CommandVersion { ref name, floor } => {
+                assert_eq!(name.as_str(), "nvim");
+                assert_eq!(floor.components(), (0, 10, 0));
+            }
+            other => panic!("expected a CommandVersion, got {other:?}"),
+        }
+    }
+
+    // The bare form must keep parsing to the bare variant. A floor parser
+    // that swallowed `command -v nvim` and defaulted the floor to 0.0.0
+    // would type-check, pass its own test, and silently convert every
+    // presence check in the manifest into a version check.
+    #[test]
+    fn a_bare_command_check_is_still_a_bare_command_check() {
+        let parsed = parse_check_expression("command -v git", ConfKind::PlatformSelected)
+            .expect("a bare command expression parses");
+        assert_eq!(parsed, command("git"));
+    }
+
+    // A malformed floor is refused rather than degraded to a presence
+    // check. Degrading would reintroduce exactly the bug the floor exists
+    // to close: a machine reported satisfied while carrying a version the
+    // config cannot run.
+    #[test]
+    fn a_malformed_version_floor_is_refused() {
+        for raw in [
+            "command -v nvim >=",
+            "command -v nvim >=latest",
+            "command -v nvim >=0",
+            "command -v nvim >=v0.10",
+        ] {
+            assert!(
+                parse_check_expression(raw, ConfKind::PlatformSelected).is_err(),
+                "{raw:?} parsed instead of being refused"
+            );
+        }
     }
 
     fn home_file(rest: &str) -> CheckPath {

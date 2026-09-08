@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use deps_core::{
     CloneSource, ConfKind, DependencyName, KeyringSource, NoInstallReason, PackageAvailability,
     PackageCatalog, PackageManager, PackageMap, PathRoot, Requirements, ScriptInstaller,
-    SourceListEntry, parse_manifest,
+    SourceListEntry, TarballRelease, parse_manifest,
 };
 use dotfiles_path::{CheckRelPath, PackageId};
 
@@ -75,12 +75,32 @@ pub fn packages() -> PackageCatalog {
 
     // Rows whose package name is the dependency name on every manager, which
     // is the shell's `*)` default case at `retired-check-deps:434-438`.
-    for name in ["git", "zsh", "neovim", "fzf", "ripgrep", "tmux", "shellcheck", "xclip"] {
+    for name in ["git", "zsh", "fzf", "ripgrep", "tmux", "shellcheck", "xclip"] {
         insert_same_name_everywhere(&mut catalog, name);
     }
 
-    // ripgrep's binary is `rg` and neovim's is `nvim`, but both packages are
-    // named for the project on all three managers, so they need no override.
+    // ripgrep's binary is `rg`, but the package is named for the project on
+    // all three managers, so it needs no override.
+
+    // neovim is NOT in the row above, though its package is spelled the same
+    // everywhere, because on apt the correctly-spelled package is too old to
+    // satisfy the manifest's `>=0.10` floor: Pop!_OS 22.04 ships 0.6.1 and
+    // 24.04 ships 0.9.5. Installing it would leave the fixpoint running the
+    // same install every wave against a check that can never pass.
+    //
+    // brew and pacman both ship current Neovim, so only the apt arm differs.
+    insert(
+        &mut catalog,
+        "neovim",
+        per_manager(vec![
+            (PackageManager::Apt, PackageAvailability::ViaTarball(TarballRelease::Neovim)),
+            (PackageManager::Brew, named("neovim")),
+            (PackageManager::Pacman, named("neovim")),
+        ]),
+        PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
+            manager: PackageManager::Unknown,
+        }),
+    );
 
     insert(
         &mut catalog,
@@ -714,7 +734,11 @@ mod tests {
             Check::FileExists(path) | Check::FileNonEmpty(path) => vec![(path.clone(), true)],
             // A glob names the directory it searches, which a clone creates.
             Check::GlobExists { dir, .. } => vec![(dir.clone(), false)],
-            Check::Command(_) | Check::PythonImport(_) => Vec::new(),
+            // Neither names a path, so neither can be a clone target: a
+            // version check reads a binary already on PATH.
+            Check::Command(_) | Check::CommandVersion { .. } | Check::PythonImport(_) => {
+                Vec::new()
+            }
             Check::AnyOf { first, rest } => {
                 let mut subjects = subjects_by_kind(first);
                 for branch in rest {

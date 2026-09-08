@@ -2,6 +2,20 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- CLAIMED 2026-09-08. Harden the nvim install so a bare image gets a working
+  editor, and add tests that execute nvim rather than grepping its config.
+  ROOT CAUSE VERIFIED: `InstallAction::ReleaseTarball`
+  (crates/config-cli/src/deps/installer.rs:314-336) copies only `bin/nvim`
+  out of the staging directory and discards `share/nvim/runtime/` and `lib/`.
+  Neovim finds $VIMRUNTIME by walking up from its own executable looking for
+  `share/nvim/runtime`, so the orphaned binary looks in
+  ~/.local/share/nvim/runtime, finds nothing, and falls back to the
+  compiled-in upstream build paths. Reproduced in ubuntu:24.04:
+  VIMRUNTIME=/usr/local/share/nvim (nonexistent), `require "nvim.spellfile"`
+  FAIL, `E484: Can't open file .../syntax/syntax.vim`.
+  Full investigation, the 4-lens panel synthesis, and the deferred items are
+  in .superpowers/sdd/nvim-hardening/progress.md.
+
 - Show child process output while a step runs, rather than only a summary
   after it finishes. Reported 2026-09-08: `config init: [5/5] install the
   missing tracked dependencies` prints nothing at all until every install is

@@ -16,7 +16,7 @@ small mechanical fixes, two latent path-handling gaps with no live trigger,
 two config-manifest design decisions, and several items that need a
 conversation rather than a commit.
 
-- Move the deps manifests out of `.scripts/deps/` to a top-level home.
+- CLAIMED 2026-09-08. Move the deps manifests out of `.scripts/deps/` to a top-level home.
   `.scripts/` is the shell-scripts directory, and after the Rust port the
   only scripts left there are `depcheck-hook.sh`, `test-bootstrap.sh` and
   `test-local.sh`; the four `.conf` files are declarative data read by a

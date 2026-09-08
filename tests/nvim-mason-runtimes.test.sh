@@ -129,6 +129,63 @@ declared_count=$(grep -E '^        [a-z_][a-z_0-9]* = (\{|nil|true|false)' "$LSP
 assert_equals 'every server declared in the file survives the ranged parse' \
     "$declared_count" "$server_count"
 
+# --- every linter the config invokes actually gets installed ------------
+#
+# THE GAP THIS CLOSES, found 2026-09-08 on a freshly bootstrapped container.
+# Opening any file printed:
+#
+#   Error running cspell: ENOENT: no such file or directory
+#
+# nvim-lint registers cspell with `cmd = 'cspell'` and wires it into
+# `linters_by_ft` for 26 filetypes (lint.lua), so it runs on almost every
+# buffer. Nothing installs it: it is absent from `ensure_installed`, absent
+# from the deps manifests, and therefore absent on every fresh machine.
+#
+# This suite already existed to catch exactly this shape -- a tool the config
+# invokes that no install path provides -- and missed it, because it only ever
+# read the mason `ensure_installed` list. A linter registered directly with
+# nvim-lint never appears there.
+LINT_CONFIG="$NVIM_LUA/plugins/lint.lua"
+assert_succeeds 'the lint config exists' test -f "$LINT_CONFIG"
+
+# Every `cmd = '<name>'` nvim-lint is given. That is the exact string it
+# execs, so it is the thing that must exist on PATH.
+#
+# Matched ANYWHERE on the line, not anchored to the line start. A first
+# version required `^ *cmd = '...'` and missed a linter declared inline
+# (`lint.linters.foo = { cmd = 'foo' }`), which is valid Lua and the shape a
+# one-line linter naturally takes. Verified by sabotage: the anchored pattern
+# reported 17 passing assertions with an unprovided linter in the config.
+lint_commands=$(sed -e 's/--.*//' "$LINT_CONFIG" \
+    | grep -oE "cmd = '[a-z][a-z0-9-]*'" \
+    | sed -e "s/cmd = '//" -e "s/'//" | sort -u)
+assert_succeeds 'the linter commands parse' test -n "$lint_commands"
+
+# The parse must find every linter the config registers, not a subset. A
+# `lint.linters.<name> =` assignment is the independent derivation: it does
+# not share the `cmd =` pattern above, so a linter added in a shape the
+# command parse cannot read leaves the two counts different.
+registered_count=$(sed -e 's/--.*//' "$LINT_CONFIG" \
+    | grep -cE 'lint\.linters\.[a-z][a-z0-9_-]* *=')
+command_count=$(printf '%s\n' "$lint_commands" | grep -c .)
+assert_equals 'every registered linter contributes a parsed command' \
+    "$registered_count" "$command_count"
+
+# Each one must be provided by mason's ensure_installed or by the manifests.
+# Named per tool rather than as one pass/fail, so a failure says WHICH tool
+# has no install path.
+for tool in $lint_commands; do
+    if printf '%s\n%s\n' "$servers" "$extra_tools" | grep -qx "$tool"; then
+        provided="mason ensure_installed"
+    elif tracks "$tool"; then
+        provided="a deps manifest"
+    else
+        provided="NOTHING -- add it to ensure_installed or to a deps manifest"
+    fi
+    assert_succeeds "the '$tool' linter has an install path ($provided)" \
+        test "$provided" != "NOTHING -- add it to ensure_installed or to a deps manifest"
+done
+
 # --- every runtime those tools need is tracked --------------------------
 #
 # npm is the one that actually broke. Mason installs eslint-lsp, ts_ls,

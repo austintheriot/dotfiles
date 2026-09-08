@@ -2,187 +2,21 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-Items marked BLOCKER came from an /expert-review survey pass on 2026-09-05.
-Each was reproduced by running the code, not by reading it; the reproduction
-is recorded with the item so it can be turned into a regression test first.
+Swept 2026-09-08 against live code, checking the exact file:line each entry
+cited rather than trusting the entry. Twelve items were already fixed by the
+2026-09-06 and 2026-09-07 plan work, which resolved them without removing
+them from this file: both PROMPT LATENCY items, all four leak-check and
+lib.sh BLOCKERs, the bare-printf skips, the TRIGGER_PATHS gap, the
+`config help --describe` contract, the assert_succeeds exit code, the
+test-bootstrap empty-context build, and SKIP_LEAK_CHECK truthiness. They are
+deleted below. What remains was confirmed still present.
 
-The two PROMPT LATENCY items came from a research pass on 2026-09-06
-(docs/research/rust-external-tool-boundaries.md). Both are shell fixes, and
-between them they are worth more than the Rust migration they were found
-while investigating. Every number below was measured twice, once by the
-research agent and once independently.
+Every BLOCKER from that survey pass is now closed. What is left is a mix of
+small mechanical fixes, two latent path-handling gaps with no live trigger,
+two config-manifest design decisions, and several items that need a
+conversation rather than a commit.
 
-- PROMPT LATENCY. `parse_git_dirty` runs a full `git status` on every prompt
-  render, and costs 299ms in a large worktree.
-  `.zshrc:208-213` defines it and `.zshrc:224` calls it from inside `PS1`, so
-  it runs every time a prompt is drawn, in every pane.
-  Measured in a 24,453-file worktree:
-    git status (what it does now)            299.2 ms
-    git -c core.untrackedCache=true status   133.4 ms
-    git status --porcelain -uno --no-renames  44.6 ms
-  In `$HOME` it is only 12ms, because `.cfg/config` sets
-  `status.showUntrackedFiles=no`. The cost is paid in the real project
-  worktrees, which is where most prompts are drawn.
-  Two options, and they compose:
-    - Set `core.untrackedCache=true` (and consider `core.fsmonitor`). Both
-      are currently unset, verified. No code change, no behavior change.
-    - Switch to `--porcelain -uno --no-renames` and match on the porcelain
-      codes rather than three `[[ =~ ]]` tests against human-readable
-      English. That is also a correctness improvement: the current form
-      breaks if git ever rewords its output, and it depends on the user's
-      locale. It drops untracked-file colouring, so that part is a
-      deliberate behavior decision rather than a free win.
-  For scale: the tmux naming script this repo has spent much more effort on
-  costs 17.8ms on the same path.
-
-- PROMPT LATENCY. `.scripts/tmux-update-window-names.sh --all` costs 1473ms,
-  and roughly a third of that is spawns for directories that are not
-  repositories.
-  Measured: `--all` at 1473ms against 17.8ms for the default single-window
-  path, so the `-a` path is about 80x the per-prompt cost. It is reached from
-  `re` (the alias at .zshrc:85) and by anything that renames every window.
-  Two causes, both fixable in shell:
-    - The `--path-format` fallback at lines 105-113 fires whenever `$info` is
-      empty, which is every non-repo directory, not only git older than 2.31.
-      Git here is 2.50.0, so the fallback can never be needed for its stated
-      reason. Measured 24.27ms of wasted spawns per non-repo directory,
-      against 0.0033ms for a `test -e "$dir/.git"` guard.
-    - The per-window `git rev-parse` can be a direct read of `.git`,
-      `<gitdir>/commondir` and `<gitdir>/HEAD`. I verified agreement with
-      `git branch --show-current` across all 21 live window directories:
-      21 of 21 agree, including the linked worktrees whose `.git` is a file
-      pointing into a `worktrees/` directory.
-  Keep a `git rev-parse` fallback for the shapes a file read does not cover
-  (`gitdir:` chains, `core.worktree`, unusual ref backends), which is the
-  library-first-with-escape-hatch design starship uses. Build the equivalence
-  harness first: 21 live directories is evidence, not proof.
-
-- BLOCKER. `tests/leak-check.sh` reports a clean scan when the scan failed.
-  `added_lines` detects a `git log` failure and calls `exit 2` (line 115),
-  but it is only ever invoked inside a command substitution
-  (`staged=$(echo "$scan_paths" | added_lines)`, line 132). The exit kills
-  the subshell, the parent captures an empty string, and the next line
-  (`[ -z "$staged" ] && exit 0`) reports success. `changed_paths` has the
-  same shape at line 96.
-  Reproduced with a standalone script: parent survives, capture empty,
-  final exit 0.
-  Consequence: `tests/pre-push:96` has a branch for exit status 2 ("could
-  not scan, push blocked") that this path can never reach. The script
-  prints the correct diagnostic and then does the opposite.
-  Fix direction: capture the status explicitly
-  (`scan_paths=$(changed_paths) || exit 2`) or write a sentinel file the
-  parent checks. A subshell cannot propagate an exit to its parent.
-
-- BLOCKER. `tests/leak-check.sh` layer 2 fails open when the pattern file
-  is absent. When `~/.claude/local/leak-patterns.conf` is unreadable
-  (line 167), the guard prints "term rules INACTIVE" to stderr and
-  continues. The generic credential rules still run, so a credential-shaped
-  string is still caught. What deactivates is the employer and project term
-  layer, which is the layer that exists because this repo is public.
-  Reproduced by differential test on identical content: pattern file
-  present exits 1 (blocked), pattern file absent exits 0 (allowed).
-  The file is untracked on purpose, so it is absent by default on every
-  fresh machine. That is the same moment a new machine is committing its
-  setup work.
-  Fix direction: exit non-zero when the file is missing, with an explicit
-  opt-out variable for a machine that genuinely has no terms to defend.
-  Compare `tests/pre-push:86`, which hard-fails when leak-check.sh itself
-  is missing.
-
-- BLOCKER. `tests/leak-check.sh` can be blinded by one `.gitattributes`
-  line. A path marked `-diff` produces "Binary files ... differ" with no
-  `+` lines, so the content rules see nothing.
-  Reproduced: a file holding a credential-shaped string is blocked
-  normally (exit 1) and passes (exit 0) once `cred.txt -diff` is
-  committed. This is distinct from the known binary-file gap below,
-  because it lets an ordinary text file be marked unscannable and the
-  marking is an innocuous-looking one-line commit.
-  Fix direction: after computing `scan_paths`, assert every path produced
-  at least one hunk, and block on any path that produced none. That one
-  mechanism also closes the binary-file and newline-path gaps recorded
-  below.
-
-- BLOCKER. A test suite that runs zero assertions reports PASS.
-  `tests/lib.sh:264` ends `finish` with `[ "$failed" -eq 0 ]`, which is
-  true when nothing ran. Under `run-all.sh -q`, which is what the
-  pre-push hook shows, that is byte-identical to a real pass.
-  Reproduced: a suite whose body is only `finish` prints
-  "0 passed, 0 failed" and exits 0.
-  The sharpest live instance is `tests/githooks-installed.test.sh:26-30`,
-  which uses a bare `printf` rather than `skip`, then `finish; exit 0`,
-  when there is no `.cfg` directory. Reproduced under an isolated
-  DOTFILES_ROOT: "0 passed, 0 failed", exit 0. `.github/workflows/test-suite.yml:139`
-  sets DOTFILES_ROOT to the checkout workspace, which has `.git` and not
-  `.cfg`, and the container has no `.cfg` either. So all 7 assertions in
-  the suite that exists to catch "the hooks are not installed" run on one
-  machine only: this one.
-  Fix direction: make `finish` fail, or report a distinct verdict, when
-  passed + failed + skipped is 0. `run-all.sh:117` already parses the
-  summary line and can carry the marker up to the verdict.
-
-- Six suites skip with a bare `printf` instead of `skip`, so the skipped
-  assertions never reach the summary line or the runner's verdict.
-  Confirmed by grep: `githooks-installed`, `alacritty-platform-split`,
-  `workflow-labels`, `zshrc-node-startup`, `zshrc-python-startup`,
-  `zshrc-platform-split`. (`skip-reporting.test.sh` also matches, but its
-  hits are its own fixtures.)
-  The measured cost, per an /expert-review agent that ran the suite on the
-  host and in the container and diffed the counts:
-  `config-manifest-lifecycle` drops 7 of 16 assertions in the container
-  with no skip recorded, including the assertion that a binary built
-  without the stamp variable reports `unstamped`. That assertion is the
-  guard against the pre-push stamp gate comparing an empty string against
-  a real tree id.
-  `.claude/rules/dotfiles-tests.md` already states the rule this breaks:
-  do not printf the skip yourself and do not silently return.
-  `tests/setup.test.sh:422` is the model to copy.
-
-- `tests/pre-push` TRIGGER_PATHS omits paths that suites read, so editing
-  them pushes without running the suite that tests them. This is the same
-  class as the `.config/nvim` gap already fixed once; the class was never
-  swept.
-  Verified against the regex at line 38:
-    - every file in `.scripts/config/` except `usage.sh`. The alternative
-      `^\.scripts/.*\.sh$` requires a `.sh` suffix, and the dispatcher and
-      all 11 `config-*` subcommands are extensionless. Eight suites read
-      that tree.
-    - `.zshrc`, `.zshrc-mac`, `.zshrc-linux` (six zshrc-*.test.sh suites)
-    - `setup.sh` (setup.test.sh, bootstrap-harness.test.sh)
-    - `.profile` (profile-path.test.sh)
-    - `.config/alacritty/` (alacritty-platform-split, platform)
-    - `.scripts/deps/*.conf` and `.scripts/deps/docker/Dockerfile.*`
-  Every one of these is already COPYed into the test image because the
-  suites need it, so the Dockerfile and the trigger regex disagree about
-  what counts as test input.
-  Worth fixing structurally rather than by adding alternatives:
-  `tests/container.test.sh:227-263` already derives referenced root files
-  mechanically by grepping the suites. Extending that derivation to all
-  referenced paths, then asserting each matches TRIGGER_PATHS, would have
-  caught every entry above and would catch the next one.
-
-- `config help` cannot describe a compiled subcommand, so the first
-  `config-*` script ported to Rust will silently list as "(undocumented)".
-  `.scripts/config/config-help:38` reads the description with
-  `sed -n 's/^# help: //p'` over the file's source text. Verified against
-  the installed `config-manifest` binary: the sed yields nothing.
-  The dispatcher's execution contract (`.scripts/config/config:27-32`) is
-  already binary-compatible. It is only the introspection contract that is
-  source-text-only, so the two contracts share one name and the port
-  breaks the second one.
-  Fix direction: add a `--describe` execution contract with the existing
-  `sed` read as the fallback, so shell subcommands need no change and the
-  migration stays incremental. Do this BEFORE porting any subcommand.
-
-- `tests/lib.sh:229` reports the wrong exit code on every `assert_succeeds`
-  failure. `failed=$((failed + 1))` runs before the `printf` reads `$?`,
-  so the arithmetic's status is what gets printed.
-  Reproduced: a command exiting 42 reports "(exited 0)".
-  `assert_succeeds` is used 170+ times, and the failures that matter most
-  are the ones from a container run that cannot be reproduced
-  interactively.
-  Fix: capture the status into a local before the branch.
-
-- `tests/zshrc-startup-budget.test.sh` has no floor asserting it measured
+- CLAIMED 2026-09-08. `tests/zshrc-startup-budget.test.sh` has no floor asserting it measured
   anything, so the repo's only performance gate can pass while measuring
   nothing. The file's own comment at lines 76-79 documents the failure
   mode: without the `zmodload`, `$EPOCHREALTIME` is empty, every
@@ -190,17 +24,6 @@ research agent and once independently.
   clamps negatives to zero, which hides it further.
   Fix: assert the harness measured a non-zero elapsed time before
   asserting the budget. One line.
-
-- `.scripts/deps/test-bootstrap.sh` runs a guaranteed-failing `docker
-  build` on every invocation. `$workdir/empty-context` is created only at
-  line 121, inside the failure branch of the build at line 119, and the
-  first attempt's stderr is discarded by `2>/dev/null`. Confirmed that
-  `docker build` errors on a missing context path ("unable to prepare
-  context: path not found"). Line 153 (the bare build) has no retry and
-  works only because line 121 already ran, which is the tell that the
-  try/retry shape was never intentional.
-  Fix: `mkdir -p` beside the other mkdirs near line 55, then one
-  unconditional build. About 15 lines become 6.
 
 - `.scripts/alacritty-platform.sh:49` writes the pointer file
   non-atomically (`printf '%s' "$new" > "$pointer"`), and `.zshrc:178`
@@ -220,13 +43,6 @@ research agent and once independently.
   symlinks on a synced home.
   Fix: `find -L`, or resolve with `readlink -f` first (already done at
   line 21 for `$0`).
-
-- `SKIP_LEAK_CHECK` skips on any non-empty value, so `SKIP_LEAK_CHECK=0`
-  and `SKIP_LEAK_CHECK=false` both disable the guard.
-  `tests/leak-check.sh:60` tests `[ -n "$SKIP_LEAK_CHECK" ]`. Reproduced
-  for `1`, `0` and `false`. This is the sanctioned bypass of the repo's
-  primary control, so its semantics should not surprise.
-  Fix: match `1`, `true`, `yes` explicitly.
 
 - `.scripts/tmux-start.sh:26` decides a session exists with
   `[ "$(tmux ls | rg $SESSION_NAME)" = "" ]`, which substring-matches and

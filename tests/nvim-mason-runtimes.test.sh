@@ -63,9 +63,26 @@ assert_equals 'no health module sits directly in lua/, where it would never run'
 # is therefore load-bearing: if the shape of the config changes and this
 # silently extracts nothing, every assertion below passes vacuously.
 
+# Anchored to the server table's OWN indentation (8 spaces), not to `^ *`.
+# The loose pattern matched every `key = ...` line at any depth, so
+# `rust_analyzer`'s nested `settings = {` (lsp.lua:78 and :91) was extracted
+# as if it were an LSP server name. That put a non-server into the list every
+# assertion below reads, and the count guard did not notice because the list
+# was too long rather than too short.
+#
+# Harmless in effect until now only because the npm-backed list below is
+# hardcoded and `settings` is not in it. A server actually named for a
+# config key would have been silently cross-checked against the manifest.
 servers=$(sed -n '/local servers = {/,/^      }$/p' "$LSP_CONFIG" \
-    | sed -n 's/^ *\([a-z_]*\) = .*/\1/p' | sort -u)
+    | sed -n 's/^        \([a-z_][a-z_0-9]*\) = .*/\1/p' | sort -u)
 assert_succeeds 'the servers table parses' test -n "$servers"
+
+# The parse must not pick up nested table keys. `settings` is the one this
+# suite actually got wrong; it is asserted by name because a generic
+# "no unexpected names" rule would need its own list of expected names and
+# would drift the moment a server is added.
+assert_equals 'the parse takes server names only, not nested config keys' '' \
+    "$(printf '%s\n' "$servers" | grep -x 'settings' || true)"
 
 extra_tools=$(sed -n 's/.*ensure_installed = .*vim\.tbl_keys(servers), {\(.*\)}.*/\1/p' "$LSP_CONFIG" \
     | tr -d " '" | tr ',' '\n' | grep -v '^$' | sort -u)
@@ -74,8 +91,43 @@ assert_succeeds 'the extra tool list parses' test -n "$extra_tools"
 # A count guard on the parse above. `-gt 1` rather than an exact number, so
 # adding a server is not a test failure, but a parse that collapses to one
 # entry or none is.
+#
+# WHAT THIS GUARD DOES NOT CATCH, stated because it nearly hid a real defect.
+# A PARTIAL collapse passes: if an indentation change dropped the range
+# anchor and 10 servers parsed down to 2, every assertion below would run
+# against a subset and report success. The guard proves the parse produced
+# something, not that it produced everything. The `settings` assertion above
+# is the other half -- it proves the parse is not over-matching -- and
+# together they bound the parse from both sides.
 server_count=$(printf '%s\n' "$servers" | grep -c .)
 assert_succeeds 'the servers table has more than one entry' test "$server_count" -gt 1
+
+# An INDEPENDENT derivation, deliberately not sharing the sed range above.
+#
+# A first version of this guard counted the same `sed -n '/start/,/end/p'`
+# range and compared the two counts. It was useless, and the sabotage that
+# proved it is worth recording: inserting a line matching the range
+# terminator before `cssls` truncated the table from 10 servers to 5, and
+# all 14 assertions passed -- because BOTH sides read the same truncated
+# range and agreed with each other while both were wrong. Two derivations
+# that share their failure mode are one derivation.
+#
+# So this counts server-shaped lines across the WHOLE file and requires the
+# ranged parse to find every one of them. A range that stops early now
+# leaves the two numbers different.
+#
+# NOT_A_SERVER is the cost of reading the whole file: `handlers` (lsp.lua:102)
+# sits at the same 8-space depth outside the servers table, and this guard
+# failed on the healthy config until it was excluded. That is the intended
+# behaviour -- a new key at that depth breaks the build and gets classified
+# by a human, rather than silently joining the server list the way `settings`
+# did.
+NOT_A_SERVER='handlers'
+declared_count=$(grep -E '^        [a-z_][a-z_0-9]* = (\{|nil|true|false)' "$LSP_CONFIG" \
+    | sed -n 's/^        \([a-z_][a-z_0-9]*\) = .*/\1/p' \
+    | grep -vxF "$NOT_A_SERVER" | sort -u | grep -c .)
+assert_equals 'every server declared in the file survives the ranged parse' \
+    "$declared_count" "$server_count"
 
 # --- every runtime those tools need is tracked --------------------------
 #

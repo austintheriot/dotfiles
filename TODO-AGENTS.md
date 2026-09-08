@@ -684,3 +684,38 @@ labelled name`, `owned window follows branch changes`.
   run `install-hooks`, and assert the message names both the directory and
   the chmod. `tests/config-init.test.sh` and `tests/githooks-installed.test.sh`
   are the two suites that already drive these paths.
+
+## Neovim version floor is not enforced by the dependency contract
+
+The nvim config requires Neovim 0.10+ (`vim.uv`, added in 0.10; before that
+the handle was `vim.loop`). The manifest check is `command -v nvim`, which is
+a presence test with no version floor, so apt's Neovim on Pop!_OS 22.04
+(0.6.1) and 24.04 (0.9.5) both satisfy the manifest and then crash the editor
+at `init.lua:6`:
+
+    E5113: ... attempt to index field 'uv' (a nil value)
+
+`lua/dotfiles/health.lua` already carries the correct floor check
+(`vim.version.ge(vim.version(), '0.10-dev')`) and it can never fire on the
+machines that need it, for two independent reasons:
+
+  1. `init.lua` requires the health module on line 3 and indexes `vim.uv` on
+     line 6, so startup dies before `:checkhealth` can ever be run.
+  2. `health.lua:4` itself calls `vim.uv.os_uname()` two lines ABOVE its own
+     version check, so even a reachable `:checkhealth` would crash first.
+
+This is the same failure shape `nvim-mason-runtimes.test.sh` was written to
+catch: a health check that never runs reports nothing at all.
+
+The manifest half is a real feature, not a one-line conf edit. `Check` is a
+closed sum type of seven variants (`check.rs`), none of which expresses a
+version floor, and `parse_check_expression` returns `Unrecognized` for
+anything outside that grammar. A shell version pipeline in deps.conf would be
+a hard parse error, which is the type system correctly refusing the shortcut.
+Encoding the floor means a new `Check` variant plus a probe in `gather.rs`.
+
+Open question the variant forces: once the check correctly fails on Pop!_OS,
+apt cannot satisfy it on 22.04 or 24.04, so the catalog needs an answer or
+the fixpoint reports a permanently incomplete machine. `AptWithSource`
+(the mechanism `gh` already uses) with the neovim-ppa, or a `ScriptInstaller`
+for the official AppImage, are the two shapes that already exist here.

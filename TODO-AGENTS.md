@@ -2,33 +2,84 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- Failure when running in Ubuntu or Debian Docker containers:
-```
-Cloning into bare repository '/root/.cfg'...
-remote: Enumerating objects: 6164, done.
-remote: Counting objects: 100% (2051/2051), done.
-remote: Compressing objects: 100% (1021/1021), done.
-remote: Total 6164 (delta 1265), reused 1710 (delta 976), pack-reused 4113 (from 1)
-Receiving objects: 100% (6164/6164), 3.72 MiB | 7.42 MiB/s, done.
-Resolving deltas: 100% (3594/3594), done.
-setup.sh: moved aside .profile
-setup.sh: 1 pre-existing file(s) kept in /root/.dotfiles-backup-20260908184747
-Already on 'main'
-config init: [1/4] set status.showUntrackedFiles to no
-config init: [2/4] link the git hooks and put config on PATH
-/root/.cfg/hooks/pre-commit -> /root/tests/pre-commit
-/root/.cfg/hooks/pre-push -> /root/tests/pre-push
-/root/.local/bin/config -> /root/.scripts/config/config
-config init: [3/4] install the missing tracked dependencies
-/root/.scripts/config/config-install: 13: exec: config-cli: not found
+- BOOTSTRAP IS BROKEN ON ANY FRESH MACHINE WITH NO RUST TOOLCHAIN. Reported
+  as a Docker failure; it is not Docker-specific. Investigated 2026-09-08,
+  cause found and reproduced, NOT fixed: the fix is a design decision, not a
+  mechanical edit.
+  Reproduced byte-for-byte against the README's own one-liner
+  (README.md:13) in a clean `debian:bookworm`, and the same in
+  `ubuntu:24.04`:
 
-config init: the install step failed
-config init: the repo is cloned, the hooks are linked, and config is on PATH
-config init: fix the package manager, then run:
-config init:   /root/.scripts/config/config-install && /root/.scripts/config/config-build
-config init: (or `config install` and `config build`, once /root/.local/bin is on your PATH)
-root@7a8865f6f485:/#
-```
+      config init: [3/4] install the missing tracked dependencies
+      /root/.scripts/config/config-install: 13: exec: config-cli: not found
+      === setup.sh exit: 127 ===
+
+  THE CAUSE IS A CIRCULAR DEPENDENCY, and `config-init`'s own header comment
+  states both halves of it without noticing they close a loop:
+    - "install second, because it is what places the Rust toolchain. rustup
+      is a deps.toml entry, so on a genuinely fresh machine cargo does not
+      exist until this step has run."
+    - "build last ... it compiles the crate with the cargo that install just
+      placed."
+  But step 3 is `config-install`, whose last line is
+  `exec config-cli deps install "$@"` (`.scripts/config/config-install:13`),
+  and `config-cli` is what step 4 BUILDS. Step 3 needs step 4's output.
+  This became true when the deps engine moved from shell to Rust. It was not
+  a problem while step 3 was a shell script.
+
+  THE PRINTED RECOVERY PATH IS A DEAD END IN BOTH DIRECTIONS. Verified by
+  following it exactly:
+    - `config install` -> `exec: config-cli: not found` (same failure)
+    - `config build`   -> `cargo: not found` (`config-build:59`)
+  The message says "fix the package manager", and the package manager was
+  never the problem. A user who follows the advice gets the identical error.
+
+  THERE IS AN ESCAPE, and it inverts the documented order. Verified working
+  end to end in `debian:bookworm`: install rustup by hand
+  (`curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path`), put
+  `~/.cargo/bin` on PATH, then `config build` (succeeds, installs config-cli
+  and tmux-tools), then `config install --yes` (succeeds, installs zsh, tpm,
+  xclip, zoxide, zsh-autosuggestions). So the machine is recoverable; nothing
+  tells the user any of this.
+
+  WHY CI IS GREEN ON ALL EIGHT BOOTSTRAP LEGS -- this is the part worth
+  sitting with. `deps/docker/seed-prebuilt.sh` mounts a config-cli built on
+  the HOST into every bootstrap image before `setup.sh` runs, and its own
+  comment names this exact circularity as the reason the seam exists:
+  "on a genuinely fresh machine config-cli must arrive before the step that
+  would otherwise build it. These images cannot compile it."
+  So the gate pre-satisfies the gap that breaks real users. Every bootstrap
+  leg tests a machine that already has the binary, which is the one
+  condition a fresh machine does not meet. That is the repo's own documented
+  fail-open shape ("a gate that falls back can pass having tested a path
+  that no longer ships" -- seed-prebuilt.sh:20-22), one level up: the seam
+  is not a fallback, it is the premise.
+  Whatever fix is chosen, ONE bootstrap leg must run with no prebuilt binary
+  and no toolchain, or the bug can return silently.
+
+  THE DECISION TO MAKE, since these are not equivalent:
+    1. Have `config init` install rustup FIRST, directly, before step 3.
+       rustup is already `PackageAvailability::ViaScript(ScriptInstaller::Rustup)`
+       (`catalog.rs:200-202`) pointing at `https://sh.rustup.rs`
+       (`installer.rs:70`), so the URL and flags already exist in the engine
+       -- but the engine is the thing that cannot run yet, so this means a
+       shell copy of that one install in `config-init`. Cost: two places
+       know how to install rustup, and the repo's stated rule is one place
+       per concept.
+    2. Fetch a prebuilt config-cli from a GitHub release in `setup.sh`.
+       This is what the DEFERRED entry "Bootstrapping from a prebuilt binary
+       instead of a local compile" already proposes, and it is what the test
+       harness effectively does. Makes the harness's seam honest rather than
+       privileged. Cost: a release-artifact pipeline, checksum verification,
+       and a per-platform binary matrix that does not exist yet.
+    3. Reorder to build-before-install and require cargo as a documented
+       precondition of the one-liner. Cheapest, and it moves the burden onto
+       the user for the case the bootstrap exists to serve.
+    4. Keep the engine in Rust but leave a minimal shell path for step 3
+       only. Reintroduces the second parser the TOML move existed to end.
+  Prefer 1 for immediate repair and 2 as the real answer; they compose,
+  since 1 stops the bleeding without blocking 2. Not committed either way
+  without a decision, because 2 changes the release story for the repo.
 
 Swept 2026-09-08 against live code, checking the exact file:line each entry
 cited rather than trusting the entry. Twelve items were already fixed by the

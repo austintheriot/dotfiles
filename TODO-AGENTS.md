@@ -2,36 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED 2026-09-08. nvim: treesitter is configured for `master` while pinned to `main`, so
-  most of it is silently off. Found 2026-09-08 while investigating
-  determinism.
-  nvim-treesitter is pinned to `main` (the rewrite) in lazy-lock.json, but
-  `.config/nvim/lua/plugins/treesitter.lua` passes `master`-branch options:
-  ensure_installed, auto_install, highlight, indent, incremental_selection.
-  On `main`, `require('nvim-treesitter').setup()` forwards to
-  nvim-treesitter.config whose default table accepts ONLY `install_dir`, so
-  every other option is absorbed and ignored. No error, no warning.
-  MEASURED CONSEQUENCE on this machine:
-    - 1 of 19 declared parsers installed (typescript.so only)
-    - treesitter highlighting does NOT auto-start on a .ts buffer
-      (vim.treesitter.highlighter.active[buf] is nil after :edit)
-    - the parser itself is fine: language.add('typescript') and
-      vim.treesitter.start(buf,'typescript') both succeed when called
-  So highlighting, indent and incremental selection are all off, and 18
-  parsers are missing.
-  ALSO: `build = ':TSUpdate'` only updates ALREADY-INSTALLED parsers on
-  `main`, so a fresh machine converges to nothing. The build step has to
-  install an explicit list.
-  ON `main` THE AUTOCMD IS OURS TO WRITE: `main` ships no FileType handler,
-  so starting the highlighter and setting indentexpr is now config work.
-  Guard it with `pcall(vim.treesitter.language.add, lang)` so a missing or
-  ABI-stale parser degrades to regex highlighting rather than erroring on
-  every buffer open.
-  STAY ON `main`: its `lua/nvim-treesitter/parsers.lua` ships an exact
-  `revision` SHA per parser (318 parsers, all 19 of ours present), so the
-  plugin pin we already have transitively locks every parser source
-  revision. `master` is in maintenance and its lockfile has looser cadence.
-
 - nvim: pin the mason registry to a tag, and pin the 14 tool versions.
   The highest-leverage determinism change available, because pinning the
   registry pins the MEANING of every unversioned package name. Today

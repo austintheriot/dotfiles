@@ -16,16 +16,7 @@ small mechanical fixes, two latent path-handling gaps with no live trigger,
 two config-manifest design decisions, and several items that need a
 conversation rather than a commit.
 
-- CLAIMED 2026-09-08. `tests/zshrc-startup-budget.test.sh` has no floor asserting it measured
-  anything, so the repo's only performance gate can pass while measuring
-  nothing. The file's own comment at lines 76-79 documents the failure
-  mode: without the `zmodload`, `$EPOCHREALTIME` is empty, every
-  difference computes as zero, and the budget assertion passes. Line 118
-  clamps negatives to zero, which hides it further.
-  Fix: assert the harness measured a non-zero elapsed time before
-  asserting the budget. One line.
-
-- `.scripts/alacritty-platform.sh:49` writes the pointer file
+- CLAIMED 2026-09-08. `.scripts/alacritty-platform.sh:49` writes the pointer file
   non-atomically (`printf '%s' "$new" > "$pointer"`), and `.zshrc:178`
   backgrounds the script in every shell. The content-equality guard at
   line 44 suppresses the steady state, but on the first startup after a

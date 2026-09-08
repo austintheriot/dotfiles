@@ -76,7 +76,8 @@ fi
 # date(1), because macOS ships a date with no sub-second format and this suite
 # has to measure in milliseconds. The zmodload is required: without it
 # $EPOCHREALTIME expands to the empty string, every difference computes as
-# zero, and the budget assertion passes while measuring nothing.
+# zero, and the budget assertion passes while measuring nothing. The floor
+# assertion below the budget is what now catches that.
 #
 # Both clock reads happen in one bare shell that brackets the timed run, so the
 # two `zsh -f` spawns are outside the measured window rather than inside it.
@@ -119,6 +120,23 @@ config_ms=$((full_ms - bare_ms))
 
 printf 'startup: bare %dms, full %dms, config %dms (budget %dms)\n' \
     "$bare_ms" "$full_ms" "$config_ms" "$BUDGET_MS"
+
+# The floor, asserted BEFORE the budget: a broken clock reports every sample as
+# zero, and zero passes a budget. Drop the `zmodload` from elapsed_ms and both
+# $EPOCHREALTIME reads expand to the empty string, `(end - start) * 1000`
+# evaluates to 0 with no error, and this suite -- the repo's only performance
+# gate -- reports PASS having measured nothing. Verified by running the
+# arithmetic both ways: 7ms with the zmodload, 0ms without it.
+#
+# The floor is on the ABSOLUTE measurements, not on the config cost. A
+# config_ms of zero is a legitimate result (see the negative clamp above: it
+# means the two measurements overlapped in noise), so a floor there would fail
+# on the good outcome. A `full_ms` of zero is not a possible cost for spawning
+# a process and sourcing this config; it can only mean the clock is broken.
+[ "$bare_ms" -gt 0 ] && [ "$full_ms" -gt 0 ] && measured=yes \
+    || measured="no (bare ${bare_ms}ms, full ${full_ms}ms -- the clock read as zero)"
+
+assert_equals 'the harness measured a non-zero startup time' 'yes' "$measured"
 
 [ "$config_ms" -le "$BUDGET_MS" ] && within=yes \
     || within="no (config costs ${config_ms}ms, budget is ${BUDGET_MS}ms)"

@@ -656,9 +656,23 @@ labelled name`, `owned window follows branch changes`.
   The message also does not say what to do. The fix is one command
   (`chmod go-w ~/.local/bin`), and the tool knows it.
 
+  It also fails on the FIRST offending directory, and it checks four
+  (`config-install-hooks:49-52`: `~/.local/bin`, `~/.scripts/config`,
+  `~/tests`, `~/.cfg/hooks`). On the machine above, fixing the first just
+  revealed the second, so a user with a permissive umask pays one round trip
+  per directory with no way to see how many are left.
+
+  Root cause is probably the umask rather than any one directory: a `umask
+  002` makes everything git checks out group-writable, so all four are
+  offending at once and a per-directory fix is treating symptoms.
+
   What to change:
+  - Check every directory, then report ALL offenders in one message with a
+    single `chmod go-w <dir1> <dir2> ...` that clears them together.
   - Print the remedy in the error: name the offending mode bits and the exact
-    `chmod go-w <dir>` that clears them.
+    chmod that clears them.
+  - Consider naming the umask when all four are offending, since that is the
+    actual cause and the chmod is a one-time patch over it.
   - Decide whether `config init` should offer to fix the permissions itself
     when the directory is owned by the user (owner-writable is the only safe
     auto-fix; a directory owned by someone else must still refuse).

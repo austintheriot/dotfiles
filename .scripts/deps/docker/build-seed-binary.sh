@@ -78,8 +78,20 @@ printf '=== building config-cli for the containers (rust %s) ===\n' "$toolchain"
 # --locked, matching every other build gate in this repo: a harness that
 # silently updates the lockfile tests a dependency set that was never
 # committed.
+# --user, so the copied binary belongs to the caller rather than to root.
+# The container's default user is root, and on a Linux host the bind mount
+# preserves that ownership, so the `chmod +x` below failed with "Operation
+# not permitted" and took every bootstrap job with it. Docker Desktop on
+# macOS remaps ownership to the calling user, which is why the local harness
+# never saw it and four CI jobs did.
+#
+# HOME is set because cargo writes into it: without it the container's root
+# HOME stays /root, which this user cannot write, and the build fails
+# looking for a registry directory it cannot create.
 # shellcheck disable=SC2086
 docker run --rm $seed_platform \
+    --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
     -v "$repo_root/crates:/src/crates:ro" \
     -v "$repo_root/.scripts:/src/.scripts:ro" \
     -v "$seed_dir:/out" \

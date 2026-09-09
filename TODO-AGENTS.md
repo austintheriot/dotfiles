@@ -13,7 +13,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   :MasonInstall) instead.
   Record this beside any mason test work so the trap is not rediscovered.
 
-- nvim: the tarball download verifies nothing, and we have to be our own
+- CLAIMED 2026-09-08. nvim: the tarball download verifies nothing, and we have to be our own
   checksum authority. installer.rs fetches with a bare `curl -fsSL`.
   Upstream publishes NO checksum asset for the pinned release (verified
   against the GitHub API for v0.12.5: only the appimage/tar.gz/msi/zip assets

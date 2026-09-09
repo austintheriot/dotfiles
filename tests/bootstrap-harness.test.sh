@@ -408,3 +408,58 @@ assert_equals 'a real prebuilt binary is accepted' '0' "$present_status"
 assert_succeeds 'and it lands on PATH' test -x "$seam_probe_home/.local/bin/config-cli"
 
 finish
+
+# --- pre-push runs the deep checks, not only the suite -------------------
+#
+# WHY THIS EXISTS. The GitHub Actions quota ran out on 2026-09-09, so local
+# gates now carry what CI carried. pre-push already ran the leak scan, the
+# stamp gate, the Rust checks and the test suite in Docker -- but NOT the
+# bootstrap legs, which are the class that has caught the most real bugs
+# this week: the orphaned nvim runtime, the missing tree-sitter CLI, the
+# system-wide font path on Arch, and the node-on-PATH ordering bug were all
+# invisible to the suite and obvious to a bare container.
+#
+# Two harnesses already existed for this and nothing ran them automatically:
+#   deps/test-local.sh     - `config deps install` against ubuntu, Pop and arch
+#   deps/test-bootstrap.sh - the real entry point against a bare clone image
+#
+# Asserted as pre-push INVOKING them, because a harness nobody runs is
+# documentation. The comment-stripped read is the same guard the other
+# script parses here use: this file explains the harnesses in prose that a
+# raw grep would count as a call.
+PRE_PUSH="$DOTFILES_ROOT/tests/pre-push"
+assert_succeeds 'the pre-push hook exists' test -f "$PRE_PUSH"
+
+pre_push_code=$(sed -e 's/#.*//' "$PRE_PUSH")
+assert_succeeds 'the pre-push body was read' test -n "$pre_push_code"
+
+# Anchored to the LOOP that runs them, not to any mention of their names.
+# A first version grepped the comment-stripped body for each filename and
+# passed on a sabotaged loop, because the skip message itself names both
+# harnesses in a printf. Matching prose is not matching code.
+harness_loop=$(printf '%s\n' "$pre_push_code" | grep -E '^for harness in ' || true)
+assert_succeeds 'pre-push loops over the bootstrap harnesses' test -n "$harness_loop"
+for harness in test-local.sh test-bootstrap.sh; do
+    assert_succeeds "the harness loop includes $harness" \
+        test -n "$(printf '%s\n' "$harness_loop" | grep -F "$harness" || true)"
+done
+
+# And that the loop body actually EXECUTES them. The path alone is not
+# enough: the executable-check guard one line above contains the same
+# string, so a first version of this passed on a body whose invocation had
+# been replaced by `true`. The invocation is the line that ENDS the `env`
+# continuation, so it is matched with its trailing `; then`.
+assert_succeeds 'the harness loop executes each harness' \
+    test -n "$(printf '%s\n' "$pre_push_code" \
+        | grep -F '"$HOME/deps/$harness"; then' || true)"
+
+# The deep checks must be OPT-OUTABLE rather than unconditional. A push that
+# touches only a test file does not need three container bootstraps, and a
+# 20-minute unconditional gate is how `--no-verify` becomes a habit -- which
+# is the one thing this repo's rules forbid outright.
+# Anchored to the TEST, not to the variable's appearance: the skip message
+# mentions the variable by name, so a grep for the name alone passed on a
+# sabotaged condition.
+assert_succeeds 'the deep checks can be skipped deliberately' \
+    test -n "$(printf '%s\n' "$pre_push_code" \
+        | grep -E '^if \[ "\$\{DOTFILES_SKIP_BOOTSTRAP' || true)"

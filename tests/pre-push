@@ -288,13 +288,60 @@ fi
 # throwaway git repositories as fixtures, and with those variables set every
 # `git init` and `git commit` inside a fixture would operate on the dotfiles
 # repo instead.
-if env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
+if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
         DOTFILES_TEST_REF="$push_ref" "$HOME/tests/run-in-docker.sh"; then
-    printf 'pre-push: tests passed\n'
+    printf '\npre-push: tests failed, push blocked.\n' >&2
+    printf 'Fix the failures, or run `git push --no-verify` only if you have a\n' >&2
+    printf 'genuine reason to bypass the gate.\n' >&2
+    exit 1
+fi
+
+printf 'pre-push: tests passed\n'
+
+# --- the deep checks: what CI used to carry ------------------------------
+#
+# The GitHub Actions quota ran out, so these run here now. They are the
+# class that has caught the most real bugs: the orphaned nvim runtime tree,
+# the missing tree-sitter CLI, the system-wide font path on Arch, and the
+# node-on-PATH ordering bug were every one of them invisible to the suite
+# above and obvious to a bare container.
+#
+# Two harnesses, deliberately both, because they have different subjects:
+#   test-local.sh     runs `config deps install` against ubuntu, Pop!_OS and
+#                     arch images that COPY the deps tree.
+#   test-bootstrap.sh runs the REAL entry point -- setup.sh into config init
+#                     -- against an image that clones from a bare repo and
+#                     has nothing but git, curl and sudo.
+# The second is the one that catches a broken bootstrap; the first is the one
+# that catches a broken manifest. Neither substitutes for the other.
+#
+# OPT-OUTABLE ON PURPOSE. Three container bootstraps cost minutes, and an
+# unconditional gate that slow is how `--no-verify` becomes a habit -- which
+# this repo's rules forbid outright. DOTFILES_SKIP_BOOTSTRAP=1 is the
+# deliberate escape, and it prints that it was used so a skipped run is
+# never silent.
+if [ "${DOTFILES_SKIP_BOOTSTRAP:-0}" = 1 ]; then
+    printf 'pre-push: DOTFILES_SKIP_BOOTSTRAP=1, skipping the container bootstraps\n'
+    printf 'pre-push: run `deps/test-local.sh` and `deps/test-bootstrap.sh` before\n'
+    printf 'pre-push: pushing anything that touches the bootstrap path.\n'
     exit 0
 fi
 
-printf '\npre-push: tests failed, push blocked.\n' >&2
-printf 'Fix the failures, or run `git push --no-verify` only if you have a\n' >&2
-printf 'genuine reason to bypass the gate.\n' >&2
-exit 1
+for harness in test-local.sh test-bootstrap.sh; do
+    if [ ! -x "$HOME/deps/$harness" ]; then
+        printf 'pre-push: ~/deps/%s is missing or not executable\n' "$harness" >&2
+        exit 1
+    fi
+    printf 'pre-push: running deps/%s (minutes; DOTFILES_SKIP_BOOTSTRAP=1 to skip)\n' \
+        "$harness"
+    if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX \
+            "$HOME/deps/$harness"; then
+        printf '\npre-push: %s failed, push blocked.\n' "$harness" >&2
+        printf 'This is the gate that catches a broken bootstrap, which the test\n' >&2
+        printf 'suite cannot see. Fix it rather than skipping it.\n' >&2
+        exit 1
+    fi
+done
+
+printf 'pre-push: container bootstraps passed\n'
+exit 0

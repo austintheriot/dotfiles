@@ -96,6 +96,23 @@ selected() {
 }
 
 suites_run=0
+# Colour, decided once. run-all.sh does not source lib.sh, so the palette is
+# repeated here the same way the interpreter resolution already is.
+#
+# EMPTY UNLESS STDOUT IS A TTY, which is the contract rather than a
+# fallback: line 133 parses the summary with sed and container.test.sh
+# matches this output, so an escape breaks the gates and breaks them only in
+# CI. NO_COLOR per no-color.org: any non-empty value disables colour.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    C_RED=$(printf '\033[31m')
+    C_YELLOW=$(printf '\033[33m')
+    C_GREEN=$(printf '\033[32m')
+    C_BOLD=$(printf '\033[1m')
+    C_RESET=$(printf '\033[0m')
+else
+    C_RED='' C_YELLOW='' C_GREEN='' C_BOLD='' C_RESET=''
+fi
+
 suites_failed=0
 skips_total=0
 failed_names=()
@@ -140,18 +157,18 @@ run_suite() {
 
     if [ "$status" -eq 0 ]; then
         if [ -n "$skips" ]; then
-            printf 'PASS (%ds, %s skipped)\n' "$elapsed" "$skips"
+            printf '%sPASS%s (%ds, %s skipped)\n' "$C_GREEN" "$C_RESET" "$elapsed" "$skips"
         else
-            printf 'PASS (%ds)\n' "$elapsed"
+            printf '%sPASS%s (%ds)\n' "$C_GREEN" "$C_RESET" "$elapsed"
         fi
         [ "$quiet" -eq 1 ] || printf '%s\n' "$output" | sed 's/^/      /'
     else
         suites_failed=$((suites_failed + 1))
         failed_names+=("$name")
         if [ -n "$skips" ]; then
-            printf 'FAIL (%ds, %s skipped)\n' "$elapsed" "$skips"
+            printf '%sFAIL%s (%ds, %s skipped)\n' "$C_RED" "$C_RESET" "$elapsed" "$skips"
         else
-            printf 'FAIL (%ds)\n' "$elapsed"
+            printf '%sFAIL%s (%ds)\n' "$C_RED" "$C_RESET" "$elapsed"
         fi
         printf '%s\n' "$output" | sed 's/^/      /'
     fi
@@ -239,7 +256,7 @@ elif [ -n "$PYTHON_BIN" ]; then
             "$PYTHON_BIN" -m unittest discover -s "$directory" -p 'test_*.py'
     done <<< "$python_dirs"
 else
-    printf 'SKIP  python unit tests (python3 not found)\n'
+    printf '%sSKIP%s  python unit tests (python3 not found)\n' "$C_YELLOW" "$C_RESET"
 fi
 
 # --- Rust unit and integration tests --------------------------------------
@@ -274,7 +291,7 @@ elif [ -n "$only" ]; then
     : # a named suite is an integration suite; saying "cargo not found" here
       # would be false, and cargo has its own filter.
 else
-    printf 'SKIP  cargo test and cargo clippy (cargo not found)\n'
+    printf '%sSKIP%s  cargo test and cargo clippy (cargo not found)\n' "$C_YELLOW" "$C_RESET"
 fi
 
 # --- summary -----------------------------------------------------------
@@ -289,11 +306,11 @@ if [ "$skips_total" -gt 0 ]; then
 fi
 
 if [ "$suites_failed" -eq 0 ]; then
-    printf 'all %d suite(s) passed%s\n' "$suites_run" "$skip_note"
+    printf '%sall %d suite(s) passed%s%s\n' "$C_GREEN$C_BOLD" "$suites_run" "$skip_note" "$C_RESET"
     exit 0
 fi
 
-printf '%d of %d suite(s) failed%s:\n' "$suites_failed" "$suites_run" "$skip_note"
+printf '%s%d of %d suite(s) failed%s%s:\n' "$C_RED$C_BOLD" "$suites_failed" "$suites_run" "$skip_note" "$C_RESET"
 for name in "${failed_names[@]}"; do
     printf '  - %s\n' "$name"
 done

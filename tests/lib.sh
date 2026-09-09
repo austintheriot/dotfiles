@@ -41,6 +41,32 @@ resolve_python() {
     fi
     command -v python3 2>/dev/null || command -v python 2>/dev/null || true
 }
+# Colour, decided once, for a human watching a terminal.
+#
+# THE PIPED CASE IS THE CONTRACT, not a fallback. container.test.sh matches
+# this suite's assertion text and run-all.sh parses the summary line with
+# sed, so an escape here breaks the gates -- and breaks them only in CI,
+# where nobody is watching a terminal. Every variable below is EMPTY unless
+# stdout is a tty.
+#
+# NO_COLOR per no-color.org: any non-empty value disables colour. An empty
+# value does not, which is how a user unsets it.
+#
+# The words are unchanged either way. Colour is redundant emphasis, so a
+# mono terminal, a log file or deuteranopia loses nothing.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    C_RED=$(printf '\033[31m')
+    C_YELLOW=$(printf '\033[33m')
+    C_GREEN=$(printf '\033[32m')
+    C_RESET=$(printf '\033[0m')
+else
+    C_RED=''
+    C_YELLOW=''
+    C_GREEN=''
+    C_RESET=''
+fi
+export C_RED C_YELLOW C_GREEN C_RESET
+
 PYTHON_BIN=$(resolve_python)
 export PYTHON_BIN
 
@@ -206,10 +232,10 @@ assert_equals() {
     local description=$1 expected=$2 actual=$3
     if [ "$expected" = "$actual" ]; then
         record_outcome pass
-        printf 'ok: %s\n' "$description"
+        printf '%sok:%s %s\n' "$C_GREEN" "$C_RESET" "$description"
     else
         record_outcome fail
-        printf 'FAIL: %s\n' "$description"
+        printf '%sFAIL:%s %s\n' "$C_RED" "$C_RESET" "$description"
         printf '      expected: [%s]\n' "$expected"
         printf '      actual:   [%s]\n' "$actual"
     fi
@@ -220,11 +246,11 @@ assert_contains() {
     case $haystack in
         *"$needle"*)
             record_outcome pass
-            printf 'ok: %s\n' "$description"
+            printf '%sok:%s %s\n' "$C_GREEN" "$C_RESET" "$description"
             ;;
         *)
             record_outcome fail
-            printf 'FAIL: %s\n' "$description"
+            printf '%sFAIL:%s %s\n' "$C_RED" "$C_RESET" "$description"
             printf '      expected to contain: [%s]\n' "$needle"
             printf '      actual:              [%s]\n' "$haystack"
             ;;
@@ -237,13 +263,13 @@ assert_succeeds() {
     "$@" >/dev/null 2>&1 || status=$?
     if [ "$status" -eq 0 ]; then
         record_outcome pass
-        printf 'ok: %s\n' "$description"
+        printf '%sok:%s %s\n' "$C_GREEN" "$C_RESET" "$description"
     else
         # Captured before anything else runs: the counter increment reset $?,
         # so reading it afterwards reported the increment's status and every
         # failure in the suite claimed "exited 0".
         record_outcome fail
-        printf 'FAIL: %s (exited %d)\n' "$description" "$status"
+        printf '%sFAIL:%s %s (exited %d)\n' "$C_RED" "$C_RESET" "$description" "$status"
     fi
 }
 
@@ -265,7 +291,7 @@ assert_succeeds() {
 skip() {
     local reason=$1
     record_outcome skip
-    printf 'skip: %s\n' "$reason"
+    printf '%sskip:%s %s\n' "$C_YELLOW" "$C_RESET" "$reason"
 }
 
 # The verdict for a tally, as a value on stdout. Reads no globals, performs no

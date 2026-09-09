@@ -227,3 +227,37 @@ output=$(bash "$sub_suite" 2>&1)
 assert_contains 'a subshell assertion reaches the tally' '1 passed' "$output"
 
 finish
+
+# --- the suite's own output colours by severity --------------------------
+#
+# Same rule as the deps engine: red for a failure, yellow for a skip, green
+# for a pass, and NOTHING when the output is not a terminal. The words are
+# unchanged, so colour is redundant emphasis rather than the only channel.
+#
+# THE PIPED CASE IS THE CONTRACT, not a fallback. container.test.sh matches
+# this suite's assertion text and run-all.sh parses the summary line with
+# sed, so an escape here breaks the gates and breaks them only where nobody
+# is watching a terminal.
+LIB="$DOTFILES_ROOT/tests/lib.sh"
+lib_code=$(sed -e 's/#.*//' "$LIB")
+assert_succeeds 'the lib body was read' test -n "$lib_code"
+
+# The decision must be made once, from a tty check plus NO_COLOR, rather
+# than per printf.
+assert_succeeds 'lib.sh decides colour from a tty' \
+    test -n "$(printf '%s\n' "$lib_code" | grep -E '\-t 1' || true)"
+assert_succeeds 'lib.sh honours NO_COLOR' \
+    test -n "$(printf '%s\n' "$lib_code" | grep -E 'NO_COLOR' || true)"
+
+# And the assertion output must actually be plain through a pipe. Asserted on
+# a real run rather than on lib.sh's text, because the text could be right
+# while the expansion is wrong.
+#
+# A DIFFERENT suite is run, not this one: invoking itself recursed until the
+# harness timed out, which is a mistake worth leaving recorded rather than
+# silently fixing. skip-assertion.test.sh is small, has no side effects, and
+# exercises the same reporters.
+piped_assertions=$("$DOTFILES_ROOT/tests/nvim-lua-format.test.sh" 2>&1 || true)
+assert_succeeds 'a piped suite run produced output' test -n "$piped_assertions"
+assert_equals 'piped assertion output carries no ANSI escape' '' \
+    "$(printf '%s' "$piped_assertions" | grep -c "$(printf '\033')" | grep -v '^0$' || true)"

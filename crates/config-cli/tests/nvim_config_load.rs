@@ -84,7 +84,17 @@ fn warm_up_plugins(scratch: &Path) {
     //
     // `restore` installs exactly the commits the lockfile names, which is
     // also the version this test should be exercising: the pins that ship.
-    match run_with_config(&nvim, scratch, &["-c", "Lazy! restore"]) {
+    //
+    // THEN `MasonToolsInstallSync`, and this is what makes the formatter
+    // test honest. mason-tool-installer downloads its tools asynchronously,
+    // and a warm-up that only restored plugins exited before any of them
+    // arrived. So the scratch home had no `stylua`, the probe truthfully
+    // reported it absent, and the `.lua` case SKIPPED on every run -- which
+    // cargo hides for a passing test. stylua is the only mason-provided
+    // formatter in the set, so the one case the e2e test exists for was the
+    // one it never ran. The sync variant blocks until every ensure_installed
+    // tool is present.
+    match run_with_config(&nvim, scratch, &["-c", "Lazy! restore", "-c", "MasonToolsInstallSync"]) {
         Ok(run) if !run.stderr.trim().is_empty() => {
             eprintln!("scratch warm-up reported: {}", run.stderr.trim());
         }
@@ -533,16 +543,20 @@ fn each_configured_filetype_formats_a_real_buffer() {
         .expect("nvim runs");
 
         let formatted = std::fs::read_to_string(&path).expect("the probe file is readable");
-        if formatted == misformatted {
-            // The mapping is right (asserted above) and the tool did
-            // nothing, which on a fresh scratch directory means mason has
-            // not finished installing it.
-            eprintln!(
-                "skipping .{extension}: {tool} produced no change, \
-                 likely not installed yet in the scratch dir"
-            );
-            eprintln!("  stderr: {}", run.stderr.trim());
-            continue;
+        match judge_format(misformatted, &formatted, tool_on_nvim_path(&nvim, scratch, tool)) {
+            FormatVerdict::Formatted => {}
+            FormatVerdict::ToolAbsent => {
+                // A genuine skip: mason installs asynchronously and has not
+                // put the binary on nvim's PATH yet. Named, so a run that
+                // skipped everything is visibly not a run that passed.
+                eprintln!("skipping .{extension}: {tool} is not on nvim's PATH yet");
+                continue;
+            }
+            FormatVerdict::ToolPresentButNoChange => panic!(
+                ".{extension}: {tool} is on nvim's PATH and the file did not change, \
+                 so the wiring did not run it\n  stderr: {}",
+                run.stderr.trim()
+            ),
         }
 
         assert!(
@@ -550,6 +564,87 @@ fn each_configured_filetype_formats_a_real_buffer() {
             ".{extension} still holds the misformatted spacing after formatting: {formatted:?}"
         );
     }
+}
+
+/// Whether nvim can find a formatter binary on the PATH it actually has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ToolOnPath {
+    Yes,
+    No,
+}
+
+/// What one format attempt proved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FormatVerdict {
+    /// The file changed: the wiring ran the tool.
+    Formatted,
+    /// Unchanged and the binary is absent: mason has not finished. Skip.
+    ToolAbsent,
+    /// Unchanged and the binary is PRESENT: the wiring did not run it. Fail.
+    ToolPresentButNoChange,
+}
+
+/// Pure: decide from the two file contents and the PATH probe alone.
+fn judge_format(before: &str, after: &str, tool: ToolOnPath) -> FormatVerdict {
+    if before != after {
+        return FormatVerdict::Formatted;
+    }
+    match tool {
+        ToolOnPath::No => FormatVerdict::ToolAbsent,
+        ToolOnPath::Yes => FormatVerdict::ToolPresentButNoChange,
+    }
+}
+
+/// Ask the running config whether `tool` resolves on nvim's PATH.
+///
+/// nvim's PATH, not this process's: mason prepends its own bin directory
+/// inside nvim, so a binary this test cannot see can still be one conform
+/// will run. `exepath` is empty when nothing resolves.
+fn tool_on_nvim_path(nvim: &Path, scratch: &Path, tool: &str) -> ToolOnPath {
+    let probe = format!("lua print('EXEPATH:' .. vim.fn.exepath('{tool}'))");
+    let run = run_with_config(nvim, scratch, &["-c", &probe]).expect("nvim runs");
+    let found = run
+        .stdout
+        .lines()
+        .chain(run.stderr.lines())
+        .find_map(|line| line.strip_prefix("EXEPATH:"))
+        .unwrap_or("");
+    if found.is_empty() { ToolOnPath::No } else { ToolOnPath::Yes }
+}
+
+/// The verdict logic for one formatted file, on its own so it can be
+/// tested without nvim.
+///
+/// THE DISTINCTION THIS EXISTS TO MAKE. An earlier version of the e2e test
+/// skipped whenever the file came back unchanged, on the reasoning that
+/// mason installs asynchronously and the binary may not exist yet. That
+/// skip could not tell "prettier is not installed" from "prettier is
+/// installed and the wiring did not run it" -- and the second is exactly
+/// the reported bug. A skip that covers both is the fail-open shape this
+/// repo keeps paying for.
+///
+/// So the unchanged case splits on whether the tool is on nvim's PATH:
+/// absent is a genuine skip, present is a failure.
+#[test]
+fn an_unchanged_file_is_a_failure_only_when_the_tool_was_present() {
+    let before = "fn  main( )  {}\n";
+    let after_formatting = "fn main() {}\n";
+
+    assert_eq!(
+        judge_format(before, after_formatting, ToolOnPath::Yes),
+        FormatVerdict::Formatted,
+        "a changed file is formatted regardless of anything else"
+    );
+    assert_eq!(
+        judge_format(before, before, ToolOnPath::No),
+        FormatVerdict::ToolAbsent,
+        "unchanged with no binary is mason not finished: skip"
+    );
+    assert_eq!(
+        judge_format(before, before, ToolOnPath::Yes),
+        FormatVerdict::ToolPresentButNoChange,
+        "unchanged WITH the binary means the wiring did not run it: fail"
+    );
 }
 
 /// Every filetype this repo maps to a formatter resolves to one in nvim.

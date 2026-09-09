@@ -103,8 +103,27 @@ assert_contains 'the local harness names the same image file' \
 # The harness must test the working tree, not the last commit. test-local.sh
 # documents this trap for its own archive; the same one applies here, and the
 # overlay is what avoids it.
-assert_contains 'the local harness overlays the working tree' \
-    'setup.sh' "$(grep -A3 'for path in' "$HARNESS" || true)"
+overlay_line=$(grep -E '^for path in ' "$HARNESS" || true)
+assert_succeeds 'the local harness has an overlay list' test -n "$overlay_line"
+
+# EVERY tree the bootstrap builds from, not just the entry script. Omitting
+# one produces a machine that cannot exist: an earlier version of this list
+# carried deps but not crates, so a working-tree manifest was parsed by
+# HEAD's engine and a new check kind failed with "unknown field
+# `login_shell`" -- a bug in neither tree, only in their combination.
+#
+# `crates` is load-bearing because step 4 of `config init` COMPILES
+# config-cli from these sources, so the engine under test must come from the
+# same tree as the manifest it reads.
+for overlaid in setup.sh deps crates .scripts/config; do
+    assert_contains "the overlay carries $overlaid" "$overlaid" "$overlay_line"
+done
+
+# The copy must not drag in build output. crates/target is gitignored and
+# multiple gigabytes, and it gets committed into the throwaway repo, so a
+# missing exclusion turns a minutes-long harness into an unusable one.
+assert_succeeds 'the overlay drops the gitignored build output' \
+    grep -q 'rm -rf "$staging/crates/target"' "$HARNESS"
 
 # --- the CI job -------------------------------------------------------------
 #

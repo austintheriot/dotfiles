@@ -70,7 +70,17 @@ git_cmd archive "$branch" | tar -x -C "$staging"
 
 # Overlay the working tree's copy of everything this bootstrap actually
 # drives, so a local edit is under test rather than the last commit.
-for path in setup.sh deps .scripts/config .scripts/platform.sh; do
+#
+# `crates` is in the list, and leaving it out was a bug that produced a
+# genuinely impossible machine: the working tree's deps.toml against HEAD's
+# engine. A manifest gaining a check kind then failed here with
+#
+#   config-cli: the manifest does not parse: unknown field `login_shell`
+#
+# which is not a bug in either tree, only in their combination. Step 4 of
+# `config init` builds config-cli from these sources, so the engine under
+# test has to come from the same tree as the manifest it parses.
+for path in setup.sh deps crates .scripts/config .scripts/platform.sh; do
     if [ -e "$HOME/$path" ]; then
         # ${path:?} rather than $path: an empty value here would expand to
         # "$staging/" and recursively delete the staging tree. The loop list
@@ -79,6 +89,14 @@ for path in setup.sh deps .scripts/config .scripts/platform.sh; do
         rm -rf "$staging/${path:?}"
         mkdir -p "$staging/$(dirname "$path")"
         cp -R "$HOME/$path" "$staging/$path"
+
+        # crates/target is 2.3 GB of build output and gitignored. Copying it
+        # would dominate this harness's runtime and then be committed into
+        # the throwaway repo below. Dropped right after the copy rather than
+        # by teaching the loop a per-path exclude list.
+        if [ "$path" = crates ]; then
+            rm -rf "$staging/crates/target"
+        fi
     fi
 done
 

@@ -172,7 +172,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   window-naming binary already computes, since that is the one piece of
   status content this repo owns.
 
-- Prettify console output for readability: colour, and surface warnings,
+- CLAIMED 2026-09-09. Prettify console output for readability: colour, and surface warnings,
   errors and successes more clearly.
   Verified starting point: this repo emits NO colour at all. A grep for
   literal ANSI escapes across every tracked file outside `.claude/` returns

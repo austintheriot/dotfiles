@@ -39,12 +39,69 @@ pub struct Rendered {
     pub exit_code: u8,
 }
 
+/// Whether rendered output carries ANSI colour.
+///
+/// A CLOSED SUM DECIDED AT THE IO EDGE, which is the whole design. `render`
+/// is pure -- returning the streams rather than writing them is what makes
+/// every reporting decision testable without capturing a process's output --
+/// and a pure function cannot ask whether stdout is a terminal. So the
+/// answer arrives as an argument.
+///
+/// The two alternatives were worse in ways worth recording. Carrying
+/// structured spans instead of a `String` would move "what is a failure" out
+/// of the one place that owns it. Painting at the IO edge by pattern-matching
+/// the rendered text would re-derive the status from prose after the type
+/// that knew it had been discarded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Style {
+    /// No escapes at all, byte-identical to the output before colour existed.
+    ///
+    /// This is the contract for every non-terminal caller, not a fallback.
+    /// Every gate in this repo greps this output, and an escape in a piped
+    /// stream breaks them only in CI, where nobody is watching a terminal.
+    Plain,
+    /// ANSI SGR colour, for a terminal with a human in front of it.
+    Ansi,
+}
+
+/// Red: something failed and the run is not going to succeed.
+const RED: &str = "\u{1b}[31m";
+/// Yellow: something needs a human, but nothing failed.
+const YELLOW: &str = "\u{1b}[33m";
+/// Green: satisfied, nothing to do.
+const GREEN: &str = "\u{1b}[32m";
+/// Bold, for the summary heading only.
+const BOLD: &str = "\u{1b}[1m";
+/// Reset, closing every sequence above.
+const RESET: &str = "\u{1b}[0m";
+
+/// Wrap `text` in `colour`, or return it unchanged under `Style::Plain`.
+///
+/// Takes the word alone rather than a whole line, so the colour covers the
+/// status and not the dependency name: a line where everything is red is
+/// harder to scan than one where only the verdict is.
+fn paint(style: Style, colour: &str, text: &str) -> String {
+    match style {
+        Style::Plain => text.to_string(),
+        Style::Ansi => format!("{colour}{text}{RESET}"),
+    }
+}
+
 /// Render one report for one verb.
 ///
 /// Pure. The exit code comes from `exit_status`, so this function has no
 /// opinion about which number means what: that mapping has exactly one
 /// owner, per spec 5.4.
 pub fn render(report: &Report, verb: Verb) -> Rendered {
+    render_styled(report, verb, Style::Plain)
+}
+
+/// Render one report for one verb, with an explicit style.
+///
+/// Pure. The exit code comes from `exit_status`, so this function has no
+/// opinion about which number means what: that mapping has exactly one
+/// owner, per spec 5.4.
+pub fn render_styled(report: &Report, verb: Verb, style: Style) -> Rendered {
     let mut stdout = String::new();
     let mut stderr = String::new();
 
@@ -56,7 +113,12 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
         // stderr the way a failure does. It is not a failure -- nothing was
         // attempted -- so it carries its own word rather than FAILED.
         if let StepOutcome::Unsatisfiable { on } = &row.outcome {
-            let _ = writeln!(stderr, "  BLOCKED   {}", row.dependency.as_str());
+            let _ = writeln!(
+                stderr,
+                "  {} {}",
+                paint(style, RED, "BLOCKED  "),
+                row.dependency.as_str()
+            );
             let _ = writeln!(
                 stderr,
                 "              needs {}, which this run excluded from the selection",
@@ -75,7 +137,12 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
             // Written rather than push_str(&format!(..)): formatting straight
             // into the buffer skips the intermediate String, and `Write for
             // String` is infallible so the discarded Err does not exist.
-            let _ = writeln!(stderr, "  FAILED    {}", row.dependency.as_str());
+            let _ = writeln!(
+                stderr,
+                "  {} {}",
+                paint(style, RED, "FAILED   "),
+                row.dependency.as_str()
+            );
 
             // The cause, indented under the name it belongs to. Without it
             // the stdout line's "(see stderr)" points at a stream that only
@@ -88,25 +155,53 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
             }
         }
 
+        // SEVERITY PER ROW, chosen from the outcome rather than from the
+        // word, so a renamed word cannot silently change its colour.
+        //
+        //   red     the run failed or cannot proceed
+        //   yellow  a human has to act, but nothing failed
+        //   green   satisfied, nothing to do
+        //
+        // The word keeps its column width inside the paint, so a coloured
+        // and a plain run align identically -- an escape has no width but a
+        // shorter word does.
         let line = match &row.outcome {
-            StepOutcome::AlreadyPresent => format!("  present   {}\n", row.dependency.as_str()),
-            StepOutcome::Installed => format!("  installed {}\n", row.dependency.as_str()),
-            StepOutcome::NotSelected => format!("  missing   {}\n", row.dependency.as_str()),
-            StepOutcome::Blocked { on } => {
-                format!("  waiting   {} (needs {})\n", row.dependency.as_str(), on.as_str())
+            StepOutcome::AlreadyPresent => {
+                format!("  {} {}\n", paint(style, GREEN, "present  "), row.dependency.as_str())
             }
-            StepOutcome::Unsatisfiable { on } => format!(
-                "  blocked   {} (needs {}, which this run excluded)\n",
+            StepOutcome::Installed => {
+                format!("  {} {}\n", paint(style, GREEN, "installed"), row.dependency.as_str())
+            }
+            StepOutcome::NotSelected => {
+                format!("  {} {}\n", paint(style, YELLOW, "missing  "), row.dependency.as_str())
+            }
+            StepOutcome::Blocked { on } => format!(
+                "  {} {} (needs {})\n",
+                paint(style, YELLOW, "waiting  "),
                 row.dependency.as_str(),
                 on.as_str()
             ),
-            StepOutcome::NotAutomatable { reason } => {
-                format!("  manual    {} ({reason:?})\n", row.dependency.as_str())
-            }
+            StepOutcome::Unsatisfiable { on } => format!(
+                "  {} {} (needs {}, which this run excluded)\n",
+                paint(style, RED, "blocked  "),
+                row.dependency.as_str(),
+                on.as_str()
+            ),
+            StepOutcome::NotAutomatable { reason } => format!(
+                "  {} {} ({reason:?})\n",
+                paint(style, YELLOW, "manual   "),
+                row.dependency.as_str()
+            ),
             StepOutcome::InstallFailed { .. } | StepOutcome::InstalledButCheckStillFails { .. } => {
-                format!("  failed    {} (see stderr)\n", row.dependency.as_str())
+                format!(
+                    "  {} {} (see stderr)\n",
+                    paint(style, RED, "failed   "),
+                    row.dependency.as_str()
+                )
             }
-            StepOutcome::Declined => format!("  declined  {}\n", row.dependency.as_str()),
+            StepOutcome::Declined => {
+                format!("  {} {}\n", paint(style, YELLOW, "declined "), row.dependency.as_str())
+            }
         };
         stdout.push_str(&line);
     }
@@ -116,7 +211,16 @@ pub fn render(report: &Report, verb: Verb) -> Rendered {
         Verb::Install => "installed dependencies",
         Verb::DryRun => "would install",
     };
-    let summary = format!("deps {heading}: {} entries\n", report.rows.len());
+    // Bold rather than coloured: the heading is not a severity, and giving
+    // it a colour would compete with the words that are. This is the line
+    // tests/run-all.sh parses with sed, so the escapes must sit outside the
+    // text it matches -- which Style::Plain guarantees for every non-tty
+    // caller.
+    let summary = format!(
+        "{} {} entries\n",
+        paint(style, BOLD, &format!("deps {heading}:")),
+        report.rows.len()
+    );
 
     let verdict = match verb {
         Verb::Check => crate::Verdict::Check(report.check),
@@ -462,6 +566,140 @@ mod tests {
             "the exit code is the only fact a silent failure leaves: {}",
             rendered.stderr
         );
+    }
+
+    /// Plain rendering is byte-identical to the uncoloured output.
+    ///
+    /// THE BREAKAGE CLASS THIS PREVENTS, and it is the one this repo keeps
+    /// hitting. Every gate here greps this output: `tests/run-all.sh` parses
+    /// the summary line with sed, the deps-check workflow greps for
+    /// `present   neovim`, and `tests/container.test.sh` matches assertion
+    /// text. An escape sequence in a piped stream breaks all of them, and it
+    /// breaks them only in CI, where nobody is watching a terminal.
+    ///
+    /// So `Style::Plain` is the contract, not a fallback: the caller decides
+    /// at the IO edge, and a non-tty caller gets exactly the bytes it got
+    /// before colour existed.
+    #[test]
+    fn plain_style_emits_no_escape_sequences() {
+        for report in [
+            a_ready_report(),
+            a_report_with_a_failed_install(),
+            a_report_that_installed_nothing_and_is_not_ready(),
+        ] {
+            for verb in [Verb::Check, Verb::Install, Verb::DryRun] {
+                let rendered = render_styled(&report, verb, Style::Plain);
+                assert!(
+                    !rendered.stdout.contains('\u{1b}'),
+                    "plain stdout must carry no escape: {:?}",
+                    rendered.stdout
+                );
+                assert!(
+                    !rendered.stderr.contains('\u{1b}'),
+                    "plain stderr must carry no escape: {:?}",
+                    rendered.stderr
+                );
+            }
+        }
+    }
+
+    /// Plain is exactly what `render` produced before colour existed.
+    ///
+    /// Stronger than "no escapes": a styling change that reworded a line
+    /// would pass that check and still break every grep. This pins the
+    /// bytes.
+    #[test]
+    fn plain_style_matches_the_uncoloured_renderer() {
+        let report = a_report_with_a_failed_install();
+        let plain = render_styled(&report, Verb::Install, Style::Plain);
+        let default = render(&report, Verb::Install);
+
+        assert_eq!(plain.stdout, default.stdout, "render() must stay plain");
+        assert_eq!(plain.stderr, default.stderr, "render() must stay plain");
+    }
+
+    /// Failures are red, warnings yellow, successes green.
+    ///
+    /// The severity mapping is asserted per word rather than as a blanket
+    /// "output contains colour", because the point is that a reader can tell
+    /// severity at a glance: an error that came out yellow is worse than no
+    /// colour at all.
+    ///
+    /// The trailing spaces are inside the escape on purpose: the column
+    /// padding belongs to the painted word so a coloured and a plain run
+    /// align identically. An escape has no display width, but a word that
+    /// lost its padding does.
+    #[test]
+    fn ansi_style_colours_by_severity() {
+        let failed = render_styled(&a_report_with_a_failed_install(), Verb::Install, Style::Ansi);
+        assert!(
+            failed.stderr.contains(&format!("{RED}FAILED   {RESET}")),
+            "a failure must be red on stderr: {:?}",
+            failed.stderr
+        );
+        assert!(
+            failed.stdout.contains(&format!("{RED}failed   {RESET}")),
+            "the stdout row for a failure must be red too: {:?}",
+            failed.stdout
+        );
+
+        let ready = render_styled(&a_ready_report(), Verb::Check, Style::Ansi);
+        assert!(
+            ready.stdout.contains(&format!("{GREEN}present  {RESET}")),
+            "a satisfied row must be green: {:?}",
+            ready.stdout
+        );
+
+        let manual =
+            render_styled(&a_report_that_installed_nothing_and_is_not_ready(), Verb::Install, Style::Ansi);
+        assert!(
+            manual.stdout.contains(&format!("{YELLOW}manual   {RESET}")),
+            "a row needing human action is a warning, so it must be yellow: {:?}",
+            manual.stdout
+        );
+    }
+
+    /// Colour is redundant emphasis: the words survive it.
+    ///
+    /// A reader on a mono terminal, reading a log file, or with
+    /// deuteranopia must lose nothing. So every status word still appears in
+    /// the coloured output, and stripping the escapes yields the plain bytes
+    /// exactly.
+    #[test]
+    fn colour_never_replaces_a_word() {
+        let report = a_report_with_a_failed_install();
+        let plain = render_styled(&report, Verb::Install, Style::Plain);
+        let ansi = render_styled(&report, Verb::Install, Style::Ansi);
+
+        assert_eq!(
+            strip_escapes(&ansi.stdout),
+            plain.stdout,
+            "stripping colour must give back the plain bytes"
+        );
+        assert_eq!(
+            strip_escapes(&ansi.stderr),
+            plain.stderr,
+            "stripping colour must give back the plain bytes"
+        );
+    }
+
+    /// Remove ANSI CSI sequences, for the redundancy assertion above.
+    fn strip_escapes(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut chars = text.chars();
+        while let Some(character) = chars.next() {
+            if character != '\u{1b}' {
+                out.push(character);
+                continue;
+            }
+            // Skip "[...m": every sequence this renderer emits is an SGR.
+            for skipped in chars.by_ref() {
+                if skipped == 'm' {
+                    break;
+                }
+            }
+        }
+        out
     }
 
     /// The verb changes the wording, which is what makes the per-verb exit

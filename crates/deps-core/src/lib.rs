@@ -51,7 +51,7 @@ pub use plan::{
     RequirementEdgeError, Requirements, Selection, Step, plan,
 };
 pub use reconcile::{Report, ReportRow, reconcile};
-pub use render::{Rendered, Verb, render};
+pub use render::{Rendered, Style, Verb, render, render_styled};
 
 #[cfg(test)]
 mod purity {

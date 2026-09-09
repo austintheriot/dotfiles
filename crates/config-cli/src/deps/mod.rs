@@ -15,9 +15,12 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use std::io::IsTerminal;
+
 use deps_core::{
-    Elevation, Manifest, PathRoot, Planning, Rendered, Report, Requirements, Selection, Verb,
-    describe, reconcile, render, run_to_fixpoint, summarize_check, summarize_install,
+    Elevation, Manifest, PathRoot, Planning, Rendered, Report, Requirements, Selection,
+    Style, Verb, render_styled,
+    describe, reconcile, run_to_fixpoint, summarize_check, summarize_install,
 };
 
 use crate::{DepsArgs, DepsVerb};
@@ -79,6 +82,37 @@ pub(crate) fn run(verb: DepsVerb) -> ExitCode {
 /// can report travels inside the `Report` this returns. Splitting them means
 /// the `CALLER_ERROR` above is reached from one place rather than from every
 /// branch that could have picked a different number.
+/// Whether to colour this run's output.
+///
+/// A pure function of the two inputs that decide it, so both branches are
+/// testable without a terminal or an environment mutation. `output_style`
+/// below is the thin wrapper that reads the real world.
+///
+/// NO_COLOR WINS OVER THE TTY CHECK. no-color.org's rule is that ANY
+/// non-empty value disables colour, and honouring it is not politeness: a
+/// user who sets it has usually done so because something downstream breaks
+/// on escapes.
+fn style_for(is_terminal: bool, no_color: Option<&str>) -> Style {
+    if no_color.is_some_and(|value| !value.is_empty()) {
+        return Style::Plain;
+    }
+    if is_terminal { Style::Ansi } else { Style::Plain }
+}
+
+/// The style for this process, read from the real environment.
+///
+/// Plain whenever stdout is not a terminal, which is the case every gate in
+/// this repo runs under: `tests/run-all.sh` parses the summary with sed, the
+/// deps-check workflow greps for `present   neovim`, and
+/// `tests/container.test.sh` matches assertion text. An escape in a piped
+/// stream breaks all of them, and only in CI.
+fn output_style() -> Style {
+    style_for(
+        std::io::stdout().is_terminal(),
+        std::env::var("NO_COLOR").ok().as_deref(),
+    )
+}
+
 fn execute(arguments: &DepsArgs, verb: Verb) -> Result<Rendered, String> {
     let environment = read_environment();
     let sources = selection::conf_paths(&environment);
@@ -120,7 +154,7 @@ fn execute(arguments: &DepsArgs, verb: Verb) -> Result<Rendered, String> {
                 run_to_fixpoint(&planning, &installers, || gather::gather(&manifest, &resolver))
                     .map_err(|error| describe_plan_error(&error))?;
             let report = scoped_to_selection(report, &arguments.only, &selection);
-            Ok(render(&report, Verb::Install))
+            Ok(render_styled(&report, Verb::Install, output_style()))
         }
     }
 }
@@ -172,7 +206,7 @@ fn check(
     let observations = gather::gather(manifest, resolver);
     let (report, _events) = reconcile(manifest, &[], &observations);
     let report = scoped_to_selection(report, only, selection);
-    render(&report, Verb::Check)
+    render_styled(&report, Verb::Check, output_style())
 }
 
 /// Preview the plan without reaching the fixpoint loop.
@@ -221,7 +255,7 @@ fn dry_run(
     let descriptions = describe(&describing, &built);
 
     let (report, _reconcile_events) = reconcile(manifest, &[], &observations);
-    let mut rendered = render(&report, Verb::DryRun);
+    let mut rendered = render_styled(&report, Verb::DryRun, output_style());
     rendered.stdout.push_str(&render_descriptions(&descriptions));
     Ok(rendered)
 }
@@ -463,5 +497,37 @@ fn describe_load_error(error: &selection::LoadError) -> String {
         selection::LoadError::Io { path, message } => {
             format!("cannot read {}: {message}", path.display())
         }
+    }
+}
+
+#[cfg(test)]
+mod style_tests {
+    use super::*;
+
+    /// A terminal gets colour; anything else does not.
+    #[test]
+    fn only_a_terminal_gets_colour() {
+        assert_eq!(style_for(true, None), Style::Ansi, "a terminal is the colour case");
+        assert_eq!(
+            style_for(false, None),
+            Style::Plain,
+            "a pipe must stay plain, or every grep in this repo breaks in CI"
+        );
+    }
+
+    /// NO_COLOR disables colour even on a terminal.
+    ///
+    /// Per no-color.org: ANY non-empty value. An empty value is NOT a
+    /// request for plain output, which is the part implementations usually
+    /// get wrong -- `NO_COLOR=` is how a user unsets it.
+    #[test]
+    fn no_color_wins_over_the_terminal_check() {
+        assert_eq!(style_for(true, Some("1")), Style::Plain, "any value disables colour");
+        assert_eq!(style_for(true, Some("0")), Style::Plain, "even \"0\": presence is the signal");
+        assert_eq!(
+            style_for(true, Some("")),
+            Style::Ansi,
+            "an EMPTY value is not a request for plain output"
+        );
     }
 }

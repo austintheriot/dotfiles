@@ -245,3 +245,37 @@ assert_succeeds 'rustup is a tracked dependency' \
     grep -q '^\[rustup\]' "$DEPS_MANIFEST_REAL"
 
 finish
+
+# --- colour never reaches a pipe -----------------------------------------
+#
+# THE BREAKAGE CLASS THIS GUARDS, stated because it is the one this repo
+# keeps hitting: every gate here greps the engine's output. run-all.sh parses
+# the summary with sed, the deps-check workflow greps for `present   neovim`,
+# and container.test.sh matches assertion text. An escape sequence in a piped
+# stream breaks all of them, and it breaks them ONLY in CI, where nobody is
+# watching a terminal.
+#
+# So this asserts the bytes, from a shell, through a pipe -- the same shape
+# every gate uses. The Rust tests assert that Style::Plain emits no escapes;
+# this asserts that a piped process actually chooses it.
+if command -v config-cli >/dev/null 2>&1; then
+    piped=$(config-cli deps check 2>&1 || true)
+
+    assert_succeeds 'the piped run produced output' test -n "$piped"
+    assert_equals 'piped output carries no ANSI escape' '' \
+        "$(printf '%s' "$piped" | grep -c "$(printf '\033')" | grep -v '^0$' || true)"
+
+    # And the exact strings the gates match, so a reworded line fails here
+    # rather than in CI.
+    # Compared VALUES, not `assert_succeeds ... | grep -q`: a pipeline there
+    # pipes assert_succeeds's own output into grep, so the assertion never
+    # runs and never reports. That mistake has now been made three times in
+    # this repo, twice by me.
+    assert_succeeds 'the summary line is still greppable' \
+        test -n "$(printf '%s' "$piped" \
+            | grep -E '^deps checked dependencies: [0-9]+ entries' || true)"
+    assert_succeeds 'a present row is still greppable' \
+        test -n "$(printf '%s' "$piped" | grep -E '^  present   [a-z]' || true)"
+else
+    skip 'config-cli is not installed, so the piped-output contract cannot be checked'
+fi

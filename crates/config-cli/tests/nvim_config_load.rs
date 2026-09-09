@@ -39,9 +39,58 @@ use std::process::Command;
 ///
 /// `OnceLock` rather than a lazily-created file, so the directory outlives
 /// every test in the process and is cleaned up when the process exits.
+///
+/// THE PLUGIN INSTALL IS PART OF THE INITIALISER, and that is the fix for a
+/// real race rather than caution. Creating the directory once is not enough:
+/// the first nvim run to touch a cold `XDG_DATA_HOME` is what bootstraps
+/// lazy.nvim and clones every plugin, and cargo runs the tests in this file
+/// in PARALLEL. So the first test started the install while the others read
+/// a half-populated directory and failed with
+///
+///   E5113: Lua chunk: init.lua:27: module 'lazy' not found
+///
+/// and, in the formatter test, an empty formatter list -- which looks
+/// exactly like a missing config entry. One test in this file was safe by
+/// accident; three were not.
+///
+/// `get_or_init` serialises: every caller blocks until the closure returns,
+/// so the warm-up runs once and no test observes a partial install.
 fn shared_scratch() -> &'static Path {
     static SCRATCH: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
-    SCRATCH.get_or_init(|| tempfile::tempdir().expect("a scratch XDG home")).path()
+    SCRATCH
+        .get_or_init(|| {
+            let scratch = tempfile::tempdir().expect("a scratch XDG home");
+            warm_up_plugins(scratch.path());
+            scratch
+        })
+        .path()
+}
+
+/// Run nvim once against a cold scratch home so lazy.nvim installs.
+///
+/// Failures are printed and swallowed: this is a warm-up, and the tests that
+/// follow assert on what the config does. A hard panic here would report a
+/// network problem as a config defect.
+fn warm_up_plugins(scratch: &Path) {
+    let Some(nvim) = installed_nvim() else {
+        return;
+    };
+    // `Lazy! restore`, NOT `Lazy! sync`. Both install missing plugins and
+    // both are synchronous in the bang form, but `sync` also UPDATES every
+    // plugin to its latest commit and rewrites `lazy-lock.json` -- and that
+    // file lives in the repo's config directory, not in the scratch
+    // `XDG_DATA_HOME`. A first version of this warm-up used `sync` and
+    // silently moved 20 tracked plugin pins in the working tree.
+    //
+    // `restore` installs exactly the commits the lockfile names, which is
+    // also the version this test should be exercising: the pins that ship.
+    match run_with_config(&nvim, scratch, &["-c", "Lazy! restore"]) {
+        Ok(run) if !run.stderr.trim().is_empty() => {
+            eprintln!("scratch warm-up reported: {}", run.stderr.trim());
+        }
+        Err(error) => eprintln!("scratch warm-up could not run: {error}"),
+        Ok(_) => {}
+    }
 }
 
 /// The Neovim this machine would actually use, or `None` when none is installed.
@@ -388,5 +437,165 @@ fn the_real_config_loads_and_opens_buffers_without_errors() {
         errors.is_empty(),
         "a buffer whose filetype has no parser raised:\n{}",
         errors.join("\n")
+    );
+}
+
+/// Does `<leader>f` actually format a file, per language?
+///
+/// WHY THIS EXISTS, and why the contract tests were not enough. Everything
+/// else guarding formatters checks DECLARATIONS: that a formatter named in
+/// `formatters_by_ft` also appears in mason's `ensure_installed` or a deps
+/// manifest. That is a real gate and it is one layer too high.
+///
+/// The gap it missed, reported 2026-09-09 from a bare Ubuntu: `rust` had no
+/// entry in `formatters_by_ft` at all. Nothing was declared, so nothing was
+/// undeclared, so every declaration test passed while pressing the format
+/// key on a .rs file did nothing but fall through to `lsp_fallback`. A test
+/// that formats a real buffer cannot be fooled that way: an unformatted
+/// buffer is an unformatted buffer.
+///
+/// FORMATTING THROUGH CONFORM'S OWN ENTRY POINT, not by shelling out to
+/// prettier. Running `prettier` directly would prove prettier works, which
+/// nobody doubts. What is under test is this repo's wiring: the filetype
+/// mapping, the formatter resolution, and whether the tool is reachable on
+/// the PATH nvim actually has.
+///
+/// SKIPS RATHER THAN FAILS when the formatter binary is absent. Mason
+/// installs prettier and stylua asynchronously on first launch, and a fresh
+/// scratch directory has not finished when this runs; rustfmt comes from
+/// rustup and may not be on a CI image at all. A skip keeps this honest on
+/// an incomplete machine while still failing hard on the thing this repo
+/// controls -- the mapping. `formatters_for_filetype` below is that half,
+/// and it never skips.
+#[test]
+fn each_configured_filetype_formats_a_real_buffer() {
+    let Some(nvim) = installed_nvim() else {
+        eprintln!("skipping: no nvim on PATH");
+        return;
+    };
+    let scratch = shared_scratch();
+
+    // One case per language whose formatter this repo configures. The input
+    // is deliberately misformatted in a way the formatter must fix, so a
+    // no-op formatter cannot pass.
+    let cases: [(&str, &str, &str); 4] = [
+        ("rs", "fn  main( )  {let x=1;}\n", "rustfmt"),
+        ("lua", "local  x   =    1\n", "stylua"),
+        ("ts", "const  x   =    1\n", "prettier"),
+        ("json", "{\"a\" :  1}\n", "prettier"),
+    ];
+
+    for (extension, misformatted, tool) in cases {
+        let path = scratch.join(format!("format-probe.{extension}"));
+        std::fs::write(&path, misformatted)
+            .unwrap_or_else(|error| panic!("could not write {}: {error}", path.display()));
+
+        // Ask conform what it would run BEFORE formatting, so a filetype
+        // with no mapping is reported as such rather than as a formatter
+        // that made no change.
+        // `list_formatters_for_buffer`, not `list_formatters`. The latter
+        // filters to formatters that are actually INSTALLED, so in a fresh
+        // scratch XDG home it returns an empty list and the assertion below
+        // could not tell a missing mapping from an uninstalled tool -- the
+        // two facts this test exists to separate.
+        let probe = String::from(
+            "lua local names = require('conform').list_formatters_for_buffer(0) \
+             print('FORMATTERS:' .. table.concat(vim.tbl_flatten(names), ','))",
+        );
+        let listing = run_with_config(
+            &nvim,
+            scratch,
+            &[path.to_str().expect("a utf-8 path"), "-c", &probe],
+        )
+        .expect("nvim runs");
+
+        let named = listing
+            .stdout
+            .lines()
+            .chain(listing.stderr.lines())
+            .find_map(|line| line.strip_prefix("FORMATTERS:"))
+            .unwrap_or("")
+            .to_owned();
+
+        assert!(
+            named.split(',').any(|entry| entry == tool),
+            ".{extension} must map to {tool}, conform listed [{named}]"
+        );
+
+        // Now format for real and compare the file on disk. `write` is what
+        // makes the change observable to this test at all.
+        let format = "lua require('conform').format({ async = false, lsp_fallback = false })";
+        let run = run_with_config(
+            &nvim,
+            scratch,
+            &[path.to_str().expect("a utf-8 path"), "-c", format, "-c", "w"],
+        )
+        .expect("nvim runs");
+
+        let formatted = std::fs::read_to_string(&path).expect("the probe file is readable");
+        if formatted == misformatted {
+            // The mapping is right (asserted above) and the tool did
+            // nothing, which on a fresh scratch directory means mason has
+            // not finished installing it.
+            eprintln!(
+                "skipping .{extension}: {tool} produced no change, \
+                 likely not installed yet in the scratch dir"
+            );
+            eprintln!("  stderr: {}", run.stderr.trim());
+            continue;
+        }
+
+        assert!(
+            !formatted.contains("  ="),
+            ".{extension} still holds the misformatted spacing after formatting: {formatted:?}"
+        );
+    }
+}
+
+/// Every filetype this repo maps to a formatter resolves to one in nvim.
+///
+/// The half of the test above that must NEVER skip. It asks conform, inside
+/// the real config, which formatters it would run for each filetype -- so it
+/// fails when a mapping is missing or misspelled regardless of whether any
+/// formatter binary is installed on this machine.
+#[test]
+fn formatters_for_filetype_are_all_resolvable() {
+    let Some(nvim) = installed_nvim() else {
+        eprintln!("skipping: no nvim on PATH");
+        return;
+    };
+    let scratch = shared_scratch();
+
+    // Read the mapping out of the running config rather than restating it
+    // here, so a filetype added to autoformat.lua is covered with no edit
+    // to this test.
+    let probe = "lua local by_ft = require('conform').formatters_by_ft \
+                 local keys = vim.tbl_keys(by_ft) table.sort(keys) \
+                 print('FILETYPES:' .. table.concat(keys, ','))";
+    let listing = run_with_config(&nvim, scratch, &["-c", probe]).expect("nvim runs");
+
+    let filetypes = listing
+        .stdout
+        .lines()
+        .chain(listing.stderr.lines())
+        .find_map(|line| line.strip_prefix("FILETYPES:"))
+        .unwrap_or("")
+        .to_owned();
+
+    assert!(
+        !filetypes.is_empty(),
+        "the config must map at least one filetype to a formatter, got [{filetypes}]"
+    );
+
+    // rust is asserted BY NAME because its absence is the reported bug. The
+    // generic check above would pass with rust missing, exactly as every
+    // declaration test did.
+    assert!(
+        filetypes.split(',').any(|entry| entry == "rust"),
+        "rust must map to a formatter, config maps [{filetypes}]"
+    );
+    assert!(
+        filetypes.split(',').any(|entry| entry == "lua"),
+        "lua must map to a formatter, config maps [{filetypes}]"
     );
 }

@@ -50,6 +50,27 @@ NVIM_LUA="$DOTFILES_ROOT/.config/nvim/lua"
 HEALTH=$(find "$NVIM_LUA" -mindepth 2 -name health.lua 2>/dev/null | head -1)
 DEPS_DIR="$DOTFILES_ROOT/deps"
 
+# Read HERE, before first use, and that placement is the fix for a real
+# defect rather than tidiness.
+#
+# This block used to sit ~290 lines further down, beside the runtime
+# assertions that were its only consumer. The formatter install-path loop
+# above also reads it, in the `elif` branch that asks whether a formatter is
+# a deps-manifest entry -- and under `set -u` an unset variable is fatal, so
+# reaching that branch killed the suite mid-run with
+#
+#   nvim-mason-runtimes.test.sh: line 252: conf_names: unbound variable
+#
+# and the harness reported "0 passed, 0 failed" rather than a failure. It
+# stayed hidden because every formatter matched the FIRST branch, so the
+# `elif` was unreachable until a formatter arrived that mason does not
+# install. A latent crash in a gate that reports success is worse than the
+# gap it was added to catch.
+conf_names=$(cat "$DEPS_DIR"/deps.toml "$DEPS_DIR"/deps-mac.toml "$DEPS_DIR"/deps-linux.toml 2>/dev/null \
+    | sed -e 's/#.*//' | grep -oE '^\[[a-z][a-z0-9-]*\]' | tr -d '[]' | sort -u)
+
+tracks() { printf '%s\n' "$conf_names" | grep -qx "$1"; }
+
 assert_succeeds 'the lsp plugin config exists' test -f "$LSP_CONFIG"
 assert_succeeds 'the health module is under a named directory, so checkhealth can find it' \
     test -n "$HEALTH"
@@ -236,17 +257,55 @@ assert_succeeds 'the formatter list parses' test -n "$formatters"
 assert_equals 'the parse takes formatter names only, not the plugin name' '' \
     "$(printf '%s\n' "$formatters" | grep -x 'conform' || true)"
 
+# A THIRD install path, added because rustfmt has one and it is neither of
+# the first two. rustup's default profile ships rustfmt beside cargo and
+# clippy, so the tracked `rustup` entry is what provides it. Verified in a
+# clean ubuntu:24.04: `rustup component list --installed` names rustfmt with
+# no extra step.
+#
+# Listed by tool name rather than inferred, so a formatter that only LOOKS
+# toolchain-provided still has to be justified here by a human.
+TOOLCHAIN_PROVIDED='rustfmt'
+
 for tool in $formatters; do
     if printf '%s\n%s\n' "$servers" "$extra_tools" | grep -qx "$tool"; then
         provided="mason ensure_installed"
     elif printf '%s\n' "$conf_names" | grep -qx "$tool"; then
         provided="a deps manifest"
+    elif printf '%s\n' "$TOOLCHAIN_PROVIDED" | grep -qx "$tool"; then
+        provided="the rust toolchain (rustup default profile)"
     else
         provided="NOTHING -- add it to ensure_installed or to a deps manifest"
     fi
     assert_succeeds "the '$tool' formatter has an install path ($provided)" \
         test "$provided" != "NOTHING -- add it to ensure_installed or to a deps manifest"
 done
+
+# --- every language with an LSP server also has a formatter -------------
+#
+# THE GAP THIS CATCHES, reported 2026-09-09: `rust` had no entry in
+# `formatters_by_ft` at all, so `<leader>f` on a .rs file fell through to
+# `lsp_fallback` and whatever rust-analyzer chose to do. rustfmt was on the
+# machine the whole time (rustup's DEFAULT profile installs it, verified in
+# a clean container), so this was purely a missing three-word config line.
+#
+# Asserted per language rather than as a count, so the failure names the
+# language that is missing rather than only that one is.
+#
+# The list is the languages this config declares an LSP server for AND that
+# have a canonical formatter. A language whose formatter is genuinely the
+# language server's own job does not belong here; `lua_ls`/stylua and
+# `rust_analyzer`/rustfmt both have a separate standard tool.
+declare_format_for() {
+    printf '%s\n' "$format_code" | grep -qE "^ *$1 = "
+}
+
+for language in lua rust; do
+    declare_format_for "$language" && has_formatter=yes \
+        || has_formatter="no (leader-f falls through to lsp_fallback)"
+    assert_equals "the $language filetype names a formatter" 'yes' "$has_formatter"
+done
+
 
 # --- the treesitter spec matches the branch it is pinned to -------------
 #
@@ -499,15 +558,19 @@ done
 # satisfied by nvm.sh existing, which says nothing about whether a node
 # version was ever installed through it. The dependency that has to exist is
 # node itself.
-conf_names=$(cat "$DEPS_DIR"/deps.toml "$DEPS_DIR"/deps-mac.toml "$DEPS_DIR"/deps-linux.toml 2>/dev/null \
-    | sed -e 's/#.*//' | grep -oE '^\[[a-z][a-z0-9-]*\]' | tr -d '[]' | sort -u)
-assert_succeeds 'the dependency manifests parse' test -n "$conf_names"
 
-tracks() { printf '%s\n' "$conf_names" | grep -qx "$1"; }
+assert_succeeds 'the dependency manifests parse' test -n "$conf_names"
 
 # The other half of the tree-sitter-cli ownership pair (see the mason section
 # above): the engine must install it, so it has to be a manifest entry.
 assert_succeeds 'tree-sitter-cli is a tracked dependency' tracks 'tree-sitter-cli'
+
+# rustfmt needs NO manifest entry of its own, and this states why so nobody
+# adds a redundant one: rustup's default profile installs rustfmt alongside
+# cargo and clippy. Verified in a clean ubuntu:24.04, where
+# `rustup component list --installed` names rustfmt-x86_64-unknown-linux-gnu
+# with no extra step. So the formatter's install path is the rustup entry.
+assert_succeeds 'rustup is tracked, which is what provides rustfmt' tracks 'rustup'
 
 # The npm-backed entries in the ensure_installed list. Named here because the
 # mapping from a server name to its registry backing is Mason's, not this
@@ -526,6 +589,21 @@ tracks node && node_tracked=yes \
 assert_equals 'node is a tracked dependency, so npm-backed Mason tools can install' \
     'yes' "$node_tracked"
 
+# unzip is the second runtime, and it is the one that was still missing.
+#
+# Mason's own health check names it (mason.nvim health.lua:94), because a
+# `pkg:github/...` entry whose release asset is a .zip is extracted with
+# unzip. stylua ships exactly that way, so a bare machine installs every
+# npm-backed tool successfully and stylua alone fails -- which reads as a
+# stylua problem rather than a missing archiver.
+#
+# deps.toml already RECORDED that a bare ubuntu:24.04 has neither xz nor
+# unzip, in the comment justifying the xz-utils entry. The observation was
+# written down and only half acted on.
+tracks unzip && unzip_tracked=yes || unzip_tracked='no (stylua ships as a .zip release asset)'
+assert_equals 'unzip is a tracked dependency, so zip-backed Mason tools can install' \
+    'yes' "$unzip_tracked"
+
 # --- the health check names the runtimes --------------------------------
 #
 # Without this, a missing runtime surfaces only as N identical "failed to
@@ -535,7 +613,7 @@ assert_equals 'node is a tracked dependency, so npm-backed Mason tools can insta
 # word, so prose mentioning node in a message does not satisfy the assertion.
 # The claim being tested is that the check RUNS on that executable.
 health_text=$(cat "$HEALTH")
-for runtime in node npm; do
+for runtime in node npm unzip; do
     case $health_text in
         *"$runtime = "*|*"'$runtime'"*) named=yes ;;
         *) named="no" ;;

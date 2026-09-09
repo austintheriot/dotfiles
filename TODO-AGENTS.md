@@ -38,8 +38,12 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       files are ABI-coupled to the Neovim build and platform-coupled to the
       machine, so vendoring creates a matrix to rebuild on every bump whose
       stale entries fail at buffer-open on the OTHER machine.
-    - No test exercises mason actually installing, LSP attach, or treesitter
-      parsers in CI. The panel's tiering: an offline config-correctness tier
+    - PARTLY CLOSED 2026-09-09: crates/config-cli/tests/nvim_config_load.rs
+      now drives `MasonToolsInstallSync` in a scratch XDG home and formats
+      real .rs/.lua/.ts/.json buffers through conform, failing when a tool is
+      present and the file does not change. That covers mason installing and
+      the formatter wiring locally and in the pre-push container. Still not
+      exercised: LSP attach and treesitter parser compilation. The panel's tiering: an offline config-correctness tier
       on every push, a networked tier on a schedule plus workflow_dispatch,
       split by "touches the network" rather than by "is slow" so the fast
       signal is not hostage to npm uptime. Each layer gets its own CI STEP so
@@ -60,10 +64,10 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       highlighter paints during draw and persists no extmarks), and
       get_captures_at_pos returns nothing in a -S script that runs before
       the FileType autocmd; run the query against the tree instead.
-    - vim.g.have_nerd_font = true is unconditional (settings.lua:3) while no
-      font is a tracked dependency, so glyph width varies per machine. Pairs
-      with the DEFERRED font entry below. Making it a probe changes rendering
-      on a machine that currently works, so it wants a decision.
+    - RESOLVED 2026-09-09 by making the font a tracked dependency
+      (`nerd-font` in deps.toml, installed by the engine on every platform),
+      so `vim.g.have_nerd_font = true` is now a true statement on a fresh
+      machine rather than an assumption. No probe needed.
     - data-flow's structural fix: `TarballLayout` as a closed sum
       (SingleBinary vs RelocatablePrefix) with `InstallAction::postconditions()`
       deriving checks from the artifact, so a check cannot disagree with what
@@ -175,19 +179,18 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   Decide which before porting more scripts, because the next crate will
   copy this one's shape.
 
-- `crates/config-manifest`: exit codes are bare `u8` literals returned
-  from nine sites, and status 1 currently means drift, unmatched paths,
-  malformed manifest, unreadable manifest, git subprocess failure,
-  non-UTF-8 tree entry, refused sync, and post-sync coverage gap. The
-  `Err` arm at `main.rs:86` flattens every structured error the crate
-  built into the same status. The 2026-09-06 collapse deleted `check.rs`
-  and branch-drift.yml, so the specific message-text grepping this entry
-  cited is gone; re-read the surviving callers before acting on it.
-  Fix direction: one `Outcome` sum with a single exhaustive
-  `exit_code()` match. The numbers stay as they are today, so nothing
-  downstream breaks, but they become derived from a named meaning in one
-  place. Worth doing before the shape is copied.
-
+- RESOLVED BY THE 2026-09-06 COLLAPSE, confirmed 2026-09-09 by reading the
+  crate rather than this entry: `crates/config-manifest` no longer has a
+  binary. `src/` is doctor.rs, git.rs, lib.rs, path.rs and stamp.rs, with no
+  `[[bin]]` and no main.rs, so the "nine sites" and the `Err` arm at
+  main.rs:86 this entry described are gone. What survives is one
+  `Rendered.exit_code: u8` in stamp.rs with three assignment sites (0, 1, 2),
+  each with a documented meaning, one consumer (config-cli's verify_stamps),
+  and a doc comment on why `u8`. The pain this entry recorded, one status
+  meaning eight things, does not exist in that shape. An `Outcome` sum over
+  three sites would be a refactor for its own sake, so none is made. The
+  design rule stands for the next crate: derive exit codes from a named
+  meaning in one place rather than scattering literals.
 - Fossil branches are reachable from the bootstrap path. `home`,
   `home-mac` and `work` last moved 2 to 3 years ago and each differs from
   `mac` in about 360 of 354 tracked files, while `mac` and `linux` differ

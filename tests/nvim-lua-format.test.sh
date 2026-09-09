@@ -1,6 +1,7 @@
 #!/bin/bash
 #
-# Gates the Lua under .config/nvim against the repo's own stylua settings.
+# Gates the Lua under .config/nvim: formatting with stylua, correctness with
+# selene.
 #
 # WHY THIS EXISTS. Nothing checked the Lua at all. tests/shellcheck.test.sh
 # covers 25+ shell scripts, and the ~20 Lua files had no equivalent, so the
@@ -58,4 +59,53 @@ else
     lua_count=$(find "$NVIM_DIR" -name '*.lua' -type f | grep -c . || true)
     assert_succeeds 'the check covered a non-trivial number of Lua files' \
         test "$lua_count" -gt 10
+fi
+
+# --- selene: the correctness half --------------------------------------------
+#
+# stylua above cannot catch a wrong API call, and both regressions that
+# shipped this week were wrong API calls. selene can: given a file with an
+# unused local and an undefined call it reports both.
+#
+# THE PART THAT TOOK RESEARCH. selene ships standard libraries for plain Lua
+# and Roblox and NOTHING for Neovim -- the upstream request for an equivalent
+# of luacheck's `globals vim` is still open. Without a `vim` declaration it
+# reports "`vim` is not defined" on the first real line of every file, which
+# is a gate that gets muted within a day. .config/nvim/vim.yml supplies it,
+# in the shape mason.nvim and plenary.nvim converged on.
+SELENE_CONFIG="$NVIM_DIR/selene.toml"
+SELENE_STD="$NVIM_DIR/vim.yml"
+
+assert_succeeds 'the repo states its own selene settings' test -f "$SELENE_CONFIG"
+assert_succeeds 'the vim standard library ships here' test -f "$SELENE_STD"
+
+# The std chain is the load-bearing line: `lua51+vim` resolves `vim` as a
+# file beside selene.toml. A bare `lua51` would report every vim call.
+assert_succeeds 'selene chains the vim standard library' \
+    grep -qE '^std = "lua5[0-9]\+vim"' "$SELENE_CONFIG"
+
+selene_bin=$(command -v selene 2>/dev/null \
+    || printf '%s' "$HOME/.local/share/nvim/mason/bin/selene")
+
+if [ ! -x "$selene_bin" ]; then
+    skip 'selene is not installed: it arrives through mason on first nvim launch'
+else
+    # Run from the config directory: selene resolves `+vim` relative to the
+    # working directory, not to the file being linted.
+    lint_output=$(cd "$NVIM_DIR" && "$selene_bin" . 2>&1)
+    lint_errors=$(printf '%s\n' "$lint_output" | grep -cE '^error\[' || true)
+
+    assert_equals 'selene reports no errors' '0' "$lint_errors"
+
+    # Positive control. selene on a directory it cannot read exits 0 with no
+    # findings, which is indistinguishable from a clean run, so assert it
+    # actually produced a report.
+    assert_succeeds 'selene produced a report' \
+        test -n "$(printf '%s\n' "$lint_output" | grep -E 'Results:' || true)"
+
+    # And that `vim` is genuinely declared: a missing vim.yml would surface
+    # as undefined_variable errors, which the assertion above catches, but
+    # this names the cause rather than the count.
+    assert_equals 'the vim global is not reported undefined' '' \
+        "$(printf '%s\n' "$lint_output" | grep -oE '`vim` is not defined' | head -1)"
 fi

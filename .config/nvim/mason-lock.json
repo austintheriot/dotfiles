@@ -12,6 +12,7 @@
     "prettier": "3.8.1",
     "prettierd": "0.27.0",
     "rust-analyzer": "2026-04-06",
+    "selene": "0.31.0",
     "stylua": "v2.4.1",
     "svelte-language-server": "0.17.30",
     "taplo": "0.10.0",

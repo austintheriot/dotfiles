@@ -1,0 +1,24 @@
+# The `vim` global, for selene.
+#
+# selene ships standard libraries for plain Lua (lua51 through lua54) and
+# Roblox, and NOTHING for Neovim: the upstream issue asking for an equivalent
+# of luacheck's `globals vim` is still open
+# (https://github.com/Kampfkarren/selene/issues/284). So every Neovim project
+# supplies this file itself, and the shape below is what mason.nvim,
+# plenary.nvim and the nvim-plugin-boilerplate template all converged on.
+#
+# `any: true` rather than an enumerated API surface. Enumerating Neovim's
+# ~2000 functions would be a second, always-stale copy of the API, and it
+# would report a false error on every function added upstream. The point of
+# this file is not to typecheck vim calls -- that is lua-language-server's
+# job, with real annotations -- it is to stop `undefined_variable` from
+# firing on every line so the rule can catch the mistakes that matter.
+#
+# Measured against this config before committing: 0 errors and 54 warnings,
+# where every one of the 54 was `mixed_table`, which selene.toml allows for
+# the reason stated there.
+base: lua51
+
+globals:
+  vim:
+    any: true

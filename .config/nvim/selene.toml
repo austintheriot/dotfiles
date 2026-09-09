@@ -1,0 +1,15 @@
+# selene, the Lua linter, for this config.
+#
+# `lua51+vim` chains selene's builtin Lua 5.1 library (Neovim's LuaJIT is
+# 5.1-compatible) with the `vim` global declared in vim.yml beside this file.
+# The `+name` half is resolved as a file in the same directory, which is why
+# vim.yml has to ship here rather than being a selene builtin.
+std = "lua51+vim"
+
+[rules]
+# lazy.nvim plugin specs ARE mixed tables: `{ 'author/plugin', opts = {} }`
+# puts a positional entry and a named key in one table, which is the format
+# lazy.nvim documents. All 54 warnings this config produced were this rule,
+# and every one was a plugin spec. mason.nvim and other Neovim projects allow
+# it for the same reason.
+mixed_table = "allow"

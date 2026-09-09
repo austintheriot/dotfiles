@@ -73,7 +73,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       Script{}, GitClone{} (DirExists passes on an empty dir left by an
       interrupted clone) and AptSource{}.
 
-- Harden the nvim Lua config at the CODE level: lints, tests, refactors for
+- CLAIMED 2026-09-09. Harden the nvim Lua config at the CODE level: lints, tests, refactors for
   clarity and purity. Requested by the owner 2026-09-09.
   Nothing lints the Lua today. `tests/shellcheck.test.sh` covers 25+ shell
   scripts and there is no equivalent for the ~20 files under

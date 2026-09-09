@@ -2,6 +2,63 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
+- nvim: NOTHING IN CI OR THE SUITE EVER LOADS THE REAL CONFIG, which is how
+  two regressions shipped on 2026-09-08 that a config-load test would have
+  caught in seconds.
+  Measured: `tests/nvim-mason-runtimes.test.sh` has 45 assertions and ZERO
+  nvim invocations -- it greps Lua text. `nvim-version-floor.test.sh` runs
+  nvim three times but only to read a version.
+  `crates/config-cli/tests/nvim_runtime.rs` executes nvim with `-u NONE`,
+  deliberately testing the INSTALL rather than the config. And
+  `.github/workflows/test-suite.yml` mentions nvim zero times.
+  The two regressions this let through:
+    - `Parser could not be created for buffer 1 and language "NvimTree"` on
+      every plugin buffer, because get_lang falls back to the filetype and
+      language.add succeeds for a name with no parser.
+    - `Cannot find package "rust-analyzer@2026-04-06"`, because
+      mason-tool-installer wants `{ 'name', version = '...' }` tables while
+      `name@version` is mason-lspconfig's syntax.
+  WHAT TO BUILD: load the REAL init.lua (not a minimal init -- a minimal
+  init tests a config you do not ship) in a throwaway XDG_DATA_HOME, assert
+  stderr is empty, then open a buffer per configured filetype PLUS a plugin
+  buffer, and assert no errors. Offline, seconds, every push.
+  ANTI-VACUITY: assert the config actually loaded by checking a sentinel only
+  it sets (vim.g.mapleader, a named augroup), and assert the run against
+  `-u NONE` FAILS that same check. A test that passes with no config loaded
+  is testing nothing.
+
+- nvim: assert the mason lockfile resolves against the pinned registry.
+  Every name in mason-lock.json must satisfy `mason-registry.get_package`
+  under the pinned registry version. Catches the `rust-analyzer@2026-04-06`
+  class before first launch rather than after. Needs the registry, so it is
+  a networked-tier test, not an every-push one.
+
+- Track a nerd font as a dependency and install it automatically.
+  APPROVED BY THE OWNER 2026-09-08.
+  `.config/nvim/lua/settings.lua:3` sets `vim.g.have_nerd_font = true`
+  unconditionally, and telescope.lua and mini.lua both read it, so a fresh
+  machine renders tofu in every icon column. `.config/alacritty/alacritty.toml`
+  names `Hack Nerd Font Mono` in all four font slots. Verified: 12 Hack Nerd
+  Font faces are installed on this mac, and NO font is a tracked dependency.
+  THE INSTALL DIFFERS BY PLATFORM, which is the work:
+    - macOS: a cask, `font-hack-nerd-font`. The catalog's `BrewPackage` with
+      `kind: Cask` already models this.
+    - Linux: Arch has `ttf-hack-nerd`; Debian and Ubuntu ship nothing
+      current, so apt means downloading the release archive into
+      ~/.local/share/fonts and running `fc-cache -f`. That is a new install
+      shape -- closest existing kin is ReleaseTarball, which now has both an
+      archive and a single-file mode, but neither unpacks into a font
+      directory.
+    - The release asset is a .tar.xz on recent ryanoasis/nerd-fonts
+      releases, so the archive mode's `tar -xzf` needs a format check the
+      way tree-sitter's gzip did.
+  THE CHECK IS NOT `command -v`: it is `fc-list | grep -q 'Hack Nerd Font'`
+  on Linux and a directory or fc-list probe on macOS, so it likely wants the
+  two-branch AnyOf shape zsh-autosuggestions already uses.
+  Once the font is tracked, `have_nerd_font = true` becomes a stated fact
+  rather than a wish, and the DEFERRED entry below about making it a probe
+  can be closed as unnecessary.
+
 - nvim: `ensure_installed` NEVER RUNS HEADLESS, which invalidates the
   obvious CI test for it. Verified verbatim at
   mason-lspconfig/lua/mason-lspconfig/init.lua:31:

@@ -38,8 +38,8 @@
 
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
-use std::io::{IsTerminal, Write};
-use std::process::{Command, Output};
+use std::io::{IsTerminal, Read, Write};
+use std::process::{Command, Output, Stdio};
 
 use deps_core::{
     ActionDescription, BrewKind, CloneSource, Elevation, ExecFailure, InstallAction, Installer,
@@ -1024,6 +1024,13 @@ fn needs_manager_privilege(action: &InstallAction) -> bool {
     matches!(action, InstallAction::Package { .. } | InstallAction::AptSource { .. })
 }
 
+/// How many bytes of a child's output to keep for the failure message.
+///
+/// Larger than a typical diagnostic and far smaller than a build log.
+/// `BoundedText` truncates again on its own; this cap is what stops an
+/// unbounded read from allocating megabytes before it gets there.
+const RETAINED_OUTPUT_LIMIT: usize = 16 * 1024;
+
 /// Spawn one argv and report why it failed, or `None` on success.
 ///
 /// Builds [`ExecFailure`] from the real output. `Output::status.code()` is
@@ -1047,14 +1054,97 @@ fn run_one(argv: &[OsString], environment: &BTreeMap<OsString, OsString>) -> Opt
         command.env(key, value);
     }
 
-    let output = match command.output() {
-        Ok(output) => output,
+    // Piped rather than `command.output()`, which returns nothing until the
+    // child exits: that is what made `config init: [5/5]` silent for minutes
+    // on a fresh machine.
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
         Err(error) => return Some(ExecFailure::Spawn(spawn_error(&error))),
     };
-    if output.status.success() {
+
+    // ONE THREAD PER PIPE, and it is not optional. Reading them in sequence
+    // deadlocks: a child that fills the pipe this thread is not reading
+    // blocks forever, and apt writes to both. The threads own the pipes and
+    // hand the retained copies back on join.
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+    let stdout_reader = std::thread::spawn(move || match stdout_pipe {
+        Some(pipe) => tee_reader(pipe, &mut std::io::stdout()),
+        None => BoundedText::truncating(""),
+    });
+    let stderr_reader = std::thread::spawn(move || match stderr_pipe {
+        Some(pipe) => tee_reader(pipe, &mut std::io::stderr()),
+        None => BoundedText::truncating(""),
+    });
+
+    let status = match child.wait() {
+        Ok(status) => status,
+        Err(error) => return Some(ExecFailure::Spawn(spawn_error(&error))),
+    };
+    // Joined after wait, so a reader that outlives the exit still finishes.
+    // A panicked reader yields no text rather than poisoning the install:
+    // losing the diagnosis is bad, losing the install is worse.
+    let captured_stdout =
+        stdout_reader.join().unwrap_or_else(|_| BoundedText::truncating(""));
+    let captured_stderr =
+        stderr_reader.join().unwrap_or_else(|_| BoundedText::truncating(""));
+
+    if status.success() {
         return None;
     }
-    Some(exec_failure(program, &output))
+    Some(exec_failure_from_parts(program, status, captured_stdout, captured_stderr))
+}
+
+/// Stream one pipe to a sink while keeping a bounded copy.
+///
+/// THE WHOLE POINT is that these are one operation rather than a choice.
+/// `config init: [5/5] install the missing tracked dependencies` printed
+/// nothing until every install finished, so minutes of real work -- an apt
+/// update, a rustup download, several git clones, a neovim tarball, a font
+/// archive -- looked identical to a hang.
+///
+/// The obvious fix, letting the child inherit the terminal, discards the
+/// bytes `exec_failure_from_parts` needs. Those bytes are why a script that
+/// explains itself on stdout is reported at all instead of as "exited 1 with
+/// no output on stderr" -- the defect 2ee309fa fixed after oh-my-zsh's
+/// installer cost an afternoon. Inheriting shows progress and loses the
+/// diagnosis; buffering keeps the diagnosis and hides progress. Teeing is
+/// the only shape that does both.
+///
+/// Boundedness is not incidental: `BoundedText` exists because an unbounded
+/// subprocess string in an error type is how a terminal receives a control
+/// sequence, and a chatty installer would otherwise turn one failure line
+/// into megabytes. The stream is passed through whole -- a reader watching
+/// progress wants all of it -- while the retained copy is capped.
+///
+/// Reads in CHUNKS rather than lines: a progress bar that rewrites one line
+/// with carriage returns emits no newline for seconds, and a line-oriented
+/// read would hold it until the line ended. apt and cargo both do this.
+///
+/// Generic over the reader and the sink so the tee is testable without
+/// spawning a process: `run_one` passes the child's pipe and the real
+/// stdout, the tests pass a slice and a Vec.
+fn tee_reader(mut pipe: impl Read, sink: &mut impl Write) -> BoundedText {
+    let mut buffer = [0u8; 8192];
+    let mut retained: Vec<u8> = Vec::new();
+    loop {
+        match pipe.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(count) => {
+                let chunk = &buffer[..count];
+                let _ = sink.write_all(chunk);
+                let _ = sink.flush();
+                if retained.len() < RETAINED_OUTPUT_LIMIT {
+                    let room = RETAINED_OUTPUT_LIMIT - retained.len();
+                    retained.extend_from_slice(&chunk[..chunk.len().min(room)]);
+                }
+            }
+        }
+    }
+    BoundedText::truncating(&String::from_utf8_lossy(&retained))
 }
 
 /// Classify a spawn failure into the core's closed set.
@@ -1079,16 +1169,32 @@ fn spawn_error(error: &std::io::Error) -> SpawnError {
 /// bytes on stderr, so reading stderr alone reported "no output" while the
 /// explanation sat in the same `Output`.
 fn exec_failure(program: &OsStr, output: &Output) -> ExecFailure {
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if program == OsStr::new("sudo") && looks_like_refused_authentication(&stderr) {
+    exec_failure_from_parts(
+        program,
+        output.status,
+        BoundedText::truncating(&String::from_utf8_lossy(&output.stdout)),
+        BoundedText::truncating(&String::from_utf8_lossy(&output.stderr)),
+    )
+}
+
+/// The same classification, from output already captured.
+///
+/// Split out when the install step started TEEING its children rather than
+/// buffering them: the bytes have been read and written by then, so there is
+/// no `Output` to hand over, only the bounded copies the readers kept.
+/// `exec_failure` above delegates here so both paths classify identically
+/// and the sudo rule cannot drift between them.
+fn exec_failure_from_parts(
+    program: &OsStr,
+    status: std::process::ExitStatus,
+    stdout: BoundedText,
+    stderr: BoundedText,
+) -> ExecFailure {
+    if program == OsStr::new("sudo") && looks_like_refused_authentication(stderr.as_str()) {
         return ExecFailure::AuthenticationRefused;
     }
-    match output.status.code() {
-        Some(code) => ExecFailure::NonZeroExit {
-            code,
-            stdout: BoundedText::truncating(&String::from_utf8_lossy(&output.stdout)),
-            stderr: BoundedText::truncating(&stderr),
-        },
+    match status.code() {
+        Some(code) => ExecFailure::NonZeroExit { code, stdout, stderr },
         // No code means a signal killed the process. Reporting that as
         // `NonZeroExit { code: -1 }` would invent an exit status the process
         // never reported, so it is a spawn-side failure instead.
@@ -1345,6 +1451,110 @@ mod tests {
             !url.contains(wrong_platform),
             "the asset must not come from {wrong_platform}: {url}"
         );
+    }
+
+    /// Streaming a child's output also retains it for the failure value.
+    ///
+    /// THE TENSION THIS PINS. `config init: [5/5] install the missing
+    /// tracked dependencies` printed nothing until every install finished,
+    /// so a bootstrap that was working looked identical to one that had
+    /// hung -- minutes of silence on a fresh machine across an apt update, a
+    /// rustup download, several git clones, a neovim tarball and a font
+    /// archive.
+    ///
+    /// The obvious fix, `Stdio::inherit()`, un-fixes 2ee309fa: `exec_failure`
+    /// reads BOTH streams to build `ExecFailure::NonZeroExit`, which is why a
+    /// script that explains itself on stdout (oh-my-zsh: "Zsh is not
+    /// installed") is reported at all rather than as "exited 1 with no
+    /// output". Inheriting shows progress and discards the diagnosis;
+    /// capturing keeps the diagnosis and hides progress.
+    ///
+    /// So the write and the retention are one operation, and this asserts
+    /// both halves of it: every byte reaches the sink, and the retained copy
+    /// is what the failure value would carry.
+    #[test]
+    fn teeing_writes_every_byte_and_keeps_a_bounded_copy() {
+        let mut sink: Vec<u8> = Vec::new();
+        let chunks: [&[u8]; 3] = [b"Reading package lists...\n", b"Building tree\n", b"done\n"];
+
+        let joined: Vec<u8> = chunks.concat();
+        let retained = tee_reader(joined.as_slice(), &mut sink);
+
+        let written = String::from_utf8(sink).expect("the sink holds what was written");
+        assert_eq!(
+            written, "Reading package lists...\nBuilding tree\ndone\n",
+            "every byte must reach the terminal in order, or progress is \
+             worse than useless"
+        );
+        assert_eq!(
+            retained.as_str(),
+            "Reading package lists...\nBuilding tree\ndone\n",
+            "the retained copy is what exec_failure reports, so it must hold \
+             the same bytes"
+        );
+    }
+
+    /// The retained copy is bounded even when the child is not.
+    ///
+    /// `BoundedText` exists because an unbounded subprocess string in an
+    /// error type is how a terminal gets a control sequence written to it.
+    /// Streaming is unbounded by nature -- that is the point -- so the
+    /// retention has to stay bounded independently, or a chatty installer
+    /// turns one failure message into megabytes.
+    #[test]
+    fn teeing_bounds_the_retained_copy_but_not_the_stream() {
+        let mut sink: Vec<u8> = Vec::new();
+        let noisy = vec![b'x'; 64 * 1024];
+        let retained = tee_reader(noisy.as_slice(), &mut sink);
+
+        assert_eq!(
+            sink.len(),
+            64 * 1024,
+            "the stream is passed through whole: a reader watching progress \
+             wants all of it"
+        );
+        assert!(
+            retained.as_str().len() < 64 * 1024,
+            "the retained copy must stay bounded, or one noisy installer \
+             makes an unreadable failure message: {} bytes",
+            retained.as_str().len()
+        );
+    }
+
+    /// A teed failure still carries the child's own words.
+    ///
+    /// THE REGRESSION THIS GUARDS. Streaming and diagnosing pull against
+    /// each other: `Stdio::inherit()` would show progress and hand
+    /// `exec_failure_from_parts` nothing, putting back the defect 2ee309fa
+    /// fixed -- oh-my-zsh's installer explaining itself on stdout while the
+    /// engine reported "exited 1 with no output on stderr".
+    ///
+    /// Exercised through the SHIPPED path: a real child, really teed, whose
+    /// retained bytes build the real failure value. A test that constructed
+    /// `NonZeroExit` by hand would pass with the tee removed entirely.
+    #[test]
+    fn a_teed_failure_reports_what_the_child_said() {
+        let script = "printf 'progress line\\n';                       printf 'E: the real cause\\n' >&2;                       exit 42";
+        let argv = words(["sh", "-c", script]);
+
+        let failure = run_one(&argv, &BTreeMap::new()).expect("a nonzero exit is a failure");
+
+        match failure {
+            ExecFailure::NonZeroExit { code, stdout, stderr } => {
+                assert_eq!(code, 42, "the child's own status is reported");
+                assert!(
+                    stderr.as_str().contains("E: the real cause"),
+                    "the teed stderr must survive into the failure value, or \
+                     streaming has un-fixed the no-output-on-stderr bug: {stderr}"
+                );
+                assert!(
+                    stdout.as_str().contains("progress line"),
+                    "the teed stdout must survive too: that is what reports a \
+                     script which explains itself on stdout: {stdout}"
+                );
+            }
+            other => panic!("a nonzero exit must classify as NonZeroExit, got {other:?}"),
+        }
     }
 
     /// A gzipped single binary is unpacked with gunzip, never with tar.

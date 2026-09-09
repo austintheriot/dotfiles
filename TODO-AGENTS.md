@@ -2,12 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED 2026-09-08. nvim: assert the mason lockfile resolves against the pinned registry.
-  Every name in mason-lock.json must satisfy `mason-registry.get_package`
-  under the pinned registry version. Catches the `rust-analyzer@2026-04-06`
-  class before first launch rather than after. Needs the registry, so it is
-  a networked-tier test, not an every-push one.
-
 - nvim: `ensure_installed` NEVER RUNS HEADLESS, which invalidates the
   obvious CI test for it. Verified verbatim at
   mason-lspconfig/lua/mason-lspconfig/init.lua:31:

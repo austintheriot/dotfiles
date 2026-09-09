@@ -13,7 +13,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use deps_core::{
-    CloneSource, ConfKind, DependencyName, KeyringSource, NoInstallReason, PackageAvailability,
+    BrewKind, CloneSource, ConfKind, DependencyName, KeyringSource, NoInstallReason, PackageAvailability,
     PackageCatalog, PackageManager, PackageMap, PathRoot, Requirements, ScriptInstaller,
     SourceListEntry, TarballRelease, parse_manifest_toml,
 };
@@ -129,6 +129,31 @@ pub fn packages() -> PackageCatalog {
             manager: PackageManager::Unknown,
         }),
     );
+
+    // The font this config assumes. brew has the cask and pacman has
+    // ttf-hack-nerd, both at the same 3.5.1 upstream publishes, so only apt
+    // needs the release archive.
+    insert(
+        &mut catalog,
+        "nerd-font",
+        per_manager(vec![
+            (PackageManager::Apt, PackageAvailability::ViaTarball(TarballRelease::NerdFontHack)),
+            (
+                PackageManager::Brew,
+                cask("font-hack-nerd-font"),
+            ),
+            (PackageManager::Pacman, named("ttf-hack-nerd")),
+        ]),
+        PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
+            manager: PackageManager::Unknown,
+        }),
+    );
+
+    // tar cannot read the font archive without it on Debian and Ubuntu:
+    // "xz: Cannot exec: No such file or directory", extracting nothing.
+    // Named here rather than assumed because a bare ubuntu:24.04 has neither
+    // xz nor unzip.
+    insert_same_name_everywhere(&mut catalog, "xz-utils");
 
     insert(
         &mut catalog,
@@ -365,6 +390,13 @@ const EDGES: &[(&str, &[&str])] = &[
     // script: it is what orders the two, so nvm's install runs in an earlier
     // wave and node's source of nvm.sh finds a file that exists.
     ("node", &["nvm"]),
+    // The font archive is xz-compressed, and tar shells out to xz to read
+    // it. Without the edge, apt attempted the font in the same wave xz-utils
+    // was still missing and tar failed with
+    // "xz: Cannot exec: No such file or directory" having extracted nothing.
+    // Only apt needs this -- brew and pacman install a packaged font -- but
+    // the edge is harmless where the prerequisite is already satisfied.
+    ("nerd-font", &["xz-utils"]),
     // oh-my-zsh's installer refuses to run without zsh: its first check
     // prints "Zsh is not installed. Please install zsh first." and exits 1.
     // The message goes to STDOUT, so the engine reported "exited 1 with no
@@ -504,6 +536,20 @@ fn insert_same_name_everywhere(catalog: &mut PackageCatalog, name: &str) {
 /// The degraded value names the manager rather than claiming anything about
 /// upstream, so a catalog typo cannot masquerade as "upstream does not
 /// package this".
+/// A brew cask, or a stated absence when the name will not parse.
+///
+/// `Named` cannot express a cask: `action_for` maps it to
+/// `BrewKind::Formula`, so `brew install font-hack-nerd-font` fails with
+/// "No available formula with the name".
+fn cask(raw: &str) -> PackageAvailability {
+    match PackageId::parse(raw) {
+        Ok(id) => PackageAvailability::BrewPackage { kind: BrewKind::Cask, id, tap: None },
+        Err(_) => PackageAvailability::Unavailable(
+            NoInstallReason::ManagerNotNamedInManifest { manager: PackageManager::Unknown },
+        ),
+    }
+}
+
 fn named(raw: &str) -> PackageAvailability {
     match PackageId::parse(raw) {
         Ok(id) => PackageAvailability::Named(id),
@@ -568,7 +614,7 @@ mod tests {
         // Positive control. Validation below passes vacuously against an
         // empty or partial union, so assert the union really spans all four
         // files first, naming one dependency exclusive to each.
-        assert_eq!(known.len(), 23, "the union must cover every conf file");
+        assert_eq!(known.len(), 25, "the union must cover every conf file");
         assert!(known.contains(&name("git")), "deps.toml entries are present");
         assert!(known.contains(&name("oh-my-zsh")), "deps-linux.toml entries are present");
         assert!(known.contains(&name("aerospace")), "deps-mac.toml entries are present");
@@ -696,6 +742,38 @@ mod tests {
         // Positive control: at least one clone must exist, or this test
         // passes by iterating nothing.
         assert!(checked > 0, "the catalog must contain at least one Clone availability");
+    }
+
+    /// A nerd font is installable on every manager that can install one.
+    ///
+    /// WHY THIS IS TRACKED AT ALL. `.config/nvim/lua/settings.lua:3` sets
+    /// `vim.g.have_nerd_font = true` unconditionally, and telescope.lua and
+    /// mini.lua both read it, so a fresh machine renders tofu in every icon
+    /// column. `.config/alacritty/alacritty.toml` names
+    /// `Hack Nerd Font Mono` in all four font slots. Nothing installed it,
+    /// so `have_nerd_font = true` was a wish rather than a stated fact.
+    ///
+    /// brew has the cask and pacman has `ttf-hack-nerd`, both at the same
+    /// 3.5.1 upstream publishes. apt has nothing current, which is why the
+    /// Linux path needs the release archive.
+    #[test]
+    fn a_nerd_font_is_installable_on_every_manager() {
+        let catalog = packages();
+        let entry = catalog
+            .get(&name("nerd-font"))
+            .expect("nerd-font is a catalog entry");
+
+        for manager in every_manager() {
+            if manager == PackageManager::Unknown {
+                continue;
+            }
+            let availability = entry.resolve(manager);
+            assert!(
+                !matches!(availability, PackageAvailability::Unavailable(_)),
+                "{manager:?} must be able to install a nerd font, or \
+                 have_nerd_font stays a wish on that platform: {availability:?}"
+            );
+        }
     }
 
     /// Neovim's version is pinned on every platform, not only on apt.

@@ -125,6 +125,23 @@ pub enum TarballRelease {
     /// this variant unpacks differently from `Neovim` above. See
     /// `tarball_url` and the `ReleaseTarball` arm of `argv_sequence_for`.
     TreeSitterCli,
+    /// The Hack Nerd Font, patched with the glyphs this config assumes.
+    ///
+    /// `.config/nvim/lua/settings.lua:3` sets `vim.g.have_nerd_font = true`
+    /// and `.config/alacritty/alacritty.toml` names `Hack Nerd Font Mono` in
+    /// all four font slots, so without this the icon columns render tofu on
+    /// a fresh machine.
+    ///
+    /// apt only. brew has the cask and pacman has `ttf-hack-nerd`, both at
+    /// the same 3.5.1 upstream publishes, so only Debian and Ubuntu need the
+    /// release archive.
+    ///
+    /// A `.tar.xz` whose members are FLAT -- the archive holds
+    /// `HackNerdFont-Bold.ttf` and friends at its root with no directory
+    /// prefix -- so it neither strips components nor installs a prefix tree.
+    /// It unpacks into the user font directory instead. Verified by listing
+    /// the published asset.
+    NerdFontHack,
 }
 
 /// A closed set of APT keyring sources.

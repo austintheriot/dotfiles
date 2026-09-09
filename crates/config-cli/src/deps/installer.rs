@@ -95,6 +95,9 @@ fn tarball_tag(release: TarballRelease) -> &'static str {
         // Matches the version pinned in .config/nvim/mason-lock.json, so the
         // engine and the editor agree on which CLI compiled the parsers.
         TarballRelease::TreeSitterCli => "v0.27.0",
+        // Matches the version brew's cask and pacman's ttf-hack-nerd carry,
+        // so all three managers land on the same font.
+        TarballRelease::NerdFontHack => "v3.5.1",
     }
 }
 
@@ -130,6 +133,8 @@ fn tarball_asset(release: TarballRelease) -> Option<&'static str> {
         }
         (TarballRelease::TreeSitterCli, "aarch64") => Some("tree-sitter-linux-arm64.gz"),
         (TarballRelease::TreeSitterCli, _) => None,
+        // One architecture-independent archive: fonts are not machine code.
+        (TarballRelease::NerdFontHack, _) => Some("Hack.tar.xz"),
     }
 }
 
@@ -138,6 +143,7 @@ fn tarball_url(release: TarballRelease) -> Option<String> {
     let project = match release {
         TarballRelease::Neovim => "neovim/neovim",
         TarballRelease::TreeSitterCli => "tree-sitter/tree-sitter",
+        TarballRelease::NerdFontHack => "ryanoasis/nerd-fonts",
     };
     let asset = tarball_asset(release)?;
     Some(format!(
@@ -379,6 +385,50 @@ pub fn argv_sequence_for(
             let prefix = tarball_prefix(*release);
             let binary = tarball_binary(*release);
 
+            // FONTS GO TO THE FONT DIRECTORY, not to a versioned prefix.
+            // The artifact is a set of .ttf files that a font system scans by
+            // location, so there is no executable to link and no prefix whose
+            // internal layout matters. The archive members are FLAT --
+            // verified by listing the published asset, which holds
+            // HackNerdFont-Bold.ttf and friends at its root -- so this does
+            // not strip components.
+            //
+            // `-xJf` because the asset is xz-compressed. On Debian and Ubuntu
+            // that needs xz-utils, which is a manifest entry with a declared
+            // edge to this one; without it tar fails with
+            // "xz: Cannot exec: No such file or directory" and extracts
+            // nothing.
+            //
+            // fc-cache is best-effort: macOS has no fontconfig and does not
+            // need one, so a missing binary is not a failure. The `|| true`
+            // lives in the argv rather than in a shell string because the
+            // command list has no other way to express "may fail".
+            if matches!(release, TarballRelease::NerdFontHack) {
+                let fonts = font_dir();
+                return vec![
+                    words(["rm", "-rf", &staging_path]),
+                    words(["mkdir", "-p", &staging_path]),
+                    words([
+                        "curl",
+                        "-fsSL",
+                        "-o",
+                        &format!("{staging_path}/fonts.tar.xz"),
+                        &url,
+                    ]),
+                    words([
+                        "sh",
+                        "-c",
+                        &format!(
+                            "printf '%s  %s' '{digest}' '{staging_path}/fonts.tar.xz' | sha256sum --status -c -"
+                        ),
+                    ]),
+                    words(["mkdir", "-p", &fonts]),
+                    words(["tar", "-xJf", &format!("{staging_path}/fonts.tar.xz"), "-C", &fonts]),
+                    words(["sh", "-c", "fc-cache -f >/dev/null 2>&1 || true"]),
+                    words(["rm", "-rf", &staging_path]),
+                ];
+            }
+
             // A BARE GZIPPED EXECUTABLE, not an archive. tree-sitter
             // publishes `tree-sitter-<platform>.gz`, which `tar -xzf`
             // rejects with "Unrecognized archive format"; `gunzip -c` yields
@@ -509,6 +559,10 @@ fn tarball_sha256(release: TarballRelease) -> Option<&'static str> {
         (TarballRelease::TreeSitterCli, "aarch64", false) => {
             Some("3a35a2dd961ad842384e982c75daf792c01d1a67e442fc3914d4de37bd8a59cb")
         }
+        // Architecture-independent, so one digest covers every platform.
+        (TarballRelease::NerdFontHack, _, _) => {
+            Some("cdd389472e10e2261520140ff1b382b4f8a226af5fd0b2735b975d31151d9c3c")
+        }
         // An architecture with no recorded digest also has no asset in
         // `tarball_asset`, so the install is already unavailable there.
         _ => None,
@@ -527,6 +581,10 @@ fn tarball_is_archive(release: TarballRelease) -> bool {
         TarballRelease::Neovim => true,
         // One gzipped executable.
         TarballRelease::TreeSitterCli => false,
+        // An archive, but not a prefix tree -- see the font arm of
+        // `argv_sequence_for`, which installs its members into the user font
+        // directory rather than moving a prefix into place.
+        TarballRelease::NerdFontHack => true,
     }
 }
 
@@ -535,6 +593,8 @@ fn tarball_binary(release: TarballRelease) -> &'static str {
     match release {
         TarballRelease::Neovim => "nvim",
         TarballRelease::TreeSitterCli => "tree-sitter",
+        // No executable: the artifact is a set of font files.
+        TarballRelease::NerdFontHack => "",
     }
 }
 
@@ -552,6 +612,7 @@ fn tarball_staging_dir(release: TarballRelease) -> std::path::PathBuf {
     let name = match release {
         TarballRelease::Neovim => ".nvim-release-staging",
         TarballRelease::TreeSitterCli => ".tree-sitter-release-staging",
+        TarballRelease::NerdFontHack => ".nerd-font-release-staging",
     };
     std::path::PathBuf::from(tarball_prefix_parent(release)).join(name)
 }
@@ -565,6 +626,7 @@ fn tarball_prefix(release: TarballRelease) -> String {
     let name = match release {
         TarballRelease::Neovim => "nvim",
         TarballRelease::TreeSitterCli => "tree-sitter",
+        TarballRelease::NerdFontHack => "nerd-font-hack",
     };
     format!("{}/{name}-{}", tarball_prefix_parent(release), tarball_tag(release))
 }
@@ -577,6 +639,20 @@ fn tarball_prefix(release: TarballRelease) -> String {
 fn tarball_prefix_parent(_release: TarballRelease) -> String {
     let home = std::env::var("HOME").unwrap_or_else(|_| String::from("/root"));
     format!("{home}/.local/opt")
+}
+
+/// Where a user-installed font goes on this platform.
+///
+/// macOS scans `~/Library/Fonts`; fontconfig on Linux scans
+/// `~/.local/share/fonts`. Neither needs privilege, which is why this
+/// installs per-user rather than system-wide.
+fn font_dir() -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| String::from("/root"));
+    if cfg!(target_os = "macos") {
+        format!("{home}/Library/Fonts")
+    } else {
+        format!("{home}/.local/share/fonts")
+    }
 }
 
 /// `~/.local/bin`, the directory `search_path` prepends.

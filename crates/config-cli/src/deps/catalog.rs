@@ -93,8 +93,17 @@ pub fn packages() -> PackageCatalog {
         "neovim",
         per_manager(vec![
             (PackageManager::Apt, PackageAvailability::ViaTarball(TarballRelease::Neovim)),
-            (PackageManager::Brew, named("neovim")),
-            (PackageManager::Pacman, named("neovim")),
+            // brew and pacman use the pinned tarball too, though both package
+            // a recent enough Neovim to satisfy the floor. The floor is not
+            // the point: treesitter parsers are compiled against the running
+            // Neovim's ABI, so a `brew upgrade` moved the ABI under a parser
+            // set the repo believes is pinned. Homebrew cannot express the
+            // pin -- there is no neovim@0.12 formula, and brew stable had
+            // already moved to 0.12.5 while this machine sat at 0.12.4 -- so
+            // the tarball is the only mechanism that fixes the version on
+            // every platform.
+            (PackageManager::Brew, PackageAvailability::ViaTarball(TarballRelease::Neovim)),
+            (PackageManager::Pacman, PackageAvailability::ViaTarball(TarballRelease::Neovim)),
         ]),
         PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
             manager: PackageManager::Unknown,
@@ -687,6 +696,49 @@ mod tests {
         // Positive control: at least one clone must exist, or this test
         // passes by iterating nothing.
         assert!(checked > 0, "the catalog must contain at least one Clone availability");
+    }
+
+    /// Neovim's version is pinned on every platform, not only on apt.
+    ///
+    /// THE GAP THIS CLOSES. apt got `ViaTarball` because Pop!_OS ships 0.6.1
+    /// and 24.04 ships 0.9.5, both below the manifest's floor. brew and
+    /// pacman got `named("neovim")`, which is whatever the distribution
+    /// currently offers, so the version was an exact fact on Linux and an
+    /// accident on macOS.
+    ///
+    /// That asymmetry lands on the one value every treesitter parser is
+    /// keyed to. Parsers are compiled against the running Neovim's ABI, so a
+    /// `brew upgrade` moves the ABI under a parser set the repo believes is
+    /// pinned -- and pinning parser sources (which the plugin pin already
+    /// does) buys nothing if the thing that loads them floats.
+    ///
+    /// Homebrew cannot express the pin: there is no `neovim@0.12` formula,
+    /// only third-party 0.11.x taps, and brew stable had already moved to
+    /// 0.12.5 while this machine sat at 0.12.4. Upstream does publish
+    /// `nvim-macos-arm64.tar.gz` and `nvim-macos-x86_64.tar.gz` with the
+    /// same bin/lib/share layout the Linux path already installs, so the
+    /// tarball is the only mechanism that pins it.
+    #[test]
+    fn every_manager_installs_the_pinned_neovim_release() {
+        let catalog = packages();
+        let entry = catalog.get(&name("neovim")).expect("neovim is a catalog entry");
+
+        for manager in every_manager() {
+            // Unknown is the no-manager case and legitimately has no answer.
+            if manager == PackageManager::Unknown {
+                continue;
+            }
+            let availability = entry.resolve(manager);
+            assert!(
+                matches!(
+                    availability,
+                    PackageAvailability::ViaTarball(TarballRelease::Neovim)
+                ),
+                "{manager:?} must install the pinned release rather than a \
+                 distribution package, or the treesitter ABI floats on that \
+                 platform: {availability:?}"
+            );
+        }
     }
 
     /// Every dependency in every shipped conf file has a catalog entry.

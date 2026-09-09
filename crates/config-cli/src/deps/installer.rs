@@ -107,6 +107,16 @@ fn tarball_tag(release: TarballRelease) -> &'static str {
 /// guessing an asset that would 404 halfway through a bootstrap.
 fn tarball_asset(release: TarballRelease) -> Option<&'static str> {
     match (release, std::env::consts::ARCH) {
+        // macOS first: the arch names collide, so a bare arch match would
+        // hand a Linux tarball to a mac. Upstream publishes the same
+        // bin/lib/share layout for both platforms, which is why one action
+        // installs both.
+        (TarballRelease::Neovim, "x86_64") if cfg!(target_os = "macos") => {
+            Some("nvim-macos-x86_64.tar.gz")
+        }
+        (TarballRelease::Neovim, "aarch64") if cfg!(target_os = "macos") => {
+            Some("nvim-macos-arm64.tar.gz")
+        }
         (TarballRelease::Neovim, "x86_64") => Some("nvim-linux-x86_64.tar.gz"),
         (TarballRelease::Neovim, "aarch64") => Some("nvim-linux-arm64.tar.gz"),
         (TarballRelease::Neovim, _) => None,
@@ -1094,6 +1104,43 @@ mod tests {
     fn exit_status_of(code: i32) -> std::process::ExitStatus {
         use std::os::unix::process::ExitStatusExt as _;
         std::process::ExitStatus::from_raw(code << 8)
+    }
+
+    /// The release URL names this platform's asset, not another platform's.
+    ///
+    /// The arch strings collide across operating systems: both a mac and a
+    /// Linux box report `aarch64`. Once brew started installing the pinned
+    /// tarball rather than a formula, a bare arch match would have handed
+    /// `nvim-linux-arm64.tar.gz` to a mac, which unpacks and then fails to
+    /// execute. Asserted per platform with cfg! so the test says the same
+    /// thing the code does on whichever machine runs it.
+    #[test]
+    fn the_release_url_names_this_platforms_asset() {
+        let sequence = argv_sequence_for(
+            &InstallAction::ReleaseTarball { release: TarballRelease::Neovim },
+            PackageManager::Brew,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
+        let url = sequence
+            .iter()
+            .flat_map(|command| command.iter())
+            .map(|word| word.to_string_lossy().into_owned())
+            .find(|word| word.starts_with("https://"))
+            .expect("the sequence fetches a release asset");
+
+        let expected_platform = if cfg!(target_os = "macos") { "macos" } else { "linux" };
+        assert!(
+            url.contains(expected_platform),
+            "this platform is {expected_platform}, so the asset must be its \
+             own: {url}"
+        );
+
+        let wrong_platform = if cfg!(target_os = "macos") { "linux" } else { "macos" };
+        assert!(
+            !url.contains(wrong_platform),
+            "the asset must not come from {wrong_platform}: {url}"
+        );
     }
 
     /// A gzipped single binary is unpacked with gunzip, never with tar.

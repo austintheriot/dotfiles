@@ -399,6 +399,7 @@ impl gather::RootResolver for HostRoots {
         match root {
             PathRoot::Home => std::env::var_os("HOME").map(PathBuf::from),
             PathRoot::MacApplications => Some(PathBuf::from("/Applications")),
+            PathRoot::UsrShare => Some(PathBuf::from("/usr/share")),
             PathRoot::BrewPrefix => self.brew_prefix(),
         }
     }

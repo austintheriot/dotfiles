@@ -409,6 +409,7 @@ mod tests {
                 PathRoot::Home => Some(self.home.clone()),
                 PathRoot::MacApplications => Some(self.home.clone()),
                 PathRoot::BrewPrefix => Some(self.home.clone()),
+                PathRoot::UsrShare => Some(self.home.clone()),
             }
         }
     }
@@ -424,7 +425,7 @@ mod tests {
         fn resolve(&self, root: PathRoot) -> Option<PathBuf> {
             match root {
                 PathRoot::BrewPrefix => None,
-                PathRoot::Home | PathRoot::MacApplications => {
+                PathRoot::Home | PathRoot::MacApplications | PathRoot::UsrShare => {
                     Some(std::env::temp_dir())
                 }
             }

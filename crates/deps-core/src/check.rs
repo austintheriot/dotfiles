@@ -24,6 +24,15 @@ pub enum PathRoot {
     Home,
     /// `/Applications/`, the macOS bundle directory.
     MacApplications,
+    /// `/usr/share/`, where a system package manager installs shared data.
+    ///
+    /// Added because a font is legitimately installed system-wide: pacman's
+    /// `ttf-hack-nerd` writes /usr/share/fonts/TTF/HackNerdFont-*.ttf, so a
+    /// check that looked only under $HOME reported "the install succeeded
+    /// and the check still fails" on every Arch leg. Read-only here -- this
+    /// root exists so a check can SEE what a package manager put there, and
+    /// nothing in this repo installs into it.
+    UsrShare,
     /// Homebrew's prefix, written `$(brew --prefix 2>/dev/null)/`.
     BrewPrefix,
 }
@@ -420,7 +429,7 @@ pub(crate) fn parse_quoted_path(raw: &str) -> Result<CheckPath, CheckParseError>
         .and_then(|rest| rest.strip_suffix('"'))
         .unwrap_or(raw);
 
-    let roots: [(&str, PathRoot); 3] = [
+    let roots: [(&str, PathRoot); 4] = [
         ("$(brew --prefix 2>/dev/null)/", PathRoot::BrewPrefix),
         // No ZSH_CUSTOM entry. No conf file contains that variable, so the
         // prefix matched nothing, and supporting it would let a check and an
@@ -429,6 +438,7 @@ pub(crate) fn parse_quoted_path(raw: &str) -> Result<CheckPath, CheckParseError>
         // which diverge whenever the variable is set.
         ("$HOME/", PathRoot::Home),
         ("/Applications/", PathRoot::MacApplications),
+        ("/usr/share/", PathRoot::UsrShare),
     ];
     for (prefix, root) in roots {
         if let Some(rest) = inner.strip_prefix(prefix) {

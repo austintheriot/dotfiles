@@ -126,14 +126,24 @@ docs = "https://tree-sitter.github.io/tree-sitter/creating-parsers"
 # `Hack Nerd Font Mono` in all four slots, so without this a fresh machine
 # renders tofu in every icon column.
 #
-# Two check branches because the two platforms scan different directories:
-# macOS reads ~/Library/Fonts and fontconfig reads ~/.local/share/fonts. A
-# glob rather than a named file, so a version bump that renames the faces
-# does not silently report the font missing.
+# THREE check branches, because the three install paths land in three
+# different directories:
+#   brew's cask   -> ~/Library/Fonts
+#   the archive   -> ~/.local/share/fonts (what this repo unpacks into)
+#   pacman        -> /usr/share/fonts/TTF, SYSTEM-WIDE
+# The third was missing at first, and every Arch leg failed with the engine
+# saying exactly what was wrong: "the install succeeded and the check still
+# fails". pacman had installed ttf-hack-nerd correctly; only the check was
+# looking in the wrong place.
+#
+# A glob rather than a named file, so a version bump that renames the faces
+# does not silently report the font missing. All three paths use the same
+# HackNerdFont* filenames, verified by listing the pacman package.
 [nerd-font]
 any_of = [
     { glob = { dir = "$HOME/Library/Fonts", pattern = "HackNerdFont*" } },
     { glob = { dir = "$HOME/.local/share/fonts", pattern = "HackNerdFont*" } },
+    { glob = { dir = "/usr/share/fonts/TTF", pattern = "HackNerdFont*" } },
 ]
 docs = "https://github.com/ryanoasis/nerd-fonts"
 

@@ -763,6 +763,9 @@ fn clone_destination(into: &deps_core::CheckPath) -> OsString {
     let root = match into.root {
         PathRoot::Home => std::env::var_os("HOME").unwrap_or_default(),
         PathRoot::MacApplications => OsString::from("/Applications"),
+        // Never a clone destination: UsrShare exists so a CHECK can see what
+        // a package manager installed, and nothing here writes into it.
+        PathRoot::UsrShare => OsString::new(),
         // A clone never targets the brew prefix, and guessing a prefix here
         // would write outside any directory this process owns. An empty root
         // yields a relative destination, which git creates under the working

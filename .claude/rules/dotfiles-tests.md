@@ -120,6 +120,28 @@ The rule is the one the pre-push hook already states one level up: a gate that
 says nothing when it skips is indistinguishable from a gate that is not
 installed. `tests/skip-reporting.test.sh` holds this behavior in place.
 
+A test that starts its own tmux server with `-L <name>` must set
+`TMUX_TMPDIR` to a directory it owns and removes, because of three tmux
+behaviours that each cost a debugging cycle on 2026-09-09:
+
+- tmux 3.4 does not unlink its socket file on `kill-server`, even on a clean
+  exit. Without a private directory, every run left one dead socket per
+  server in the shared `/tmp/tmux-<uid>/`; 1435 were found there.
+- A Unix socket path is capped at 104 bytes on macOS. `$FIXTURES` lives
+  under the long `/var/folders/.../T/` prefix, so a socket there came to
+  111 bytes and tmux failed with "File name too long". Make the directory
+  directly under `/tmp` (`mktemp -d /tmp/tmux-test-XXXXXX`, or
+  `tempfile::Builder::new().tempdir_in("/tmp")` in Rust).
+- When `TMUX_TMPDIR` names a directory whose parent does not exist, tmux
+  falls back to the shared directory and exits 0 with no message. Create the
+  directory before the first tmux call, and assert at the end of the suite
+  that the shared directory does not hold your socket. `tmux-conf-split`
+  and `tmux-plugin-path` are the shape to copy.
+
+Route the EXIT trap's `kill-server` through the same wrapper that sets
+`TMUX_TMPDIR`, or it aims at a path that no longer exists, the real server
+survives, and `rm -rf` removes its socket from under a running process.
+
 Two failure modes are worth knowing about, because both have bitten this repo:
 
 - A test that creates tmux sessions must clean them up on signals, not only on

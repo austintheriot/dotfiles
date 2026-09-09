@@ -23,10 +23,22 @@ CONFIG="$DOTFILES_ROOT/.config/tmux/tmux.conf"
 SOCKET="tmux-conf-split-test-$$"
 SESSION=$(session_name conf-split)
 
-tmux_t() { tmux -L "$SOCKET" "$@"; }
+# TMUX_TMPDIR under the fixture directory, which lib.sh removes at exit. tmux
+# 3.4 does not unlink a socket on kill-server, so without this every run left
+# its socket file in the shared /tmp/tmux-<uid>/ forever. The EXIT trap kills
+# through this same wrapper, so it reaches the real server rather than a path
+# that no longer exists.
+# A SHORT directory directly under /tmp, not under $FIXTURES. A Unix socket
+# path is capped at 104 bytes on macOS (sizeof sun_path, measured), and
+# $FIXTURES lives under the long /var/folders/.../T/ prefix, so a socket
+# there came to 111 bytes and tmux failed with "File name too long". Removed
+# in the EXIT trap after the kill, so the server dies before its directory.
+SOCKET_DIR=$(mktemp -d /tmp/tmux-test-XXXXXX)
+tmux_t() { TMUX_TMPDIR="$SOCKET_DIR" tmux -L "$SOCKET" "$@"; }
 
 extra_cleanup() {
     tmux_t kill-server 2>/dev/null
+    rm -rf "$SOCKET_DIR"
     cleanup
 }
 trap extra_cleanup EXIT
@@ -83,5 +95,17 @@ other_yank_cmd=$(sed -n "s/.*copy-mode-vi 'y'.*copy-pipe \"\([^\"]*\)\".*/\1/p" 
     "$DOTFILES_ROOT/.config/tmux/tmux-$other_platform.conf")
 assert_equals "the $other_platform yank command is not bound" \
     '' "$(printf '%s' "$yank_binding" | grep -oF "$other_yank_cmd")"
+
+# --- the suite leaves no socket file behind --------------------------------
+#
+# tmux 3.4 does NOT unlink its socket on kill-server (verified: new-session,
+# kill-server, the file remains). So every `tmux -L <unique>` a test run
+# created stayed in the shared directory forever: 1435 dead sockets were
+# found there, six per run across this suite and the tmux-tools tests, for
+# weeks. Killed explicitly here so the assertion has something to observe;
+# the EXIT trap's kill becomes a no-op.
+tmux_t kill-server 2>/dev/null
+assert_succeeds 'the suite socket is not left in the shared tmux directory' \
+    test ! -e "/tmp/tmux-$(id -u)/$SOCKET"
 
 finish

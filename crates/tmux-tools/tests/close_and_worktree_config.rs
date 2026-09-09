@@ -3,12 +3,24 @@
 
 use std::process::Command;
 
-fn tmux(socket: &str, arguments: &[&str]) -> std::process::Output {
+fn tmux(socket_dir: &std::path::Path, socket: &str, arguments: &[&str]) -> std::process::Output {
     Command::new("tmux")
+        // Relocates the socket into the test\'s own directory, which Drop
+        // removes. tmux 3.4 does not unlink it on kill-server.
+        .env("TMUX_TMPDIR", socket_dir)
         .args(["-L", socket])
         .args(arguments)
         .output()
         .expect("tmux runs")
+}
+
+/// Where tmux puts a socket when nothing relocates it, which is where every
+/// test socket this file ever created stayed: tmux 3.4 does not unlink the
+/// file on `kill-server`, so the shared directory held 1435 dead sockets.
+fn shared_socket_path(socket: &str) -> std::path::PathBuf {
+    let uid = Command::new("id").arg("-u").output().expect("id -u runs");
+    let uid = String::from_utf8(uid.stdout).expect("utf-8").trim().to_owned();
+    std::path::PathBuf::from(format!("/tmp/tmux-{uid}/{socket}"))
 }
 
 /// `close` kills every other pane in the current window, leaving the target
@@ -19,11 +31,12 @@ fn tmux(socket: &str, arguments: &[&str]) -> std::process::Output {
 #[test]
 fn it_closes_every_pane_but_the_target() {
     let socket = format!("tmux-tools-test-close-{}", std::process::id());
+    let socket_dir = tempfile::Builder::new().prefix("tt-").tempdir_in("/tmp").expect("a socket dir");
 
-    tmux(&socket, &["new-session", "-d", "-s", "probe"]);
-    tmux(&socket, &["split-window", "-t", "probe:1"]);
+    tmux(socket_dir.path(), &socket, &["new-session", "-d", "-s", "probe"]);
+    tmux(socket_dir.path(), &socket, &["split-window", "-t", "probe:1"]);
 
-    let before = tmux(&socket, &["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
+    let before = tmux(socket_dir.path(), &socket, &["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
     let before_output = String::from_utf8_lossy(&before.stdout).into_owned();
     // Positive control: the fixture must actually have two panes, or the
     // "dropped to one" assertion below would hold trivially for a session
@@ -36,11 +49,12 @@ fn it_closes_every_pane_but_the_target() {
     let run = Command::new(binary)
         .args(["close", "-t", &target_pane])
         .env("TMUX_TOOLS_SOCKET", &socket)
+        .env("TMUX_TMPDIR", socket_dir.path())
         .output()
         .expect("the binary runs");
     assert!(run.status.success(), "stderr: {}", String::from_utf8_lossy(&run.stderr));
 
-    let after = tmux(&socket, &["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
+    let after = tmux(socket_dir.path(), &socket, &["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
     let after_output = String::from_utf8_lossy(&after.stdout);
     let pane_count_after = after_output.lines().count();
     assert_eq!(pane_count_after, 1, "expected one pane left, got {after_output:?}");
@@ -49,10 +63,14 @@ fn it_closes_every_pane_but_the_target() {
         "the surviving pane must be the target, got {after_output:?}"
     );
 
-    let session_still_exists = tmux(&socket, &["has-session", "-t", "probe"]).status.success();
+    let session_still_exists = tmux(socket_dir.path(), &socket, &["has-session", "-t", "probe"]).status.success();
     assert!(session_still_exists, "the session must survive close");
 
-    tmux(&socket, &["kill-server"]);
+    tmux(socket_dir.path(), &socket, &["kill-server"]);
+    assert!(
+        !shared_socket_path(&socket).exists(),
+        "the test left its socket file in the shared tmux directory: {socket}"
+    );
 }
 
 /// `worktree-config` prints the numbered-worktree-window count.

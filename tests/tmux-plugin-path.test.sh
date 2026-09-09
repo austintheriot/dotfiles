@@ -48,12 +48,23 @@ SESSION=$(session_name plugin-path)
 TMPDIR_TEST=$(mktemp -d)
 fresh_home="$TMPDIR_TEST/fresh-home"
 
-tmux_t() { tmux -L "$SOCKET" "$@"; }
+# TMUX_TMPDIR under the fixture directory: see tmux-conf-split.test.sh. Both
+# wrappers are defined here, before the trap, so the trap can kill through
+# them and reach the real servers.
+# A SHORT directory directly under /tmp, not under $FIXTURES. A Unix socket
+# path is capped at 104 bytes on macOS (sizeof sun_path, measured), and
+# $FIXTURES lives under the long /var/folders/.../T/ prefix, so a socket
+# there came to 111 bytes and tmux failed with "File name too long". Removed
+# in the EXIT trap after the kill, so the server dies before its directory.
+SOCKET_DIR=$(mktemp -d /tmp/tmux-test-XXXXXX)
+tmux_t() { TMUX_TMPDIR="$SOCKET_DIR" tmux -L "$SOCKET" "$@"; }
+tmux_fresh() { HOME="$fresh_home" TMUX_TMPDIR="$SOCKET_DIR" tmux -L "$FRESH_SOCKET" "$@"; }
 
 extra_cleanup() {
     tmux_t kill-server 2>/dev/null
-    HOME="$fresh_home" tmux -L "$FRESH_SOCKET" kill-server 2>/dev/null
+    tmux_fresh kill-server 2>/dev/null
     [ -n "${TMPDIR_TEST:-}" ] && rm -rf "$TMPDIR_TEST"
+    rm -rf "$SOCKET_DIR"
     cleanup
 }
 trap extra_cleanup EXIT
@@ -139,7 +150,6 @@ fi
 mkdir -p "$fresh_home/.config/tmux"
 cp "$CONFIG" "$fresh_home/.config/tmux/tmux.conf"
 
-tmux_fresh() { HOME="$fresh_home" tmux -L "$FRESH_SOCKET" "$@"; }
 
 tmux_fresh -f "$fresh_home/.config/tmux/tmux.conf" \
     new-session -d -s fresh -c "$fresh_home" 2>/dev/null
@@ -154,5 +164,14 @@ assert_equals 'the plugin path follows HOME, not the config file location' \
     "$fresh_home/.tmux/plugins/" "$fresh_manager"
 
 tmux_fresh kill-server 2>/dev/null
+assert_succeeds 'the fresh-home socket is not left in the shared tmux directory' \
+    test ! -e "/tmp/tmux-$(id -u)/$FRESH_SOCKET"
+
+# See tmux-conf-split.test.sh for why: tmux 3.4 leaves the socket file after
+# kill-server, so a suite has to make sure its own does not land in the
+# shared directory.
+tmux_t kill-server 2>/dev/null
+assert_succeeds 'the suite socket is not left in the shared tmux directory' \
+    test ! -e "/tmp/tmux-$(id -u)/$SOCKET"
 
 finish

@@ -88,6 +88,25 @@ pub enum Check {
         /// The lowest version that satisfies the check.
         floor: VersionFloor,
     },
+    /// The passwd entry's shell field names this command.
+    ///
+    /// Not `Command`, and not a path check. `Command` asks whether zsh is
+    /// installed; this asks whether zsh is what a login actually starts,
+    /// which is a field in the passwd database rather than anything on the
+    /// filesystem the other variants can name.
+    ///
+    /// The two were conflated, and the symptom was that `config init`
+    /// reported a ready machine while every new terminal ran bash. tmux
+    /// makes it worse than a login-prompt annoyance: tmux derives
+    /// `default-shell` from the passwd entry, so a passwd entry naming
+    /// /bin/bash runs bash in every pane regardless of `$SHELL`, and the
+    /// carefully configured zsh prompt is never drawn.
+    ///
+    /// Carries a `CommandName` rather than a path because the check is
+    /// satisfied by any absolute path whose basename is this command:
+    /// zsh lives at /usr/bin/zsh on Debian and /bin/zsh on Arch, and
+    /// pinning either would fail on the other.
+    LoginShell(CommandName),
     /// `[ -d <path> ]`: the path is a directory.
     DirExists(CheckPath),
     /// `[ -f <path> ]`: the path is a file.
@@ -598,6 +617,36 @@ mod tests {
             (rest[0].clone(), Observation::Absent),
         ]);
         assert_eq!(evaluate(&check, &observed), Observation::Absent);
+    }
+
+    // The login shell is a field in the passwd database, not a path and not
+    // a name on PATH, so it needs its own variant. This is the bug where
+    // `zsh` is installed, `config init` reports success, and every new
+    // terminal and every tmux pane still runs bash: nothing in the repo ever
+    // changed the passwd entry, and no existing check could observe it.
+    //
+    // tmux is the reason it matters beyond a login prompt. tmux reads
+    // `default-shell` from the passwd entry, so a machine whose passwd says
+    // /bin/bash runs bash in every pane no matter what $SHELL says.
+    #[test]
+    fn login_shell_is_a_distinct_check_from_the_command_being_installed() {
+        let installed = Check::Command(CommandName::parse("zsh").expect("a valid name"));
+        let is_login_shell =
+            Check::LoginShell(CommandName::parse("zsh").expect("a valid name"));
+        assert_ne!(
+            installed, is_login_shell,
+            "having zsh and using zsh as the login shell are different questions"
+        );
+
+        // The bug, stated as an assertion: a machine with zsh installed must
+        // NOT thereby satisfy the login-shell check. Collapsing the two is
+        // what would leave the passwd entry unchanged while reporting ready.
+        let observed = ObservationMap::from_pairs(vec![(installed, Observation::Present)]);
+        assert_eq!(
+            evaluate(&is_login_shell, &observed),
+            Observation::Absent,
+            "an installed shell must not satisfy the login-shell check"
+        );
     }
 
     // A leaf nobody observed is Absent, not a panic. gather runs at the

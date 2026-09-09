@@ -309,6 +309,44 @@ pub fn argv_sequence_for(
                 clone_destination(into),
             ]]
         }
+        // `chsh -s <absolute path>`, and the path is resolved from this
+        // machine rather than pinned: zsh is /usr/bin/zsh on Debian and
+        // /bin/zsh on Arch, and this repo has CI legs for both.
+        //
+        // No elevation word. `chsh` with no username argument changes the
+        // CALLER'S own entry, which is the operation a user is always
+        // allowed to perform on themselves. Prefixing sudo would instead
+        // change root's shell -- the wrong row -- on every machine where
+        // the reader is not root.
+        // The path is resolved HERE, not carried in the action, because the
+        // catalog is built once before the fixpoint runs any wave. A path
+        // resolved at catalog-build time on a bare machine was resolved
+        // before zsh existed, and the step reported
+        // `manual (ShellNotListedInEtcShells)` on the same run that had just
+        // installed zsh. `argv_sequence_for` is called by both `describe`
+        // and `perform`, so both see the same answer at the same moment.
+        //
+        // ELEVATED, and the username is explicit. `chsh` on the caller's own
+        // row prompts for their password through PAM, which no unattended
+        // run can answer: the non-root bootstrap leg failed with
+        // "Password: chsh: PAM: Authentication failure". Under sudo there is
+        // no prompt, and a sudo'd `chsh` with no username would edit ROOT's
+        // row rather than the reader's.
+        //
+        // An empty sequence when the shell is not listed or the user cannot
+        // be identified, which `perform` already turns into a reported
+        // non-install rather than a spawn.
+        InstallAction::SetLoginShell { shell } => {
+            match (shell_path_for(shell.as_str()), target_username()) {
+                (Some(resolved), Some(user)) => vec![elevated_with(
+                    privilege,
+                    elevation,
+                    ["chsh", "-s", resolved.as_str()],
+                    [user.as_str()],
+                )],
+                _ => Vec::new(),
+            }
+        }
         // nvm is a shell function, not a binary, so it is sourced first.
         // That is the one action a shell genuinely owns, and it is spawned
         // as `sh -c` over a fixed string with no interpolated data:
@@ -785,6 +823,76 @@ fn words<const COUNT: usize>(parts: [&str; COUNT]) -> Vec<OsString> {
     parts.into_iter().map(OsString::from).collect()
 }
 
+/// The absolute path `chsh -s` should be given for `command`, chosen from
+/// the text of `/etc/shells`.
+///
+/// PURE, taking the file's content as a parameter, because `argv_for` is
+/// pure and this module's header states why: `describe` and `perform` read
+/// the same vector, so the dry run IS the real run. An earlier version of
+/// this probed the filesystem with `Path::exists` and broke that: on this
+/// mac `/usr/bin/zsh` does not exist while `/bin/zsh` does, so a preview
+/// and a spawn could name different files.
+///
+/// `/etc/shells` rather than a candidate list, because it is the authority
+/// `chsh` itself validates against. A path outside it is refused for a
+/// non-root user.
+///
+/// An absolute path and never a bare name. `chsh -s zsh` exits 0, prints
+/// "Warning: zsh does not exist" to stderr, and writes the literal string
+/// `zsh` into the passwd entry -- a broken login shell reported as success.
+/// `chsh` in fact exits 0 for every input, including an absolute path that
+/// does not exist, so its status carries no verdict at all and the
+/// fixpoint's re-check is what decides.
+fn shell_path_in(etc_shells: &str, command: &str) -> Option<String> {
+    etc_shells
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('/'))
+        .find(|line| {
+            std::path::Path::new(line).file_name().is_some_and(|base| base == command)
+        })
+        .map(str::to_owned)
+}
+
+/// The `chsh` target for `command`, read from this machine's `/etc/shells`.
+///
+/// The IO half, kept out of [`argv_for`]'s pure path by being called from
+/// the catalog when the action is BUILT rather than when its argv is
+/// rendered. See [`shell_path_in`] for why the file is the authority.
+///
+/// `None` when the shell is not listed, which is the honest answer: the
+/// engine has nothing correct to pass `chsh`, and reporting no automated
+/// install beats writing a path that does not resolve.
+pub fn shell_path_for(command: &str) -> Option<String> {
+    let text = std::fs::read_to_string("/etc/shells").ok()?;
+    shell_path_in(&text, command)
+}
+
+/// The user whose passwd entry a `chsh` step edits.
+///
+/// Explicit rather than omitted. `chsh` with no username edits the caller's
+/// own row, which reads as the obvious default and is wrong here: the step
+/// runs under sudo, so the caller is root and the row edited would be
+/// root's.
+///
+/// `SUDO_USER` first, because under sudo that is the human who invoked the
+/// run while `id -un` has already become root. `id -un` is the fallback for
+/// a run that is genuinely root's own (a container bootstrap) or that
+/// reaches root some other way.
+fn target_username() -> Option<String> {
+    if let Ok(invoking) = std::env::var("SUDO_USER")
+        && !invoking.is_empty()
+    {
+        return Some(invoking);
+    }
+    let output = Command::new("id").arg("-un").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let name = String::from_utf8(output.stdout).ok()?.trim().to_owned();
+    if name.is_empty() { None } else { Some(name) }
+}
+
 /// Whether a step's argv gets a literal `sudo` word.
 ///
 /// Two independent facts decide it, and conflating them is what produced
@@ -957,6 +1065,42 @@ impl Spawning {
     }
 }
 
+impl Spawning {
+    /// What privilege this action needs on this machine.
+    ///
+    /// `perform` takes the action rather than the step, so the privilege is
+    /// re-derived here rather than read from `Step::privilege`. That makes
+    /// this function the second place the rule lives, and the two have
+    /// already disagreed once:
+    /// `perform_and_plan_agree_on_which_actions_need_root` is what holds
+    /// them together.
+    ///
+    /// TWO KINDS OF PRIVILEGED STEP, and collapsing them is the bug this
+    /// shape prevents:
+    ///
+    ///   A MANAGER install elevates only where the manager does. brew
+    ///   refuses to run as root and says so, so a brew formula never gets a
+    ///   `sudo`; apt and pacman write system directories, so they do.
+    ///
+    ///   A SYSTEM-DATABASE edit elevates everywhere. `chsh` writes
+    ///   `/etc/passwd` on a mac exactly as it does on Debian, and brew's
+    ///   no-root rule is a fact about brew rather than about every step that
+    ///   runs on a machine that has brew.
+    ///
+    /// The first version asked `manager.needs_root()` for both, so the
+    /// passwd edit silently lost its `sudo` on any brew machine.
+    fn privilege_for(&self, action: &InstallAction) -> PrivilegeRequirement {
+        let elevates_everywhere = matches!(action, InstallAction::SetLoginShell { .. });
+        let elevates_with_manager = self.manager.needs_root() && needs_manager_privilege(action);
+
+        if elevates_everywhere || elevates_with_manager {
+            PrivilegeRequirement::Root
+        } else {
+            PrivilegeRequirement::None
+        }
+    }
+}
+
 impl Installer for Spawning {
     fn describe(&self, step: &Step) -> ActionDescription {
         let sequence =
@@ -979,15 +1123,7 @@ impl Installer for Spawning {
             return StepOutcome::NotAutomatable { reason: reason.clone() };
         }
 
-        // `perform` takes the action rather than the step, so the privilege
-        // is re-derived from the manager here. That is the same rule `plan`
-        // applied and not a second opinion: brew never elevates, and every
-        // other manager's own `needs_root` decides.
-        let privilege = if self.manager.needs_root() && needs_manager_privilege(action) {
-            PrivilegeRequirement::Root
-        } else {
-            PrivilegeRequirement::None
-        };
+        let privilege = self.privilege_for(action);
         let sequence = argv_sequence_for(action, self.manager, privilege, self.elevation);
         if sequence.is_empty() {
             return StepOutcome::NotAutomatable {
@@ -1015,13 +1151,33 @@ impl Installer for Spawning {
     }
 }
 
-/// Whether this action installs through the manager, so the manager's own
-/// privilege rule applies.
+/// Whether this action needs root, matching what `plan` decided.
 ///
 /// A pip install, a clone and an nvm install all land in a user-owned
 /// directory whatever manager the machine has, so none of them elevates.
+///
+/// KEEP THIS IN STEP WITH `plan.rs` `action_for`. `perform` re-derives
+/// privilege rather than reading `Step::privilege`, so an action marked as
+/// wanting root there and omitted here silently loses its `sudo` word.
+/// `SetLoginShell` was exactly that: `plan` marked it root, this predicate
+/// did not name it, and the non-root bootstrap leg failed with
+/// "Password: chsh: PAM: Authentication failure" after the privilege was
+/// already fixed in `plan`.
+/// `perform_and_plan_agree_on_which_actions_need_root` holds the two
+/// together.
+///
+/// `SetLoginShell` is not a manager install at all, which is why the name
+/// changed: it edits the passwd database, so it needs root on a brew machine
+/// too. `Spawning::perform` guards this with `self.manager.needs_root()`,
+/// and brew reports false, so the arm below states the requirement
+/// independently of the manager.
 fn needs_manager_privilege(action: &InstallAction) -> bool {
-    matches!(action, InstallAction::Package { .. } | InstallAction::AptSource { .. })
+    matches!(
+        action,
+        InstallAction::Package { .. }
+            | InstallAction::AptSource { .. }
+            | InstallAction::SetLoginShell { .. }
+    )
 }
 
 /// How many bytes of a child's output to keep for the failure message.
@@ -1246,6 +1402,9 @@ fn summarize(action: &InstallAction) -> String {
         InstallAction::Pip { id, break_system_packages: false } => format!("pip {id}"),
         InstallAction::Script { installer } => format!("script {}", script_url(*installer)),
         InstallAction::GitClone { source, .. } => format!("clone {}", clone_url(*source)),
+        InstallAction::SetLoginShell { shell } => {
+            format!("chsh: make {shell} the login shell")
+        }
         InstallAction::NvmInstall => "node through nvm".to_string(),
         InstallAction::NotAutomatable { .. } => "no automated install".to_string(),
     }
@@ -1289,7 +1448,7 @@ pub fn wire(
 mod tests {
     use super::*;
     use deps_core::{CheckPath, DependencyName, TapName};
-    use dotfiles_path::{CheckRelPath, PackageId};
+    use dotfiles_path::{CheckRelPath, CommandName, PackageId};
 
     /// A failed child's stdout reaches the failure value, not only its stderr.
     ///
@@ -1814,6 +1973,375 @@ mod tests {
             !elevated.iter().any(|word| word.to_string_lossy().contains("sudo apt-get")),
             "sudo must not be glued to the program: {elevated:?}"
         );
+    }
+
+    /// The login-shell action names `chsh` and the resolved shell path.
+    ///
+    /// The bug this closes: zsh installed, `config init` reporting a ready
+    /// machine, and every terminal and tmux pane still running bash because
+    /// nothing ever wrote the passwd entry.
+    #[test]
+    fn setting_the_login_shell_runs_chsh_with_an_absolute_path() {
+        let action = InstallAction::SetLoginShell {
+            shell: CommandName::parse("zsh").expect("a valid name"),
+        };
+
+        let sequence = argv_for(
+            &action,
+            PackageManager::Apt,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
+
+        let words: Vec<String> =
+            sequence.iter().map(|word| word.to_string_lossy().into_owned()).collect();
+
+        assert_eq!(words.first().map(String::as_str), Some("chsh"), "{words:?}");
+        assert!(words.iter().any(|word| word == "-s"), "the shell is set with -s: {words:?}");
+
+        // An absolute path, because a bare name is what `chsh` accepts and
+        // writes verbatim: `chsh -s zsh` exits 0, warns on stderr, and
+        // leaves the literal string `zsh` in the passwd entry.
+        //
+        // Found by POSITION after `-s` rather than as the last word: the
+        // username is last now, since `sudo chsh` with no username would
+        // edit root's row instead of the reader's.
+        let flag_at = words.iter().position(|word| word == "-s").expect("a -s flag");
+        let target = words.get(flag_at + 1).expect("a shell argument after -s");
+        assert!(
+            target.starts_with('/'),
+            "chsh needs an absolute path, not a bare name: {target}"
+        );
+        assert!(target.ends_with("/zsh"), "the path must name zsh: {target}");
+    }
+
+    /// The chsh step is elevated and names the user explicitly.
+    ///
+    /// THE BUG THIS CLOSES, from the non-root bootstrap leg:
+    ///
+    ///   FAILED    zsh-login-shell
+    ///     exited 1 (stderr): Password: chsh: PAM: Authentication failure
+    ///
+    /// I had documented the opposite of the truth here: "chsh with no
+    /// username changes the CALLER'S own entry, which is the operation a
+    /// user is always allowed to perform on themselves". A user is allowed
+    /// to, but PAM asks for their PASSWORD first, so it cannot work in any
+    /// unattended run -- which is every run this engine performs.
+    ///
+    /// Verified in a container: `chsh -s /bin/zsh` as a non-root user fails
+    /// with that PAM error and leaves the entry unchanged, while
+    /// `sudo chsh -s /bin/zsh <user>` succeeds with no prompt.
+    ///
+    /// So the username is required: `sudo chsh` without one would edit
+    /// ROOT's entry, which is the wrong row.
+    #[test]
+    fn setting_the_login_shell_is_privileged_and_names_the_user() {
+        let action = InstallAction::SetLoginShell {
+            shell: CommandName::parse("zsh").expect("a valid name"),
+        };
+
+        let sequence = argv_for(
+            &action,
+            PackageManager::Apt,
+            PrivilegeRequirement::Root,
+            Elevation::ViaSudo,
+        );
+        let words: Vec<String> =
+            sequence.iter().map(|word| word.to_string_lossy().into_owned()).collect();
+
+        assert_eq!(
+            words.first().map(String::as_str),
+            Some("sudo"),
+            "the step needs root, and sudo is how this machine reaches it: {words:?}"
+        );
+        assert!(words.iter().any(|word| word == "chsh"), "{words:?}");
+
+        // The username must be the last word. `sudo chsh -s <shell>` with no
+        // user edits root's entry rather than the reader's.
+        let user = words.last().expect("a username argument");
+        assert!(
+            !user.starts_with('/') && !user.starts_with('-'),
+            "the final word must be the username, got {user}"
+        );
+    }
+
+    /// `plan` and `perform` must agree about privilege for EVERY action.
+    ///
+    /// THE BUG THIS CLOSES, and it survived one fix attempt. `plan` marks the
+    /// login-shell step as needing root (`plan.rs` `action_for`), but
+    /// `perform` does not read that: it re-derives privilege from
+    /// `manager.needs_root() && needs_manager_privilege(action)`. That
+    /// predicate listed only `Package` and `AptSource`, so `SetLoginShell`
+    /// came back `None`, the `sudo` word was dropped, and the non-root
+    /// bootstrap leg failed with
+    ///
+    ///   exited 1 (stderr): Password: chsh: PAM: Authentication failure
+    ///
+    /// even after the step was correctly marked as privileged in `plan`.
+    /// Marking it in one place and reading it in another is the whole defect.
+    ///
+    /// Asserted as an AGREEMENT over every action rather than as a fact about
+    /// chsh, so the next action added with a privilege requirement cannot
+    /// reintroduce the split silently.
+    #[test]
+    fn perform_and_plan_agree_on_which_actions_need_root() {
+        // Actions `plan` marks as wanting root, paired with the manager
+        // whose machine the step would run on.
+        let privileged: [InstallAction; 3] = [
+            InstallAction::Package { id: PackageId::parse("tmux").expect("a valid id") },
+            InstallAction::AptSource {
+                keyring: KeyringSource::GithubCli,
+                list: SourceListEntry::GithubCli,
+            },
+            InstallAction::SetLoginShell {
+                shell: CommandName::parse("zsh").expect("a valid name"),
+            },
+        ];
+
+        for action in privileged {
+            assert!(
+                needs_manager_privilege(&action),
+                "plan marks this action as needing root, so perform must too: {action:?}"
+            );
+        }
+    }
+
+    /// A passwd edit needs root on a brew machine too.
+    ///
+    /// `perform` gates privilege on `manager.needs_root()`, and brew reports
+    /// false because brew itself refuses to run as root. That rule is about
+    /// BREW, not about every step that happens to run on a mac: `chsh`
+    /// writes the passwd database wherever it runs.
+    ///
+    /// Latent rather than live today, and worth pinning for that reason:
+    /// macOS has used zsh as the default login shell since Catalina, so the
+    /// check passes and the step never runs there. A linuxbrew machine, or a
+    /// mac whose shell was changed to bash, would hit it.
+    #[test]
+    fn a_passwd_edit_needs_root_even_where_the_manager_does_not() {
+        let action = InstallAction::SetLoginShell {
+            shell: CommandName::parse("zsh").expect("a valid name"),
+        };
+        let installer = Spawning::refusing_to_spawn(PackageManager::Brew);
+
+        assert_eq!(
+            installer.privilege_for(&action),
+            PrivilegeRequirement::Root,
+            "editing the passwd database needs root regardless of the manager"
+        );
+
+        // And brew's own installs still do not elevate, which is the rule
+        // this must not break.
+        let brew = InstallAction::Brew {
+            kind: BrewKind::Formula,
+            id: PackageId::parse("tmux").expect("a valid id"),
+            tap: None,
+        };
+        assert_eq!(
+            installer.privilege_for(&brew),
+            PrivilegeRequirement::None,
+            "brew refuses to run as root, so a brew install never elevates"
+        );
+    }
+
+    /// Already root needs no sudo word, and the username is still required.
+    #[test]
+    fn setting_the_login_shell_as_root_takes_no_sudo_word() {
+        let action = InstallAction::SetLoginShell {
+            shell: CommandName::parse("zsh").expect("a valid name"),
+        };
+
+        let sequence = argv_for(
+            &action,
+            PackageManager::Apt,
+            PrivilegeRequirement::Root,
+            Elevation::AlreadyRoot,
+        );
+        let words: Vec<String> =
+            sequence.iter().map(|word| word.to_string_lossy().into_owned()).collect();
+
+        assert_eq!(words.first().map(String::as_str), Some("chsh"), "{words:?}");
+        assert!(
+            !words.iter().any(|word| word == "sudo"),
+            "there is nothing to escalate to when already root: {words:?}"
+        );
+    }
+
+    /// No word carries interpolated shell text.
+    ///
+    /// `chsh` edits a system database, so this action is the one place a
+    /// stray shell word would be most costly. The argv is spawned directly
+    /// with no shell, and this holds that.
+    #[test]
+    fn setting_the_login_shell_spawns_no_shell_and_interpolates_nothing() {
+        let action = InstallAction::SetLoginShell {
+            shell: CommandName::parse("zsh").expect("a valid name"),
+        };
+
+        let sequence = argv_for(
+            &action,
+            PackageManager::Apt,
+            PrivilegeRequirement::None,
+            Elevation::ViaSudo,
+        );
+
+        let words: Vec<String> =
+            sequence.iter().map(|word| word.to_string_lossy().into_owned()).collect();
+
+        for shell_word in ["sh", "bash", "-c", "eval"] {
+            assert!(
+                !words.iter().any(|word| word == shell_word),
+                "no interpreter word belongs here, found {shell_word}: {words:?}"
+            );
+        }
+        for metacharacter in ['$', '`', ';', '|', '&', '>'] {
+            assert!(
+                !words.iter().any(|word| word.contains(metacharacter)),
+                "no word may carry {metacharacter}: {words:?}"
+            );
+        }
+    }
+
+    /// `argv_for` stays pure, so describe and perform cannot disagree.
+    ///
+    /// This caught a real defect. The first version of the login-shell arm
+    /// resolved the shell by probing the filesystem with `Path::exists`,
+    /// which breaks the promise in `argv_for`'s own doc comment: a dry run
+    /// on a machine without zsh printed `/usr/bin/zsh` while the real run
+    /// on a machine with `/bin/zsh` spawned a different word. The whole
+    /// point of the split is that `describe` renders what `perform`
+    /// spawns.
+    ///
+    /// Asserted by calling twice and comparing, which is the property that
+    /// matters: same inputs, same output, whatever this machine has
+    /// installed.
+    #[test]
+    fn the_login_shell_argv_does_not_depend_on_this_machine() {
+        let action = InstallAction::SetLoginShell {
+            shell: CommandName::parse("zsh").expect("a valid name"),
+        };
+
+        let first =
+            argv_for(&action, PackageManager::Apt, PrivilegeRequirement::None, Elevation::ViaSudo);
+        let second =
+            argv_for(&action, PackageManager::Brew, PrivilegeRequirement::None, Elevation::AlreadyRoot);
+
+        assert_eq!(
+            first, second,
+            "the argv must not vary with the manager, the machine, or the filesystem"
+        );
+    }
+
+    /// The chsh target is resolved when the argv is BUILT, not when the
+    /// catalog is.
+    ///
+    /// THE BUG THIS CLOSES, from a real bare-container bootstrap:
+    ///
+    ///   installed  zsh
+    ///   manual     zsh-login-shell (ShellNotListedInEtcShells)
+    ///
+    /// The catalog is built once, before the fixpoint runs any wave, so a
+    /// version that read `/etc/shells` at catalog-build time read it before
+    /// zsh existed. The `EDGES` entry orders the two INSTALLS and says
+    /// nothing about when the catalog is constructed, so the ordering the
+    /// edge exists to provide was never in force for this step.
+    ///
+    /// Asserted by resolving against two different `/etc/shells` texts: the
+    /// answer must follow the text it is given, which is what proves the
+    /// read happens per-call rather than once.
+    #[test]
+    fn the_chsh_target_follows_the_etc_shells_it_is_given() {
+        let before_install = "/bin/sh\n/bin/bash\n";
+        let after_install = "/bin/sh\n/bin/bash\n/usr/bin/zsh\n";
+
+        assert_eq!(
+            shell_path_in(before_install, "zsh"),
+            None,
+            "before zsh is installed there is no target, which is correct"
+        );
+        assert_eq!(
+            shell_path_in(after_install, "zsh"),
+            Some("/usr/bin/zsh".to_owned()),
+            "after the install wave the same call must find it"
+        );
+    }
+
+    /// The `/etc/shells` parse, against the real file's format.
+    ///
+    /// Pure, taking the text as a parameter, so the assertions do not
+    /// depend on which shells this machine happens to list. A test that
+    /// read the real file would assert nothing on a mac (where zsh is
+    /// already the login shell) and would differ between the Debian and
+    /// Arch CI legs.
+    #[test]
+    fn the_shell_path_comes_from_etc_shells() {
+        let debian = concat!(
+            "# /etc/shells: valid login shells\n",
+            "/bin/sh\n",
+            "/bin/bash\n",
+            "/usr/bin/zsh\n",
+        );
+        assert_eq!(shell_path_in(debian, "zsh"), Some("/usr/bin/zsh".to_owned()));
+
+        // Arch and macOS put it elsewhere. Both are real targets here, and a
+        // pinned path would fail one of them.
+        let arch = "/bin/sh\n/bin/bash\n/bin/zsh\n";
+        assert_eq!(shell_path_in(arch, "zsh"), Some("/bin/zsh".to_owned()));
+
+        // Not listed is None, not a guess. `chsh` exits 0 for any argument,
+        // so a guessed path would be written into the passwd entry and
+        // reported as a successful install.
+        assert_eq!(shell_path_in("/bin/sh\n/bin/bash\n", "zsh"), None);
+    }
+
+    /// Comments and blank lines are skipped, and a near-miss is not a match.
+    #[test]
+    fn the_shell_path_parse_rejects_comments_and_near_misses() {
+        let tricky = concat!(
+            "# a comment naming /usr/bin/zsh\n",
+            "\n",
+            "  /usr/bin/zsh-beta  \n",
+            "relative/zsh\n",
+            "/usr/bin/zsh\n",
+        );
+        assert_eq!(
+            shell_path_in(tricky, "zsh"),
+            Some("/usr/bin/zsh".to_owned()),
+            "a comment, a near-miss name and a relative path must all be skipped"
+        );
+    }
+
+    /// Only an absolute path from `/etc/shells` ever reaches `chsh -s`.
+    ///
+    /// The invariant that matters, because `chsh` enforces nothing itself:
+    /// `chsh -s zsh` exits 0, warns only on stderr, and writes the literal
+    /// string `zsh` into the passwd entry, leaving a login shell that does
+    /// not resolve. `chsh` in fact exits 0 for EVERY argument, so the
+    /// filtering has to happen before the spawn.
+    ///
+    /// `shell_path_in` is that filter: it only ever returns a line from
+    /// `/etc/shells` that starts with `/`, so a relative path or a bare
+    /// name in that file cannot become a chsh target.
+    #[test]
+    fn only_an_absolute_path_can_become_a_chsh_target() {
+        // A malformed /etc/shells is not a source of bad targets.
+        let malformed = concat!(
+            "zsh\n",
+            "bin/zsh\n",
+            "  \n",
+            "# /usr/bin/zsh\n",
+        );
+        assert_eq!(
+            shell_path_in(malformed, "zsh"),
+            None,
+            "no line here is an absolute path, so there is no target"
+        );
+
+        // And every target that IS produced is absolute.
+        for text in ["/usr/bin/zsh\n", "/bin/zsh\n", "/usr/local/bin/zsh\n"] {
+            let found = shell_path_in(text, "zsh").expect("an absolute entry resolves");
+            assert!(found.starts_with('/'), "{found} must be absolute");
+        }
     }
 
     /// A path with a space survives as one argv word.

@@ -460,6 +460,26 @@ fn action_for(
             false,
         ),
         PackageAvailability::ViaNvm => (InstallAction::NvmInstall, false),
+        // ROOT, and this is a correction. The first version reasoned that
+        // `chsh` on the caller's own row is an operation every user may
+        // perform on themselves, so it needed no elevation. A user is
+        // permitted to, but PAM asks for their PASSWORD first, so it cannot
+        // work in an unattended run -- which is every run this engine
+        // performs. The non-root bootstrap leg failed with
+        //
+        //   exited 1 (stderr): Password: chsh: PAM: Authentication failure
+        //
+        // `sudo chsh -s <shell> <user>` succeeds with no prompt, verified in
+        // a container. The username is then required, because a sudo'd chsh
+        // with no username edits root's row instead of the reader's.
+        //
+        // `true` unconditionally rather than `manager.needs_root()`: this
+        // edits a system database, so it needs root on a brew machine too,
+        // and brew's no-elevation rule is about brew rather than about every
+        // step that happens to run there.
+        PackageAvailability::ViaLoginShell { shell } => {
+            (InstallAction::SetLoginShell { shell: shell.clone() }, true)
+        }
     };
 
     if wants_root && elevation == Elevation::Unavailable {

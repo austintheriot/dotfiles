@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use dotfiles_path::{NameError, PackageId};
+use dotfiles_path::{CommandName, NameError, PackageId};
 
 use crate::check::CheckPath;
 use crate::manifest::DependencyName;
@@ -220,6 +220,21 @@ pub enum NoInstallReason {
     },
     /// The step needs root and this machine has neither root nor sudo.
     PrivilegeUnavailable,
+    /// The shell is not listed in this machine's `/etc/shells`, so there is
+    /// no absolute path `chsh` would accept.
+    ///
+    /// A claim about THIS MACHINE, which is why it is not
+    /// `NotPackagedForThisManager` (a claim about upstream) and not
+    /// `PrerequisiteNotYetInstalled` (which promises a later wave can fix
+    /// it, and a wave that installs the shell does update `/etc/shells`, but
+    /// this variant is reached only after that edge has already been
+    /// satisfied).
+    ///
+    /// Reported rather than guessing a path, because `chsh` exits 0 for
+    /// every argument and writes what it is given: a guessed path would be
+    /// written into the passwd entry and reported as a successful install,
+    /// leaving a login that does not resolve.
+    ShellNotListedInEtcShells,
     /// Not in this wave. Named `NotYetInstalled` rather than `Missing`
     /// because under the fixpoint a later wave can change the answer, which
     /// is a different claim from "this can never be automated".
@@ -303,6 +318,31 @@ pub enum InstallAction {
     Script {
         /// Which installer to run.
         installer: ScriptInstaller,
+    },
+    /// Point the current user's passwd entry at a shell already installed.
+    ///
+    /// Not an install: the software is already there, and what is missing is
+    /// the system's record of which shell a login starts. Folding it into
+    /// `Package` would make `describe` print "install package zsh" for an
+    /// action that installs nothing and edits a system database.
+    ///
+    /// Carries the command name rather than an absolute path. The path is
+    /// resolved at perform time from what is actually on this machine,
+    /// because zsh is /usr/bin/zsh on Debian and /bin/zsh on Arch and a
+    /// pinned path fails whichever one it does not name.
+    SetLoginShell {
+        /// The shell to make the login shell.
+        ///
+        /// The NAME, not a path. The absolute path `chsh -s` needs is
+        /// resolved from `/etc/shells` when the argv is built, which is
+        /// after the fixpoint's install wave has put the shell there.
+        ///
+        /// Carrying a resolved path here was a bug: the catalog is
+        /// constructed once, before any wave runs, so on a bare machine the
+        /// path was resolved before zsh existed and the step reported
+        /// `manual (ShellNotListedInEtcShells)` on the very run that had
+        /// just installed zsh successfully.
+        shell: CommandName,
     },
     /// A clone of one of the closed set of plugin repositories.
     GitClone {
@@ -416,6 +456,16 @@ pub enum PackageAvailability {
     },
     /// `node`, which installs through nvm rather than a manager.
     ViaNvm,
+    /// The shell is installed already and the passwd entry must point at it.
+    ///
+    /// Manager-independent, unlike every variant above: the operation is the
+    /// same `chsh` call on apt, pacman and brew, because what it edits is a
+    /// system database rather than a package set.
+    ViaLoginShell {
+        /// The shell to make the login shell, by name. See
+        /// [`InstallAction::SetLoginShell`] for why this is not a path.
+        shell: CommandName,
+    },
 }
 
 /// Per-manager availability with a mandatory fallback.

@@ -42,6 +42,25 @@ present. Most are `command -v <binary>`. A few dependencies are not binaries
 on `PATH`, so they check for a directory or a file instead. `tpm` checks for
 a cloned directory. `nvm` checks for a sourceable script.
 
+`zsh-login-shell` checks the passwd entry rather than the filesystem. Having
+zsh and using zsh are two different facts with two different remedies, and
+only the first was ever checked: every bootstrap reported a ready machine
+while every new terminal still ran bash. tmux made it worse than a
+login-prompt annoyance, because tmux derives `default-shell` from the passwd
+entry and not from `$SHELL`, so a passwd entry naming `/bin/bash` ran bash in
+every pane. The check matches on basename, so `/usr/bin/zsh` on Debian and
+`/bin/zsh` on Arch both satisfy it. Reading the current shell takes three
+sources, because none answers everywhere: `getent` (which consults NSS, so it
+covers LDAP and SSSD machines), then `/etc/passwd`, then `dscl` on macOS,
+which keeps users in Directory Services and ships no `getent`.
+
+The install is `chsh -s <absolute path from /etc/shells>`. The path is read
+from `/etc/shells` rather than pinned, because `chsh` validates against that
+file and because the same shell lives in different directories per
+distribution. `chsh` exits 0 for every argument it is given, including a bare
+name it warns about and writes anyway, so its exit status carries no verdict
+and the fixpoint's re-check is what decides whether the step converged.
+
 `node` checks both `PATH` and nvm's version directory. A non-interactive
 shell does not run `.zshrc`, so an nvm-managed node is not on its `PATH`, and
 a `command -v node` alone would report a machine that has node as missing it.

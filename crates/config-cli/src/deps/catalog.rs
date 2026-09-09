@@ -13,11 +13,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use deps_core::{
-    BrewKind, CloneSource, ConfKind, DependencyName, KeyringSource, NoInstallReason, PackageAvailability,
-    PackageCatalog, PackageManager, PackageMap, PathRoot, Requirements, ScriptInstaller,
-    SourceListEntry, TarballRelease, parse_manifest_toml,
+    BrewKind, CloneSource, ConfKind, DependencyName, KeyringSource, NoInstallReason,
+    PackageAvailability, PackageCatalog, PackageManager, PackageMap, PathRoot, Requirements,
+    ScriptInstaller, SourceListEntry, TarballRelease, parse_manifest_toml,
 };
-use dotfiles_path::{CheckRelPath, PackageId};
+use dotfiles_path::{CheckRelPath, CommandName, PackageId};
 
 /// The four manifests this repository ships, paired with how each is chosen.
 ///
@@ -74,7 +74,9 @@ pub fn packages() -> PackageCatalog {
 
     // Rows whose package name is the dependency name on every manager, which
     // is the shell's `*)` default case at `retired-check-deps:434-438`.
-    for name in ["git", "zsh", "fzf", "ripgrep", "tmux", "shellcheck", "xclip"] {
+    // `unzip` joins this row rather than getting an arm of its own: apt,
+    // pacman and brew all name the package `unzip`, and macOS ships it.
+    for name in ["git", "zsh", "fzf", "ripgrep", "tmux", "shellcheck", "xclip", "unzip"] {
         insert_same_name_everywhere(&mut catalog, name);
     }
 
@@ -277,6 +279,20 @@ pub fn packages() -> PackageCatalog {
     // shell resolves them.
     insert(&mut catalog, "node", per_manager(Vec::new()), PackageAvailability::ViaNvm);
 
+    // The passwd entry, on every manager. `chsh` is the same call everywhere
+    // because what it edits is a system database rather than a package set,
+    // so this is one of the two entries with no per-manager rows at all.
+    //
+    // The fallback carries it rather than a manager row: a machine whose
+    // manager this engine does not recognize still has a passwd entry, and
+    // the operation is identical there.
+    insert(
+        &mut catalog,
+        "zsh-login-shell",
+        per_manager(Vec::new()),
+        login_shell("zsh"),
+    );
+
     insert(
         &mut catalog,
         "oh-my-zsh",
@@ -417,6 +433,12 @@ const EDGES: &[(&str, &[&str])] = &[
     // something the prerequisite provides. Here it is the zsh binary rather
     // than a directory.
     ("oh-my-zsh", &["zsh"]),
+    // chsh validates its -s argument against /etc/shells and fails when the
+    // shell is not installed, so the passwd entry cannot be pointed at zsh
+    // in a wave where zsh itself is still missing. Same shape as every edge
+    // above: the dependent's install reads something the prerequisite
+    // provides.
+    ("zsh-login-shell", &["zsh"]),
 ];
 
 pub fn requirements(
@@ -559,6 +581,34 @@ fn named(raw: &str) -> PackageAvailability {
     }
 }
 
+/// A `chsh` to the named shell, or a stated absence when the name will not
+/// parse.
+///
+/// Total, like every sibling here. `expect` would be a panic in a binary
+/// that runs before the shell prompt, and clippy refuses it in production
+/// code in this workspace for exactly that reason.
+fn login_shell(raw: &str) -> PackageAvailability {
+    // The NAME only. No IO here, deliberately: this function runs while the
+    // catalog is being constructed, which is once, before the fixpoint runs
+    // any install wave.
+    //
+    // An earlier version resolved the absolute path from /etc/shells right
+    // here. On a bare machine that read happened before zsh was installed,
+    // so the step reported `manual (ShellNotListedInEtcShells)` on the very
+    // run whose earlier wave had installed zsh successfully. The `EDGES`
+    // entry orders the two INSTALLS and says nothing about when the catalog
+    // is built, so the ordering the edge exists to supply was never in force.
+    //
+    // The path is resolved in `argv_sequence_for` instead, which both
+    // `describe` and `perform` call at the moment the step runs.
+    match CommandName::parse(raw) {
+        Ok(shell) => PackageAvailability::ViaLoginShell { shell },
+        Err(_) => PackageAvailability::Unavailable(
+            NoInstallReason::ManagerNotNamedInManifest { manager: PackageManager::Unknown },
+        ),
+    }
+}
+
 /// A pip install with the PEP 668 override, or a stated absence.
 fn pip_distribution(raw: &str) -> PackageAvailability {
     match PackageId::parse(raw) {
@@ -614,8 +664,12 @@ mod tests {
         // Positive control. Validation below passes vacuously against an
         // empty or partial union, so assert the union really spans all four
         // files first, naming one dependency exclusive to each.
-        assert_eq!(known.len(), 25, "the union must cover every conf file");
+        assert_eq!(known.len(), 27, "the union must cover every conf file");
         assert!(known.contains(&name("git")), "deps.toml entries are present");
+        assert!(
+            known.contains(&name("zsh-login-shell")),
+            "the passwd entry is a dependency in its own right"
+        );
         assert!(known.contains(&name("oh-my-zsh")), "deps-linux.toml entries are present");
         assert!(known.contains(&name("aerospace")), "deps-mac.toml entries are present");
         assert!(known.contains(&name("pyyaml")), "deps-ci.toml entries are present");
@@ -666,6 +720,51 @@ mod tests {
     ///
     /// Without this, `validated` returning `Ok` for everything would make the
     /// test above pass no matter what the table said.
+    // The login-shell availability is machine-INDEPENDENT, and that is the
+    // whole point.
+    //
+    // THE BUG THIS CLOSES, from a real bare-container bootstrap:
+    //
+    //   installed  zsh
+    //   manual     zsh-login-shell (ShellNotListedInEtcShells)
+    //
+    // An earlier version resolved the absolute chsh target from /etc/shells
+    // right here. The catalog is built ONCE, before the fixpoint runs any
+    // wave, so on a bare machine that read happened before zsh existed and
+    // the step reported "no automated install" on the very run whose earlier
+    // wave had installed zsh successfully. The `EDGES` entry orders the two
+    // INSTALLS; it says nothing about when the catalog is constructed.
+    //
+    // This module's own header states the rule the bug broke: "Nothing in
+    // this module performs IO."
+    #[test]
+    fn the_login_shell_availability_reads_nothing_about_this_machine() {
+        let catalog = packages();
+        let entry = catalog
+            .get(&name("zsh-login-shell"))
+            .expect("zsh-login-shell is a catalog entry");
+
+        // Every manager, because the operation is a passwd edit rather than
+        // a package install and so cannot vary by manager.
+        for manager in [
+            PackageManager::Apt,
+            PackageManager::Brew,
+            PackageManager::Pacman,
+            PackageManager::Unknown,
+        ] {
+            match entry.resolve(manager) {
+                PackageAvailability::ViaLoginShell { shell } => {
+                    assert_eq!(
+                        shell.as_str(),
+                        "zsh",
+                        "the availability carries the NAME, so no path is resolved yet"
+                    );
+                }
+                other => panic!("{manager:?} must reach the login-shell action, got {other:?}"),
+            }
+        }
+    }
+
     #[test]
     fn a_misspelled_prerequisite_is_rejected_by_the_same_union() {
         let known = every_shipped_dependency();
@@ -918,11 +1017,13 @@ mod tests {
             Check::FileExists(path) | Check::FileNonEmpty(path) => vec![(path.clone(), true)],
             // A glob names the directory it searches, which a clone creates.
             Check::GlobExists { dir, .. } => vec![(dir.clone(), false)],
-            // Neither names a path, so neither can be a clone target: a
-            // version check reads a binary already on PATH.
-            Check::Command(_) | Check::CommandVersion { .. } | Check::PythonImport(_) => {
-                Vec::new()
-            }
+            // None names a path, so none can be a clone target: a version
+            // check reads a binary already on PATH, and a login-shell check
+            // reads a field in the passwd database.
+            Check::Command(_)
+            | Check::CommandVersion { .. }
+            | Check::PythonImport(_)
+            | Check::LoginShell(_) => Vec::new(),
             Check::AnyOf { first, rest } => {
                 let mut subjects = subjects_by_kind(first);
                 for branch in rest {

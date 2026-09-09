@@ -227,6 +227,8 @@ struct RawEntry {
     glob: Option<RawGlob>,
     /// A module `python3 -c "import ..."` must find.
     python_import: Option<String>,
+    /// The command the passwd entry's shell field must name.
+    login_shell: Option<String>,
     /// An alternation: any one branch satisfies the entry.
     any_of: Option<Vec<RawBranch>>,
     /// Where a human reads about the dependency.
@@ -271,6 +273,8 @@ struct RawBranch {
     glob: Option<RawGlob>,
     /// A module `python3 -c "import ..."` must find.
     python_import: Option<String>,
+    /// The command the passwd entry's shell field must name.
+    login_shell: Option<String>,
 }
 
 /// The check fields of a raw entry or branch, as borrowed options.
@@ -287,6 +291,7 @@ struct CheckFields<'a> {
     file_non_empty: Option<&'a String>,
     glob: Option<&'a RawGlob>,
     python_import: Option<&'a String>,
+    login_shell: Option<&'a String>,
     any_of: Option<&'a Vec<RawBranch>>,
 }
 
@@ -304,6 +309,7 @@ impl CheckFields<'_> {
             self.file_non_empty.is_some(),
             self.glob.is_some(),
             self.python_import.is_some(),
+            self.login_shell.is_some(),
             self.any_of.is_some(),
         ]
         .into_iter()
@@ -387,6 +393,11 @@ impl CheckFields<'_> {
             let parsed = ModuleName::parse(module).map_err(CheckParseError::BadModuleName)?;
             return Ok(Check::PythonImport(parsed));
         }
+        if let Some(command) = self.login_shell {
+            let parsed =
+                CommandName::parse(command).map_err(CheckParseError::BadCommandName)?;
+            return Ok(Check::LoginShell(parsed));
+        }
 
         // Unreachable: named_count() is 1 and every kind is handled above.
         // Returned rather than panicked so a future kind added to the count
@@ -407,6 +418,7 @@ impl RawEntry {
             file_non_empty: self.file_non_empty.as_ref(),
             glob: self.glob.as_ref(),
             python_import: self.python_import.as_ref(),
+            login_shell: self.login_shell.as_ref(),
             any_of: self.any_of.as_ref(),
         }
     }
@@ -425,6 +437,7 @@ impl RawBranch {
             file_non_empty: self.file_non_empty.as_ref(),
             glob: self.glob.as_ref(),
             python_import: self.python_import.as_ref(),
+            login_shell: self.login_shell.as_ref(),
             any_of: None,
         }
     }
@@ -688,10 +701,14 @@ docs = "https://nodejs.org/"
 [pyyaml]
 python_import = "yaml"
 docs = "https://pyyaml.org/"
+
+[zsh-login-shell]
+login_shell = "zsh"
+docs = "https://www.zsh.org/"
 "#;
         let parsed = parse_manifest_toml(real_shapes, ConfKind::ExplicitOnly)
             .expect("every shape in the tracked manifests parses");
-        assert_eq!(parsed.entries.len(), 8);
+        assert_eq!(parsed.entries.len(), 9);
 
         let check_of = |name: &str| -> Check {
             let wanted = DependencyName::parse(name).expect("a fixture name parses");
@@ -712,6 +729,7 @@ docs = "https://pyyaml.org/"
         assert!(matches!(check_of("nvm"), Check::FileNonEmpty(_)));
         assert!(matches!(check_of("node"), Check::AnyOf { .. }));
         assert!(matches!(check_of("pyyaml"), Check::PythonImport(_)));
+        assert!(matches!(check_of("zsh-login-shell"), Check::LoginShell(_)));
 
         // The alternations' own branches, because FileExists, GlobExists and
         // MacApplications appear only inside one and would otherwise go

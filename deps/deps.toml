@@ -24,6 +24,8 @@
 #   python_import   a module `python3 -c "import ..."` must find. Permitted
 #                   only in a file named by an explicit DEPS_CONF, because it
 #                   spawns an interpreter.
+#   login_shell     the command the passwd entry's shell field must name.
+#                   Matched on basename, so any directory holding it counts.
 #   any_of          a list of inline tables, any one of which satisfies it
 #
 # Paths are written with one of three roots: `$HOME/`, `/Applications/`, or
@@ -70,6 +72,40 @@ docs = "https://alacritty.org/"
 [zsh]
 command = "zsh"
 docs = "https://www.zsh.org/"
+
+# Installing zsh and USING zsh are two different things, and only the first
+# was ever checked. Every bootstrap reported a ready machine while every new
+# terminal still ran bash, because nothing in this repo ever wrote the passwd
+# entry.
+#
+# tmux is what made it more than a login-prompt annoyance. tmux derives
+# `default-shell` from the passwd entry, not from $SHELL, so a passwd entry
+# naming /bin/bash runs bash in every pane -- which is why a fresh container
+# showed `root@host:/#` in tmux instead of the configured prompt, and why
+# typing `zsh` by hand fixed the pane you typed it in and no other.
+#
+# A separate entry rather than a second check on [zsh]: an entry names
+# exactly one check, and these are genuinely two facts with two different
+# remedies (install the package; change the passwd entry).
+#
+# The edge to zsh is declared in the engine's EDGES table, so chsh never runs
+# in a wave where the shell it names is still missing. That ordering matters
+# more than it looks: `chsh` exits 0 for EVERY argument, valid or not, and
+# `chsh -s zsh` writes the literal string `zsh` into the passwd entry while
+# only warning on stderr. So the engine reads the absolute path out of
+# /etc/shells (the authority chsh itself validates against) and the
+# fixpoint's re-check, not chsh's status, is what decides whether the step
+# converged.
+#
+# Reading the CURRENT shell takes three sources, because no one of them
+# answers everywhere: `getent` (NSS, so it covers LDAP and SSSD machines),
+# then /etc/passwd, then `dscl` for macOS, which keeps users in Directory
+# Services and ships no getent. Without the third, this check reported
+# `missing` on a mac whose login shell has been zsh since Catalina -- and
+# the engine would have offered a chsh for an entry already correct.
+[zsh-login-shell]
+login_shell = "zsh"
+docs = "https://wiki.archlinux.org/title/Command-line_shell#Changing_your_default_shell"
 
 [zsh-autosuggestions]
 any_of = [
@@ -153,6 +189,24 @@ docs = "https://github.com/ryanoasis/nerd-fonts"
 [xz-utils]
 command = "xz"
 docs = "https://tukaani.org/xz/"
+
+# The other half of the observation the comment above already recorded: a
+# bare ubuntu:24.04 has no unzip either, and only xz was acted on.
+#
+# Mason extracts a `pkg:github/...` package whose release asset is a .zip
+# with unzip, and its own health check tests for it (mason.nvim
+# health.lua:94). stylua ships exactly that way, so on a fresh machine every
+# npm-backed tool installs and stylua alone fails -- which reads as a stylua
+# problem rather than a missing archiver.
+#
+# The consequence a reader sees is `<leader>f` on a Lua file reporting no
+# formatter, on a machine where prettier works fine for TypeScript.
+#
+# The package is `unzip` on apt and pacman, and macOS ships it, so no
+# per-manager override is needed.
+[unzip]
+command = "unzip"
+docs = "https://infozip.sourceforge.net/UnZip.html"
 
 [shellcheck]
 command = "shellcheck"

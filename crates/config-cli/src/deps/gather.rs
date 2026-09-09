@@ -86,12 +86,141 @@ fn observe_one(check: &Check, resolver: &impl RootResolver) -> Observation {
         }),
         Check::GlobExists { dir, pattern } => probe_glob(dir, pattern.as_str(), resolver),
         Check::PythonImport(module) => probe_python_import(module.as_str()),
+        Check::LoginShell(name) => probe_login_shell(name.as_str()),
         // The composite has no subject of its own beyond its branches:
         // `deps_core::evaluate` derives its answer from them, so recording
         // `Absent` here is inert as long as every branch is also recorded
         // (rule 1), and `observe_check` guarantees that.
         Check::AnyOf { .. } => Observation::Absent,
     }
+}
+
+/// Whether the passwd entry for the current user names `command` as its shell.
+///
+/// The IO half: read the database, then hand the text to the pure functions
+/// below. Split that way so the parse is testable without a fixture user,
+/// and because a test that read the real `/etc/passwd` would pass vacuously
+/// on any machine already using the shell in question.
+///
+/// `Unresolvable` rather than `Absent` when the user cannot be identified or
+/// the database cannot be read. "I could not tell" and "your login shell is
+/// bash" have different remedies, and reporting the second for the first
+/// would offer to run `chsh` on a machine where the question was never
+/// answered.
+fn probe_login_shell(command: &str) -> Observation {
+    let Some(user) = current_username() else {
+        return Observation::Unresolvable { root: PathRoot::Home };
+    };
+
+    // getent first: it consults NSS, so it answers on LDAP and SSSD
+    // machines whose users are not in the file at all. The file is the
+    // fallback, for a container with no getent.
+    let from_getent = std::process::Command::new("getent")
+        .args(["passwd", &user])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .and_then(|text| login_shell_in(&text, &user));
+
+    let from_file = || {
+        std::fs::read_to_string("/etc/passwd")
+            .ok()
+            .and_then(|text| login_shell_in(&text, &user))
+    };
+
+    // macOS third, and it is not a nicety. A mac keeps users in Directory
+    // Services rather than /etc/passwd and ships no `getent`, so both
+    // sources above come back empty on a machine whose login shell has been
+    // zsh since Catalina. Without this the check reported `missing` on the
+    // one platform that needs no fix, and the engine would offer a `chsh`
+    // for a passwd entry that is already correct.
+    let from_directory_service = || {
+        std::process::Command::new("dscl")
+            .args([".", "-read", &format!("/Users/{user}"), "UserShell"])
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .and_then(|text| shell_from_dscl(&text))
+    };
+
+    let shell = from_getent.or_else(from_file).or_else(from_directory_service);
+
+    match shell {
+        Some(path) => to_observation(shell_path_names_command(&path, command)),
+        None => Observation::Unresolvable { root: PathRoot::Home },
+    }
+}
+
+/// The shell in `dscl . -read /Users/<name> UserShell` output.
+///
+/// The output is one line, `UserShell: /bin/zsh`. Parsed rather than
+/// trusted wholesale so that an error line ("No such key: UserShell") does
+/// not become a shell path.
+///
+/// `None` for anything that does not carry an absolute path after the key,
+/// which is `Unresolvable` upstream and never `Absent`: "macOS did not
+/// answer" is a different fact from "your login shell is bash".
+fn shell_from_dscl(output: &str) -> Option<String> {
+    output
+        .lines()
+        .filter_map(|line| line.split_once(": "))
+        .find(|(key, _)| key.trim() == "UserShell")
+        .map(|(_, value)| value.trim().to_owned())
+        .filter(|value| value.starts_with('/'))
+}
+
+/// The current user's name, for looking up their passwd row.
+///
+/// `$USER` is not trusted alone: it is absent in a bare container's
+/// non-login shell and it is settable, so a wrong value would have this
+/// check answer about somebody else. `id -un` asks the system.
+fn current_username() -> Option<String> {
+    let output = std::process::Command::new("id").arg("-un").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let name = String::from_utf8(output.stdout).ok()?.trim().to_owned();
+    if name.is_empty() { None } else { Some(name) }
+}
+
+/// The shell field of `user`'s row in passwd-formatted `text`.
+///
+/// `None` when the user has no row, which is a different fact from an empty
+/// shell field: the first means the question could not be answered, the
+/// second means the row explicitly names no shell.
+///
+/// Rows with fewer than seven fields are skipped rather than guessed at. A
+/// truncated row is corrupt, and reading a shorter row's last field as the
+/// shell would invent an answer from a line that does not carry one.
+fn login_shell_in(text: &str, user: &str) -> Option<String> {
+    const SHELL_FIELD: usize = 6;
+    const FIELD_COUNT: usize = 7;
+
+    text.lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| line.split(':').collect::<Vec<_>>())
+        .filter(|fields| fields.len() >= FIELD_COUNT)
+        .find(|fields| fields.first() == Some(&user))
+        .map(|fields| fields[SHELL_FIELD].to_owned())
+}
+
+/// Whether `shell_path` is an absolute path whose basename is `command`.
+///
+/// Basename equality, not `contains` and not a pinned path. zsh is
+/// `/usr/bin/zsh` on Debian and `/bin/zsh` on Arch, so a pinned path fails
+/// one of this repo's own CI legs; `contains` would read `/usr/bin/zsh-beta`
+/// and `/bin/bash`-adjacent names as a match.
+///
+/// An empty field names no command. It means "the system default", which is
+/// `/bin/sh`, and answering `true` for it would report a configured shell on
+/// a row that configures none.
+fn shell_path_names_command(shell_path: &str, command: &str) -> bool {
+    if shell_path.is_empty() {
+        return false;
+    }
+    Path::new(shell_path).file_name().is_some_and(|base| base == command)
 }
 
 /// Resolve `path`'s root and test the joined path, or report why not.
@@ -644,6 +773,104 @@ mod tests {
 
     fn evaluate_for_test(check: &Check, observations: &ObservationMap) -> Observation {
         deps_core::evaluate(check, observations)
+    }
+
+    // The passwd parse, against the real file's format rather than a
+    // hand-waved one. Kept pure so the assertions do not depend on the
+    // login shell of whatever machine runs the suite -- a test that read
+    // the real /etc/passwd would pass vacuously on this mac, where zsh
+    // already is the login shell, and that is precisely the shape of
+    // fail-open this repo keeps hitting.
+    #[test]
+    fn login_shell_reads_the_shell_field_for_the_named_user() {
+        let passwd = concat!(
+            "root:x:0:0:root:/root:/bin/bash\n",
+            "austin:x:1000:1000:Austin:/home/austin:/usr/bin/zsh\n",
+        );
+
+        assert_eq!(
+            login_shell_in(passwd, "austin"),
+            Some("/usr/bin/zsh".to_owned()),
+            "the seventh colon-separated field is the shell"
+        );
+        assert_eq!(
+            login_shell_in(passwd, "root"),
+            Some("/bin/bash".to_owned()),
+            "each user's own row is read, not the first row"
+        );
+        assert_eq!(
+            login_shell_in(passwd, "nobody-here"),
+            None,
+            "a user with no row has no answer, which is not the same as bash"
+        );
+    }
+
+    // Any absolute path whose basename is the command satisfies it. zsh is
+    // /usr/bin/zsh on Debian and /bin/zsh on Arch, so pinning either one
+    // would fail the other -- and the Arch leg is a real CI leg here.
+    #[test]
+    fn login_shell_matches_on_basename_across_distributions() {
+        for path in ["/usr/bin/zsh", "/bin/zsh", "/usr/local/bin/zsh"] {
+            assert!(
+                shell_path_names_command(path, "zsh"),
+                "{path} is zsh regardless of which directory holds it"
+            );
+        }
+    }
+
+    // The near-miss that a naive `contains` would wave through. `zsh` is a
+    // substring of every one of these, and none of them is zsh.
+    #[test]
+    fn login_shell_rejects_a_shell_that_merely_contains_the_name() {
+        for path in ["/bin/bash", "/usr/bin/zsh-beta", "/bin/false", "/usr/bin/fish"] {
+            assert!(
+                !shell_path_names_command(path, "zsh"),
+                "{path} must not read as zsh"
+            );
+        }
+    }
+
+    // An empty shell field means the system default, which is /bin/sh, and
+    // is emphatically not the shell being asked about. A parse that
+    // returned the empty string and then compared basenames would have to
+    // get this right by accident.
+    #[test]
+    fn an_empty_shell_field_does_not_name_any_command() {
+        let passwd = "svc:x:999:999::/nonexistent:\n";
+        assert_eq!(login_shell_in(passwd, "svc"), Some(String::new()));
+        assert!(!shell_path_names_command("", "zsh"));
+        assert!(!shell_path_names_command("", "sh"));
+    }
+
+    // macOS keeps users in Directory Services, not /etc/passwd, and ships
+    // no `getent`. Both sources therefore come back empty on a mac whose
+    // login shell IS already zsh, and the check must not read that as
+    // "missing" -- doing so offers a `chsh` the machine does not need, on
+    // the one platform where the shell is correct out of the box.
+    //
+    // `dscl` is the macOS authority, which is why the probe consults it.
+    #[test]
+    fn the_macos_directory_service_output_is_understood() {
+        // `dscl . -read /Users/austin UserShell` prints exactly this.
+        assert_eq!(
+            shell_from_dscl("UserShell: /bin/zsh\n"),
+            Some("/bin/zsh".to_owned()),
+            "the value after the key is the shell"
+        );
+
+        // A user with no such key prints an error to stderr and nothing
+        // useful on stdout. That is unresolvable, not bash.
+        assert_eq!(shell_from_dscl(""), None);
+        assert_eq!(shell_from_dscl("No such key: UserShell\n"), None);
+    }
+
+    // Comments and blank lines exist in a real passwd file on some systems,
+    // and a row with too few fields must not panic or be misread.
+    #[test]
+    fn malformed_passwd_rows_are_skipped_rather_than_misread() {
+        let passwd = "\n# a comment\nbroken:row\naustin:x:1:1::/home/austin:/usr/bin/zsh\n";
+        assert_eq!(login_shell_in(passwd, "austin"), Some("/usr/bin/zsh".to_owned()));
+        assert_eq!(login_shell_in(passwd, "broken"), None);
     }
 
     /// A failed probe is `Unresolvable`, not `Absent`.

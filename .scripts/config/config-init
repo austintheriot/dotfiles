@@ -248,3 +248,57 @@ case ":$caller_path:" in
         printf 'config init: new shells get it from ~/.profile (bash, sh) or ~/.zshrc (zsh).\n'
         ;;
 esac
+
+# Hand over to the shell this setup just configured.
+#
+# Without this, the last thing a fresh-machine bootstrap does is print
+# "done" into the bash the reader started in: no prompt, no aliases, and no
+# `config` on PATH, because no process can change the PATH of the shell that
+# started it. The advice printed above is correct and it is still one more
+# thing to type on a machine where everything is already installed.
+#
+# `exec`, not a subshell, so the reader's shell IS zsh from here on rather
+# than a child they have to exit out of back into bash.
+#
+# A LOGIN shell (`-l`), so the handover reads the same files a real login
+# reads. A non-login interactive zsh skips ~/.zprofile, which is where a
+# login PATH belongs, and the reader would get a shell subtly unlike every
+# later one.
+#
+# THREE conditions, all required, because getting this wrong hangs a
+# bootstrap rather than merely annoying somebody:
+#
+#   A terminal on stdin. The documented entry point is `curl ... | sh`, and
+#   CI and both Docker bootstrap harnesses run this script the same way.
+#   Exec'ing an interactive shell against a closed pipe replaces the
+#   bootstrap process with a shell that reads EOF and exits, which reports
+#   as a bootstrap failure -- or worse, waits for input nobody can give.
+#   This is the same `-t 0` test setup.sh uses to decide it is unattended.
+#
+#   zsh actually installed. The install step above can legitimately fail on
+#   a machine whose package manager is broken, and exec'ing a missing binary
+#   would replace a successful bootstrap with "command not found".
+#
+#   zsh is the login shell. If the passwd entry still names bash, then
+#   something did not converge, and dropping the reader into a zsh their
+#   next terminal will not give them hides that instead of showing it.
+#
+# Any condition unmet: return normally. The closing message above already
+# said what to do, and a bootstrap that finished is not a bootstrap that
+# failed.
+if [ -t 0 ] && command -v zsh >/dev/null 2>&1; then
+    login_shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)
+    # No getent on macOS, so fall back to the shell the environment names.
+    # ${SHELL:-} and not $SHELL: `set -u` is on, and SHELL is genuinely
+    # unset in a bare container's non-login shell -- which is exactly the
+    # machine this whole handover exists for. An unguarded expansion would
+    # abort the script here, turning a finished bootstrap into an error.
+    [ -n "$login_shell" ] || login_shell=${SHELL:-}
+
+    case ${login_shell##*/} in
+        zsh)
+            printf 'config init: starting zsh, the login shell this setup installed\n'
+            exec zsh -l
+            ;;
+    esac
+fi

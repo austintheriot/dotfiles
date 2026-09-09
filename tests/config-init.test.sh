@@ -381,8 +381,6 @@ assert_equals 'no hint when local bin is already on PATH' '' \
     "$(printf '%s\n' "$output" | grep 'export PATH=' || true)"
 
 
-finish
-
 # --- prereqs is the one step whose failure is fatal before anything else ----
 
 # A machine with no cc and no rustup cannot build the engine, and every step
@@ -414,3 +412,67 @@ assert_succeeds 'the failure names the toolchain step' \
 calls=$(calls_of "$home")
 assert_equals 'no step after prereqs runs' '' \
     "$(printf '%s\n' "$calls" | awk '{print $1}' | grep -E '^(build|install)$' || true)"
+
+# --- the finished setup hands over to the new login shell ---------------
+#
+# The feature: after a successful `config init`, the reader is dropped into
+# zsh rather than left in the bash they started in. Without it, the very
+# last thing a fresh-machine bootstrap does is print "done" into a shell
+# that has none of the configuration it just installed -- no prompt, no
+# aliases, no PATH entry for `config`.
+#
+# THE CONSTRAINT THAT MAKES THIS DELICATE: an unattended run must NOT exec a
+# shell. The documented entry point is `curl ... | sh`, CI runs the same
+# script, and the Docker bootstrap harnesses run it too. Exec'ing an
+# interactive zsh there replaces the bootstrap process with a shell reading
+# a closed pipe, which either hangs the leg until its timeout or exits in a
+# way that looks like a bootstrap failure.
+#
+# So the handover is gated on the same condition every other prompt in this
+# script is gated on: a terminal on stdin. `--yes`, a pipe, and CI all take
+# the quiet path and simply return.
+
+assert_succeeds 'the init script names the login shell handover' \
+    grep -q 'exec .*zsh\|handover\|hand over' "$INIT"
+
+# The gate, asserted against the code rather than a comment: the handover
+# must be inside a terminal test. A handover that runs unattended is the
+# hang described above.
+handover_line=$(grep -n 'exec .*zsh' "$INIT" | head -1 | cut -d: -f1)
+assert_succeeds 'the handover exists as a line of code' test -n "$handover_line"
+
+# Walk back from the handover to find its guard. `-t 0` (or -t 1) must
+# appear above it: that is the "somebody is actually here" test.
+guard_above=$(head -n "$handover_line" "$INIT" | grep -c '\-t 0\|\-t 1')
+assert_succeeds 'the handover is guarded by a terminal test' \
+    test "$guard_above" -gt 0
+
+# A dry run changes nothing, including replacing the reader's shell.
+dry_output=$("$INIT" --dry-run 2>&1 || true)
+assert_succeeds 'a dry run does not exec a shell' \
+    test "$(printf '%s' "$dry_output" | grep -c '^config init: done')" -eq 0
+
+# The unattended path must reach its end and RETURN, which is what proves
+# it did not exec. A run with no terminal on stdin prints the closing
+# "done" and exits; if it exec'd zsh instead, this call would not return.
+#
+# Piped, not --yes: --yes is about declining prompts, and the point here is
+# the absence of a terminal, which is the condition the guard reads.
+piped_status=0
+printf '' | "$INIT" --dry-run >/dev/null 2>&1 || piped_status=$?
+assert_equals 'an unattended run returns rather than exec-ing a shell' \
+    '0' "$piped_status"
+
+# SHELL unset is the normal state in a bare container's non-login shell,
+# which is the machine this handover exists for. `set -u` is on, so an
+# unguarded $SHELL expansion aborts the script and turns a finished
+# bootstrap into an error. Asserted against the code, because the abort
+# happens only on a machine where getent is ALSO absent -- a combination
+# this suite cannot produce on either CI platform.
+assert_succeeds 'the SHELL fallback is guarded against being unset' \
+    grep -q 'login_shell=${SHELL:-}' "$INIT"
+
+unguarded=$(grep -c 'login_shell=\$SHELL$' "$INIT" || true)
+assert_equals 'no unguarded SHELL expansion in the handover' '0' "$unguarded"
+
+finish

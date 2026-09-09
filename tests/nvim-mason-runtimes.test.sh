@@ -180,6 +180,18 @@ assert_equals 'every declared tool has a version pin' \
 lsp_code=$(sed -e 's/--.*//' "$LSP_CONFIG")
 assert_succeeds 'the config reads the lockfile' \
     test -n "$(printf '%s\n' "$lsp_code" | grep 'mason-lock.json' || true)"
+
+# mason-tool-installer takes `{ 'name', version = '...' }` TABLE entries. It
+# passes the name straight to mason-registry.get_package, which does not
+# parse a `name@version` string, so the string form fails at runtime with
+#   Cannot find package "rust-analyzer@2026-04-06".
+# Read from the plugin: init.lua:235-238 destructures item[1] and
+# item.version. The `name@version` spelling is mason-LSPCONFIG's syntax, not
+# this plugin's, and mixing them up is silent until first launch.
+assert_equals 'the tool-installer entries do not use the name@version string' '' \
+    "$(printf '%s\n' "$lsp_code" | grep "package_name .. '@'" || true)"
+assert_succeeds 'the tool-installer entries pass version as a table field' \
+    test -n "$(printf '%s\n' "$lsp_code" | grep 'version = version' || true)"
 assert_succeeds 'the config pins the registry from the lockfile' \
     test -n "$(printf '%s\n' "$lsp_code" | grep 'registries' || true)"
 assert_succeeds 'auto_update is disabled, so the lock is not overwritten' \
@@ -268,6 +280,17 @@ if [ "$ts_branch" = main ]; then
         test -n "$(printf '%s\n' "$ts_code" | grep 'vim\.treesitter\.start' || true)"
     assert_succeeds 'the spec guards the parser load' \
         test -n "$(printf '%s\n' "$ts_code" | grep 'pcall.*language\.add' || true)"
+
+    # `pcall(language.add, lang)` is NOT sufficient on its own. get_lang
+    # falls back to returning the filetype itself when nothing maps it, and
+    # language.add SUCCEEDS for a name with no parser -- it registers the
+    # language rather than loading a parser. treesitter.start then throws:
+    #   Parser could not be created for buffer 1 and language "NvimTree"
+    # Reported from a real session on a plugin buffer. The predicate that
+    # actually answers the question is whether a parser FILE exists on
+    # runtimepath.
+    assert_succeeds 'the spec requires an installed parser before starting' \
+        test -n "$(printf '%s\n' "$ts_code" | grep 'nvim_get_runtime_file' || true)"
 
     # THE TREE-SITTER CLI IS A HARD REQUIREMENT ON `main`, and this is the
     # assertion that would have saved a container round. `master` compiled

@@ -69,11 +69,33 @@ return {
         group = vim.api.nvim_create_augroup('dotfiles_treesitter', { clear = true }),
         callback = function(args)
           local lang = vim.treesitter.language.get_lang(args.match)
-          if not lang or not pcall(vim.treesitter.language.add, lang) then
+          if not lang then
             return
           end
 
-          vim.treesitter.start(args.buf, lang)
+          -- A PARSER FILE MUST EXIST, and checking that is not the same as
+          -- calling language.add. get_lang returns the FILETYPE ITSELF when
+          -- nothing maps it, and language.add then succeeds for that name
+          -- because it registers a language rather than loading a parser.
+          -- vim.treesitter.start is the call that finally throws:
+          --
+          --   Parser could not be created for buffer 1 and language "NvimTree"
+          --
+          -- Reported from a real session opening the file explorer, whose
+          -- buffer has filetype NvimTree. Every plugin buffer is this shape.
+          if #vim.api.nvim_get_runtime_file('parser/' .. lang .. '.so', false) == 0 then
+            return
+          end
+
+          -- Still guarded: a parser that exists can be ABI-stale against the
+          -- running Neovim, and that failure arrives from start() rather
+          -- than from the file check above.
+          if not pcall(vim.treesitter.language.add, lang) then
+            return
+          end
+          if not pcall(vim.treesitter.start, args.buf, lang) then
+            return
+          end
 
           -- Indent was `indent = { enable = true, disable = { 'ruby' } }`
           -- under master. On main the expression is ours to set, and ruby's

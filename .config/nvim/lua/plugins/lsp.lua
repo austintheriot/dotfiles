@@ -122,8 +122,15 @@ return {
       local ensure = {}
       for _, name in ipairs(vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint', 'cspell' })) do
         local package_name = mason_names[name] or name
+        -- A TABLE, not a `name@version` string. mason-tool-installer
+        -- destructures item[1] and item.version (its init.lua:235-238) and
+        -- passes the name straight to mason-registry.get_package, which does
+        -- not parse a version suffix. The string form fails at first launch
+        -- with `Cannot find package "rust-analyzer@2026-04-06"`. The
+        -- `name@version` spelling is mason-lspconfig's syntax, not this
+        -- plugin's.
         local version = lock.packages[package_name]
-        table.insert(ensure, version and (package_name .. '@' .. version) or package_name)
+        table.insert(ensure, version and { package_name, version = version } or package_name)
       end
 
       require('mason-tool-installer').setup {

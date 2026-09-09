@@ -103,7 +103,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   unit tests are the inner one, and they are what make a failure land at the
   edit rather than at the next launch.
 
-- Show child process output while a step runs, rather than only a summary
+- CLAIMED 2026-09-09 (step 4 only). Show child process output while a step runs, rather than only a summary
   after it finishes. BOTH LONG STEPS OF `config init` ARE SILENT, and they
   are silent for DIFFERENT REASONS, so this is two fixes rather than one.
 

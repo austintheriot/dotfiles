@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- nvim: assert the mason lockfile resolves against the pinned registry.
+- CLAIMED 2026-09-08. nvim: assert the mason lockfile resolves against the pinned registry.
   Every name in mason-lock.json must satisfy `mason-registry.get_package`
   under the pinned registry version. Catches the `rust-analyzer@2026-04-06`
   class before first launch rather than after. Needs the registry, so it is

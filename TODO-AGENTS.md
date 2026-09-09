@@ -103,22 +103,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   unit tests are the inner one, and they are what make a failure land at the
   edit rather than at the next launch.
 
-- CLAIMED 2026-09-09. Extend the nvim config-load test to open and FORMAT several file types.
-  Suggested by the owner 2026-09-09 while reporting the errors above: run
-  nvim on a bare docker image and open/edit/format .css, .ts, .rs, .html,
-  .md and friends. The existing test
-  (`crates/config-cli/tests/nvim_config_load.rs`) opens .lua, .md, .ts,
-  .json, .toml and .sh and asserts nothing errors, which is what caught the
-  NvimTree regression. It does NOT exercise formatting, and `<leader>f` is
-  exactly the path that broke.
-  What to add: .css, .html and .rs to the fixture set, and an assertion that
-  a format request on a supported filetype either formats or reports a
-  MISSING TOOL rather than silently doing nothing. Note the trap: on a
-  machine where the formatter is genuinely absent, "unavailable" is the
-  correct answer, so the assertion has to distinguish "no formatter
-  configured for this filetype" from "the configured formatter is not
-  installed" -- the first is a config bug, the second is an install bug.
-
 - Show child process output while a step runs, rather than only a summary
   after it finishes. BOTH LONG STEPS OF `config init` ARE SILENT, and they
   are silent for DIFFERENT REASONS, so this is two fixes rather than one.

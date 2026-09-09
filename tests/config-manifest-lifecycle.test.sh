@@ -94,6 +94,37 @@ if command -v cargo >/dev/null 2>&1; then
     assert_succeeds 'config-build installs no binary for a library member' \
         test ! -e "$bin_dir/config-manifest"
 
+    # --- cargo's progress reaches a human, and only a human ---------------
+    #
+    # `config init: [4/5] build and install the stamped binary` printed one
+    # line and then nothing for minutes on a fresh machine. config-init runs
+    # config-build with no redirection, so the silence was not buffering:
+    # `cargo build --quiet` suppresses the per-crate "Compiling ..." lines,
+    # which are the only progress a cold compile of six crates emits.
+    #
+    # Measured before changing it, because the flag was doing real work. A
+    # warm rebuild of one crate prints both a "Compiling" and a "Finished"
+    # line without it, and nothing with it -- so dropping it unconditionally
+    # makes the no-op rebuild that every `config init` re-run performs noisy,
+    # and adds noise to eight CI legs.
+    #
+    # Gating on a tty keeps both: progress where somebody is watching a cold
+    # compile, silence where the output is piped or captured. This suite
+    # captures with $(...), so the run above is the piped case.
+    assert_equals 'a captured build stays quiet' '' \
+        "$(printf '%s\n' "$output" | grep -E '^\s+(Compiling|Finished)' || true)"
+
+    # The tty half, asserted by reading the script rather than by allocating
+    # a pty: the suite runs headless in eight CI legs and in Docker, so a
+    # real terminal is not available to test against. What is checkable is
+    # that the quiet flag is CONDITIONAL -- an unconditional `--quiet` is the
+    # defect, and an unconditional absence is the noise.
+    build_code=$(sed -e 's/#.*//' "$BUILD")
+    assert_succeeds 'the build decides quietness from a tty' \
+        test -n "$(printf '%s\n' "$build_code" | grep -E '\-t 1' || true)"
+    assert_equals 'the quiet flag is not passed unconditionally' '' \
+        "$(printf '%s\n' "$build_code" | grep -E 'cargo build .*--quiet' || true)"
+
     # The stamp lives inside the binary, not in a file beside it, so a stale
     # or foreign config-cli on PATH cannot report a stamp it was not built
     # with.

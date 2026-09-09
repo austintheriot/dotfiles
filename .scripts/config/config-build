@@ -40,6 +40,28 @@ export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/config-manifest/target
 # One invocation, one snapshot. Re-invoking per crate would read the worktree
 # several times, so crate A could be stamped from one state and crate B from
 # another.
+# `--quiet` only when nobody is watching.
+#
+# `config init: [4/5] build and install the stamped binary` printed one line
+# and then nothing for minutes on a fresh machine. Not buffering: config-init
+# runs this script with no redirection, and `cargo build --quiet` suppresses
+# the per-crate "Compiling ..." lines, which are the only progress a cold
+# compile of six crates emits.
+#
+# The flag was still doing real work, measured before changing it. A warm
+# rebuild of one crate prints both a "Compiling" and a "Finished" line
+# without it and nothing with it, so dropping it unconditionally makes the
+# no-op rebuild that every `config init` re-run performs noisy, and adds
+# noise to eight CI legs.
+#
+# Unquoted on purpose: this is a word to pass or nothing at all, and the
+# empty-string case must expand to zero arguments rather than one empty one.
+if [ -t 1 ]; then
+    quiet=''
+else
+    quiet='--quiet'
+fi
+
 stamps=$("$ROOT/.scripts/config/config-stamp")
 
 mkdir -p "$BIN_DIR"
@@ -57,7 +79,7 @@ printf '%s\n' "$stamps" | while IFS=' ' read -r member stamp; do
     # library's compile errors surface at `config build` rather than only
     # inside whichever binary depends on it.
     CONFIG_MANIFEST_STAMP="$stamp" \
-        cargo build --release --locked --quiet \
+        cargo build --release --locked $quiet \
             --manifest-path "$WORKSPACE_DIR/Cargo.toml" -p "$member" \
         || exit 1
 

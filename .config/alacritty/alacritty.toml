@@ -42,7 +42,7 @@ startup_mode = "Maximized"
 # Nord. Previously present only on the linux branch, so the two terminals did
 # not match.
 [colors.primary]
-background = "0x2E3440"
+background = "0x000000"
 foreground = "0xD8DEE9"
 
 [colors.cursor]

@@ -119,59 +119,22 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   unit tests are the inner one, and they are what make a failure land at the
   edit rather than at the next launch.
 
-- Remove the Nord theme from tmux. KEEP the status bar; make its background
-  black.
-  Confirmed cause: `.config/tmux/tmux.conf:27` declares
-  `set -g @plugin "nordtheme/tmux"`, whose own README calls it "an arctic,
-  north-bluish clean and elegant tmux color theme". It is one of three
-  plugins, beside tpm itself and tmux-sensible.
-  WHAT IS ACTUALLY BLUE, which is narrower than the whole theme and changes
-  the shape of the fix. Nord's own `status-style` is ALREADY
-  `bg=black,fg=white` (`plugins/tmux/src/nord.conf:24`), so the bar's
-  background is not the problem. The blue is in the SEGMENTS, all set by
-  `plugins/tmux/src/nord-status-content.conf`:
-    - `status-left`: the session name on `bg=blue`.
-    - `window-status-current-format`: the active window on `bg=cyan`.
-    - `status-right`: the hostname on `bg=cyan`, with the date and time on
-      `bg=brightblack`.
-    - `window-status-format`: inactive windows on `bg=brightblack`.
-  Two smaller blue settings outside the status line, worth deciding on at
-  the same time: `pane-active-border-style fg=blue` and
-  `message-style fg=cyan` (nord.conf:29 and :33).
-  So the work is to keep the layout and re-colour the segments, not to
-  delete the bar. The content is what this repo wants anyway: session name
-  on the left, window list in the middle, date, time and hostname on the
-  right.
-  THE ONE REAL CONSTRAINT: this repo has NO status settings of its own. A
-  grep for `status` across `tmux.conf`, `tmux-mac.conf` and
-  `tmux-linux.conf` returns nothing, so Nord supplies the entire bar.
-  Deleting the plugin line alone drops to tmux's DEFAULT green bar and loses
-  the clock and the hostname. Keeping the bar therefore means writing our
-  own `status-left`, `status-right`, `window-status-format` and
-  `window-status-current-format` -- copy Nord's, which are the layout to
-  keep, and change the colours.
-  Suggested starting point, to be adjusted by eye rather than trusted from
-  here: `bg=black` throughout for the bar, `bg=brightblack` for inactive
-  segments (a visible but unobtrusive step up from the ground), and one
-  non-blue accent for the active window and the hostname. Nord's structure
-  uses a `#[fg=X,bg=black]` separator glyph between segments; that separator
-  needs a patched font, and this config never sets
-  `@nord_tmux_no_patched_font`, so it is currently getting the patched-font
-  variant.
-  Mechanics, verified:
-    - no test asserts the plugin list or any status setting (grep for
-      `@plugin`, `nordtheme` and `status` across `tests/*.test.sh` returns
-      nothing on the first two). `tmux-conf-split.test.sh` reads the config
-      but asserts on the platform-variant wiring.
-    - the plugin tree at `.config/tmux/plugins/` is untracked, installed by
-      tpm, so removal is `rm -rf .config/tmux/plugins/tmux` plus the line.
-    - `.config/tmux/tmux.conf.bak.20260821121033` is an untracked backup
-      from 2026-08-21 carrying the same plugin line. Delete it in the same
-      pass so a future grep for `nordtheme` comes back clean.
-  Worth considering while in there: whether the bar should show anything the
-  window-naming binary already computes, since that is the one piece of
-  status content this repo owns.
-
+- DONE 2026-09-09, and the intent was narrower than this entry said: keep the
+  Nord status bar, make the TERMINAL ground full black. The blue was never
+  the ground. Alacritty painted `0x2E3440` (Nord polar night) as
+  `colors.primary.background`, and both nvim (`transparent = true`) and
+  Nord's tmux panes (`bg=default`) show the terminal through, so one line
+  in alacritty.toml was the whole change. Pinned by
+  tests/alacritty-platform-split.test.sh so a future Nord palette paste does
+  not drag it back.
+  NOT changed, on purpose: the palette `black = 0x3B4252`, which is what
+  makes the bar look like Nord. So the bar now sits as a grey-blue strip on
+  a black ground with a visible edge. If that edge is unwanted, the next
+  step is palette black to `0x000000`, and it recolours every `black` in
+  nvim and zsh too, so it is a separate decision.
+  Superseded reasoning kept: the earlier draft of this entry proposed
+  removing the plugin and rewriting the four status segments by hand. That
+  was solving the wrong layer.
 - Latent, no live trigger today: several path-handling gaps share one
   cause, that git quotes unusual paths and the quoted form matches no
   pathspec when fed back. No tracked path currently contains a space or a

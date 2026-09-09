@@ -262,4 +262,19 @@ else
     skip 'no repository here, so the generated pointer cannot be checked against it'
 fi
 
+# --- the terminal ground is pure black -------------------------------------
+#
+# Requested 2026-09-09: keep the Nord status bar, make the terminal's own
+# background full black. The two are separable because nvim runs with
+# `transparent = true` and Nord's tmux panes use `bg=default`, so both show
+# the terminal through, and only Alacritty paints the ground.
+#
+# Pinned because of how the old value got there. `0x2E3440` is Nord's polar
+# night, pasted in as part of the whole Nord palette, and a future palette
+# refresh would paste it back. The palette entries are deliberately NOT
+# pinned: `black = 0x3B4252` is what keeps the bar looking like Nord, and
+# that is wanted.
+ground=$(sed -n '/^\[colors.primary\]/,/^\[/p' "$SHARED" | sed -n 's/^background *= *"\(0x[0-9A-Fa-f]*\)".*/\1/p')
+assert_equals 'the terminal background is pure black' '0x000000' "$ground"
+
 finish

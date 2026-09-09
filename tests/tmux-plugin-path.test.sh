@@ -88,15 +88,38 @@ assert_equals 'tpm runs from the directory tmux installs plugins into' \
 #
 # The contents, not the installer's verdict. See the header: the installer
 # reports success for plugins it never cloned.
-while read -r repo; do
-    [ -n "$repo" ] || continue
-    plugin_name=${repo##*/}
-    assert_succeeds "the declared plugin $repo is installed" \
-        test -d "$manager_dir/$plugin_name"
-done <<PLUGINS
-$(grep -oE "@plugin +['\"][^'\"]+['\"]" "$CONFIG" \
+#
+# SKIPPED where tpm itself is absent, and that is a real distinction rather
+# than a convenience. This block asks about INSTALLED STATE, which the deps
+# engine creates by cloning tpm and which the pre-push container therefore
+# does not have: its tree comes from `git archive`, so no plugin was ever
+# cloned into it. A bare `test -d` there fails for a correct machine.
+#
+# The path assertions above are the half that still runs everywhere, because
+# they read the CONFIG rather than the machine, and the config is what this
+# repo actually controls. That split is the point: the container gates the
+# contract, and a developer machine gates the contract plus the state.
+plugins_declared=$(grep -oE "@plugin +['\"][^'\"]+['\"]" "$CONFIG" \
     | sed -E "s|@plugin +['\"]([^'\"]+)['\"]|\1|")
+assert_succeeds 'the config declares at least one plugin' test -n "$plugins_declared"
+
+if [ ! -d "$manager_dir/tpm" ]; then
+    while read -r repo; do
+        [ -n "$repo" ] || continue
+        skip "no tpm at $manager_dir: the declared plugin $repo is installed"
+    done <<PLUGINS
+$plugins_declared
 PLUGINS
+else
+    while read -r repo; do
+        [ -n "$repo" ] || continue
+        plugin_name=${repo##*/}
+        assert_succeeds "the declared plugin $repo is installed" \
+            test -d "$manager_dir/$plugin_name"
+    done <<PLUGINS
+$plugins_declared
+PLUGINS
+fi
 
 # --- the theme applies from an EMPTY plugin tree ------------------------
 #

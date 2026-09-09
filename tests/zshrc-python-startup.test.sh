@@ -80,7 +80,36 @@ assert_equals 'startup does not run `pyenv rehash`' \
 
 # --- the end state is reached anyway ----------------------------------------
 
-report=$(zsh -i -c '
+# A BASELINE PATH the caller cannot pollute, and this is a fix for a real
+# defect rather than hygiene.
+#
+# `zsh -i` inherits the caller's PATH, so this suite measured the
+# ENVIRONMENT IT RAN IN rather than what .zshrc produces. Run from a shell
+# whose PATH already had Homebrew ahead of the pyenv shims (Claude Code's own
+# environment is one), the two resolution assertions below failed while a
+# real login shell on the same machine resolved python3 to the shims
+# correctly. Same .zshrc, two answers, decided by the caller.
+#
+# The guard in .zshrc is what makes the inherited PATH matter: it skips the
+# prepend when the shims are on PATH ANYWHERE, so an inherited PATH that
+# already carries them further back leaves them there, behind whatever came
+# first.
+#
+# /usr/bin:/bin:/usr/sbin:/sbin is what `path_helper` starts a login shell
+# with, so this is the state .zshrc is actually written against. Nothing here
+# adds pyenv or Homebrew: the assertions below are about what .zshrc does
+# with PATH, and pre-seeding either one would answer the question for it.
+#
+# USED ONLY FOR THE RESOLUTION BLOCK BELOW, not for the lazy-loading
+# assertions further down. Those call the real `pyenv`, which on this machine
+# is a Homebrew install at /opt/homebrew/bin/pyenv, so a baseline that
+# excludes Homebrew makes them fail with "command not found: pyenv" -- a fact
+# about the baseline rather than about the shim. They keep the caller's PATH
+# because what they test (does the shim load the real thing and re-dispatch)
+# does not depend on PATH ORDER at all.
+STARTUP_PATH='/usr/bin:/bin:/usr/sbin:/sbin'
+
+report=$(PATH="$STARTUP_PATH" zsh -i -c '
     print -- "--python3--"; command -v python3
     print -- "--pip3--";    command -v pip3
     print -- "--shell--";   print -r -- "${PYENV_SHELL:-unset}"

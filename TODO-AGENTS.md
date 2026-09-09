@@ -13,20 +13,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   :MasonInstall) instead.
   Record this beside any mason test work so the trap is not rediscovered.
 
-- CLAIMED 2026-09-08. nvim: the tarball download verifies nothing, and we have to be our own
-  checksum authority. installer.rs fetches with a bare `curl -fsSL`.
-  Upstream publishes NO checksum asset for the pinned release (verified
-  against the GitHub API for v0.12.5: only the appimage/tar.gz/msi/zip assets
-  and .zsync files), so "verify against upstream" is not available.
-  The remaining option is committing our own SHA-256 per architecture:
-  trust-on-first-use, weaker than upstream provenance, but it converts a
-  silent substitution into a loud failure and makes the digest reviewable in
-  a diff. Cost: two values (x86_64 and arm64) to update on every bump, and a
-  wrong one bricks the install on one architecture only.
-  A prior panel called this the highest-severity item in the determinism
-  picture. Earlier notes in this file were more dismissive of it; that was
-  wrong.
-
 - Finish the nvim determinism work. The runtime-tree bug is FIXED (bd38c48f):
   the release tarball now installs as a versioned prefix
   (~/.local/opt/nvim-<tag>) with ~/.local/bin/nvim symlinked into it, so

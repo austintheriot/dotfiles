@@ -103,7 +103,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   unit tests are the inner one, and they are what make a failure land at the
   edit rather than at the next launch.
 
-- Extend the nvim config-load test to open and FORMAT several file types.
+- CLAIMED 2026-09-09. Extend the nvim config-load test to open and FORMAT several file types.
   Suggested by the owner 2026-09-09 while reporting the errors above: run
   nvim on a bare docker image and open/edit/format .css, .ts, .rs, .html,
   .md and friends. The existing test

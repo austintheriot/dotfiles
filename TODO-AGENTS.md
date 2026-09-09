@@ -135,23 +135,29 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   Superseded reasoning kept: the earlier draft of this entry proposed
   removing the plugin and rewriting the four status segments by hand. That
   was solving the wrong layer.
-- Latent, no live trigger today: several path-handling gaps share one
-  cause, that git quotes unusual paths and the quoted form matches no
-  pathspec when fed back. No tracked path currently contains a space or a
-  non-ASCII byte (verified), so none of these fire now. They matter as
-  evasion surface on a public-repo gate.
-    - `tests/leak-check.sh:111` misses EVERY non-ASCII path, not only the
-      newline case already recorded below. Reproduced: git emits
-      `"caf\303\251/note.md"`, feeding it back matches nothing, and a
-      credential there scans zero lines and exits 0. Fix with `-z` and
-      NUL-delimited reads, or `-c core.quotePath=false` plus
-      `--literal-pathspecs`.
-    - `setup.sh:410` iterates `for path in $(cfg ls-tree -r --name-only
-      "$branch")`, which word-splits on whitespace. A tracked path with a
-      space is never moved aside, and `cfg checkout` at line 425 then
-      fails under `set -e`, aborting the bootstrap. That is the exact
-      failure the comment at lines 396-402 says the loop prevents.
-
+- DONE 2026-09-09: the two path-handling gaps that shared one cause, that
+  git C-quotes any path with a byte outside printable ASCII and the quoted
+  form matches no pathspec when fed back.
+    - `tests/leak-check.sh`: fixed with one line,
+      `export GIT_CONFIG_PARAMETERS="'core.quotePath=false'"`, which reaches
+      every git the script spawns including the ones under `xargs -0`, where
+      a shell function would not. THE RECORDED CONSEQUENCE WAS WRONG and is
+      corrected here: this entry predicted "scans zero lines and exits 0". 
+      Measured before the fix, a credential under `café/` exited 2, blocked
+      by unscannable_paths as "no readable diff" with a diagnosis naming
+      .gitattributes and binaries. So the gate failed closed and nothing
+      leaked; the real defect was that no non-ASCII path was committable at
+      all, and the message pointed at the wrong cause. Both sides are now
+      asserted: a clean file under such a path passes, a secret under it is
+      blocked as a secret.
+    - `setup.sh`: the move-aside loop was `for path in $(cfg ls-tree ...)`,
+      which word-splits a path with a space and receives the quoted form for
+      a non-ASCII one, so neither was moved and the retried checkout failed
+      under set -e. Now a heredoc-fed `while IFS= read -r` over
+      `-c core.quotePath=false` output, which is POSIX (`read -d ''` is not)
+      and keeps the loop in the main shell so the moved counter survives.
+      A path containing a newline is the one shape this still misses, and it
+      stays recorded as such below.
 - `crates/config-manifest`: an orphan `!` rule silently disables drift
   checking for the paths it names. `manifest.rs:186-204` returns
   `Classification::Excluded` for any path matching an `Excluded` pattern

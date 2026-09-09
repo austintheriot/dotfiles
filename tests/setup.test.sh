@@ -167,6 +167,38 @@ assert_succeeds 'the backup is not itself tracked' \
     test -z "$(git --git-dir="$home/.cfg" --work-tree="$home" ls-files "$(basename "$backup_dir")")"
 assert_contains 'the output says a file was moved aside' 'marker' "$output"
 
+# --- colliding paths git word-splits or quotes --------------------------------
+#
+# The move-aside loop was `for path in $(cfg ls-tree -r --name-only ...)`,
+# which word-splits on whitespace and receives git's C-quoted form for any
+# non-ASCII byte. A tracked `my notes/marker.txt` became two words that named
+# nothing, `café/` arrived as "caf\303\251/", neither was moved, and the
+# retried checkout then failed under set -e -- the exact failure the loop
+# exists to prevent. No tracked path carries either today, which is why this
+# never fired, and why it is a test rather than an incident.
+seed=$(make_seed oddpaths)
+mkdir -p "$seed/my notes" "$seed/café"
+printf 'tracked space\n' > "$seed/my notes/marker.txt"
+printf 'tracked utf8\n'  > "$seed/café/marker.txt"
+git -C "$seed" add -A
+git -C "$seed" -c user.email=t@t -c user.name=t commit -q -m 'odd paths'
+home=$(new_home oddpaths)
+mkdir -p "$home/my notes" "$home/café"
+printf 'user space\n' > "$home/my notes/marker.txt"
+printf 'user utf8\n'  > "$home/café/marker.txt"
+HOME="$home" DOTFILES_PLATFORM=mac "$SETUP" --yes --repo "$seed" >/dev/null 2>&1
+status=$?
+assert_equals 'colliding paths with a space and a non-ASCII byte do not fail the bootstrap' '0' "$status"
+assert_equals 'the tracked file wins at the path with a space' \
+    'tracked space' "$(cat "$home/my notes/marker.txt" 2>/dev/null)"
+assert_equals 'the tracked file wins at the non-ASCII path' \
+    'tracked utf8' "$(cat "$home/café/marker.txt" 2>/dev/null)"
+odd_backup=$(find "$home" -maxdepth 1 -type d -name '.dotfiles-backup-*' 2>/dev/null | head -1)
+assert_equals 'the backup keeps the original at the path with a space' \
+    'user space' "$(cat "$odd_backup/my notes/marker.txt" 2>/dev/null)"
+assert_equals 'the backup keeps the original at the non-ASCII path' \
+    'user utf8' "$(cat "$odd_backup/café/marker.txt" 2>/dev/null)"
+
 # --- refusing to clobber an existing setup ----------------------------------
 
 # Re-running the clone half on a machine that already has ~/.cfg must not

@@ -70,6 +70,37 @@ run_leak_check() {
 }
 exit_of() { printf '%s' "$1" | sed -n 's/^__exit=//p' | tail -1; }
 
+# --- paths git quotes ---------------------------------------------------------
+#
+# Git C-quotes any path with a byte outside printable ASCII, so `café/` is
+# reported as "caf\303\251/". The scan fed that quoted form back to
+# `git diff -- <path>`, which matched nothing, so the path had no diff header
+# and unscannable_paths blocked it as "no readable diff" with a diagnosis
+# naming .gitattributes and binaries. Wrong cause, and every non-ASCII path
+# was uncommittable.
+#
+# TWO SIDES, because a fix that only stops the false block could also stop
+# the true one. A clean file under such a path must pass, and a credential
+# under it must be blocked AS A CREDENTIAL, not as an unreadable path.
+#
+# The TODO that recorded this predicted a silent exit 0. Measured before the
+# fix: exit 2 on both, so the gate failed closed and nothing leaked. Recorded
+# so the security claim is not overstated.
+unstage_all
+stage_file "café/notes.md" "$(clean_text)"
+out=$(run_leak_check)
+assert_equals 'a clean file under a non-ASCII path passes' '0' "$(exit_of "$out")"
+
+unstage_all
+stage_file "café/notes.md" "$(plant_key)"
+out=$(run_leak_check)
+assert_equals 'a secret under a non-ASCII path is blocked' '1' "$(exit_of "$out")"
+assert_equals 'and blocked for the secret, not for an unreadable path' '' \
+    "$(printf '%s' "$out" | grep 'no readable diff' || true)"
+# Leave nothing staged: the staged-mode block below stages its first file
+# without clearing, and a secret left here made its clean-file case fail.
+unstage_all
+
 # --- staged mode -----------------------------------------------------------
 
 stage_file notes.txt "$(clean_text)"

@@ -369,13 +369,31 @@ if ! cfg checkout "$branch" 2>/dev/null; then
     # `checkout` names each blocking path on stderr, but parsing English is
     # fragile. Ask git for the tracked paths instead and move the ones that
     # exist and are untracked.
-    for path in $(cfg ls-tree -r --name-only "$branch"); do
+    # One path per line, read whole. This was `for path in $(cfg ls-tree ...)`,
+    # which word-splits on whitespace, so a tracked `my notes/marker` became
+    # two names that matched nothing, was never moved, and the retried
+    # checkout below then failed under set -e -- the exact failure this loop
+    # exists to prevent. No tracked path carried a space when that was
+    # written, which is why it never fired.
+    #
+    # core.quotePath=false for the same reason one layer down: git C-quotes a
+    # path with a byte outside printable ASCII ("caf\303\251/"), and the
+    # quoted form names no file either.
+    #
+    # A heredoc rather than a pipe, because this must stay POSIX (`read -d ''`
+    # is bash) and a `| while` runs in a subshell under dash, where `moved`
+    # would be lost. A path containing a newline is the one shape this still
+    # misses.
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
         [ -e "$HOME/$path" ] || continue
         mkdir -p "$backup_dir/$(dirname "$path")"
         mv "$HOME/$path" "$backup_dir/$path"
         printf 'setup.sh: moved aside %s\n' "$path"
         moved=$((moved + 1))
-    done
+    done <<TRACKED_PATHS
+$(cfg -c core.quotePath=false ls-tree -r --name-only "$branch")
+TRACKED_PATHS
 
     if [ "$moved" -gt 0 ]; then
         printf 'setup.sh: %d pre-existing file(s) kept in %s\n' "$moved" "$backup_dir"

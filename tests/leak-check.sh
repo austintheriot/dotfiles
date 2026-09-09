@@ -113,6 +113,16 @@ ALLOW_FILE="${LEAK_ALLOW_FILE:-$HOME/.claude/local/leak-allow.conf}"
 # read as a delete plus an add, and the add is scanned.
 RANGE_LOG_FLAGS=(--diff-filter=ACMR --diff-merges=first-parent --no-renames)
 
+# Raw path bytes from every git call this script spawns, INCLUDING the ones
+# under `xargs -0`, which exec a git binary and so would miss a shell
+# function. Without this, git C-quotes any path with a byte outside printable
+# ASCII ("caf\303\251/"), the quoted form fed back to `git diff -- <path>`
+# matched nothing, and every such path was blocked as "no readable diff" with
+# a diagnosis naming .gitattributes and binaries. Wrong cause, and no
+# non-ASCII path was committable. The header match in unscannable_paths
+# needs the same setting, or the list and the headers disagree byte for byte.
+export GIT_CONFIG_PARAMETERS="'core.quotePath=false'"
+
 TMP_OUT=$(mktemp) || exit 2
 TMP_ERR=$(mktemp) || exit 2
 trap 'rm -f "$TMP_OUT" "$TMP_ERR"' EXIT

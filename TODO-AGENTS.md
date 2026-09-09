@@ -8,32 +8,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   class before first launch rather than after. Needs the registry, so it is
   a networked-tier test, not an every-push one.
 
-- CLAIMED 2026-09-08. Track a nerd font as a dependency and install it automatically.
-  APPROVED BY THE OWNER 2026-09-08.
-  `.config/nvim/lua/settings.lua:3` sets `vim.g.have_nerd_font = true`
-  unconditionally, and telescope.lua and mini.lua both read it, so a fresh
-  machine renders tofu in every icon column. `.config/alacritty/alacritty.toml`
-  names `Hack Nerd Font Mono` in all four font slots. Verified: 12 Hack Nerd
-  Font faces are installed on this mac, and NO font is a tracked dependency.
-  THE INSTALL DIFFERS BY PLATFORM, which is the work:
-    - macOS: a cask, `font-hack-nerd-font`. The catalog's `BrewPackage` with
-      `kind: Cask` already models this.
-    - Linux: Arch has `ttf-hack-nerd`; Debian and Ubuntu ship nothing
-      current, so apt means downloading the release archive into
-      ~/.local/share/fonts and running `fc-cache -f`. That is a new install
-      shape -- closest existing kin is ReleaseTarball, which now has both an
-      archive and a single-file mode, but neither unpacks into a font
-      directory.
-    - The release asset is a .tar.xz on recent ryanoasis/nerd-fonts
-      releases, so the archive mode's `tar -xzf` needs a format check the
-      way tree-sitter's gzip did.
-  THE CHECK IS NOT `command -v`: it is `fc-list | grep -q 'Hack Nerd Font'`
-  on Linux and a directory or fc-list probe on macOS, so it likely wants the
-  two-branch AnyOf shape zsh-autosuggestions already uses.
-  Once the font is tracked, `have_nerd_font = true` becomes a stated fact
-  rather than a wish, and the DEFERRED entry below about making it a probe
-  can be closed as unnecessary.
-
 - nvim: `ensure_installed` NEVER RUNS HEADLESS, which invalidates the
   obvious CI test for it. Verified verbatim at
   mason-lspconfig/lua/mason-lspconfig/init.lua:31:
@@ -637,32 +611,6 @@ labelled name`, `owned window follows branch changes`.
   than racing the real server, and the stub must never target a real window id
   (an earlier attempt passed `-w '@1'`, which is a live window on this
   machine).
-
-- Add a nerd font as a tracked dependency.
-  `.config/alacritty/alacritty.toml` names `Hack Nerd Font Mono` in all four
-  font slots (normal, bold, italic, bold_italic), and
-  `.config/nvim/lua/settings.lua:3` sets `vim.g.have_nerd_font = true`
-  unconditionally, which turns on `nvim-web-devicons` for telescope, trouble
-  and the mini statusline. No conf file in `.scripts/deps/` mentions a font at
-  all, so a fresh machine gets a bootstrap that reports success and then
-  renders tofu boxes in the terminal and in every nvim icon column.
-
-  Open questions for whoever picks this up:
-  - The install differs by platform. On macOS it is a cask
-    (`font-hack-nerd-font`), which the `BrewPackage` availability with a
-    `kind: Cask` already models. On Linux there is no single package name:
-    Arch has `ttf-hack-nerd`, Debian and Ubuntu ship nothing current, so the
-    apt path is probably a release-archive download into
-    `~/.local/share/fonts` plus `fc-cache -f`. That is a new
-    `PackageAvailability` shape, or an `ArchiveInstall` alongside `GitClone`.
-  - The check command is not a `command -v`. It is
-    `fc-list | grep -q 'Hack Nerd Font'` on Linux and a `ls` under
-    `~/Library/Fonts` (or the same `fc-list` if fontconfig is installed) on
-    macOS, so it may need the two-branch `-o` shape `zsh-autosuggestions`
-    uses in `deps.conf:26`.
-  - Decide whether `have_nerd_font` should stay unconditional in the nvim
-    config or become a probe. Leaving it true is right if the font is a
-    tracked dependency; it is wrong today, because nothing guarantees it.
 
 - Make `config install-hooks` recoverable when `~/.local/bin` is group- or
   world-writable.

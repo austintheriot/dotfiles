@@ -369,6 +369,12 @@ pub fn argv_sequence_for(
             let Some(url) = tarball_url(*release) else {
                 return Vec::new();
             };
+            // No recorded digest means no asset for this platform either, so
+            // there is nothing to install rather than something to install
+            // unverified.
+            let Some(digest) = tarball_sha256(*release) else {
+                return Vec::new();
+            };
             let staging_path = tarball_staging_dir(*release).to_string_lossy().into_owned();
             let prefix = tarball_prefix(*release);
             let binary = tarball_binary(*release);
@@ -389,6 +395,17 @@ pub fn argv_sequence_for(
                     words(["rm", "-rf", &staging_path]),
                     words(["mkdir", "-p", &staging_path]),
                     words(["curl", "-fsSL", "-o", &format!("{staging_path}/{binary}.gz"), &url]),
+                    // `--status` is quiet on success and non-zero on a
+                    // mismatch, which is what stops the sequence. The
+                    // expected line is written to a file rather than piped,
+                    // so no shell appears in the argv.
+                    words([
+                        "sh",
+                        "-c",
+                        &format!(
+                            "printf '%s  %s' '{digest}' '{staging_path}/{binary}.gz' | sha256sum --status -c -"
+                        ),
+                    ]),
                     words(["mkdir", "-p", &home_local_bin()]),
                     // `gunzip <file>` in place rather than `sh -c 'gunzip -c
                     // ... > ...'`. The redirect spelling would put two paths
@@ -410,6 +427,13 @@ pub fn argv_sequence_for(
                 words(["rm", "-rf", &staging_path]),
                 words(["mkdir", "-p", &staging_path]),
                 words(["curl", "-fsSL", "-o", &format!("{staging_path}/release.tar.gz"), &url]),
+                words([
+                    "sh",
+                    "-c",
+                    &format!(
+                        "printf '%s  %s' '{digest}' '{staging_path}/release.tar.gz' | sha256sum --status -c -"
+                    ),
+                ]),
                 words([
                     "tar",
                     "-xzf",
@@ -438,6 +462,56 @@ pub fn argv_sequence_for(
             ]
         }
         InstallAction::NotAutomatable { .. } => Vec::new(),
+    }
+}
+
+/// The expected SHA-256 of this platform's asset for a pinned release.
+///
+/// WE ARE THE CHECKSUM AUTHORITY HERE, deliberately and with a stated cost.
+/// Neither upstream publishes a checksum asset: verified against the GitHub
+/// API for neovim v0.12.5, whose release carries only appimage, tar.gz, msi
+/// and zip assets plus .zsync files. So there is nothing to verify against
+/// except a value we recorded ourselves.
+///
+/// That is trust-on-first-use. The bytes attested are whatever the network
+/// served on the day they were recorded, so this proves continuity rather
+/// than provenance. It still converts a silent substitution -- a re-cut
+/// release under the same tag, a compromised mirror, a truncated download --
+/// into a loud failure, and it puts the digest in a diff where a human can
+/// see it change.
+///
+/// Bumping a `tarball_tag` REQUIRES bumping these, per architecture. A stale
+/// digest fails the install loudly on exactly one platform, which is the
+/// intended behaviour: the alternative is a version bump that silently
+/// stops being verified.
+///
+/// Recorded 2026-09-08 with `shasum -a 256` against the published assets.
+fn tarball_sha256(release: TarballRelease) -> Option<&'static str> {
+    match (release, std::env::consts::ARCH, cfg!(target_os = "macos")) {
+        (TarballRelease::Neovim, "x86_64", true) => {
+            Some("81f4518622cb059b450ee2e498c6a1082a222f6bd89589de5bbcf0c6a68aa3fd")
+        }
+        (TarballRelease::Neovim, "aarch64", true) => {
+            Some("65fb000099e47ca1b762584c484cc833f40e30851a0ec450d4174e16317c1f9b")
+        }
+        (TarballRelease::Neovim, "x86_64", false) => {
+            Some("bce0f56eda1f1b1db6eee8f4133d7a38813ea07933837dd1777411ca384c6875")
+        }
+        (TarballRelease::Neovim, "aarch64", false) => {
+            Some("1aa5ca085249580ae0f91eb14f27ec0919773ff2d99a163d03f3d6c21ac29725")
+        }
+        (TarballRelease::TreeSitterCli, "aarch64", true) => {
+            Some("70f7573b2b2e5371a5b58cc5227d2ad981fd5374596b9874e770af486060774e")
+        }
+        (TarballRelease::TreeSitterCli, "x86_64", _) => {
+            Some("20a1f39ec1c45f2211492dcb8881c802b643b554bb196869a29ac3778277fa77")
+        }
+        (TarballRelease::TreeSitterCli, "aarch64", false) => {
+            Some("3a35a2dd961ad842384e982c75daf792c01d1a67e442fc3914d4de37bd8a59cb")
+        }
+        // An architecture with no recorded digest also has no asset in
+        // `tarball_asset`, so the install is already unavailable there.
+        _ => None,
     }
 }
 
@@ -1104,6 +1178,57 @@ mod tests {
     fn exit_status_of(code: i32) -> std::process::ExitStatus {
         use std::os::unix::process::ExitStatusExt as _;
         std::process::ExitStatus::from_raw(code << 8)
+    }
+
+    /// Every release download is checked against a recorded digest.
+    ///
+    /// The fetch was a bare `curl -fsSL` that verified nothing. Upstream
+    /// publishes NO checksum asset for either pinned release -- verified
+    /// against the GitHub API for neovim v0.12.5, which ships only the
+    /// appimage, tar.gz, msi and zip assets plus .zsync files -- so
+    /// "verify against upstream" is not available and we are the checksum
+    /// authority.
+    ///
+    /// This is trust-on-first-use and weaker than upstream provenance: the
+    /// bytes recorded are whatever the network served the day they were
+    /// recorded. It is still categorically better than nothing, because it
+    /// converts a silent substitution into a loud failure and makes the
+    /// digest a reviewable line in a diff. A re-cut release under the same
+    /// tag is exactly what it catches.
+    #[test]
+    fn every_release_download_is_checksum_verified() {
+        for release in [TarballRelease::Neovim, TarballRelease::TreeSitterCli] {
+            let sequence = argv_sequence_for(
+                &InstallAction::ReleaseTarball { release },
+                PackageManager::Apt,
+                PrivilegeRequirement::None,
+                Elevation::ViaSudo,
+            );
+            let flattened: Vec<String> = sequence
+                .iter()
+                .flat_map(|command| command.iter())
+                .map(|word| word.to_string_lossy().into_owned())
+                .collect();
+
+            assert!(
+                !flattened.is_empty(),
+                "the control: {release:?} must plan commands on this platform"
+            );
+
+            // The digest itself must appear, so a verification step that ran
+            // against no expected value cannot satisfy this.
+            let digest = tarball_sha256(release).expect("a recorded digest for this platform");
+            assert!(
+                flattened.iter().any(|word| word.contains(digest)),
+                "{release:?} must carry its expected digest into the \
+                 verification: {flattened:?}"
+            );
+            assert!(
+                flattened.iter().any(|word| word.contains("sha256")),
+                "{release:?} must actually verify, not merely record a \
+                 digest: {flattened:?}"
+            );
+        }
     }
 
     /// The release URL names this platform's asset, not another platform's.

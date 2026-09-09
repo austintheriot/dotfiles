@@ -73,7 +73,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       Script{}, GitClone{} (DirExists passes on an empty dir left by an
       interrupted clone) and AptSource{}.
 
-- CLAIMED 2026-09-09. Harden the nvim Lua config at the CODE level: lints, tests, refactors for
+- Harden the nvim Lua config at the CODE level: lints, tests, refactors for
   clarity and purity. Requested by the owner 2026-09-09.
   Nothing lints the Lua today. `tests/shellcheck.test.sh` covers 25+ shell
   scripts and there is no equivalent for the ~20 files under
@@ -81,13 +81,22 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   at runtime -- which is how the NvimTree and mason-version regressions both
   shipped.
   WHAT TO CONSIDER, roughly in order of value per effort:
-    - `luacheck` or `selene` as a suite gate, with a config that knows the
-      `vim` global. selene is Rust and needs no lua runtime, which fits this
-      repo; luacheck is the established one. Either way the gate has to fail
-      the build, not merely report.
-    - `stylua` is ALREADY a tracked formatter (it is in ensure_installed and
-      the lock), so a `stylua --check` gate costs almost nothing and would
-      keep the Lua consistently formatted.
+    - DONE (b375c224): the `stylua --check` gate. 12 files had drifted from
+      the repo's own .stylua.toml; they are formatted and
+      tests/nvim-lua-format.test.sh now fails when they drift again.
+    - STILL TO DO, the lint half. Investigated 2026-09-09, not implemented.
+      Both linters are in the mason registry: `selene`
+      (pkg:github/Kampfkarren/selene@0.31.0, a Rust binary needing no lua
+      runtime, which fits this repo) and `luacheck`
+      (pkg:luarocks/luacheck@1.1.0, which needs luarocks).
+      Verified selene works and catches the right class -- given a file with
+      an unused local and an undefined call it reported 2 errors and 1
+      warning. BUT it also reported "`vim` is not defined" on the very first
+      real line, because its bundled standard libraries are plain Lua.
+      So the work is not "add selene", it is "add selene plus a `vim` std
+      definition". The ecosystem answer is a generated neovim.yml std file;
+      without it the gate reports every line of every file and gets muted
+      within a day. Budget for that, not for the binary.
     - Tests for the pure parts. Most of the config is declarative tables,
       but a few pieces are real logic and are the pieces that broke: the
       treesitter FileType callback, the lint runnable-filter, the mason

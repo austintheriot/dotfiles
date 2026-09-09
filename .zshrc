@@ -178,6 +178,24 @@ alias nuke="yarn clean && npx del-cli -v \"**/node_modules\" && yarn && yarn bui
 # Everything platform-specific lives in .zshrc-mac / .zshrc-linux beside this
 # file, selected at runtime by platform_source_variant. Both variants ship on
 # the single branch, so this file stays platform-neutral.
+# NVM_DIR is set here, once, because both platform variants need it. Each
+# variant then installs its own lazy `nvm` shim: the mac and linux nvm
+# installs put the newest node in different places, but neither may pay the
+# 2.4s of sourcing nvm.sh at startup. `se` builds 107 panes.
+#
+# BEFORE the variant source, and that is the whole point. It used to sit
+# ~96 lines BELOW this, while .zshrc-linux's lazy block globbed
+# "$NVM_DIR"/versions/node/v*(N/) and its comment said "NVM_DIR comes from
+# the shared .zshrc". It did -- but later, so the glob ran against an empty
+# variable and matched nothing. Measured in zsh: 0 matches with NVM_DIR
+# empty, 11 with it set.
+#
+# The symptom was not a slow shell but a missing tool: node stayed off PATH,
+# every npm-backed mason package failed to install, and `<leader>f` reported
+# no formatters -- while the deps engine reported node PRESENT, because its
+# check globs the same directory the shell failed to read.
+export NVM_DIR="$HOME/.nvm"
+
 source ~/.scripts/platform.sh
 platform_source_variant ~/.zshrc
 
@@ -271,12 +289,6 @@ unset fzf_zsh_init
 source ~/.scripts/zsh-git-widgets.sh
 
 # SETUP NVM ################################################################################################
-# NVM_DIR is set here, once, because both platform variants need it. Each
-# variant then installs its own lazy `nvm` shim: the mac and linux nvm
-# installs put the newest node in different places, but neither may pay the
-# 2.4s of sourcing nvm.sh at startup. `se` builds 107 panes.
-export NVM_DIR="$HOME/.nvm"
-
 # SETUP PYENV ##############################################################################################
 # Lazy, the same shape as nvm in .zshrc-mac.
 #

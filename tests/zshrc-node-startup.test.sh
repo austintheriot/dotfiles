@@ -31,6 +31,39 @@
 ZSHRC_MAC="$DOTFILES_ROOT/.zshrc-mac"
 NVM_NODE_DIR="$HOME/.nvm/versions/node"
 
+# --- NVM_DIR is exported before the variant that reads it ---------------
+#
+# THE BUG THIS CATCHES, reported 2026-09-09 from a bare Ubuntu and proven
+# here. .zshrc-linux's lazy-nvm block globs
+# `"$NVM_DIR"/versions/node/v*(N/)` and says in its own comment that
+# "NVM_DIR comes from the shared .zshrc". It does -- but LATER. The variant
+# is sourced at .zshrc:182 and NVM_DIR is exported at .zshrc:278, so the
+# glob runs with an empty NVM_DIR and matches nothing.
+#
+# Measured in zsh:
+#     with empty NVM_DIR, matches: 0
+#     with NVM_DIR set,   matches: 11
+#
+# The consequence is not a slow shell, it is a missing tool: node is
+# installed under ~/.nvm and never reaches PATH, so every npm-backed mason
+# package fails to install and `<leader>f` reports no formatters. The deps
+# engine reports node PRESENT throughout, because its check globs the same
+# directory the shell failed to read.
+#
+# Asserted as line ORDER rather than mere presence, because a correct export
+# sitting below the variant source is exactly the bug.
+zshrc_line() {
+    grep -n "$1" "$DOTFILES_ROOT/.zshrc" | head -1 | cut -d: -f1
+}
+nvm_dir_line=$(zshrc_line '^export NVM_DIR=')
+variant_line=$(zshrc_line '^platform_source_variant')
+
+assert_succeeds 'the shared zshrc exports NVM_DIR' test -n "$nvm_dir_line"
+assert_succeeds 'the shared zshrc sources a platform variant' test -n "$variant_line"
+assert_succeeds 'NVM_DIR is exported before the variant that reads it' \
+    test "$nvm_dir_line" -lt "$variant_line"
+
+
 # This suite measures the developer's own interactive shell: `zsh -i` loads
 # $HOME/.zshrc, which sources $HOME/.zshrc-mac. That is only the config under
 # test when HOME is the repo. On a CI runner HOME is the runner's home and

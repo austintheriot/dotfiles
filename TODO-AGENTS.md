@@ -73,7 +73,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       Script{}, GitClone{} (DirExists passes on an empty dir left by an
       interrupted clone) and AptSource{}.
 
-- nvim on a bare Ubuntu: `<leader>f` reports "Formatters unavailable for
+- CLAIMED 2026-09-09. nvim on a bare Ubuntu: `<leader>f` reports "Formatters unavailable for
   typescript file", and eslint-lsp plus css-variables-language-server report
   "failed to install". Reported 2026-09-09 with screenshots. ONE ROOT CAUSE
   BEHIND BOTH, plus one gap of its own.

@@ -75,6 +75,10 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`app-privacy-compliance`** -- GDPR / US state patchwork / COPPA, consent ordering, data minimization, deletion propagation, privacy manifests and store declarations. Engineering guidance, not legal advice.
 - **`native-bridge`** -- Electron / Tauri / React Native / Flutter / KMP / Capacitor bridges, IPC contract design, the renderer trust boundary, WebView-in-native, serialization and version skew.
 - **`input-and-peripherals`** -- pointer / stylus / touch / keyboard / gamepad input fidelity, and camera / mic / Bluetooth / location / file / USB access with their permission models.
+- **`citation-and-bibliography`** -- citation styles and what they require, CSL / BibTeX / BibLaTeX substrate choice, identifier contracts (DOI, ORCID, arXiv, ISBN), bibliographies as build artifacts in docs-as-code pipelines, retraction checking.
+- **`scholarly-publishing`** -- venue choice and what it obligates, peer review and deanonymization, preprints and version identity, OA routes and funder mandates, retraction detection, scholarly metadata and indexing, preservation, reproducibility artifacts, white-paper credibility.
+- **`copyright-and-permissions`** -- copyright notice form, term and public domain, fair use vs fair dealing, permissions clearance for quotations / images / fonts, Creative Commons attribution, generated notice and attribution pipelines. Engineering guidance, not legal advice.
+- **`print-production`** -- page geometry and bleed, imposition and binding, spine width, colour and ink limits, print fonts, the copyright / verso page and its notices, ISBN and distribution metadata, POD vendor requirements, print-ready builds from source.
 - **`licensing-and-oss`** -- license compatibility, copyleft scope, attribution and NOTICE obligations, source-available licenses, SBOM and scanning, policy-as-code. Engineering guidance, not legal advice.
 - **`build-systems`** -- the build graph: incrementality and correctness, hermeticity, reproducibility, cache keys and poisoning, per-toolchain mechanics, monorepo build shape.
 - **`crash-and-release-health`** -- crash capture and symbolication, crash-free metrics and their vendor incomparability, staged-rollout gating, and the client telemetry problems servers do not have.
@@ -177,6 +181,10 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "Do we need consent for this / how do I handle deletion requests / what goes in the privacy label" | `app-privacy-compliance` |
 | "How should I design this IPC / expose native code to JS / secure my Electron or Tauri app" | `native-bridge` |
 | "How do I handle stylus input / request this permission / access this device" | `input-and-peripherals` |
+| "How should I cite this / which style / why is my bibliography wrong / should I use CSL or BibLaTeX" | `citation-and-bibliography` |
+| "Where should I publish this / does this satisfy my funder's OA mandate / how do I make this white paper citable" | `scholarly-publishing` |
+| "Do I need permission to quote or reproduce this / what goes in the copyright notice / is our attribution list complete" | `copyright-and-permissions` |
+| "How do I prepare this for print / what bleed and trim / why did the printer reject this / how do I compute the spine" | `print-production` |
 | "Can I use this dependency / what does this license require / is this compatible" | `licensing-and-oss` |
 | "Why does this rebuild / how do I make the build cacheable / is this build hermetic" | `build-systems` |
 | "How do I set up crash reporting / symbolicate this / decide whether to halt a rollout" | `crash-and-release-health` |

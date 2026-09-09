@@ -52,7 +52,34 @@ return {
 
       vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWritePost', 'InsertLeave' }, {
         group = vim.api.nvim_create_augroup('lint', { clear = true }),
-        callback = function() lint.try_lint() end,
+        callback = function()
+          -- Only run linters whose binary actually resolves.
+          --
+          -- Mason installs these asynchronously and its ensure_installed
+          -- does not run headlessly at all, so a freshly bootstrapped
+          -- machine always has a window where they are absent. nvim-lint
+          -- has no guard of its own, and the result was a blocking prompt
+          -- on EVERY markdown open:
+          --
+          --   Error running markdownlint: ENOENT: no such file or directory
+          --   Error running cspell: ENOENT: no such file or directory
+          --   Press ENTER or type command to continue
+          --
+          -- Silently skipping is right here: a linter that is not installed
+          -- yet has nothing to say, and `:checkhealth dotfiles` is where a
+          -- missing tool gets reported. Erroring per keystroke is not.
+          local runnable = {}
+          for _, name in ipairs(lint.linters_by_ft[vim.bo.filetype] or {}) do
+            local linter = lint.linters[name]
+            local cmd = type(linter) == 'table' and linter.cmd or name
+            if vim.fn.executable(cmd) == 1 then
+              table.insert(runnable, name)
+            end
+          end
+          if #runnable > 0 then
+            lint.try_lint(runnable)
+          end
+        end,
       })
     end,
   },

@@ -352,6 +352,31 @@ fi
 LINT_CONFIG="$NVIM_LUA/plugins/lint.lua"
 assert_succeeds 'the lint config exists' test -f "$LINT_CONFIG"
 
+# --- linting degrades when a linter is not installed yet ----------------
+#
+# THE BUG THIS CATCHES, captured verbatim from a PTY render on a freshly
+# bootstrapped machine:
+#
+#   Error in BufEnter Autocommands for "*":
+#   Error running markdownlint: ENOENT: no such file or directory
+#   Error running cspell: ENOENT: no such file or directory
+#   Press ENTER or type command to continue
+#
+# Every markdown open blocked on a prompt. The linters ARE declared in mason,
+# so this is ordering, not a missing declaration: nvim-lint runs on BufEnter
+# while mason installs asynchronously, and mason's ensure_installed does not
+# run headlessly at all. A first launch therefore always has a window where
+# the binaries are absent.
+#
+# Unlike tree-sitter-cli, these are not needed at build time, so the fix is
+# to tolerate their absence rather than to move every linter into the deps
+# engine. nvim-lint has no built-in guard -- checked, there is no
+# `vim.fn.executable` anywhere in its init.lua -- so the check is ours.
+assert_succeeds 'the lint callback checks the linter exists before running it' \
+    test -n "$(printf '%s\n' "$(sed -e 's/--.*//' "$LINT_CONFIG")" \
+        | grep 'vim\.fn\.executable' || true)"
+
+
 # Every `cmd = '<name>'` nvim-lint is given. That is the exact string it
 # execs, so it is the thing that must exist on PATH.
 #

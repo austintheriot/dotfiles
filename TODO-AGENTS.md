@@ -73,7 +73,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       Script{}, GitClone{} (DirExists passes on an empty dir left by an
       interrupted clone) and AptSource{}.
 
-- CLAIMED 2026-09-09. Harden the nvim Lua config at the CODE level: lints, tests, refactors for
+- Harden the nvim Lua config at the CODE level: lints, tests, refactors for
   clarity and purity. Requested by the owner 2026-09-09.
   Nothing lints the Lua today. `tests/shellcheck.test.sh` covers 25+ shell
   scripts and there is no equivalent for the ~20 files under
@@ -84,7 +84,14 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
     - DONE (b375c224): the `stylua --check` gate. 12 files had drifted from
       the repo's own .stylua.toml; they are formatted and
       tests/nvim-lua-format.test.sh now fails when they drift again.
-    - STILL TO DO, the lint half. Investigated 2026-09-09, not implemented.
+    - DONE (3fbd91aa): the selene lint gate. The research answer was that
+      selene ships no Neovim std and upstream issue #284 is still open, so
+      every project supplies its own `vim.yml` with `vim: any: true` --
+      mason.nvim, Allaman/nvim and plenary.nvim all converged on that. The
+      `+vim` in `std = "lua51+vim"` resolves as a file beside selene.toml.
+      Measured 0 errors and 54 warnings, all `mixed_table`, which is allowed
+      because lazy.nvim plugin specs genuinely are mixed tables.
+    - SUPERSEDED, kept for the reasoning:
       Both linters are in the mason registry: `selene`
       (pkg:github/Kampfkarren/selene@0.31.0, a Rust binary needing no lua
       runtime, which fits this repo) and `luacheck`

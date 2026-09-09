@@ -13,55 +13,65 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   :MasonInstall) instead.
   Record this beside any mason test work so the trap is not rediscovered.
 
-- Finish the nvim determinism work. The runtime-tree bug is FIXED (bd38c48f):
-  the release tarball now installs as a versioned prefix
-  (~/.local/opt/nvim-<tag>) with ~/.local/bin/nvim symlinked into it, so
-  $VIMRUNTIME resolves and runtime files load. Verified end to end from a
-  bare ubuntu:24.04 with no prebuilt binary. cspell was also invoked as a
-  linter for 26 filetypes and installed by nothing (7089d6a3).
-  WHAT IS LEFT, in rough priority order:
-    - THE REAL DESIGN DECISION, upstream of any further test work: mason has
-      no lockfile and treesitter parsers are ABI-coupled to the Neovim build,
-      so "as deterministic as the dotfiles setup" is not reachable for those
-      layers without either vendoring the LSP binaries and parsers (into the
-      repo or a release artifact) or accepting them as pinned-by-convention
-      behind a slower, separately-gated leg. Pick one before writing tests
-      for that layer.
+- nvim determinism: what is left after the 2026-09-08 hardening pass.
+  DONE, so nobody re-does it: runtime tree installed whole (bd38c48f);
+  lazy-lock.json tracked, it had been gitignored (7a308818); mason registry
+  and 14 tool versions locked (261510bc); treesitter written for the `main`
+  branch it is pinned to, which also locks all 19 parser SOURCE revisions
+  transitively through nvim-treesitter's parsers.lua (a345469e);
+  tree-sitter-cli moved from mason to the deps engine, because the editor
+  cannot install what it needs during its own first run (0dd3deac); linters
+  skipped when absent instead of erroring per buffer (b036a064); the Neovim
+  version pinned on brew and pacman too, not only apt, since the treesitter
+  ABI is keyed to it (2804f2e7); every release download checksum-verified
+  (2a8055c7).
+  WHAT REMAINS, and none of it is mechanical:
+    - THE HONEST BOUNDARY, worth stating once rather than re-deriving: what
+      is now guaranteed is "the same declared inputs on every machine" --
+      same Neovim version and bytes, same 37 plugin commits, same 19 parser
+      source revisions, same 14 tool versions. What is NOT guaranteed is
+      byte-identity of anything compiled on the target (parsers, whose bytes
+      depend on the host cc) or of an npm package's transitive tree under a
+      pinned top-level version. Mason has no integrity-hash layer for
+      package payloads. Closing that last gap means vendoring compiled
+      artifacts, which all four expert lenses argued against: parser .so
+      files are ABI-coupled to the Neovim build and platform-coupled to the
+      machine, so vendoring creates a matrix to rebuild on every bump whose
+      stale entries fail at buffer-open on the OTHER machine.
     - No test exercises mason actually installing, LSP attach, or treesitter
-      parsers. The expert panel's tiering: an offline config-correctness tier
-      on every push, a networked tier on a schedule with `workflow_dispatch`,
-      split by "touches the network" rather than by "is slow", so the fast
+      parsers in CI. The panel's tiering: an offline config-correctness tier
+      on every push, a networked tier on a schedule plus workflow_dispatch,
+      split by "touches the network" rather than by "is slow" so the fast
       signal is not hostage to npm uptime. Each layer gets its own CI STEP so
       a red run names the layer (install / runtime tree / plugin manager /
-      mason / LSP) instead of "nvim exited 1".
-    - Do NOT cache the unpacked tree or ~/.local/share/nvim between legs. All
-      four lenses flagged it as this repo's pre-satisfied-path shape again; a
-      cached treesitter parser built against another ABI passes invisibly.
-      Cache the tarball BYTES if anything.
+      mason / LSP) rather than "nvim exited 1".
+      NOTE THE TRAP recorded separately below: ensure_installed does not run
+      headlessly, so the obvious version of that test asserts the gate rather
+      than the install.
+    - Do NOT cache the unpacked tree or ~/.local/share/nvim between legs.
+      All four lenses flagged it as this repo's pre-satisfied-path shape
+      again; a cached parser built against another ABI passes invisibly.
+      Cache the tarball BYTES if anything, which the digests now make safe.
     - Render snapshots: all four lenses said no as a blocking gate (terminal
       size, locale, font fallback, colorscheme, plugin version). Assert
-      structured state instead -- nvim_eval_statusline for a statusline,
-      nvim_get_hl for theme groups, buffer lines for a dashboard.
-    - vim.g.have_nerd_font = true is set unconditionally (settings.lua:3)
-      while no font is a tracked dependency, so glyph width varies per
-      machine. Pairs with the DEFERRED font entry below; making it a probe
-      changes rendering on a machine that currently works, so it wants a
-      decision rather than a drive-by.
-    - The tarball download verifies nothing (installer.rs, bare curl -fsSL).
-      Upstream publishes NO checksum asset for the pinned release (verified
-      against the GitHub API for v0.12.5: only the appimage/tar.gz/msi/zip
-      assets and .zsync files), so this means committing our own hash per
-      architecture and updating four values on a bump.
+      structured state instead -- nvim_eval_statusline, nvim_get_hl, buffer
+      lines. Two measurement traps found while testing this by hand:
+      extmark COUNT is not a highlighting signal (Neovim's treesitter
+      highlighter paints during draw and persists no extmarks), and
+      get_captures_at_pos returns nothing in a -S script that runs before
+      the FileType autocmd; run the query against the tree instead.
+    - vim.g.have_nerd_font = true is unconditional (settings.lua:3) while no
+      font is a tracked dependency, so glyph width varies per machine. Pairs
+      with the DEFERRED font entry below. Making it a probe changes rendering
+      on a machine that currently works, so it wants a decision.
     - data-flow's structural fix: `TarballLayout` as a closed sum
-      (SingleBinary vs RelocatablePrefix) with an
-      `InstallAction::postconditions()` deriving the checks from the artifact,
-      so the manifest author never states the artifact's shape and a check
-      cannot disagree with what was installed. Same "the type describes less
-      than the artifact" mismatch likely lurks in Script{}, GitClone{} (a
-      DirExists check passes on an empty dir left by an interrupted clone),
-      and AptSource{}.
-  Full four-lens panel synthesis, the sabotage records, and the corrected
-  hypotheses are in .superpowers/sdd/nvim-hardening/progress.md.
+      (SingleBinary vs RelocatablePrefix) with `InstallAction::postconditions()`
+      deriving checks from the artifact, so a check cannot disagree with what
+      was installed. Partially anticipated by `tarball_is_archive`, which now
+      names that same distinction as a predicate rather than a type. The same
+      "type describes less than the artifact" mismatch likely lurks in
+      Script{}, GitClone{} (DirExists passes on an empty dir left by an
+      interrupted clone) and AptSource{}.
 
 - Show child process output while a step runs, rather than only a summary
   after it finishes. Reported 2026-09-08: `config init: [5/5] install the

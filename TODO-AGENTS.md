@@ -13,20 +13,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   :MasonInstall) instead.
   Record this beside any mason test work so the trap is not rediscovered.
 
-- CLAIMED 2026-09-08. Decide the macOS Neovim ABI question. The version is exactly pinned on apt
-  and completely unpinned on brew and pacman: catalog.rs:93-98 maps
-  Apt -> ViaTarball(TarballRelease::Neovim) (the v0.12.5 pin) but
-  Brew -> named("neovim") and Pacman -> named("neovim"). The manifest states
-  only `min_version = "0.10"` as a floor.
-  So the ABI that treesitter parsers are compiled against is pinned on Linux
-  and floats on macOS, where a `brew upgrade` moves it silently. Two machines
-  are guaranteed to differ on the one value every parser artifact is keyed
-  to. (Verified: this mac runs Homebrew's 0.12.4, not the pinned 0.12.5, and
-  that is correct behaviour for the brew path rather than a bug.)
-  Either pin the mac too, or document that the ABI is only pinned on Linux.
-  A parser lock keyed to a floating ABI has one leg in the air, so this is
-  upstream of any lock design.
-
 - nvim: the tarball download verifies nothing, and we have to be our own
   checksum authority. installer.rs fetches with a bare `curl -fsSL`.
   Upstream publishes NO checksum asset for the pinned release (verified

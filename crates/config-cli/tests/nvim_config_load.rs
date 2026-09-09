@@ -218,6 +218,13 @@ fn the_real_config_loads_and_opens_buffers_without_errors() {
         ("probe.json", "{\n  \"key\": \"value\"\n}\n"),
         ("probe.toml", "[table]\nkey = \"value\"\n"),
         ("probe.sh", "#!/bin/sh\necho hello\n"),
+        // Added 2026-09-09 at the owner's suggestion, after `<leader>f` on a
+        // TypeScript file reported no formatters on a bare Ubuntu. These are
+        // the filetypes conform routes to prettier, so they are where a
+        // missing formatter shows up.
+        ("probe.css", ".selector {\n  color: red;\n}\n"),
+        ("probe.html", "<!doctype html>\n<html><body><p>hi</p></body></html>\n"),
+        ("probe.rs", "fn main() {\n    println!(\"hi\");\n}\n"),
     ];
     let mut checked = 0;
     for (name, body) in files {
@@ -233,7 +240,7 @@ fn the_real_config_loads_and_opens_buffers_without_errors() {
         );
         checked += 1;
     }
-    assert!(checked >= 6, "the fixture set must actually be exercised, got {checked}");
+    assert!(checked >= 9, "the fixture set must actually be exercised, got {checked}");
 
     // 5. EVERY PINNED MASON NAME RESOLVES against the pinned registry.
     //
@@ -300,7 +307,63 @@ fn the_real_config_loads_and_opens_buffers_without_errors() {
         lock.stdout
     );
 
-    // 6. THE PLUGIN BUFFER, which is the case both 2026-09-08 regressions
+    // 6. EVERY CONFIGURED FORMATTER RESOLVES.
+    //
+    //    `<leader>f` on a TypeScript file reported "Formatters unavailable"
+    //    on a bare Ubuntu, because prettier and prettierd were named by
+    //    conform and installed by nothing.
+    //
+    //    THE TRAP THIS AVOIDS: on a machine where a formatter is genuinely
+    //    absent, "unavailable" is the CORRECT answer, so asserting that
+    //    formatting succeeds would fail for the right reason and the wrong
+    //    cause. What is asserted instead is that every formatter conform is
+    //    configured with resolves to an executable -- a config bug (nothing
+    //    configured for this filetype) and an install bug (configured but
+    //    absent) are different, and only the second is this repo's fault.
+    //
+    //    Skipped rather than failed when nothing is installed yet, because
+    //    mason installs asynchronously and this test does not drive it. The
+    //    shell suite's formatter gate is what proves an install path EXISTS;
+    //    this proves the ones present actually run.
+    let formatter_probe = r#"lua
+        local ok, conform = pcall(require, 'conform')
+        if not ok then io.write('conform-missing') return end
+        local unresolved, checked = {}, 0
+        for filetype, entry in pairs(conform.formatters_by_ft or {}) do
+          local names = type(entry) == 'table' and entry or { entry }
+          for _, name in ipairs(names) do
+            if type(name) == 'string' then
+              checked = checked + 1
+              local info = conform.get_formatter_info(name)
+              if info and info.available == false and info.available_msg then
+                table.insert(unresolved, filetype .. ':' .. name)
+              end
+            end
+          end
+        end
+        io.write('checked=' .. checked .. ' unavailable=' .. #unresolved)
+    "#;
+    let formatters = run_with_config(&nvim, scratch, &["-c", formatter_probe]).expect("nvim runs");
+    assert!(
+        !formatters.stdout.contains("conform-missing"),
+        "conform must load, or the formatter configuration is unreachable: {:?}",
+        formatters.stderr
+    );
+    assert!(
+        formatters.stdout.contains("checked="),
+        "the formatter probe did not finish, so it proved nothing: {:?} \
+         (stderr: {:?})",
+        formatters.stdout,
+        formatters.stderr
+    );
+    assert!(
+        !formatters.stdout.contains("checked=0"),
+        "conform reported no configured formatters, so this asserted \
+         nothing: {}",
+        formatters.stdout
+    );
+
+    // 7. THE PLUGIN BUFFER, which is the case both 2026-09-08 regressions
     //    needed. A filetype with no parser is what every plugin window is,
     //    and a test that only opens .lua and .md files passes while the file
     //    explorer throws on every open.

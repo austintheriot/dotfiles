@@ -2,31 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED 2026-09-08. nvim: NOTHING IN CI OR THE SUITE EVER LOADS THE REAL CONFIG, which is how
-  two regressions shipped on 2026-09-08 that a config-load test would have
-  caught in seconds.
-  Measured: `tests/nvim-mason-runtimes.test.sh` has 45 assertions and ZERO
-  nvim invocations -- it greps Lua text. `nvim-version-floor.test.sh` runs
-  nvim three times but only to read a version.
-  `crates/config-cli/tests/nvim_runtime.rs` executes nvim with `-u NONE`,
-  deliberately testing the INSTALL rather than the config. And
-  `.github/workflows/test-suite.yml` mentions nvim zero times.
-  The two regressions this let through:
-    - `Parser could not be created for buffer 1 and language "NvimTree"` on
-      every plugin buffer, because get_lang falls back to the filetype and
-      language.add succeeds for a name with no parser.
-    - `Cannot find package "rust-analyzer@2026-04-06"`, because
-      mason-tool-installer wants `{ 'name', version = '...' }` tables while
-      `name@version` is mason-lspconfig's syntax.
-  WHAT TO BUILD: load the REAL init.lua (not a minimal init -- a minimal
-  init tests a config you do not ship) in a throwaway XDG_DATA_HOME, assert
-  stderr is empty, then open a buffer per configured filetype PLUS a plugin
-  buffer, and assert no errors. Offline, seconds, every push.
-  ANTI-VACUITY: assert the config actually loaded by checking a sentinel only
-  it sets (vim.g.mapleader, a named augroup), and assert the run against
-  `-u NONE` FAILS that same check. A test that passes with no config loaded
-  is testing nothing.
-
 - nvim: assert the mason lockfile resolves against the pinned registry.
   Every name in mason-lock.json must satisfy `mason-registry.get_package`
   under the pinned registry version. Catches the `rust-analyzer@2026-04-06`

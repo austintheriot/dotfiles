@@ -73,6 +73,65 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       Script{}, GitClone{} (DirExists passes on an empty dir left by an
       interrupted clone) and AptSource{}.
 
+- nvim on a bare Ubuntu: `<leader>f` reports "Formatters unavailable for
+  typescript file", and eslint-lsp plus css-variables-language-server report
+  "failed to install". Reported 2026-09-09 with screenshots. ONE ROOT CAUSE
+  BEHIND BOTH, plus one gap of its own.
+
+  ROOT CAUSE: NODE IS INSTALLED BUT UNREACHABLE. deps.toml's `node` entry is
+  an any_of whose second branch is
+  `glob { dir = "$HOME/.nvm/versions/node", pattern = "v*" }`, so the check
+  passes as soon as nvm has ANY version unpacked. Nothing puts that version
+  on PATH. Measured in a bare ubuntu:24.04 after installing nvm and running
+  `nvm install --lts`:
+      node dir exists:            v24.21.0
+      node on PATH in sh:         MISSING
+      node on PATH in bash -l:    MISSING
+  So the dependency reports satisfied while the tool cannot be executed, and
+  every npm-backed mason package fails: eslint-lsp
+  (pkg:npm/vscode-langservers-extracted), css-variables-language-server,
+  typescript-language-server, cssls, cssmodules_ls, svelte, astro,
+  markdownlint, cspell. The two in the screenshot are just the two that
+  reported first.
+  NOTE the check is not merely weak, it is weak IN THE DIRECTION THAT HIDES
+  THIS: the `command = "node"` branch would have failed honestly. The glob
+  branch was added so a machine with node under nvm would not be reported as
+  missing it, and it now reports a machine that cannot run node as having it.
+  Deciding the fix means deciding where node's bin directory gets onto PATH:
+  the shell profile, the deps engine's own search path (`search_path` already
+  prepends ~/.local/bin and ~/.cargo/bin for exactly this class of problem),
+  or nvim's own environment. The engine's search path is the narrowest change
+  and is where the same problem was solved for cargo.
+
+  SEPARATE GAP, same shape as the cspell one fixed earlier today:
+  `prettier` and `prettierd` are named as conform formatters
+  (`.config/nvim/lua/plugins/autoformat.lua:1`) for typescript, javascript,
+  svelte, css, html, json and more, and NEITHER IS INSTALLED BY ANYTHING --
+  not mason-lock.json, not ensure_installed, not a deps manifest entry
+  (verified by grep). That is what "Formatters unavailable" is. The
+  nvim-mason-runtimes suite grew an assertion that every LINTER has an
+  install path; formatters were never covered, so the same class walked
+  straight back in.
+  Fix both halves: add the formatters to ensure_installed and to the lock,
+  AND extend the suite to gate formatters the way it now gates linters, or
+  this recurs a third time.
+
+- Extend the nvim config-load test to open and FORMAT several file types.
+  Suggested by the owner 2026-09-09 while reporting the errors above: run
+  nvim on a bare docker image and open/edit/format .css, .ts, .rs, .html,
+  .md and friends. The existing test
+  (`crates/config-cli/tests/nvim_config_load.rs`) opens .lua, .md, .ts,
+  .json, .toml and .sh and asserts nothing errors, which is what caught the
+  NvimTree regression. It does NOT exercise formatting, and `<leader>f` is
+  exactly the path that broke.
+  What to add: .css, .html and .rs to the fixture set, and an assertion that
+  a format request on a supported filetype either formats or reports a
+  MISSING TOOL rather than silently doing nothing. Note the trap: on a
+  machine where the formatter is genuinely absent, "unavailable" is the
+  correct answer, so the assertion has to distinguish "no formatter
+  configured for this filetype" from "the configured formatter is not
+  installed" -- the first is a config bug, the second is an install bug.
+
 - Show child process output while a step runs, rather than only a summary
   after it finishes. BOTH LONG STEPS OF `config init` ARE SILENT, and they
   are silent for DIFFERENT REASONS, so this is two fixes rather than one.

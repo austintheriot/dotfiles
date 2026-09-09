@@ -197,6 +197,57 @@ assert_succeeds 'the config pins the registry from the lockfile' \
 assert_succeeds 'auto_update is disabled, so the lock is not overwritten' \
     test -n "$(printf '%s\n' "$lsp_code" | grep 'auto_update = false' || true)"
 
+# --- every formatter the config invokes actually gets installed ---------
+#
+# THE BUG THIS CATCHES, reported 2026-09-09 from a bare Ubuntu: pressing
+# `<leader>f` on a TypeScript file printed
+#
+#   Formatters unavailable for typescript file
+#
+# conform names prettier and prettierd for typescript, javascript, svelte,
+# css, html, json and more (autoformat.lua:1), and NEITHER was installed by
+# anything -- not mason-lock.json, not ensure_installed, not a deps manifest
+# entry.
+#
+# THE SAME CLASS AS THE LINTER GAP fixed the day before, and it walked
+# straight back in because that fix gated LINTERS only. A formatter is the
+# same shape: a binary the config execs that some install path has to
+# provide. Gating both is what stops a third recurrence with a different
+# noun.
+FORMAT_CONFIG="$NVIM_LUA/plugins/autoformat.lua"
+assert_succeeds 'the formatter config exists' test -f "$FORMAT_CONFIG"
+
+# Formatter names as conform receives them: quoted strings inside a BRACE
+# LIST, which is the only place a formatter name appears. A looser grep over
+# every quoted string in the file picked up `conform` from
+# `require('conform')` and reported the plugin itself as an uninstalled
+# formatter -- the same over-match that read `settings` as an LSP server.
+#
+# Comments stripped first, for the reason the other parses here document.
+format_code=$(sed -e 's/--.*//' "$FORMAT_CONFIG")
+formatters=$(printf '%s\n' "$format_code" \
+    | grep -oE "\{ *'[a-z][a-z0-9_-]*'( *, *'[a-z][a-z0-9_-]*')*" \
+    | grep -oE "'[a-z][a-z0-9_-]*'" | tr -d "'" | sort -u)
+assert_succeeds 'the formatter list parses' test -n "$formatters"
+
+# The plugin's own name must not be in the list. Asserted by name because it
+# is the one that actually got through, and a generic rule would need its
+# own allowlist.
+assert_equals 'the parse takes formatter names only, not the plugin name' '' \
+    "$(printf '%s\n' "$formatters" | grep -x 'conform' || true)"
+
+for tool in $formatters; do
+    if printf '%s\n%s\n' "$servers" "$extra_tools" | grep -qx "$tool"; then
+        provided="mason ensure_installed"
+    elif printf '%s\n' "$conf_names" | grep -qx "$tool"; then
+        provided="a deps manifest"
+    else
+        provided="NOTHING -- add it to ensure_installed or to a deps manifest"
+    fi
+    assert_succeeds "the '$tool' formatter has an install path ($provided)" \
+        test "$provided" != "NOTHING -- add it to ensure_installed or to a deps manifest"
+done
+
 # --- the treesitter spec matches the branch it is pinned to -------------
 #
 # THE BUG THIS CATCHES, found 2026-09-08. nvim-treesitter is pinned to the

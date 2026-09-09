@@ -9,6 +9,8 @@
     "eslint-lsp": "4.10.0",
     "lua-language-server": "3.18.1",
     "markdownlint": "0.48.0",
+    "prettier": "3.8.1",
+    "prettierd": "0.27.0",
     "rust-analyzer": "2026-04-06",
     "stylua": "v2.4.1",
     "svelte-language-server": "0.17.30",

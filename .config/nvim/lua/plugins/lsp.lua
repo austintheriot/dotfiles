@@ -120,7 +120,7 @@ return {
       -- rather than a second hand-written table.
       local mason_names = require('mason-lspconfig.mappings').get_mason_map().lspconfig_to_package
       local ensure = {}
-      for _, name in ipairs(vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint', 'cspell' })) do
+      for _, name in ipairs(vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint', 'cspell', 'prettier', 'prettierd' })) do
         local package_name = mason_names[name] or name
         -- A TABLE, not a `name@version` string. mason-tool-installer
         -- destructures item[1] and item.version (its init.lua:235-238) and

@@ -165,11 +165,55 @@ pub(crate) fn search_path() -> Vec<PathBuf> {
     if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
         directories.push(home.join(".local").join("bin"));
         directories.push(home.join(".cargo").join("bin"));
+        directories.extend(nvm_node_bin(&home));
     }
     if let Some(existing) = std::env::var_os("PATH") {
         directories.extend(std::env::split_paths(&existing));
     }
     directories
+}
+
+/// nvm's node `bin` directory, when a version is installed.
+///
+/// THE DEFECT THIS CLOSES, reported 2026-09-09 from a bare Ubuntu:
+/// eslint-lsp and css-variables-language-server "failed to install", and so
+/// would every other npm-backed mason package, because node was installed
+/// and unreachable. Measured there after `nvm install --lts`: the version
+/// directory existed and `command -v node` found nothing in either a plain
+/// `sh` or a login `bash`.
+///
+/// nvm puts its shims on PATH by a shell function that only an interactive
+/// login shell sources, so a non-interactive install step never sees them.
+/// That is the same problem `~/.cargo/bin` above already solves, and the
+/// same answer: widen the search rather than trust a shell to have been
+/// configured.
+///
+/// THE HIGHEST VERSION WINS, by the numeric ordering nvm itself uses, not by
+/// `read_dir` order. This machine has eleven versions installed and the
+/// directory order is arbitrary, so picking the first would make the engine
+/// resolve a different node on different runs. Parsed rather than sorted as
+/// strings, because `v9` sorts after `v10` lexically.
+fn nvm_node_bin(home: &Path) -> Option<PathBuf> {
+    let versions = home.join(".nvm").join("versions").join("node");
+    let mut best: Option<(Vec<u64>, PathBuf)> = None;
+    for entry in std::fs::read_dir(versions).ok()?.flatten() {
+        let path = entry.path();
+        if !path.join("bin").join("node").is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|raw| raw.to_str()) else {
+            continue;
+        };
+        let parsed: Vec<u64> = name
+            .trim_start_matches('v')
+            .split('.')
+            .map(|part| part.parse().unwrap_or(0))
+            .collect();
+        if best.as_ref().is_none_or(|(current, _)| parsed > *current) {
+            best = Some((parsed, path));
+        }
+    }
+    best.map(|(_, path)| path.join("bin"))
 }
 
 /// `command -v <name>`: present if `name` resolves on the search path.
@@ -359,6 +403,75 @@ mod tests {
     ///
     /// Order is asserted, not just membership. A dependency this run just
     /// installed must be found ahead of an older copy earlier on `PATH`.
+    /// nvm's node directory is on the search path when a version exists.
+    ///
+    /// THE DEFECT THIS CLOSES, reported 2026-09-09 from a bare Ubuntu:
+    /// eslint-lsp and css-variables-language-server "failed to install", and
+    /// so would every other npm-backed mason package, because node was
+    /// installed and unreachable.
+    ///
+    /// Measured in ubuntu:24.04 after `nvm install --lts`:
+    ///     node dir exists:         v24.21.0
+    ///     node on PATH in sh:      MISSING
+    ///     node on PATH in bash -l: MISSING
+    ///
+    /// deps.toml's `node` check is an `any_of` whose second branch globs for
+    /// any version directory under ~/.nvm, so the dependency reported
+    /// SATISFIED while nothing could execute node. The check is weak in the
+    /// direction that hides the problem: the `command = "node"` branch would
+    /// have failed honestly.
+    ///
+    /// This is the same shape ~/.cargo/bin already solves above, and the
+    /// same fix: widen the search rather than trust a login shell to have
+    /// been configured. nvm's path carries a version component, so it needs
+    /// a directory scan where cargo needed a constant.
+    #[test]
+    fn the_search_path_includes_an_nvm_node_version() {
+        let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+            return;
+        };
+        let versions = home.join(".nvm").join("versions").join("node");
+        let Ok(entries) = std::fs::read_dir(&versions) else {
+            // No nvm on this machine is a real state, and the CI legs that
+            // install it are where this assertion has teeth.
+            eprintln!("skip: no nvm node versions at {}", versions.display());
+            return;
+        };
+        let installed: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.join("bin").join("node").is_file())
+            .collect();
+        if installed.is_empty() {
+            eprintln!("skip: nvm is present but has no node version installed");
+            return;
+        }
+
+        // The ENGINE must add it, not the caller's shell. This machine has
+        // nvm loaded in its interactive shell, so `search_path()` inherits a
+        // node directory through PATH and the assertion would pass here for
+        // a reason that does not hold in a container -- the exact
+        // pre-satisfied path this repo keeps getting bitten by. So the
+        // prepended half is compared on its own.
+        let inherited: Vec<PathBuf> = std::env::var_os("PATH")
+            .map(|value| std::env::split_paths(&value).collect())
+            .unwrap_or_default();
+        let directories = search_path();
+        let prepended: Vec<&PathBuf> =
+            directories.iter().take(directories.len() - inherited.len()).collect();
+
+        let covered = installed
+            .iter()
+            .any(|version| prepended.contains(&&version.join("bin")));
+        assert!(
+            covered,
+            "a node version exists at {installed:?} but the engine does not \
+             prepend its bin directory, so every npm-backed install fails on \
+             a machine whose shell has not loaded nvm, while the node check \
+             still reports satisfied. Engine-prepended: {prepended:?}"
+        );
+    }
+
     #[test]
     fn the_search_path_leads_with_the_curl_installer_directories() {
         let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {

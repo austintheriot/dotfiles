@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- nvim: NOTHING IN CI OR THE SUITE EVER LOADS THE REAL CONFIG, which is how
+- CLAIMED 2026-09-08. nvim: NOTHING IN CI OR THE SUITE EVER LOADS THE REAL CONFIG, which is how
   two regressions shipped on 2026-09-08 that a config-load test would have
   caught in seconds.
   Measured: `tests/nvim-mason-runtimes.test.sh` has 45 assertions and ZERO

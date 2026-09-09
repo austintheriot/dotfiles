@@ -42,7 +42,7 @@ return {
     -- crates/config-cli/tests/nvim_runtime.rs.
     local runtime = vim.env.VIMRUNTIME or ''
     if runtime == '' then
-      vim.health.error('$VIMRUNTIME is unset, so no runtime file can be found')
+      vim.health.error '$VIMRUNTIME is unset, so no runtime file can be found'
     elseif vim.fn.isdirectory(runtime) ~= 1 then
       vim.health.error(
         string.format(
@@ -57,9 +57,7 @@ return {
       -- because that is the same lookup every `require` and `:syntax on`
       -- performs. A directory that exists but is not on runtimepath fails
       -- here and would pass a plain isdirectory check.
-      vim.health.error(
-        string.format("runtime files are not reachable through runtimepath (VIMRUNTIME='%s')", runtime)
-      )
+      vim.health.error(string.format("runtime files are not reachable through runtimepath (VIMRUNTIME='%s')", runtime))
     else
       vim.health.ok(string.format("Runtime files found: '%s'", runtime))
     end

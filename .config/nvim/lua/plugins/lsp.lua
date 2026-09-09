@@ -108,9 +108,7 @@ return {
       -- payloads, and an npm package's transitive tree floats under a
       -- pinned top-level version. This buys "the same tool versions on both
       -- machines", not byte-identity.
-      local lock = vim.json.decode(
-        table.concat(vim.fn.readfile(vim.fn.stdpath 'config' .. '/mason-lock.json'), '\n')
-      )
+      local lock = vim.json.decode(table.concat(vim.fn.readfile(vim.fn.stdpath 'config' .. '/mason-lock.json'), '\n'))
 
       require('mason').setup { registries = { lock.registry } }
 

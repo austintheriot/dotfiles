@@ -11,13 +11,7 @@ require 'dotfiles.health'
 -- `vim.version` and `vim.notify` both predate 0.7, so this runs on every
 -- version it rejects.
 if not vim.version.ge(vim.version(), '0.10') then
-  vim.notify(
-    string.format(
-      "This config needs Neovim 0.10 or newer. Found '%s'. Plugins are disabled.",
-      tostring(vim.version())
-    ),
-    vim.log.levels.ERROR
-  )
+  vim.notify(string.format("This config needs Neovim 0.10 or newer. Found '%s'. Plugins are disabled.", tostring(vim.version())), vim.log.levels.ERROR)
   return
 end
 
@@ -64,9 +58,19 @@ require('lazy').setup({
 }, {
   ui = {
     icons = vim.g.have_nerd_font and {} or {
-      cmd = '⌘', config = '🛠', event = '📅', ft = '📂', init = '⚙',
-      keys = '🗝', plugin = '🔌', runtime = '💻', require = '🌙',
-      source = '📄', start = '🚀', task = '📌', lazy = '💤 ',
+      cmd = '⌘',
+      config = '🛠',
+      event = '📅',
+      ft = '📂',
+      init = '⚙',
+      keys = '🗝',
+      plugin = '🔌',
+      runtime = '💻',
+      require = '🌙',
+      source = '📄',
+      start = '🚀',
+      task = '📌',
+      lazy = '💤 ',
     },
   },
 })

@@ -20,9 +20,9 @@ return {
             if lnum and col and message then
               local word = message:match 'Unknown word %(([^)]+)%)'
               local suggestion = message:match 'fix: %(([^)]+)%)'
-              local full_message = word and (suggestion
-                and string.format('Unknown word "%s" - did you mean "%s"?', word, suggestion)
-                or string.format('Unknown word "%s"', word)) or message
+              local full_message = word
+                  and (suggestion and string.format('Unknown word "%s" - did you mean "%s"?', word, suggestion) or string.format('Unknown word "%s"', word))
+                or message
 
               table.insert(diagnostics, {
                 bufnr = bufnr,
@@ -40,10 +40,29 @@ return {
       }
 
       local cspell_fts = {
-        'javascript', 'javascriptreact', 'typescript', 'typescriptreact',
-        'python', 'lua', 'rust', 'go', 'c', 'cpp', 'java',
-        'html', 'css', 'scss', 'json', 'yaml', 'toml',
-        'gitcommit', 'text', 'vim', 'sh', 'bash', 'zsh',
+        'javascript',
+        'javascriptreact',
+        'typescript',
+        'typescriptreact',
+        'python',
+        'lua',
+        'rust',
+        'go',
+        'c',
+        'cpp',
+        'java',
+        'html',
+        'css',
+        'scss',
+        'json',
+        'yaml',
+        'toml',
+        'gitcommit',
+        'text',
+        'vim',
+        'sh',
+        'bash',
+        'zsh',
       }
       lint.linters_by_ft = { markdown = { 'markdownlint', 'cspell' } }
       for _, ft in ipairs(cspell_fts) do

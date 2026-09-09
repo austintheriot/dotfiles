@@ -6,7 +6,6 @@ vim.g.have_nerd_font = true
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
-
 vim.o.spell = true
 vim.o.spelllang = 'en_us'
 vim.o.spellsuggest = 'best,9'

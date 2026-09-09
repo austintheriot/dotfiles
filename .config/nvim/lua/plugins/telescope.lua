@@ -1,6 +1,8 @@
 local function in_git_repo()
   local handle = io.popen 'git rev-parse --is-inside-work-tree 2>/dev/null'
-  if not handle then return false end
+  if not handle then
+    return false
+  end
   local result = handle:read '*a'
   handle:close()
   return result:match 'true'
@@ -13,7 +15,13 @@ return {
     branch = 'master',
     dependencies = {
       'nvim-lua/plenary.nvim',
-      { 'nvim-telescope/telescope-fzf-native.nvim', build = 'make', cond = function() return vim.fn.executable 'make' == 1 end },
+      {
+        'nvim-telescope/telescope-fzf-native.nvim',
+        build = 'make',
+        cond = function()
+          return vim.fn.executable 'make' == 1
+        end,
+      },
       'nvim-telescope/telescope-ui-select.nvim',
       { 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
     },
@@ -22,13 +30,17 @@ return {
 
       local function move_up(n)
         return function(opts)
-          for _ = 1, n do actions.move_selection_previous(opts) end
+          for _ = 1, n do
+            actions.move_selection_previous(opts)
+          end
         end
       end
 
       local function move_down(n)
         return function(opts)
-          for _ = 1, n do actions.move_selection_next(opts) end
+          for _ = 1, n do
+            actions.move_selection_next(opts)
+          end
         end
       end
 

@@ -30,7 +30,9 @@ return {
                   end
                   table.insert(actions, {
                     title = string.format('Add "%s" to dictionary', word),
-                    action = function() vim.cmd('CSpellAddWord ' .. word) end,
+                    action = function()
+                      vim.cmd('CSpellAddWord ' .. word)
+                    end,
                   })
                 end
               end
@@ -54,8 +56,12 @@ return {
                     title = action.title,
                     client_id = client_id,
                     action = function()
-                      if action.edit then vim.lsp.util.apply_workspace_edit(action.edit, 'utf-8') end
-                      if action.command then vim.lsp.buf.execute_command(action.command) end
+                      if action.edit then
+                        vim.lsp.util.apply_workspace_edit(action.edit, 'utf-8')
+                      end
+                      if action.command then
+                        vim.lsp.buf.execute_command(action.command)
+                      end
                     end,
                   })
                 end
@@ -64,9 +70,13 @@ return {
               if #all_actions > 0 then
                 vim.ui.select(all_actions, {
                   prompt = 'Code actions:',
-                  format_item = function(item) return item.title end,
+                  format_item = function(item)
+                    return item.title
+                  end,
                 }, function(choice)
-                  if choice then choice.action() end
+                  if choice then
+                    choice.action()
+                  end
                 end)
               else
                 vim.notify('No code actions available', vim.log.levels.INFO)

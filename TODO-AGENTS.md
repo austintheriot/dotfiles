@@ -116,6 +116,36 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   AND extend the suite to gate formatters the way it now gates linters, or
   this recurs a third time.
 
+- Harden the nvim Lua config at the CODE level: lints, tests, refactors for
+  clarity and purity. Requested by the owner 2026-09-09.
+  Nothing lints the Lua today. `tests/shellcheck.test.sh` covers 25+ shell
+  scripts and there is no equivalent for the ~20 files under
+  `.config/nvim/lua/`, so the only feedback on a Lua mistake is nvim failing
+  at runtime -- which is how the NvimTree and mason-version regressions both
+  shipped.
+  WHAT TO CONSIDER, roughly in order of value per effort:
+    - `luacheck` or `selene` as a suite gate, with a config that knows the
+      `vim` global. selene is Rust and needs no lua runtime, which fits this
+      repo; luacheck is the established one. Either way the gate has to fail
+      the build, not merely report.
+    - `stylua` is ALREADY a tracked formatter (it is in ensure_installed and
+      the lock), so a `stylua --check` gate costs almost nothing and would
+      keep the Lua consistently formatted.
+    - Tests for the pure parts. Most of the config is declarative tables,
+      but a few pieces are real logic and are the pieces that broke: the
+      treesitter FileType callback, the lint runnable-filter, the mason
+      lock-to-ensure_installed mapping. Each is a pure function of its
+      inputs if extracted, and each currently lives inline inside a
+      `config = function()` where nothing can reach it.
+    - The refactor that follows from that: move the logic out of the plugin
+      spec closures into small modules under `lua/dotfiles/`, so the specs
+      stay declarative and the logic becomes testable. `lua/dotfiles/health.lua`
+      is the shape that already exists.
+  NOTE the interaction with the config-load test added today: that test
+  catches "the config raises at runtime", which is the outer net. Lints and
+  unit tests are the inner one, and they are what make a failure land at the
+  edit rather than at the next launch.
+
 - Extend the nvim config-load test to open and FORMAT several file types.
   Suggested by the owner 2026-09-09 while reporting the errors above: run
   nvim on a bare docker image and open/edit/format .css, .ts, .rs, .html,

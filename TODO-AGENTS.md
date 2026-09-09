@@ -2,35 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED 2026-09-08. nvim: tools the editor needs at FIRST LAUNCH are
-  installed by the editor, so they are never there in time. Found by running
-  the documented one-liner in a bare ubuntu:24.04 and opening nvim.
-  TWO SYMPTOMS, ONE CAUSE:
-    1. Only 3 of 19 treesitter parsers compile on first launch. The
-       treesitter `build` hook runs during the same `Lazy sync` in which
-       mason is asked to install tree-sitter-cli, so the CLI is not on PATH
-       yet:
-         error: Error during "tree-sitter build": ENOENT (cmd): 'tree-sitter'
-       Installing the CLI by hand and re-running the build gives 19/19
-       languages and 22 parsers, so the config is right and the ORDER is
-       wrong. Adding tree-sitter-cli to mason was necessary and NOT
-       sufficient.
-    2. Every markdown open shows a blocking prompt on a fresh machine,
-       captured verbatim from a PTY render:
-         Error running markdownlint: ENOENT: no such file or directory
-         Error running cspell: ENOENT: no such file or directory
-         Press ENTER or type command to continue
-       nvim-lint invokes linters mason has not installed yet.
-  THE FIX SHAPE: anything nvim needs during its own first run cannot be
-  installed by nvim. Move those tools to the deps engine (deps.toml), which
-  runs to completion before nvim ever starts. tree-sitter-cli is the clear
-  case because a build hook needs it. The linters are the same shape one
-  level softer: they are needed on first buffer open rather than at build
-  time.
-  KEEP THEM IN mason-lock.json EITHER WAY, so the version pin survives
-  wherever the install happens, or the lockfile silently stops covering
-  them.
-
 - nvim: `ensure_installed` NEVER RUNS HEADLESS, which invalidates the
   obvious CI test for it. Verified verbatim at
   mason-lspconfig/lua/mason-lspconfig/init.lua:31:

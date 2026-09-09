@@ -8,7 +8,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   class before first launch rather than after. Needs the registry, so it is
   a networked-tier test, not an every-push one.
 
-- Track a nerd font as a dependency and install it automatically.
+- CLAIMED 2026-09-08. Track a nerd font as a dependency and install it automatically.
   APPROVED BY THE OWNER 2026-09-08.
   `.config/nvim/lua/settings.lua:3` sets `vim.g.have_nerd_font = true`
   unconditionally, and telescope.lua and mini.lua both read it, so a fresh

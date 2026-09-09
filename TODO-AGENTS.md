@@ -74,13 +74,38 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       interrupted clone) and AptSource{}.
 
 - Show child process output while a step runs, rather than only a summary
-  after it finishes. Reported 2026-09-08: `config init: [5/5] install the
-  missing tracked dependencies` prints nothing at all until every install is
-  done, so a bootstrap that is working looks identical to one that has hung.
-  On a fresh machine that silence lasts minutes, across an apt update, a
-  rustup download, several git clones and a neovim tarball.
+  after it finishes. BOTH LONG STEPS OF `config init` ARE SILENT, and they
+  are silent for DIFFERENT REASONS, so this is two fixes rather than one.
 
-  CONFIRMED CAUSE, one line: `crates/config-cli/src/deps/installer.rs:750`
+  STEP 5, `install the missing tracked dependencies`. Reported 2026-09-08:
+  prints nothing at all until every install is done, so a bootstrap that is
+  working looks identical to one that has hung. On a fresh machine that
+  silence lasts minutes, across an apt update, a rustup download, several
+  git clones, a neovim tarball and a font archive.
+
+  STEP 4, `build and install the stamped binary`. Reported 2026-09-08 as
+  well, and the cause is NOT the same. config-init runs config-build with no
+  redirection at all, so its output would reach the terminal; the silence
+  comes from `cargo build --release --locked --quiet`
+  (`.scripts/config/config-build:60`). `--quiet` suppresses the per-crate
+  "Compiling ..." lines, which are the only progress a cold compile of six
+  crates emits. That build is minutes on a fresh machine, and the step
+  prints one line before it and one after.
+  The fix here is small and separable: drop `--quiet`, or keep it only when
+  stdout is not a terminal.
+  MEASURED, so the tradeoff is real rather than assumed. A warm rebuild of
+  one crate prints, without the flag:
+      Compiling dotfiles-path v0.1.0 (/Users/austin/crates/dotfiles-path)
+       Finished `release` profile [optimized] target(s) in 0.22s
+  and prints nothing at all with it. So `--quiet` IS buying silence on a
+  no-op `config build`, which runs on every `config init` including
+  re-runs, and dropping it unconditionally makes an idempotent re-run noisy.
+  The tty-gated version keeps both properties: progress where a human is
+  watching a cold compile, silence in the eight CI legs and in any
+  re-run that pipes.
+
+  CONFIRMED CAUSE OF STEP 5, one line:
+  `crates/config-cli/src/deps/installer.rs:1050`
   runs each install with `command.output()`. That captures stdout and stderr
   into memory and returns only when the child has exited, so nothing the
   child writes can reach the terminal while it runs. The report is then

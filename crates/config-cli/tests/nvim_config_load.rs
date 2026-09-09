@@ -235,7 +235,72 @@ fn the_real_config_loads_and_opens_buffers_without_errors() {
     }
     assert!(checked >= 6, "the fixture set must actually be exercised, got {checked}");
 
-    // 5. THE PLUGIN BUFFER, which is the case both 2026-09-08 regressions
+    // 5. EVERY PINNED MASON NAME RESOLVES against the pinned registry.
+    //
+    //    This is what `Cannot find package "rust-analyzer@2026-04-06"` was:
+    //    a lockfile whose names the registry cannot find, discovered on
+    //    first launch rather than in a test.
+    //
+    //    IT NEEDS THE NETWORK, unavoidably. The registry lives in
+    //    XDG_DATA_HOME, which this test keeps scratch precisely so nothing
+    //    is inherited, so it must be fetched. Reading the developer's
+    //    already-downloaded copy would be instant and would also be the
+    //    pre-satisfied path this repo keeps getting bitten by.
+    //
+    //    Resolution goes through the registry's OWN lspconfig mapping rather
+    //    than a second table here, so a rename upstream cannot leave the two
+    //    disagreeing.
+    let lockfile_probe = r#"lua
+        local path = vim.fn.stdpath('config') .. '/mason-lock.json'
+        if vim.fn.filereadable(path) == 0 then
+          io.write('lock-missing')
+          return
+        end
+        local lock = vim.json.decode(table.concat(vim.fn.readfile(path), '\n'))
+        local registry = require('mason-registry')
+        -- The registry lives in XDG_DATA_HOME, which this test deliberately
+        -- keeps scratch, so it has to be fetched before any name can
+        -- resolve. Without this every name reports unresolved for a reason
+        -- that has nothing to do with the lockfile.
+        local done = false
+        registry.update(function() done = true end)
+        vim.wait(120000, function() return done end, 200)
+        local unresolved, checked = {}, 0
+        for package_name, _ in pairs(lock.packages or {}) do
+          checked = checked + 1
+          if not pcall(registry.get_package, package_name) then
+            table.insert(unresolved, package_name)
+          end
+        end
+        io.write('checked=' .. checked .. ' unresolved=' .. table.concat(unresolved, ','))
+    "#;
+    let lock = run_with_config(&nvim, scratch, &["-c", lockfile_probe]).expect("nvim runs");
+    assert!(
+        !lock.stdout.contains("lock-missing"),
+        "mason-lock.json must exist, or the pinning it records is not in effect"
+    );
+    assert!(
+        lock.stdout.contains("unresolved="),
+        "the lockfile probe did not finish, so it proved nothing: {:?} \
+         (stderr: {:?})",
+        lock.stdout,
+        lock.stderr
+    );
+    assert!(
+        lock.stdout.contains("unresolved=") && lock.stdout.ends_with("unresolved="),
+        "every name in mason-lock.json must resolve against the pinned \
+         registry: {}",
+        lock.stdout
+    );
+    // Positive control: a probe that read an empty lockfile would report
+    // zero unresolved names and pass while asserting nothing.
+    assert!(
+        !lock.stdout.contains("checked=0"),
+        "the lockfile probe read no packages, so it asserted nothing: {}",
+        lock.stdout
+    );
+
+    // 6. THE PLUGIN BUFFER, which is the case both 2026-09-08 regressions
     //    needed. A filetype with no parser is what every plugin window is,
     //    and a test that only opens .lua and .md files passes while the file
     //    explorer throws on every open.

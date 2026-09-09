@@ -446,8 +446,15 @@ pub fn argv_sequence_for(
                 return vec![
                     words(["rm", "-rf", &staging_path]),
                     words(["mkdir", "-p", &staging_path]),
+                    // `--retry 3`: this exact fetch failed a pre-push run with
+                    // a single transient HTTP 500 from GitHub's release host
+                    // while the next leg fetched the same file and passed.
+                    // curl's transient set is 408, 429 and 5xx with backoff;
+                    // a 404 or a bad checksum still fails on the first try.
                     words([
                         "curl",
+                        "--retry",
+                        "3",
                         "-fsSL",
                         "-o",
                         &format!("{staging_path}/fonts.tar.xz"),
@@ -482,7 +489,7 @@ pub fn argv_sequence_for(
                 return vec![
                     words(["rm", "-rf", &staging_path]),
                     words(["mkdir", "-p", &staging_path]),
-                    words(["curl", "-fsSL", "-o", &format!("{staging_path}/{binary}.gz"), &url]),
+                    words(["curl", "--retry", "3", "-fsSL", "-o", &format!("{staging_path}/{binary}.gz"), &url]),
                     // `--status` is quiet on success and non-zero on a
                     // mismatch, which is what stops the sequence. The
                     // expected line is written to a file rather than piped,
@@ -514,7 +521,7 @@ pub fn argv_sequence_for(
                 // is this action's own scratch directory.
                 words(["rm", "-rf", &staging_path]),
                 words(["mkdir", "-p", &staging_path]),
-                words(["curl", "-fsSL", "-o", &format!("{staging_path}/release.tar.gz"), &url]),
+                words(["curl", "--retry", "3", "-fsSL", "-o", &format!("{staging_path}/release.tar.gz"), &url]),
                 words([
                     "sh",
                     "-c",
@@ -2341,6 +2348,51 @@ mod tests {
         for text in ["/usr/bin/zsh\n", "/bin/zsh\n", "/usr/local/bin/zsh\n"] {
             let found = shell_path_in(text, "zsh").expect("an absolute entry resolves");
             assert!(found.starts_with('/'), "{found} must be absolute");
+        }
+    }
+
+    /// A release download retries on a transient server error.
+    ///
+    /// THE INCIDENT. A pre-push run's ubuntu leg failed with
+    ///   FAILED nerd-font  exited 22 (stderr): curl: (22) ... error: 500
+    /// while the pop leg, minutes later, fetched the same tarball and passed.
+    /// The URL answered 200 three times when probed afterwards. GitHub's
+    /// release host returned one transient 500, and the fetch was a single
+    /// `curl -fsSL` attempt, so one blip failed a dependency, a harness leg,
+    /// and the whole push.
+    ///
+    /// `--retry` is the right shape because curl's own manual defines the
+    /// transient set it retries as timeouts and HTTP 408, 429, 500, 502, 503
+    /// and 504, with exponential backoff. A 404 or a checksum mismatch is not
+    /// in that set and still fails on the first attempt, which is what a
+    /// pinned release wants.
+    #[test]
+    fn a_release_download_retries_transient_server_errors() {
+        for release in [
+            TarballRelease::NerdFontHack,
+            TarballRelease::Neovim,
+            TarballRelease::TreeSitterCli,
+        ] {
+            let action = InstallAction::ReleaseTarball { release };
+            let sequence = argv_sequence_for(
+                &action,
+                PackageManager::Apt,
+                PrivilegeRequirement::None,
+                Elevation::ViaSudo,
+            );
+            let fetch = sequence
+                .iter()
+                .find(|argv| argv.first().is_some_and(|word| word == "curl"))
+                .unwrap_or_else(|| panic!("{release:?} has a curl step: {sequence:?}"));
+            let words: Vec<String> =
+                fetch.iter().map(|word| word.to_string_lossy().into_owned()).collect();
+            let retry_at = words.iter().position(|word| word == "--retry");
+            assert!(retry_at.is_some(), "{release:?} fetch must retry: {words:?}");
+            let count = words.get(retry_at.expect("checked") + 1).map(String::as_str);
+            assert!(
+                matches!(count.and_then(|raw| raw.parse::<u8>().ok()), Some(1..=5)),
+                "a small bounded count, got {count:?}"
+            );
         }
     }
 

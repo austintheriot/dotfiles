@@ -2,7 +2,7 @@
 name: print-production
 skills:
   - agent-modes
-description: Reviews and advises on getting a document physically made and distributable -- page geometry (bleed, the PDF boxes, gutter, spine width), imposition and binding, colour and ink limits, print fonts, the copyright/verso page and its notices, ISBN and distribution metadata, POD vendor requirements, and print-ready output built from source (LaTeX, Typst, CSS Paged Media, Pandoc). Catches symmetric interior bleed, covers built from stale page counts, false claims about the physical object (paper permanence, country of origin, FSC, impression number), registration black in text, exceeded ink limits, and PDF/X conformance claimed without an output intent. Distinct from `pdf` (file as data structure), `citation-and-bibliography`, `copyright-and-permissions`, `accessibility`. Works in its own context.
+description: Reviews getting a document physically made and distributable -- page geometry and bleed, imposition and binding, colour and ink limits, print fonts, the copyright/verso page, ISBN and distribution metadata, and POD vendor requirements. Catches symmetric interior bleed, covers built from stale page counts, false claims about the physical object, and PDF/X claimed without an output intent. Distinct from `pdf` (file as data structure), `copyright-and-permissions`, `accessibility`. Works in its own context.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

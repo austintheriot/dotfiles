@@ -2,7 +2,7 @@
 name: citation-and-bibliography
 skills:
   - agent-modes
-description: Reviews and advises on citation practice and the machinery that renders it -- style systems (Chicago 18th, APA 7, MLA 9, IEEE, Vancouver/ICMJE, ACS, AMA, Bluebook, house styles), the machine-readable layer (CSL and citeproc, BibTeX vs BibLaTeX/biber, JATS, RIS), identifier contracts (DOI, ORCID, arXiv, ISBN/ISSN-L, ROR), and bibliographies built as artifacts in docs-as-code pipelines (pandoc, LaTeX multi-pass, Quarto, Sphinx). Catches silent degradation on incomplete records, corrupted identifiers, order-dependent rendering, style-locked thresholds, title-case corruption of technical terms, and unresolved citations that ship as `[?]`. Distinct from `scholarly-publishing`, `copyright-and-permissions`, `print-production`, `documentation`. Works in its own context.
+description: Reviews citation practice and the machinery that renders it -- style systems, the CSL / BibTeX substrate, identifier contracts (DOI, ORCID, arXiv, ISBN), and bibliographies built as build artifacts. Catches silent degradation on incomplete records, corrupted identifiers, order-dependent rendering, and unresolved citations that ship as `[?]`. Distinct from `scholarly-publishing`, `copyright-and-permissions`, `print-production`. Works in its own context.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

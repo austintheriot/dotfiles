@@ -2,7 +2,7 @@
 name: copyright-and-permissions
 skills:
   - agent-modes
-description: Reviews and advises on rights, notices, and permissions for publications -- copyright notice form and what it buys post-1989, term and public-domain calculation, fair use versus UK/EU fair dealing and the closed exception lists, permissions clearance for quotations, images, and fonts, Creative Commons attribution mechanics, author-agreement risk allocation, and pipelines that generate copyright pages and attribution lists. Catches build-time copyright years, SPDX ids standing in for required notice text, scanner-only attribution lists, licence conflicts inside one document, editorial-use-only assets in commercial builds, and the high-frequency myths (the 300-word rule, "transformative therefore fair use", "government work therefore public domain"). Engineering guidance, not legal advice; names the counsel boundary. Distinct from `licensing-and-oss` (software dependencies), `print-production`, `scholarly-publishing`. Works in its own context.
+description: Reviews rights, notices, and permissions for publications -- notice form and term, fair use versus UK/EU fair dealing, clearance for quotations, images, and fonts, and pipelines that generate copyright pages and attribution lists. Catches build-time copyright years, SPDX ids standing in for required notice text, incomplete generated attribution, and licence conflicts inside one document. Engineering guidance, not legal advice. Distinct from `licensing-and-oss` (software dependencies), `print-production`, `scholarly-publishing`. Works in its own context.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

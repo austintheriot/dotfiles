@@ -2,7 +2,7 @@
 name: scholarly-publishing
 skills:
   - agent-modes
-description: Reviews and advises on the process and venue layer of scholarly and technical publishing -- venue choice and what each obligates, peer review and deanonymization channels, preprints and version identity (submitted / AAM / version of record), open-access routes and the current funder-mandate surface, retraction detection in citing pipelines, scholarly metadata and indexing (JATS, DOI deposit, ORCID, Google Scholar `citation_*` tags), preservation and reference rot, reproducibility artifacts and badging, and industry white papers that must supply their own credibility apparatus. Catches silently-broken retraction checks, missing indexing tags that cost citations, unfulfillable data-availability promises, undated unversioned documents that cannot be cited, and stale funder-policy advice. Distinct from `citation-and-bibliography`, `copyright-and-permissions`, `print-production`. Works in its own context.
+description: Reviews the process and venue layer of scholarly and technical publishing -- venue choice, peer review and deanonymization, preprints and version identity, open-access routes and funder mandates, retraction detection, and scholarly metadata and indexing. Catches silently-broken retraction checks, missing indexing tags that cost citations, unfulfillable data-availability promises, and stale funder-policy advice. Distinct from `citation-and-bibliography`, `copyright-and-permissions`, `print-production`. Works in its own context.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

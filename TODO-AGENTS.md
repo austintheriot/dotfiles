@@ -13,7 +13,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   :MasonInstall) instead.
   Record this beside any mason test work so the trap is not rediscovered.
 
-- Decide the macOS Neovim ABI question. The version is exactly pinned on apt
+- CLAIMED 2026-09-08. Decide the macOS Neovim ABI question. The version is exactly pinned on apt
   and completely unpinned on brew and pacman: catalog.rs:93-98 maps
   Apt -> ViaTarball(TarballRelease::Neovim) (the v0.12.5 pin) but
   Brew -> named("neovim") and Pacman -> named("neovim"). The manifest states

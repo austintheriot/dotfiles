@@ -227,4 +227,22 @@ before=$(window_name "$win_repo")
 "$SCRIPT" -w "$win_repo"
 assert_equals 'repeated runs are stable' "$before" "$(window_name "$win_repo")"
 
+# --- precmd calls the binary, not the wrapper ---------------------------------
+#
+# Measured 2026-09-09 with zsh's EPOCHREALTIME: the binary alone is 15-22ms
+# per prompt (6-9ms process start plus one 8-13ms `tmux list-windows`, no git
+# on the common path, and an unchanged rename already skipped), while going
+# through this sh wrapper is 25-36ms. The wrapper's exec hop is a third of
+# every prompt in every pane. The wrapper stays for the tmux hooks and the
+# `re` alias, which are async or manual; the hot path goes direct.
+#
+# Read from the precmd body only, so the alias and the hooks can keep naming
+# the wrapper without tripping this.
+zshrc_precmd=$(sed -n '/^precmd () {/,/^}/p' "$DOTFILES_ROOT/.zshrc")
+assert_succeeds 'the precmd body was found' test -n "$zshrc_precmd"
+assert_contains 'precmd renames windows through the binary directly' \
+    'tmux-tools name-windows' "$zshrc_precmd"
+assert_equals 'precmd does not pay the sh wrapper hop' '' \
+    "$(printf '%s\n' "$zshrc_precmd" | grep 'tmux-update-window-names.sh' || true)"
+
 finish

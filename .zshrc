@@ -258,7 +258,10 @@ setopt prompt_subst
 autoload -Uz vcs_info # enable vcs_info
 precmd () {
     vcs_info # always load before displaying the prompt
-    ~/.scripts/tmux-update-window-names.sh >/dev/null 2>&1 # update tmux window names
+    # The binary directly, not the .scripts wrapper: the wrapper's exec hop
+    # was a third of every prompt (measured 25-36ms via the wrapper, 15-22ms
+    # direct). The wrapper stays for the tmux hooks and the `re` alias.
+    tmux-tools name-windows >/dev/null 2>&1 # update tmux window names
 }
 zstyle ':vcs_info:git*' formats ' %b' # format $vcs_info_msg_0_
 PS1='%F{254}%n%F{245} %F{153}%(5~|%-1~/⋯/%3~|%4~)%f$(parse_git_dirty)${vcs_info_msg_0_} ${VI_MODE_COLOR}λ%f '

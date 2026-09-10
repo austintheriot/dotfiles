@@ -162,6 +162,23 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   class is an environment quietly compensating for a gap in the engine, so
   a setup that is documented but unverified will drift the same way.
 
+- The nvim linter install-path assertion does not cover `markdownlint`.
+  Found 2026-09-10 while converting `nvim-mason-runtimes` to Rust, and
+  carried over faithfully rather than fixed, because widening a parse
+  mid-conversion is a behaviour change.
+  `lint.lua:67` wires `markdownlint` into `linters_by_ft` for markdown, and
+  `lsp.lua:124` puts it in the mason ensure list, so it works today. But the
+  assertion that checks a linter is installable reads `cmd = '<name>'` lines,
+  and `markdownlint` has none: it uses nvim-lint's built-in definition. So
+  the loop only ever checks `cspell`.
+  The suite's own independent-derivation guard agrees the parse is complete,
+  reporting 1 and 1, because both derivations see only explicitly-registered
+  linters. That is the guard failing to catch its own blind spot.
+  This is the third noun in the same shape. The suite's comments record
+  closing it twice before: it "only ever read the mason ensure_installed
+  list", then a second variant. Worth fixing at the derivation rather than
+  by adding `markdownlint` to a list, or a fourth noun arrives later.
+
 # QUESTIONS (leave until queried)
 
 - Should the mac/linux two-branch model collapse to one branch?

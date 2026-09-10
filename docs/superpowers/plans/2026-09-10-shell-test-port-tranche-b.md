@@ -55,7 +55,35 @@ Every suite in this tranche spawns zsh. Building that once beats seven copies, a
 
 **Interfaces:**
 - Consumes: `repo::root` from Tranche A.
-- Produces: `dotfiles_test_support::zsh::available() -> bool`, `zsh::run_login(script: &str) -> Output` (spawns `zsh -l -c`, with the repo as `$HOME`), `zsh::run_interactive(script: &str) -> Output` (`zsh -i -c`, needed because ZLE widgets and aliases only exist in an interactive shell), and `zsh::run_in_home(home: &Path, script: &str) -> Output` for fixture homes.
+- Produces: `dotfiles_test_support::zsh::available() -> bool`,
+  `zsh::run(script: &str) -> Output`, and
+  `zsh::run_in_home(home: &Path, script: &str) -> Output`.
+
+**CORRECTED 2026-09-10 during execution. There is no `run`.** The first
+draft specified one as "a login shell in the repo itself, so the tracked
+`.zshrc` loads". **Zsh does not source `.zshrc` for a non-interactive login
+shell**, only for an interactive one. Measured:
+
+```
+env -i HOME=$HOME PATH=/usr/bin:/bin TERM=xterm zsh -l -c 'whence -w parse_git_dirty'
+  -> absent            # .zshrc NOT loaded
+
+env -i HOME=$HOME PATH=/usr/bin:/bin TERM=xterm zsh -i -c 'whence -w parse_git_dirty'
+  -> function          # .zshrc loaded
+```
+
+So nothing in this tranche can use a non-interactive login shell, because
+nothing in `.zshrc` runs in one. Both entry points are `-l -i -c`, matching
+`tests/zshrc-node-startup.test.sh:193`, which already spells both flags.
+
+**And both must isolate the environment.** The first draft passed the
+developer's environment through, so `DOTFILES_PLATFORM=mac` and `NVM_DIR`
+read as set purely by inheritance and any assertion of the form "`.zshrc`
+produced X" could be satisfied by the caller. Three shell suites already
+guard against this deliberately: `zshrc-node-startup.test.sh:189` says
+"`env -i` is load-bearing" in its own comment, `zshrc-platform-split.test.sh:96`
+uses `env -i`, and `zshrc-python-startup.test.sh:110` pins `STARTUP_PATH`.
+Clear the environment and pass only `HOME`, `PATH` and `TERM`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -68,10 +96,16 @@ Every suite in this tranche spawns zsh. Building that once beats seven copies, a
 //! than reimplementing its behaviour. The helper exists so seven suites do
 //! not each carry their own `Command` construction.
 
-/// A login shell runs the repo's `.zshrc`, so a variable it exports is
-/// visible. This is the property every suite in the tranche depends on: if
-/// the fixture does not load the config, every assertion about the config
-/// passes vacuously.
+/// The fixture loads the repo's `.zshrc`. This is the property every suite
+/// in the tranche depends on: if the fixture does not load the config, every
+/// assertion about the config passes vacuously.
+///
+/// **The probe must be something only `.zshrc` defines.** An earlier draft
+/// used `$ZSH_VERSION`, which is a zsh BUILT-IN parameter: `zsh -f -c 'echo
+/// $ZSH_VERSION'` prints 5.9 with every startup file skipped, so that
+/// assertion passed with the config entirely unloaded. The plan's own
+/// sabotage step caught it. `parse_git_dirty` (`.zshrc:243`) is a function
+/// the config defines and nothing else does.
 #[test]
 fn a_login_shell_loads_the_repo_zshrc() {
     if !dotfiles_test_support::zsh::available() {
@@ -81,12 +115,12 @@ fn a_login_shell_loads_the_repo_zshrc() {
         eprintln!("zsh absent; the fixture cannot be exercised");
         return;
     }
-    let output = dotfiles_test_support::zsh::run_login("echo $ZSH_VERSION");
-    assert!(output.status.success(), "zsh -l -c exited non-zero");
+    let output = dotfiles_test_support::zsh::run("whence -w parse_git_dirty");
     let text = String::from_utf8_lossy(&output.stdout);
     assert!(
-        !text.trim().is_empty(),
-        "a login shell reported no ZSH_VERSION, so it is not really zsh"
+        text.contains("function"),
+        "the fixture did not load .zshrc: parse_git_dirty is not defined. \
+         Got {text:?}"
     );
 }
 
@@ -99,9 +133,17 @@ fn an_interactive_shell_defines_aliases() {
         eprintln!("zsh absent; the fixture cannot be exercised");
         return;
     }
-    let output = dotfiles_test_support::zsh::run_interactive("alias | wc -l");
+    // `.zshrc-mac:46` and `.zshrc-linux:37` each echo a banner line, so
+    // stdout is "Loaded mac configuration\n      11\n". Parse the LAST line,
+    // and panic on an unparseable count rather than defaulting to zero: an
+    // earlier draft used `.unwrap_or(0)` and reported "no aliases at all"
+    // for a shell that had defined eleven.
+    let output = dotfiles_test_support::zsh::run("alias | wc -l");
     let text = String::from_utf8_lossy(&output.stdout);
-    let count: usize = text.trim().parse().unwrap_or(0);
+    let last = text.lines().last().unwrap_or_default().trim();
+    let count: usize = last
+        .parse()
+        .unwrap_or_else(|_| panic!("expected a count, got {text:?}"));
     assert!(count > 0, "an interactive shell defined no aliases at all");
 }
 
@@ -174,7 +216,7 @@ pub mod zsh {
 
     /// A login shell in the repo itself, so the tracked `.zshrc` loads.
     #[must_use]
-    pub fn run_login(script: &str) -> Output {
+    pub fn run(script: &str) -> Output {
         run(&["-l", "-c"], &super::repo::root(), script)
     }
 
@@ -200,7 +242,7 @@ Expected: PASS, 3 tests. Then `cargo clippy --locked --all-targets -- -D warning
 
 - [ ] **Step 5: Sabotage the fixture**
 
-Change `run_login` to pass `-c` without `-l`. Re-run.
+Change `run` to pass `-c` without `-l`. Re-run.
 
 Expected: `a_login_shell_loads_the_repo_zshrc` goes red, because a non-login shell does not source the config. Restore and confirm green. That test is the tranche's own positive control: if it can pass with the config unloaded, every suite built on it is vacuous.
 
@@ -214,7 +256,7 @@ tests: add the zsh fixture Tranche B's suites share
 
 Tranche B's subject is the shell, so its suites spawn a real zsh rather
 than reimplementing it. Three entry points, because the distinction
-matters: run_login sources the tracked .zshrc, run_interactive is where
+matters: run sources the tracked .zshrc, run_interactive is where
 aliases and ZLE widgets exist at all, and run_in_home isolates from the
 developer's real config so a test can assert a variant is NOT loaded.
 
@@ -287,7 +329,7 @@ fn exactly_one_platform_variant_loads() {
         dotfiles_test_support::skip("no zsh here, so variant selection cannot be observed");
         return;
     }
-    let output = dotfiles_test_support::zsh::run_login(
+    let output = dotfiles_test_support::zsh::run(
         "print -l ${(k)functions} >/dev/null; echo ${DOTFILES_PLATFORM_VARIANT:-unset}",
     );
     let loaded = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -303,25 +345,17 @@ fn exactly_one_platform_variant_loads() {
 }
 ```
 
-**Verified 2026-09-10: `.zshrc` sets no such marker.** Line 199 sources
-`~/.scripts/platform.sh` and nothing records which variant was loaded, so
-the property this contract tests is currently unobservable. Adding the
-marker is therefore part of this task, not a contingency:
+**CORRECTED 2026-09-10: a marker already exists, and no shell config needs
+changing.** The first draft said the variant that loaded was unobservable and
+instructed adding `DOTFILES_PLATFORM_VARIANT` to each variant file. That was
+wrong on the second half: `.zshrc-mac:46` echoes `Loaded mac configuration`
+and `.zshrc-linux:37` echoes `Loaded linux configuration`. Exactly one prints
+per shell, on stdout, which is directly observable and is what the old shell
+suite's fixture imitated.
 
-```sh
-# In each variant, so the shared file stays platform-agnostic.
-# .zshrc-mac:   export DOTFILES_PLATFORM_VARIANT=mac
-# .zshrc-linux: export DOTFILES_PLATFORM_VARIANT=linux
-```
-
-Put it in the variants rather than the shared file, because the shared file
-must not know platform names (contract 1 asserts exactly that, and a
-`case $(uname)` there would violate it). Two one-line exports, each in the
-file whose loading they report.
-
-That is a change to tracked shell config, not just to tests, so it goes in
-the same commit with the reason stated: the assertion cannot exist without
-it.
+So assert against existing behaviour. **Do not modify `.zshrc-mac` or
+`.zshrc-linux`**: a test that changes its subject to become testable is a
+worse trade than one that reads what is already there.
 
 - [ ] **Step 4: Run to verify failure, then implement, then verify pass**
 
@@ -478,7 +512,7 @@ Report the final suite count. Expected: 41 minus however many suites this tranch
 
 **2. Placeholder scan.** No TBD, no "implement later". Tasks 3, 4 and 5 say "inventory all N assertions" rather than listing them, which is deliberate and different from a placeholder: the inventory is the task's first deliverable and listing 48 assertions here would duplicate a file the executor must read anyway. Every task states what to do when the inventory surprises the executor.
 
-**3. Type consistency.** `zsh::available`, `run_login`, `run_interactive`, `run_in_home` keep the same signatures across Tasks 1 through 5. `dotfiles_test_support::skip` matches Tranche A's. `repo::root` is unchanged.
+**3. Type consistency.** `zsh::available`, `run`, `run_interactive`, `run_in_home` keep the same signatures across Tasks 1 through 5. `dotfiles_test_support::skip` matches Tranche A's. `repo::root` is unchanged.
 
 **One risk this plan does not eliminate.** Task 5 may find that a widget's behaviour cannot be asserted from Rust, in which case one suite stays shell and the tranche is 6 of 7. That is an acceptable outcome the spec anticipates, not a failure, but it means "Tranche B is done" may need an asterisk. The plan says to stop and report rather than to weaken the assertion, and that is the right trade even though it leaves the tranche visibly incomplete.
 

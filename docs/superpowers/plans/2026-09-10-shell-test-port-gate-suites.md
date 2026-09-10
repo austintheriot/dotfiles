@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Convert the two suites Tranche A deliberately excluded, `container.test.sh` (48 assertions) and `scripts-dir-name.test.sh` (15), once nothing else depends on them as gates.
+**Goal:** Convert the two suites Tranche A deliberately excluded, `container.test.sh` (**54** assertions, corrected from an undercount of 48: the eight-tool loop expands one call site into eight) and `scripts-dir-name.test.sh` (15), once nothing else depends on them as gates.
 
 **Architecture:** Both become integration tests under `crates/config-cli/tests/`, reading tracked files through `dotfiles_test_support::repo`. Neither has a shell subject, so both convert wholly. The difficulty is not the conversion; it is that each suite is the gate another spec's step relies on, so this plan's first task is proving that dependency has lapsed.
 
-**Tech Stack:** Rust 2024, `dotfiles-test-support`, `toml` for manifest reads, `std::process::Command` for `git ls-tree` and `dash -n`. No new crates.
+**Tech Stack:** Rust 2024, `dotfiles-test-support`, `std::process::Command` for `git ls-tree` and `dash -n`. **No new crates, and that includes `toml`:** an earlier draft named it for manifest reads, but it is not a dev-dependency of `config-cli` and this plan adds none. Task 3's workspace-members check parses the single-line `members = [...]` array directly, which is the same shape `config-manifest::git::parse_workspace_members` and `.scripts/config/config-stamp` both already require and document.
 
 **Spec:** `docs/superpowers/specs/2026-09-07-shell-test-port-design.md`, section 3's exclusion note. Tranche A is done (`fd3b4435`). This plan is the spec's "those two convert after step 4."
 
@@ -17,6 +17,29 @@ The spec's words:
 > **Two exclusions, because steps 3b and 4 use them as gates.** `container.test.sh` is what the adapter spec relies on to assert cargo's workspace members against the test Dockerfile, and `scripts-dir-name.test.sh` is what the subcommand spec relies on to count scripts exactly. Converting either while another step depends on it puts two documents in one file for different reasons.
 
 That is a sequencing constraint, not a technical one, and **it must be re-checked rather than assumed lapsed**. Task 1 exists for that. Today's evidence that the dependency is live: Tranche A added a workspace member and `container.test.sh` caught the missing Dockerfile lines, red at `[ dotfiles-test-support]`, which no other suite noticed. That is the gate doing its job three commits ago.
+
+## This plan's first draft broke the gate it converts
+
+Recorded because it is the most useful thing in this document.
+
+The first draft spelled the pre-rename directory name in prose at four
+places. `tests/scripts-dir-name.test.sh` sweeps tracked files for exactly
+that string and reads `docs/` as a search root, so committing this plan
+turned the suite red: 13 passed, 2 failed. The commit reached `origin/main`
+because the pre-push gate runs the suite only when a pushed path matches
+`TRIGGER_PATHS`, and `docs/` is not in that list.
+
+Two lessons, both binding on every task below:
+
+**Do not write the pre-rename name in any tracked file, including this one.**
+Describe it. The Rust conversion assembles its own needle at runtime for the
+same reason, so the test file does not match itself.
+
+**A gate that runs only on triggered paths can be broken by an untriggered
+path.** That is not a defect in the trigger list, which exists so a
+docs-only push does not pay for the whole suite. It is a reason to run
+`bash tests/run-all.sh -q` before pushing anything, including a
+documentation change, when the change contains text that any suite reads.
 
 ## Global Constraints
 
@@ -35,6 +58,11 @@ Every one learned by executing Tranche A. Every task's requirements implicitly i
 - **`tests/rust-checks.sh` archives from a git ref**, so run it AFTER committing.
 - **One suite per commit.**
 - **The repo is public.** No employer or product names in tracked files.
+- **After restoring a sabotage by moving a backup back, `touch` the file.** A
+  restore-by-move carries the backup's older mtime, so cargo does not rebuild
+  and the **sabotaged binary keeps running against restored source**. That
+  produces a false red or a false green in exactly the step these plans
+  mandate. Found while executing this plan.
 - **Never `--no-verify`.** Never disable a test instead of fixing it.
 
 ---
@@ -71,7 +99,7 @@ grep -n "24\|count" tests/scripts-dir-name.test.sh | head
 Before converting a gate, know what it guards. Write down, from reading them:
 
 - `container.test.sh`: which assertions are the only check on their subject anywhere in the repo. The workspace-members-versus-Dockerfile assertion is one, proven by Tranche A: it was the only suite that caught `dotfiles-test-support` missing from the test image.
-- `scripts-dir-name.test.sh`: same question. The `.my-scripts` staleness assertions and the sourced-versus-executable mode checks look unique.
+- `scripts-dir-name.test.sh`: same question. The staleness assertions (which sweep tracked files for the pre-rename directory name, both its dotted form and its bare stem) and the sourced-versus-executable mode checks look unique.
 
 Any assertion in this set that is the sole guard on its subject must survive the conversion with the same strength or better. Report the list.
 
@@ -97,12 +125,12 @@ Smaller of the two, and it goes first so the `git ls-tree` and file-mode pattern
 
 Read the suite end to end. One sentence per assertion, becoming the doc comments. Known shape from a first read:
 
-1. `.scripts` exists; `.my-scripts` is gone.
+1. `.scripts` exists; the pre-rename directory is gone.
 2. Every script moved to `.scripts` (a set comparison, so it needs a positive control).
 3. Every executed script is still executable.
 4. No sourced script is marked executable (the inverse, and a real invariant: a sourced file with the execute bit invites being run directly).
 5. At least one search root is present (this **is** a positive control, already).
-6. No tracked file still names `.my-scripts`, and none names the bare `my-scripts` stem.
+6. No tracked file still names the pre-rename directory, in either its dotted form or its bare stem. **Two separate assertions, and the stem one exists because of a real defect:** the first rename pass left an assertion whose needle was the bare stem, and once its input path became `.scripts` that assertion passed unconditionally.
 7. A committed-script count, pinned as a literal, plus an explicit list of committed execute bits.
 
 Report the real count and classification before writing Rust.
@@ -128,8 +156,20 @@ So the container case is a **skip**, and it must be recorded. In Rust:
 /// from a gate that is not installed.
 #[test]
 fn every_committed_script_has_the_expected_execute_bit() {
+    // NOTE: `root.join(".git").exists()` is WRONG here and an earlier draft
+    // of this plan showed it. This repo's git directory is `~/.cfg`, bare,
+    // so that check is false on the only machine that can run the
+    // assertion, and it would skip silently. Ask git, and try both layouts:
+    //
+    //   for candidate in [root.join(".cfg"), root.join(".git")] {
+    //       git --git-dir=<candidate> rev-parse --verify HEAD
+    //   }
+    //
+    // with GIT_DIR and GIT_WORK_TREE removed from the child environment. A
+    // `.git` directory git cannot resolve a HEAD from is not a repository
+    // this test can inspect.
     let root = dotfiles_test_support::repo::root();
-    if !root.join(".git").exists() && std::env::var_os("DOTFILES_ROOT").is_none() {
+    if git_dir(&root).is_none() {
         dotfiles_test_support::skip(
             "no repository here, so committed execute bits cannot be inspected",
         );
@@ -147,7 +187,7 @@ Run from `~/crates`: `cargo test -p config-cli --locked --test scripts_dir_name`
 
 - [ ] **Step 4: Sabotage each assertion group**
 
-Rename a script out of `.scripts`; chmod a sourced script to 755; chmod an executed script to 644; add a tracked file naming `.my-scripts`; change the pinned count. Confirm the right test alone goes red per sabotage, and report which proved which.
+Rename a script out of `.scripts`; chmod a sourced script to 755; chmod an executed script to 644; add a tracked file naming the pre-rename directory; change the pinned count. Confirm the right test alone goes red per sabotage, and report which proved which.
 
 - [ ] **Step 5: Verify the skip fires correctly in both directions**
 

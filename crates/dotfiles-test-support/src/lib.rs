@@ -220,3 +220,88 @@ pub mod repo {
             .collect()
     }
 }
+
+/// Spawning the shell that Tranche B's suites take as their subject.
+///
+/// `expect` is allowed here for the same reason `repo` allows it: a helper
+/// whose only caller is a test with no recovery path should panic with a
+/// stated reason rather than thread a `Result` no one can act on.
+#[allow(
+    clippy::expect_used,
+    reason = "a broken fixture is a panic, not a recoverable error"
+)]
+pub mod zsh {
+    use std::path::Path;
+    use std::process::{Command, Output};
+
+    /// Whether a zsh is on PATH at all.
+    #[must_use]
+    pub fn available() -> bool {
+        Command::new("zsh")
+            .arg("-c")
+            .arg("exit 0")
+            .output()
+            .is_ok_and(|output| output.status.success())
+    }
+
+    /// Spawns an interactive login zsh with an isolated environment.
+    ///
+    /// Both flags are load-bearing and neither is redundant. `-i` is what
+    /// makes zsh source `.zshrc` at all: a non-interactive login shell reads
+    /// `.zprofile` and `.zlogin` and skips `.zshrc` entirely, so a `-l -c`
+    /// fixture observes none of the config this tranche is about. Measured
+    /// 2026-09-10: `zsh -l -c 'whence -w parse_git_dirty'` prints `none` and
+    /// `zsh -i -c` prints `function`. `-l` is kept because
+    /// `tests/zshrc-node-startup.test.sh:193` spells both, so the fixture
+    /// reproduces the startup path the shell suites measured.
+    ///
+    /// The environment is CLEARED rather than inherited. Without that,
+    /// `DOTFILES_PLATFORM` and `NVM_DIR` arrive from the developer's own
+    /// shell and any assertion of the form "the config produced X" is
+    /// satisfied by the caller instead of by the config. Three shell suites
+    /// already guard against this deliberately, and
+    /// `zshrc-node-startup.test.sh:189` calls `env -i` "load-bearing" in its
+    /// own comment. Only `HOME`, `PATH` and `TERM` pass through: `HOME` is
+    /// where zsh finds the startup files, `PATH` is what the config's own
+    /// resolution assertions are about, and `TERM` keeps an interactive shell
+    /// from complaining about an unknown terminal.
+    ///
+    /// # Panics
+    ///
+    /// Panics when zsh cannot be spawned. Callers guard with [`available`],
+    /// so reaching this means the shell vanished mid-run.
+    fn spawn(home: &Path, script: &str) -> Output {
+        let path = std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".to_string());
+        Command::new("zsh")
+            .args(["-l", "-i", "-c"])
+            .arg(script)
+            .env_clear()
+            .env("HOME", home)
+            .env("PATH", path)
+            .env("TERM", "xterm")
+            .output()
+            .expect("zsh spawns")
+    }
+
+    /// An interactive login shell in the repo itself, so the tracked
+    /// `.zshrc` loads.
+    ///
+    /// # Panics
+    ///
+    /// Panics when zsh cannot be spawned.
+    #[must_use]
+    pub fn run(script: &str) -> Output {
+        spawn(&super::repo::root(), script)
+    }
+
+    /// The same shell with a fixture `$HOME`, so a test can assert that a
+    /// variant is NOT loaded without depending on the machine it runs on.
+    ///
+    /// # Panics
+    ///
+    /// Panics when zsh cannot be spawned.
+    #[must_use]
+    pub fn run_in_home(home: &Path, script: &str) -> Output {
+        spawn(home, script)
+    }
+}

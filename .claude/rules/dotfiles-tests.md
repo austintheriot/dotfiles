@@ -100,6 +100,26 @@ boxes, and re-verify if the banner is old.
 The durable record of intent is the **spec** in `docs/superpowers/specs/`,
 not the plan. A plan is scaffolding for one pass of work.
 
+## Sabotage the measurement, not only the subject
+
+The standard sabotage check is "break the thing this test asserts about and
+confirm it goes red". That is necessary and it is not sufficient, because it
+cannot detect a test whose *measurement* is swamped.
+
+Found 2026-09-10 converting `zshrc-startup-budget`. The test times an
+interactive zsh against a threshold. Run with a tty inherited, bare
+`zsh -f -i` spends about **405ms** on terminal setup, against a real signal of
+about 154ms and a shell-suite baseline of 7ms. So the measurement was almost
+entirely noise, and a threshold deliberately shrunk to 1ms **still passed**.
+Breaking the subject would never have revealed that: the subject was fine.
+
+The fix is `Stdio::null()` on all three streams, stdin especially.
+
+The rule: for any test that compares a measurement to a threshold, sabotage
+the **threshold** as well as the subject. Set it absurdly tight and confirm
+the test fails. If it passes, the measurement is not measuring what the test
+claims, and every future run of that assertion is theatre.
+
 ## Where tests live
 
 Integration tests live in `~/tests/` as `<script-name>.test.sh`. They source

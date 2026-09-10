@@ -226,8 +226,6 @@ write_suite "$sub_suite" 'result=$(assert_equals "inside a substitution" a a)'
 output=$(bash "$sub_suite" 2>&1)
 assert_contains 'a subshell assertion reaches the tally' '1 passed' "$output"
 
-finish
-
 # --- the suite's own output colours by severity --------------------------
 #
 # Same rule as the deps engine: red for a failure, yellow for a skip, green
@@ -261,3 +259,5 @@ piped_assertions=$("$DOTFILES_ROOT/tests/nvim-lua-format.test.sh" 2>&1 || true)
 assert_succeeds 'a piped suite run produced output' test -n "$piped_assertions"
 assert_equals 'piped assertion output carries no ANSI escape' '' \
     "$(printf '%s' "$piped_assertions" | grep -c "$(printf '\033')" | grep -v '^0$' || true)"
+
+finish

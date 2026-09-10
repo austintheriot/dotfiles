@@ -106,11 +106,24 @@ not the plan. A plan is scaffolding for one pass of work.
 then falls off the end of the file exits **0**, and `run-all.sh` records a
 pass.
 
-Found 2026-09-10 converting `nvim-lua-format.test.sh`, which had no `finish`
-call at all: its last statement was an assertion inside an `if`. An
-unformatted Lua file made it print `FAIL:` and exit 0, so the stylua gate had
-been open since the suite was written. The Rust port exits 101 on the same
-sabotage.
+**Two instances found 2026-09-10, in one day, which makes it a pattern
+rather than an accident.**
+
+`nvim-lua-format.test.sh` had no `finish` call at all: its last statement was
+an assertion inside an `if`. An unformatted Lua file made it print `FAIL:`
+and exit 0, so the stylua gate had been open since the suite was written. The
+Rust port exits 101 on the same sabotage.
+
+`deps-manifest.test.sh` was worse, because it looked correct. It **did** call
+`finish`, and then carried four more assertions below it: the whole
+piped-output block, checking that no ANSI escape reaches a pipe, that the
+summary line stays greppable, and that a present row stays greppable.
+Measured before deletion: sabotaging the first of them printed
+`FAIL: the piped run produced output (exited 1)` and the suite **exited 0**.
+
+A reviewer scanning for "does this file call `finish`" would have passed
+that file. The check is not whether `finish` is called but whether it is
+**last**.
 
 Two related shapes found the same day, both in suites that looked fine:
 

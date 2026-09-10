@@ -92,18 +92,17 @@ FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe6
 #
 # ca-certificates is not for the suite itself but for any git operation that
 # reaches a remote; without it those fail with an opaque TLS error.
-# python3-yaml because rust-gate.test.sh and workflow-shell-quoting.test.sh
-# parse workflow YAML with it. deps-harness.test.sh used to be the reason and
-# is now Rust, so the two named above are what keeps the package.
-# rather than grepping the raw text, so a reformat cannot produce a false
-# failure.
+#
+# python3-yaml is deliberately absent. It was here so rust-gate.test.sh and
+# workflow-shell-quoting.test.sh could parse workflow YAML through python,
+# and both are now Rust and parse it with yaml_serde, as deps-harness did
+# before them. Nothing in the image imports the module any more.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         tmux \
         zsh \
         git \
         python3 \
-        python3-yaml \
         dash \
         fzf \
         ripgrep \

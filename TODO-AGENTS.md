@@ -210,20 +210,47 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
     - `origin/mac` and `origin/linux` are deliberately left in place, so
       this is reversible while they exist. Deleting them makes it not.
 
-- Should GitHub secret scanning push protection be enabled?
-  Free for public repos. It would be a second, higher-quality net for
-  layer 1 of the leak guard (the credential-shape rules), covering every
-  prefix hardcoded at `tests/leak-check.sh:152` plus many more, with fewer
-  false positives. Verified that no secret scanner (gitleaks, trufflehog)
-  is installed, configured, or listed in deps.conf, so there is no
-  half-installed path to lean on.
-  It does NOT replace layer 2: the project term rules read patterns from
-  outside the repo precisely so the terms are not published, and no hosted
-  scanner can do that. It also fires at the remote, not at pre-commit, so
-  it does not serve the "a leak should never even land in a local commit"
-  goal stated at `tests/pre-commit:11-12`.
-  Check current state with:
-    gh api repos/austintheriot/dotfiles --jq '.security_and_analysis'
+- DECIDED 2026-09-10, enable both. Not yet done: it needs an account this
+  machine is not authenticated as. GitHub secret scanning and push
+  protection are both free on this public repo, and both were verified OFF
+  (the `security_and_analysis` field is absent from the API response, and
+  `/secret-scanning/alerts` returns 404 rather than 403).
+  What to do, two toggles at
+  https://github.com/austintheriot/dotfiles/settings/security_analysis:
+  Secret scanning to Enabled, Push protection to Enabled.
+  Why it could not be done from the CLI: `gh` here is authenticated as a
+  work account with `admin: false, push: true` on this repo, and changing
+  `security_and_analysis` needs admin. The PATCH returns 404, which is
+  GitHub masking a 403. Pushes are unaffected. Anything needing admin, or
+  any `gh` command that creates content here, will hit the same wall or
+  attribute to the wrong account.
+  What each one buys, kept distinct because the original entry conflated
+  them:
+    - Secret scanning is retroactive detection. It scans the EXISTING
+      history, which the local guard has never done: `tests/leak-check.sh`
+      has only ever seen content that passed through it since it was
+      installed. This is the more valuable half.
+    - Push protection is a pre-receive block on new pushes. It fires at the
+      remote, so it does NOT serve the "a leak should never even land in a
+      local commit" goal at `tests/pre-commit:11-12`. That goal stays the
+      local guard's job.
+  What it does NOT replace, so nothing gets removed when it is on:
+    - Layer 1, the credential-shape rules at `tests/leak-check.sh:269`
+      (eight patterns: `ghp_`, `gho_`, `github_pat_`, `xox[baprs]-`, `AKIA`,
+      `sk-`, `BEGIN PRIVATE KEY`, `_authToken=`). GitHub's ruleset is
+      broader and has fewer false positives, but it is a third net at the
+      remote, not a substitute for the pre-commit one.
+    - Layer 2, the project-term rules, which read patterns from an untracked
+      file OUTSIDE the repo precisely so the terms are never published. No
+      hosted scanner can do this, by construction.
+  Deliberately untested. No suite assertion can check a remote setting: the
+  suite runs in Docker with no credentials and no network expectations. The
+  verification is a `gh api` read-back once it is on, and the entry stays
+  here until that read-back is done.
+  One operational note: a push protection block is bypassable through a web
+  prompt. Bypassing it in this repo is never the right move, because layer 2
+  means a real finding here can be a published project term rather than a
+  credential.
 
 - Are our git hooks currently configured to run the leak check on commit and then the test suite on push? If not, they should.
   ANSWERED 2026-09-05, read from tests/pre-commit and tests/pre-push. Yes,

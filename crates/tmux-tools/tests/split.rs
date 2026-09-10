@@ -6,27 +6,11 @@
 //! arrangement cases use the `TMUX_TOOLS_SOCKET` seam, the same throwaway
 //! server `close_and_worktree_config.rs` uses.
 
+mod support;
+
 use std::process::Command;
 
-fn tmux(socket_dir: &std::path::Path, socket: &str, arguments: &[&str]) -> std::process::Output {
-    Command::new("tmux")
-        // Relocates the socket into the test\'s own directory, which Drop
-        // removes. tmux 3.4 does not unlink it on kill-server.
-        .env("TMUX_TMPDIR", socket_dir)
-        .args(["-L", socket])
-        .args(arguments)
-        .output()
-        .expect("tmux runs")
-}
-
-/// Where tmux puts a socket when nothing relocates it, which is where every
-/// test socket this file ever created stayed: tmux 3.4 does not unlink the
-/// file on `kill-server`, so the shared directory held 1435 dead sockets.
-fn shared_socket_path(socket: &str) -> std::path::PathBuf {
-    let uid = Command::new("id").arg("-u").output().expect("id -u runs");
-    let uid = String::from_utf8(uid.stdout).expect("utf-8").trim().to_owned();
-    std::path::PathBuf::from(format!("/tmp/tmux-{uid}/{socket}"))
-}
+use support::Server;
 
 /// An unrecognized layout exits 3 and prints no usage text.
 ///
@@ -75,11 +59,10 @@ fn no_argument_is_a_usage_error() {
 /// that exited 3 for every name would pass that test.
 #[test]
 fn a_recognized_layout_exits_zero_and_splits() {
-    let socket = format!("tmux-tools-test-split-known-{}", std::process::id());
-    let socket_dir = tempfile::Builder::new().prefix("tt-").tempdir_in("/tmp").expect("a socket dir");
-    tmux(socket_dir.path(), &socket, &["new-session", "-d", "-s", "probe"]);
+    let server = Server::new("split-known");
+    server.tmux(&["new-session", "-d", "-s", "probe"]);
 
-    let before = tmux(socket_dir.path(), &socket, &["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
+    let before = server.tmux(&["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
     let panes_before = String::from_utf8_lossy(&before.stdout).lines().count();
     assert_eq!(panes_before, 1, "the control must start with one pane");
 
@@ -88,8 +71,8 @@ fn a_recognized_layout_exits_zero_and_splits() {
     let binary = env!("CARGO_BIN_EXE_tmux-tools");
     let run = Command::new(binary)
         .args(["split", "terms"])
-        .env("TMUX_TOOLS_SOCKET", &socket)
-        .env("TMUX_TMPDIR", socket_dir.path())
+        .env("TMUX_TOOLS_SOCKET", server.socket())
+        .env("TMUX_TMPDIR", server.socket_dir())
         .env("TMUX_PANE", &pane)
         .output()
         .expect("the binary runs");
@@ -101,15 +84,11 @@ fn a_recognized_layout_exits_zero_and_splits() {
         String::from_utf8_lossy(&run.stderr)
     );
 
-    let after = tmux(socket_dir.path(), &socket, &["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
+    let after = server.tmux(&["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
     let panes_after = String::from_utf8_lossy(&after.stdout).lines().count();
     assert_eq!(panes_after, 2, "terms with the default count makes two panes");
 
-    tmux(socket_dir.path(), &socket, &["kill-server"]);
-    assert!(
-        !shared_socket_path(&socket).exists(),
-        "the test left its socket file in the shared tmux directory: {socket}"
-    );
+    server.shutdown();
 }
 
 /// An unrecognized layout leaves the window's pane count untouched.
@@ -119,15 +98,10 @@ fn a_recognized_layout_exits_zero_and_splits() {
 /// shape by hand; this pins the same property in the suite.
 #[test]
 fn an_unrecognized_layout_splits_nothing() {
-    let socket = format!("tmux-tools-test-split-unknown-{}", std::process::id());
-    let socket_dir = tempfile::Builder::new().prefix("tt-").tempdir_in("/tmp").expect("a socket dir");
-    tmux(socket_dir.path(), &socket, &["new-session", "-d", "-s", "my-feature-branch"]);
+    let server = Server::new("split-unknown");
+    server.tmux(&["new-session", "-d", "-s", "my-feature-branch"]);
 
-    let before = tmux(
-        socket_dir.path(),
-        &socket,
-        &["list-panes", "-t", "my-feature-branch:1", "-F", "#{pane_id}"],
-    );
+    let before = server.tmux(&["list-panes", "-t", "my-feature-branch:1", "-F", "#{pane_id}"]);
     let before_output = String::from_utf8_lossy(&before.stdout).into_owned();
     assert_eq!(
         before_output.lines().count(),
@@ -139,18 +113,14 @@ fn an_unrecognized_layout_splits_nothing() {
     let binary = env!("CARGO_BIN_EXE_tmux-tools");
     let run = Command::new(binary)
         .args(["split", "my-feature-branch"])
-        .env("TMUX_TOOLS_SOCKET", &socket)
-        .env("TMUX_TMPDIR", socket_dir.path())
+        .env("TMUX_TOOLS_SOCKET", server.socket())
+        .env("TMUX_TMPDIR", server.socket_dir())
         .env("TMUX_PANE", &pane)
         .output()
         .expect("the binary runs");
     assert_eq!(run.status.code(), Some(3), "an unrecognized layout is exit 3");
 
-    let after = tmux(
-        socket_dir.path(),
-        &socket,
-        &["list-panes", "-t", "my-feature-branch:1", "-F", "#{pane_id}"],
-    );
+    let after = server.tmux(&["list-panes", "-t", "my-feature-branch:1", "-F", "#{pane_id}"]);
     let after_output = String::from_utf8_lossy(&after.stdout);
     assert_eq!(
         after_output.lines().count(),
@@ -158,29 +128,24 @@ fn an_unrecognized_layout_splits_nothing() {
         "a session name that is not a layout must leave one pane, got {after_output:?}"
     );
 
-    tmux(socket_dir.path(), &socket, &["kill-server"]);
-    assert!(
-        !shared_socket_path(&socket).exists(),
-        "the test left its socket file in the shared tmux directory: {socket}"
-    );
+    server.shutdown();
 }
 
 /// The editor layout leaves focus on the editor pane, as
 /// `create_editor_with_terminals`'s trailing `tmux select-pane -L` did.
 #[test]
 fn the_editor_layout_focuses_the_editor_pane() {
-    let socket = format!("tmux-tools-test-split-editor-{}", std::process::id());
-    let socket_dir = tempfile::Builder::new().prefix("tt-").tempdir_in("/tmp").expect("a socket dir");
-    tmux(socket_dir.path(), &socket, &["new-session", "-d", "-s", "probe"]);
+    let server = Server::new("split-editor");
+    server.tmux(&["new-session", "-d", "-s", "probe"]);
 
-    let before = tmux(socket_dir.path(), &socket, &["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
+    let before = server.tmux(&["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
     let editor_pane = String::from_utf8_lossy(&before.stdout).trim().to_string();
 
     let binary = env!("CARGO_BIN_EXE_tmux-tools");
     let run = Command::new(binary)
         .args(["split", "|"])
-        .env("TMUX_TOOLS_SOCKET", &socket)
-        .env("TMUX_TMPDIR", socket_dir.path())
+        .env("TMUX_TOOLS_SOCKET", server.socket())
+        .env("TMUX_TMPDIR", server.socket_dir())
         .env("TMUX_PANE", &editor_pane)
         .output()
         .expect("the binary runs");
@@ -191,27 +156,19 @@ fn the_editor_layout_focuses_the_editor_pane() {
         String::from_utf8_lossy(&run.stderr)
     );
 
-    let after = tmux(socket_dir.path(), &socket, &["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
+    let after = server.tmux(&["list-panes", "-t", "probe:1", "-F", "#{pane_id}"]);
     assert_eq!(
         String::from_utf8_lossy(&after.stdout).lines().count(),
         3,
         "one editor plus two terminals"
     );
 
-    let active = tmux(
-        socket_dir.path(),
-        &socket,
-        &["display-message", "-p", "-t", "probe:1", "#{pane_id}"],
-    );
+    let active = server.tmux(&["display-message", "-p", "-t", "probe:1", "#{pane_id}"]);
     assert_eq!(
         String::from_utf8_lossy(&active.stdout).trim(),
         editor_pane,
         "focus returns to the original left-hand pane"
     );
 
-    tmux(socket_dir.path(), &socket, &["kill-server"]);
-    assert!(
-        !shared_socket_path(&socket).exists(),
-        "the test left its socket file in the shared tmux directory: {socket}"
-    );
+    server.shutdown();
 }

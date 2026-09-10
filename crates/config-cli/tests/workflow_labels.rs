@@ -19,82 +19,11 @@
 //! reads jobs by key (`jobs['macos']`), so the keys are an interface. This
 //! file checks the display names layered on top of them.
 
-use std::path::{Path, PathBuf};
-
-/// The checkout whose workflows are under test.
-///
-/// The repository root, at run time.
-///
-/// `DOTFILES_ROOT` first, then `HOME`, matching `nvim_lua_units.rs` and
-/// `nvim_config_load.rs`. The manifest walk-up is the last resort and exists
-/// for the `rust-checks.sh` snapshot, where neither variable points at the
-/// archived tree.
-///
-/// Not `CARGO_MANIFEST_DIR` alone: that is a compile-time constant, so a
-/// binary built in one tree and run against another reads the wrong root,
-/// which is how these tests passed on the host and failed under the gate.
-fn repo_root() -> PathBuf {
-    for variable in ["DOTFILES_ROOT", "HOME"] {
-        if let Some(value) = std::env::var_os(variable) {
-            let candidate = PathBuf::from(value);
-            if candidate.join("crates/Cargo.toml").is_file() {
-                return candidate;
-            }
-        }
-    }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("the repo root is two levels above config-cli")
-        .to_path_buf()
-}
-
-/// Every workflow file, both extensions. The shell suite reached for an
-/// inline Python parser at line 50 to do exactly this.
-fn workflow_files(root: &Path) -> Vec<PathBuf> {
-    let directory = root.join(".github/workflows");
-    let Ok(entries) = std::fs::read_dir(&directory) else {
-        return Vec::new();
-    };
-    let mut found: Vec<PathBuf> = entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            matches!(
-                path.extension().and_then(|extension| extension.to_str()),
-                Some("yml" | "yaml")
-            )
-        })
-        .collect();
-    found.sort();
-    found
-}
-
-fn parse_workflow(text: &str) -> yaml_serde::Value {
-    yaml_serde::from_str(text).expect("a workflow parses as YAML")
-}
-
-fn read_workflow(path: &Path) -> yaml_serde::Value {
-    let text = std::fs::read_to_string(path).expect("a workflow file is readable");
-    parse_workflow(&text)
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .expect("a workflow path has a UTF-8 file name")
-        .to_string()
-}
-
-/// The jobs mapping of one workflow, as (key, job) pairs.
-fn jobs_of(workflow: &yaml_serde::Value) -> Vec<(String, &yaml_serde::Value)> {
-    let Some(jobs) = workflow.get("jobs").and_then(yaml_serde::Value::as_mapping) else {
-        return Vec::new();
-    };
-    jobs.iter()
-        .filter_map(|(key, job)| key.as_str().map(|key| (key.to_string(), job)))
-        .collect()
-}
+use dotfiles_test_support::repo::{
+    file_name, jobs_of, read_workflow, root as repo_root, run_scripts, triggers_of,
+    workflow_files,
+};
+use std::path::PathBuf;
 
 /// The parsed workflow whose job is to run the suite.
 fn suite_workflow_path() -> PathBuf {
@@ -120,20 +49,6 @@ fn matrix_runners(workflow: &yaml_serde::Value) -> Vec<String> {
     found
 }
 
-/// Every `run:` script in the suite workflow's steps, concatenated.
-///
-/// Scoped to the steps rather than the whole file, so a mention of a script
-/// inside a comment cannot satisfy an assertion that the workflow runs it.
-fn suite_run_scripts(workflow: &yaml_serde::Value) -> String {
-    jobs_of(workflow)
-        .iter()
-        .filter_map(|(_, job)| job.get("steps")?.as_sequence())
-        .flatten()
-        .filter_map(|step| step.get("run")?.as_str())
-        .collect::<Vec<&str>>()
-        .join("\n")
-}
-
 /// The directory that holds the workflows exists at all. Without it every
 /// other assertion here is about an empty listing.
 #[test]
@@ -151,7 +66,7 @@ fn the_workflow_directory_exists() {
 /// wrong" rather than "nothing read".
 #[test]
 fn at_least_one_workflow_is_present() {
-    let found = workflow_files(&repo_root());
+    let found = workflow_files();
     assert!(
         !found.is_empty(),
         "no .yml or .yaml files under .github/workflows, so every assertion \
@@ -163,7 +78,7 @@ fn at_least_one_workflow_is_present() {
 /// an unnamed workflow reads as its bare filename in the Actions sidebar.
 #[test]
 fn every_workflow_has_a_name() {
-    let found = workflow_files(&repo_root());
+    let found = workflow_files();
     assert!(!found.is_empty(), "positive control: workflows were found");
 
     let unnamed: Vec<String> = found
@@ -187,7 +102,7 @@ fn every_workflow_has_a_name() {
 /// the "branch-drift.yml" heading in the Actions sidebar.
 #[test]
 fn no_workflow_name_merely_restates_its_filename() {
-    let found = workflow_files(&repo_root());
+    let found = workflow_files();
     assert!(!found.is_empty(), "positive control: workflows were found");
 
     let terse: Vec<String> = found
@@ -217,7 +132,7 @@ fn no_workflow_name_merely_restates_its_filename() {
 /// keys are terse because tests/deps-harness.test.sh reads jobs by key.
 #[test]
 fn every_job_has_a_name() {
-    let found = workflow_files(&repo_root());
+    let found = workflow_files();
     assert!(!found.is_empty(), "positive control: workflows were found");
 
     let mut jobs_seen = 0_usize;
@@ -261,13 +176,7 @@ fn a_workflow_runs_the_test_suite() {
 #[test]
 fn the_suite_workflow_runs_on_push() {
     let workflow = read_workflow(&suite_workflow_path());
-    // `on` is the YAML 1.1 boolean `true`, which is why this reads the key
-    // both ways: yaml_serde resolves the bare word before the mapping is
-    // ours to inspect.
-    let triggers = workflow
-        .get("on")
-        .or_else(|| workflow.get(yaml_serde::Value::Bool(true)))
-        .expect("the suite workflow declares triggers");
+    let triggers = triggers_of(&workflow).expect("the suite workflow declares triggers");
     assert!(
         triggers.get("push").is_some(),
         "the suite workflow declares no push trigger; its triggers are \
@@ -279,7 +188,7 @@ fn the_suite_workflow_runs_on_push() {
 #[test]
 fn the_suite_workflow_runs_run_all_sh() {
     let workflow = read_workflow(&suite_workflow_path());
-    let scripts = suite_run_scripts(&workflow);
+    let scripts = run_scripts(&workflow);
     assert!(
         !scripts.is_empty(),
         "positive control: the suite workflow has no run: scripts at all"

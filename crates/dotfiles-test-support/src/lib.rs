@@ -43,3 +43,180 @@ pub fn skip_to(log: &Path, reason: &str) {
         let _ = handle.write_all(line.as_bytes());
     }
 }
+
+/// The checkout under test, and the tracked files the converted suites read.
+///
+/// Promoted here on its second caller: `workflow_labels.rs` was the first and
+/// the next YAML conversion is the second, so the helpers move rather than
+/// being copied a third time.
+///
+/// Every helper here panics on a malformed checkout rather than returning an
+/// error, so the crate root's `deny(clippy::expect_used)` is lifted for this
+/// module alone. A caller is a test: a missing workflow directory or an
+/// unparseable workflow has no recovery, and an `expect` message names the
+/// broken file where a `?` would surface as an opaque harness error. Each
+/// panic is documented in its own `# Panics` section.
+#[allow(
+    clippy::expect_used,
+    reason = "a broken checkout is a test failure, and the message names it"
+)]
+pub mod repo {
+    use std::path::{Path, PathBuf};
+
+    /// The repository root, at run time.
+    ///
+    /// `DOTFILES_ROOT` first, then `HOME`, accepting either only when
+    /// `crates/Cargo.toml` is under it. The manifest walk-up is the last
+    /// resort and exists for the `rust-checks.sh` snapshot, where neither
+    /// variable points at the archived tree.
+    ///
+    /// Not `CARGO_MANIFEST_DIR` alone: that is a compile-time constant, so a
+    /// binary built in one tree and run against another reads the wrong root,
+    /// which is how these tests passed on the host and failed under the gate.
+    ///
+    /// # Panics
+    ///
+    /// Panics when no candidate holds `crates/Cargo.toml` and the manifest
+    /// directory has no grandparent, which means the crate was moved out of
+    /// the workspace.
+    #[must_use]
+    pub fn root() -> PathBuf {
+        for variable in ["DOTFILES_ROOT", "HOME"] {
+            if let Some(value) = std::env::var_os(variable) {
+                let candidate = PathBuf::from(value);
+                if candidate.join("crates/Cargo.toml").is_file() {
+                    return candidate;
+                }
+            }
+        }
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("the repo root is two levels above this crate")
+            .to_path_buf()
+    }
+
+    /// Every workflow file in this checkout, both extensions, sorted.
+    #[must_use]
+    pub fn workflow_files() -> Vec<PathBuf> {
+        workflow_files_in(&root())
+    }
+
+    /// Every workflow file under an explicit root, both extensions, sorted.
+    ///
+    /// Takes the root so the helper is testable against a temporary tree
+    /// rather than only against the checkout it happens to run in.
+    #[must_use]
+    pub fn workflow_files_in(root: &Path) -> Vec<PathBuf> {
+        let directory = root.join(".github/workflows");
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            return Vec::new();
+        };
+        let mut found: Vec<PathBuf> = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                matches!(
+                    path.extension().and_then(|extension| extension.to_str()),
+                    Some("yml" | "yaml")
+                )
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// Parses workflow text as YAML.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the text is not YAML. A workflow that does not parse is a
+    /// broken workflow, so there is nothing for a caller to recover from.
+    #[must_use]
+    pub fn parse_workflow(text: &str) -> yaml_serde::Value {
+        yaml_serde::from_str(text).expect("a workflow parses as YAML")
+    }
+
+    /// Reads and parses one workflow file.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the file is unreadable or is not YAML.
+    #[must_use]
+    pub fn read_workflow(path: &Path) -> yaml_serde::Value {
+        let text = std::fs::read_to_string(path).expect("a workflow file is readable");
+        parse_workflow(&text)
+    }
+
+    /// The file name of a path, for use in a failure message.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the path has no UTF-8 file name.
+    #[must_use]
+    pub fn file_name(path: &Path) -> String {
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .expect("a workflow path has a UTF-8 file name")
+            .to_string()
+    }
+
+    /// The jobs mapping of one workflow, as (key, job) pairs in file order.
+    #[must_use]
+    pub fn jobs_of(workflow: &yaml_serde::Value) -> Vec<(String, &yaml_serde::Value)> {
+        let Some(jobs) = workflow.get("jobs").and_then(yaml_serde::Value::as_mapping) else {
+            return Vec::new();
+        };
+        jobs.iter()
+            .filter_map(|(key, job)| key.as_str().map(|key| (key.to_string(), job)))
+            .collect()
+    }
+
+    /// The trigger mapping of one workflow.
+    ///
+    /// Reads the key both ways: `on` is the YAML 1.1 boolean `true`, which
+    /// `yaml_serde` resolves before the mapping is ours to inspect.
+    #[must_use]
+    pub fn triggers_of(workflow: &yaml_serde::Value) -> Option<&yaml_serde::Value> {
+        workflow
+            .get("on")
+            .or_else(|| workflow.get(yaml_serde::Value::Bool(true)))
+    }
+
+    /// Every `run:` script in a workflow's steps, concatenated.
+    ///
+    /// Scoped to the steps rather than the whole file, so a mention of a
+    /// script inside a comment cannot satisfy an assertion that the workflow
+    /// runs it.
+    #[must_use]
+    pub fn run_scripts(workflow: &yaml_serde::Value) -> String {
+        jobs_of(workflow)
+            .iter()
+            .filter_map(|(_, job)| job.get("steps")?.as_sequence())
+            .flatten()
+            .filter_map(|step| step.get("run")?.as_str())
+            .collect::<Vec<&str>>()
+            .join("\n")
+    }
+
+    /// Every `uses:` value in a workflow's steps, with the job key that owns
+    /// it, so a failure message can name where a pin lives.
+    #[must_use]
+    pub fn step_uses(workflow: &yaml_serde::Value) -> Vec<(String, String)> {
+        jobs_of(workflow)
+            .iter()
+            .flat_map(|(key, job)| {
+                let steps = job
+                    .get("steps")
+                    .and_then(yaml_serde::Value::as_sequence)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default();
+                steps
+                    .iter()
+                    .filter_map(|step| step.get("uses")?.as_str())
+                    .map(|uses| (key.clone(), uses.trim().to_string()))
+                    .collect::<Vec<(String, String)>>()
+            })
+            .collect()
+    }
+}

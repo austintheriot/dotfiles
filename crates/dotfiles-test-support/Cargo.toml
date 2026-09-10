@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Reads the workflows as YAML instead of by regex. The shell suites these
+# helpers replace shelled out to an inline Python parser for the same job.
+# Not serde_yaml: that crate is deprecated.
+yaml_serde = "0.10"
 
 [dev-dependencies]
 tempfile = "3.27"

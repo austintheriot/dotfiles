@@ -128,9 +128,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   content rules to see. Confirmed identical at commit 76608b6, so this
   predates the range-mode work. The newline case is a deliberate-evasion
   shape worth closing on a public-repo gate; record only, no fix yet.
-- `tests/tmux-update-window-names.test.sh` fails intermittently (1 of 33
-  assertions) on a live tmux server and passes on rerun; find the timing
-  dependency and make the assertion deterministic.
 - Dropped after measurement, recorded so it is not retried: `compinit -C`.
   An isolated `zsh -f` test showed compinit at 1.17s, but that was an
   fpath artefact. In the real startup trace compinit is ~60ms and did not

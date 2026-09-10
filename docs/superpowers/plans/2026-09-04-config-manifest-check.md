@@ -1,5 +1,31 @@
 # config-manifest `check` Implementation Plan (Plan B1)
 
+> **STATUS 2026-09-10: OBSOLETE. Do not execute.**
+> Verified against the tree.
+>
+> The `check` subcommand, its manifest, tree and check modules, and the
+> entire branch-drift subsystem it replaced were all deleted on 2026-09-06
+> (`25207c2a`). Only the build-lifecycle scaffolding survives, retargeted at
+> a multi-crate workspace and the `config-cli` binary.
+>
+> Deleted: `crates/config-manifest/src/check.rs` (366 lines),
+> `manifest.rs` (442), `tree.rs` (209), and `main.rs` entirely. `path.rs`
+> keeps only `TreeId`; `RelPath`, `BlobId` and `CommitId` exist nowhere in
+> `crates/`. `tests/check-branch-drift.sh`,
+> `.github/workflows/branch-drift.yml` and `.sync-manifest` are all gone.
+>
+> The crate is library-only now, and says so at
+> `crates/config-manifest/src/lib.rs:16-24`: "The binary that used to own
+> the `doctor` and `verify-stamps` subcommands is gone." So this plan's
+> lifecycle assertion, `config-manifest 0.1.0`, cannot pass, and
+> `tests/config-manifest-lifecycle.test.sh:70-72` records why.
+>
+> What survives in mutated form: `config-stamp` (now per-crate over a
+> workspace, `<crate-tree>:<lock-blob>:<workspace-blob>`, not this plan's
+> single crate-subtree id), `config-build`, and the digest-pinned Rust
+> builder stage at `tests/docker/Dockerfile:19`.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Create the `crates/config-manifest` Rust crate with a `check` subcommand that replaces tests/check-branch-drift.sh byte-for-byte in output, prove the build lifecycle (host stamp, Docker builder stage, CI) before any logic exists, and switch every consumer to the binary.

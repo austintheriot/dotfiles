@@ -1,5 +1,24 @@
 # Blockers and Build Infrastructure Implementation Plan
 
+> **STATUS 2026-09-10: SHIPPED, and superseded by
+> `2026-09-06-blockers-and-workspace-foundation.md`. Do not execute.**
+> Verified against the tree.
+>
+> All eight tasks are in the tree and green: the `SKIP_LEAK_CHECK`
+> truthiness fix and `exit 3` (`tests/leak-check.sh:65-72`, `:306`),
+> `assert_succeeds` capturing `status=$?` before `record_outcome`
+> (`tests/lib.sh:260-274`), the skip-reporting chain (`:291`, `:308`,
+> `:328`, `:348`), the workspace and toolchain pin (`channel = "1.94.0"`),
+> `config-stamp --ref` (`:30-54`), `doctor::diagnose` and `render`, and
+> `parse_git_dirty` using `git status --porcelain -uno --no-renames` with
+> the 299ms measurement recorded at `.zshrc:233`.
+>
+> Task 9 (tmux spawning git per window) was dropped by the successor plan
+> and later landed by a different route: `tmux-update-window-names.sh` is a
+> 16-line `exec tmux-tools name-windows`, backed by
+> `crates/tmux-core/src/naming.rs`.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the four verified fail-open blockers in the leak guard and test

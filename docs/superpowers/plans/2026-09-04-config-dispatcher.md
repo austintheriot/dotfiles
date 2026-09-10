@@ -1,5 +1,31 @@
 # `config` Dispatcher and Utilities Implementation Plan (Plan C)
 
+> **STATUS 2026-09-10: PARTIALLY IMPLEMENTED, and partly superseded.**
+> Verified against the tree.
+>
+> The dispatcher and five of its seven utilities shipped, but `config check`
+> and `config sync` were deleted in the 2026-09-06 branch collapse
+> (`df34d230`), and the remaining wrappers are now thin `exec config-cli`
+> shims rather than the shell implementations this plan specifies.
+>
+> - `.scripts/config/config` exists and matches the plan's architecture,
+>   plus a `--` git escape hatch and `--help` handling the plan did not
+>   specify.
+> - `config-test`, `config-install`, `config-reload` exist as
+>   `exec config-cli <sub>` shims. The plan's `config-test` specified inline
+>   flag parsing and a `cksum` fingerprint `--watch` loop; the real file is
+>   33 lines ending in `exec config-cli test "$@"`.
+> - `.scripts/config/config-check` and `config-sync` do not exist. Task 5
+>   (sync to linux, `config check mac linux`, dual push) describes a
+>   two-branch model that is gone.
+> - `tests/config.test.sh` exists with 80 assertions and passes.
+>   `EXPECTED_SUBCOMMANDS` now names nine subcommands the plan never
+>   mentioned, and neither `check` nor `sync`.
+>
+> Do not execute. The shipped parts are shipped; the rest describes a
+> repository shape that no longer exists.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the per-branch `config` git alias with a tracked POSIX `config` dispatcher that runs `config-<sub>` siblings when present and passes everything else through to the bare-repo git, and ship the utilities behind it: `install-hooks`, `check`, `sync`, `test`, `install`, `reload`.

@@ -1,5 +1,27 @@
 # `config-cli` Adapter Implementation Plan
 
+> **STATUS 2026-09-10: SHIPPED. Do not execute.** Verified against the tree.
+>
+> All eight tasks landed, and every file in the plan's File Structure table
+> exists: `config-cli/src/deps/{mod,catalog,selection,elevation,gather,installer}.rs`.
+>
+> `config-cli` absorbed `config-manifest`'s subcommands and the separate
+> binary is gone: `config-manifest/src/` has no `main.rs` and its Cargo.toml
+> declares no `[[bin]]`, while `config-cli/src/main.rs:57-67` registers
+> `Doctor` and `VerifyStamps`. The fallout landed too, at `pre-push:176`
+> and `:204`, `tests/docker/Dockerfile:122`, and
+> `config-manifest-lifecycle.test.sh:71`.
+>
+> `.scripts/deps/check-deps.sh` is deleted along with its whole directory.
+> Six residual mentions remain, all doc comments naming "the retired
+> check-deps shell engine".
+>
+> The sharpest constraint held: `DEBIAN_FRONTEND=noninteractive` is built
+> into the child environment at `installer.rs:199`, asserted at
+> `:1901-1926`, and no `ENV DEBIAN_FRONTEND` line survives in any
+> Dockerfile.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace `check-deps.sh` with a `config-cli` binary that drives the

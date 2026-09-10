@@ -1,5 +1,35 @@
 # `config-*` Subcommand Ports Implementation Plan
 
+> **STATUS 2026-09-10: SHIPPED, all four tasks. Do not execute.**
+> Verified against the tree.
+>
+> The correction header below (the one titled "the scripts become SHIMS,
+> not deletions") is accurate, and its instruction was followed for all
+> four scripts. Each is a shim whose body is one `exec`, with the
+> correction's rationale in its own header:
+>
+> | Script | Lines | Body |
+> |---|---|---|
+> | `config-reload` | 19 | `exec config-cli reload "$@"` |
+> | `config-test` | 32 | `exec config-cli test "$@"` |
+> | `config-help` | 62 | exports `CONFIG_SUBCOMMAND_DIR`, then execs `config-cli help` |
+> | `config-doctor` | 33 | `exec config-cli doctor "$@"` |
+>
+> `reload.rs`, `test_runner.rs`, `help.rs`, `doctor.rs` and
+> `verify_stamps.rs` all exist, with 22 passing tests across
+> `reload_behavior.rs`, `test_runner_behavior.rs`, `help_listing.rs` and
+> `doctor_and_stamps.rs`. The golden help fixture still matches
+> byte-for-byte.
+>
+> **Two things this document still gets wrong.** Task 4's body says to
+> delete `.scripts/config/config-doctor`; it was converted to a shim
+> instead, which is the correction header applied consistently, because
+> deleting it would make `config doctor` mean `git doctor` permanently.
+> And every script-count instruction (38 to 37 to 36 to 35 to 34) is stale:
+> `tests/scripts-dir-name.test.sh:213` pins **24**, and `.scripts/config/`
+> holds 14 files. The count moved for reasons outside this plan.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move the three `config-*` scripts that can move into `config-cli`

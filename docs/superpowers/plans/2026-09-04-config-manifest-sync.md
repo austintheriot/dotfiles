@@ -1,5 +1,26 @@
 # config-manifest `sync` Implementation Plan (Plan B2)
 
+> **STATUS 2026-09-10: SHIPPED, THEN DELIBERATELY REMOVED. Do not execute.**
+> Verified against the tree.
+>
+> This plan is not abandoned work. It was built, shipped, and used for
+> roughly 40 real syncs, then retired on 2026-09-06 along with the
+> two-branch model that was its only purpose. That distinction matters: the
+> code is recoverable from `dd5b13f5` (the pure sync planner) and
+> `c7b0209e` (`config-manifest sync`) if the two-branch model ever returns.
+>
+> Deleted in `25207c2a`: `crates/config-manifest/src/plan.rs` (405 lines).
+> `crates/config-manifest/tests/` does not exist. `lib.rs` has no
+> `pub mod plan;`, and `git.rs` retains only `discover`, `output_text` and
+> `workspace_stamps`, so every function this plan required (`rev_parse`,
+> `current_branch`, `has_remote`, `fetch`, `dirty_paths`, `commit_plan`) is
+> gone.
+>
+> The 35 "Sync shared paths from mac" commits `df34d230` counted are the
+> record of this tool working. It was removed because the gate it served
+> cost more than it caught, not because it failed.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `config-manifest sync [--dry-run] [--to <branch>]`: make the other branch's shared paths match the current branch by committing directly onto it through git plumbing, never touching `$HOME` or the working tree, never pushing.

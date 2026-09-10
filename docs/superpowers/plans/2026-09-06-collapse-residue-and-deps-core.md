@@ -1,5 +1,37 @@
 # Branch-Collapse Residue and the `deps-core` Port Implementation Plan
 
+> **STATUS 2026-09-10: SHIPPED. Do not execute, and do not read this
+> document as a description of the tree.** Verified against the tree.
+>
+> All twelve tasks landed. The collapse residue is gone (`pre-push` has no
+> `pushing_synced_branch`, `setup.sh:331` defaults the branch to `main`,
+> the porting doc and proptest regressions are deleted), `--describe`
+> shipped (`usage.sh:33`, `:80`; `config-cli/src/help.rs:201-207` shells it
+> out per sibling and the golden fixture matches byte-for-byte), and
+> `deps-core` shipped with 99 passing unit tests, private constructors
+> guarded by five compile-fail doctests, the three-state `Observation`, and
+> the closed `Check` enum that removes the `sh -c "$check"` escape hatch.
+>
+> **This plan makes two false claims about itself**, and both produce false
+> negatives when read against the tree:
+>
+> - Its "What this plan does not cover" section says Task 12 (retiring
+>   `check-deps.sh`) did not land. It did. `.scripts/deps/` does not exist
+>   and `check-deps.sh` has no live references outside `docs/`.
+> - Its Verification Note 1 asserts "the manifest is not TOML" and builds a
+>   pipe parser accordingly. The reverse is true: `deps/deps.toml` is real
+>   TOML and the parser shipped as `parse_manifest_toml`
+>   (`deps-core/src/manifest.rs:503`).
+>
+> Several types also shipped under different names or richer shapes:
+> `parse_check` became `parse_check_expression`, the raw
+> `BTreeMap<..., PackageMap>` became `PackageCatalog`,
+> `Installer::describe(&InstallAction)` became `describe(&Step)`,
+> `Verdict::Install(InstallStatus)` became
+> `Install(InstallStatus, CheckStatus)`, and `run_to_fixpoint`'s parameter
+> spread became a `Planning<'inputs>` struct.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the branch-collapse residue that leaves a fresh bootstrap

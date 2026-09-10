@@ -1,5 +1,28 @@
 # `deps-core` Completion Implementation Plan
 
+> **STATUS 2026-09-10: SHIPPED. Do not execute.** Verified against the tree.
+>
+> All seven items landed:
+>
+> 1. The four previously unreachable `InstallAction` variants are all
+>    reachable from the catalog: `GitClone` through
+>    `PackageAvailability::Clone` (`catalog.rs:630`), `NvmInstall` through
+>    `ViaNvm`, `Pip` through `PipDistribution`, `AptSource` through
+>    `AptWithSource`.
+> 2. `crates/deps-core/src/render.rs` exists.
+> 3. `Requirements::validated` exists.
+> 4. `StepOutcome::Declined` exists.
+> 5. `PathRoot::OhMyZshCustom` is deleted. The only surviving mention is a
+>    comment at `catalog.rs:625` explaining why it went.
+>
+> A caution for anyone re-verifying: grepping `crates/` for `OhMyZshCustom`
+> returns a hit, and grepping the catalog for the *action* names
+> (`GitClone`, `NvmInstall`) returns nothing. Both readings are wrong. The
+> hit is the comment recording the deletion, and the catalog names
+> `PackageAvailability` variants rather than `InstallAction` variants, so
+> the mapping above is what to check.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix the seven defects a seven-lens expert review found inside

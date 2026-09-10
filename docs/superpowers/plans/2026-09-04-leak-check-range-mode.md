@@ -1,5 +1,30 @@
 # Leak Check Range Mode Implementation Plan
 
+> **STATUS 2026-09-10: FULLY IMPLEMENTED, and extended past the plan.**
+> Verified against the tree. Do not execute.
+>
+> Range mode, the pre-push scan, and both modes' tests are all in place,
+> with **64 passing assertions against this plan's target of 34**.
+>
+> - `tests/leak-check.sh:34-49` is this plan's `mode`/`range` case block
+>   including the `exit 2` usage errors; `:53-57` its `PUSH BLOCKED` and
+>   `COMMIT BLOCKED` strings; `changed_paths()` at `:133` and
+>   `added_lines()` at `:155` are its two source functions.
+> - `tests/pre-push:102-114` collects one range per ref with the
+>   `$empty_tree..$local_sha` case for a new remote branch, and the leak
+>   scan runs before everything else.
+> - `tests/leak-check.test.sh` (568 lines) carries this plan's three
+>   tranches plus two it never specified: git-quoted paths, and merge
+>   commits.
+>
+> Three things the tree has that this plan did not anticipate: a third exit
+> code (3, "misconfigured", distinct from 2, "could not scan"); range
+> validation before scanning; and a `SKIP_LEAK_CHECK` truthiness fix at
+> `tests/leak-check.sh:63-73`, because the plan's `[ -n "$SKIP_LEAK_CHECK" ]`
+> was true for the string `"0"` and so disabled the guard for anyone who
+> meant the opposite.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give `tests/leak-check.sh` a `--range <a>..<b>` mode that scans every commit in a pushed range, run it from `tests/pre-push` before anything else, and cover both modes with tests.

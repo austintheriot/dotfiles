@@ -1,5 +1,23 @@
 # tmux and zsh Scripts Port Implementation Plan
 
+> **STATUS 2026-09-10: LARGELY IMPLEMENTED.** Verified against the tree.
+>
+> Every crate deliverable exists. `crates/tmux-core/src/` holds `naming.rs`,
+> `branches.rs`, `layout.rs` and `lib.rs`; `crates/tmux-tools/src/` holds
+> `main.rs`, `repo.rs`, `tmux.rs` and `git_branches.rs`. Both crates are
+> workspace members. `.scripts/tmux-update-window-names.sh` is now a 16-line
+> shim that calls `tmux-tools`, which is what this plan's Task 4 specified.
+>
+> Not re-verified task by task: which of the later tasks' individual
+> assertions landed, and whether `.scripts/tmux-split.sh` and
+> `.scripts/zsh-git-widgets.sh` reached the end state sections 3.1 and 3.2
+> of the spec describe. Both scripts still exist at those paths, which the
+> spec expects, since the widget must run in-process.
+>
+> Verify before executing any remaining task. Do not read the open
+> checkboxes as pending work.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move the computation in five shell scripts into a Rust binary,

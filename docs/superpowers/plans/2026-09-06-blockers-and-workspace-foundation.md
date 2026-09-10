@@ -1,5 +1,28 @@
 # Blockers and Workspace Foundation Implementation Plan
 
+> **STATUS 2026-09-10: SHIPPED. Do not execute.** Verified against the tree.
+>
+> Carries forward the eight tasks of
+> `2026-09-06-blockers-and-build-infrastructure.md`, all verified, plus its
+> own three additions:
+>
+> - `dotfiles-path` exists with `lib.rs`, `rel.rs`, `name.rs`, `bounded.rs`.
+>   `CheckRelPath::parse` at `rel.rs:108`, `PathError` at `:16`, 27 unit
+>   tests passing. The crate grew past the plan: `name.rs` and `bounded.rs`
+>   were later additions.
+> - The stamp verdict owner shipped: `config-manifest/src/stamp.rs:70`
+>   `verify`, `:109` `render`, `:35` `StampVerdict`, `:167`
+>   `parse_stamp_line`, with `workspace_stamps` at `git.rs:109`.
+> - The bootstrap toolchain seam shipped in a **stronger shape than
+>   specified**. The plan asked for an optional `BOOTSTRAP_PREBUILT_BIN` in
+>   `bootstrap-curl-entrypoint.sh`. What exists is
+>   `deps/docker/seed-prebuilt.sh`, where the variable is **required**
+>   (`:18`: "REQUIRED, not optional. It defaulted to empty..."), consumed at
+>   seven sites in `deps-check.yml` and gated by
+>   `tests/bootstrap-harness.test.sh:375-413`. The directory also moved from
+>   `.scripts/deps/docker/` to `deps/docker/`.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the four verified fail-open blockers, then lay the Cargo

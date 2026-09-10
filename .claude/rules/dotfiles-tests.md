@@ -75,6 +75,31 @@ triggered from a prompt hook serializes every pane behind cargo's build lock
 pre-push, which refuses a push when any binary is stale for the ref being
 pushed, and `config doctor` is how you ask before then.
 
+## Plan checkboxes are never ticked here, so an open box means nothing
+
+`docs/superpowers/plans/` holds implementation plans whose steps are
+`- [ ]` checkboxes. **Across all 13 plans, 464 boxes are open and 0 are
+ticked**, including in plans whose work demonstrably shipped months ago.
+Nobody in this repo has ever ticked one.
+
+So an open box is not evidence of pending work, and a plan full of them is
+not a backlog. Reading them that way has already caused one wrong
+recommendation: on 2026-09-10 the `rust-gate-and-strict-lints` plan's 36
+open boxes were read as a ready-to-execute task, when every one of them had
+shipped (`tests/rust-checks.sh` runs `cargo test` and
+`cargo clippy -D warnings`, `tests/pre-push` runs them on the host,
+`test-suite.yml` runs clippy, and `crates/Cargo.toml` carries the workspace
+lint policy).
+
+**Before executing any plan in that directory, verify its deliverables
+against the tree.** Read the files it says to create and the functions it
+says to add, and check whether they are already there. Each plan now carries
+a dated status banner recording that verification; trust the banner over the
+boxes, and re-verify if the banner is old.
+
+The durable record of intent is the **spec** in `docs/superpowers/specs/`,
+not the plan. A plan is scaffolding for one pass of work.
+
 ## Where tests live
 
 Integration tests live in `~/tests/` as `<script-name>.test.sh`. They source

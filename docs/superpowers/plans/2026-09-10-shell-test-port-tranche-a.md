@@ -825,6 +825,28 @@ MSG
 
 Converted, in this order, cheapest first: `workflow-action-versions` (`28a54d83`), `readme-badges` (`a6743f02`), `shellcheck` (`10c83f09`).
 
+> **DECIDED 2026-09-10, after the correction above: convert both suites in
+> full.** The owner's call, and the reason is consistency: one suite should
+> not live in two harnesses, even when the split would be along disjoint
+> assertion sets.
+>
+> This overrides the scoped-extraction recommendation above. That
+> recommendation was right that ~117 of the 129 assertions gain nothing
+> technically from Rust (`test -f` becomes `Path::is_file`), and the owner
+> has weighed that against a reader having to know two files hold one
+> suite's assertions. Consistency won. Recorded so the tradeoff is not
+> re-litigated: the cost is known and accepted, not overlooked.
+>
+> So `bootstrap-harness` (77 assertions, 484 lines) and `deps-harness` (52
+> assertions, 526 lines) convert whole, one commit each, and both `.test.sh`
+> files are deleted. The 12 python-gated YAML assertions lose their skips.
+> The remaining assertions carry over as the same checks in Rust:
+> `test -f` to `is_file`, `test -x` to a mode check, `git ls-tree` to a
+> `Command`, Dockerfile and shell-text greps to `contains` over a read file.
+>
+> Tranche C then has nothing left to do for these two, which is the other
+> half of the consistency argument.
+
 For each, repeat Task 3's steps 1 through 8 exactly: read the suite and state every assertion in a sentence, write one test per assertion with a positive control, watch it fail, implement, watch it pass, sabotage each test to prove it is load-bearing, delete the shell file, run both gates, commit. Do not batch two suites into one commit; a reviewer must be able to reject one conversion while accepting its neighbor.
 
 Two suites need a skip from Task 1's mechanism rather than an assertion:

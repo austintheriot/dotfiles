@@ -23,13 +23,25 @@ use std::path::{Path, PathBuf};
 
 /// The checkout whose workflows are under test.
 ///
-/// `CARGO_MANIFEST_DIR` rather than `DOTFILES_ROOT`, so the assertions read
-/// the tree this test was compiled from. `tests/rust-checks.sh` archives a
-/// git ref into a snapshot and builds there, and it lists `.github` in
-/// `COMPILE_TIME_PATHS` so the workflows travel with the snapshot. Reading
-/// `DOTFILES_ROOT` instead would test the live working tree while the gate
-/// checks a ref, which is the failure that gate exists to catch.
+/// The repository root, at run time.
+///
+/// `DOTFILES_ROOT` first, then `HOME`, matching `nvim_lua_units.rs` and
+/// `nvim_config_load.rs`. The manifest walk-up is the last resort and exists
+/// for the `rust-checks.sh` snapshot, where neither variable points at the
+/// archived tree.
+///
+/// Not `CARGO_MANIFEST_DIR` alone: that is a compile-time constant, so a
+/// binary built in one tree and run against another reads the wrong root,
+/// which is how these tests passed on the host and failed under the gate.
 fn repo_root() -> PathBuf {
+    for variable in ["DOTFILES_ROOT", "HOME"] {
+        if let Some(value) = std::env::var_os(variable) {
+            let candidate = PathBuf::from(value);
+            if candidate.join("crates/Cargo.toml").is_file() {
+                return candidate;
+            }
+        }
+    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)

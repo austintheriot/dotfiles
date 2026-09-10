@@ -8,14 +8,30 @@
 //! is the same event either way.
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+/// The repository root, at run time.
+///
+/// `DOTFILES_ROOT` first, then `HOME`, matching `nvim_lua_units.rs` and
+/// `nvim_config_load.rs`. The manifest walk-up is the last resort and exists
+/// for the `rust-checks.sh` snapshot, where neither variable points at the
+/// archived tree.
+///
+/// Not `CARGO_MANIFEST_DIR` alone: that is a compile-time constant, so a
+/// binary built in one tree and run against another reads the wrong root,
+/// which is how these tests passed on the host and failed under the gate.
 fn repo_root() -> PathBuf {
-    // The workspace lives at <root>/crates, and this test runs with its
-    // manifest directory as the working directory.
+    for variable in ["DOTFILES_ROOT", "HOME"] {
+        if let Some(value) = std::env::var_os(variable) {
+            let candidate = PathBuf::from(value);
+            if candidate.join("crates/Cargo.toml").is_file() {
+                return candidate;
+            }
+        }
+    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .and_then(std::path::Path::parent)
+        .and_then(Path::parent)
         .expect("the repo root is two levels above config-cli")
         .to_path_buf()
 }

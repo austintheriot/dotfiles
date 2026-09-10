@@ -142,6 +142,36 @@ Route the EXIT trap's `kill-server` through the same wrapper that sets
 `TMUX_TMPDIR`, or it aims at a path that no longer exists, the real server
 survives, and `rm -rf` removes its socket from under a running process.
 
+### A headless nvim test cannot assert that mason installed anything
+
+`mason-lspconfig` gates `ensure_installed` on an attached user interface.
+Verified verbatim at `mason-lspconfig/lua/mason-lspconfig/init.lua:31`, at
+the commit this repo pins (`63a3c6a8`):
+
+    if not platform.is_headless and #settings.current.ensure_installed > 0 then
+
+and `is_headless` is `#vim.api.nvim_list_uis() == 0` in
+`mason-core/platform.lua:38`. So a test that runs `nvim --headless` and then
+asserts the servers are installed is asserting THE GATE, not the install.
+Nothing was attempted. That assertion passes on a machine where mason is
+entirely broken, which makes it worse than no test: it reports a guarantee
+it never checked.
+
+A headless test has to drive the install directly instead. Two ways that
+work, both in use here:
+
+- `MasonToolsInstallSync`, which `crates/config-cli/tests/nvim_config_load.rs`
+  runs in a scratch XDG home. It is synchronous, so the test can assert
+  afterwards without polling.
+- `:MasonInstall <pkg>` or the `pkg:install` API for one package.
+
+`tests/nvim-mason-runtimes.test.sh` asserts the gate still exists at the
+pinned commit, and skips where the plugin tree is absent, which is the case
+in the container. The assertion is deliberately about the gate rather than
+about mason's behaviour: when a bump removes the gate, a headless install
+test becomes possible and this section's advice becomes wrong, so it should
+fail loudly rather than rot.
+
 Two failure modes are worth knowing about, because both have bitten this repo:
 
 - A test that creates tmux sessions must clean them up on signals, not only on

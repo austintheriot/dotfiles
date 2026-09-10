@@ -634,4 +634,27 @@ done
 assert_contains 'the health check names the install remedy' \
     'nvm install' "$health_text"
 
+# --- ensure_installed does not run headless -----------------------------
+#
+# mason-lspconfig gates ensure_installed on an attached UI, so a headless
+# test that asserts the servers installed is asserting the gate: nothing was
+# attempted, and the assertion passes on a machine where mason is broken.
+# .claude/rules/dotfiles-tests.md records the trap and what to do instead.
+#
+# This asserts the gate still EXISTS at the pinned commit. When a mason bump
+# removes it, a headless install test becomes possible and the rule's advice
+# becomes wrong, so the record should fail rather than quietly rot.
+#
+# Read from the installed plugin tree, which the container does not carry, so
+# this skips there rather than failing or passing vacuously.
+mason_lspconfig_init="${XDG_DATA_HOME:-$HOME/.local/share}/nvim/lazy/mason-lspconfig.nvim/lua/mason-lspconfig/init.lua"
+if [ -r "$mason_lspconfig_init" ]; then
+    grep -q 'not platform.is_headless and #settings.current.ensure_installed' \
+        "$mason_lspconfig_init" && gate_present=yes || gate_present=no
+    assert_equals 'mason-lspconfig still gates ensure_installed on an attached UI' \
+        'yes' "$gate_present"
+else
+    skip 'mason-lspconfig is not installed here, so the headless gate cannot be read'
+fi
+
 finish

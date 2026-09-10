@@ -2,17 +2,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- CLAIMED 2026-09-10: nvim: `ensure_installed` NEVER RUNS HEADLESS, which invalidates the
-  obvious CI test for it. Verified verbatim at
-  mason-lspconfig/lua/mason-lspconfig/init.lua:31:
-      if not platform.is_headless and #settings.current.ensure_installed > 0
-  So any CI or Rust test that runs `nvim --headless` and then asserts the
-  servers installed is asserting THE GATE, not the install: nothing was
-  attempted. That assertion passes on a machine where mason is entirely
-  broken. A headless test has to drive the install directly (pkg:install or
-  :MasonInstall) instead.
-  Record this beside any mason test work so the trap is not rediscovered.
-
 - nvim determinism: what is left after the 2026-09-08 hardening pass.
   DONE, so nobody re-does it: runtime tree installed whole (bd38c48f);
   lazy-lock.json tracked, it had been gitignored (7a308818); mason registry

@@ -10,6 +10,42 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-07-shell-test-port-design.md`, section 3's exclusion note. Tranche A is done (`fd3b4435`). This plan is the spec's "those two convert after step 4."
 
+> **STATUS 2026-09-10: IMPLEMENTED.** Both suites converted:
+> `bebf8053` (scripts-dir-name, 15 assertions to 13 tests) and `38b52abb`
+> (container, 54 assertions to 17 tests). Task 1 confirmed both gate
+> dependencies historical.
+>
+> **Sabotage caught two defects that review did not, both in the conversion
+> itself:**
+>
+> 1. The macOS-exclusion assertion was **inherited vacuous**. With the real
+>    `RUN rm -f` deleted and only the comment naming the suite left, it stayed
+>    green: the comments-are-not-code defect this plan's own constraints warn
+>    about, reproduced faithfully from the shell suite. Fixed to read parsed
+>    instructions.
+> 2. Ref resolution probed the wrong repository. `run-in-docker.sh` reads
+>    `$HOME/.cfg` unconditionally rather than the root the test reads through,
+>    so deriving the expectation from the root predicted "no repository" while
+>    the runner resolved `HEAD` against the real one.
+>
+> **Two mandatory sabotages both went red**, as required. The workspace-member
+> one needs a real stub directory, because cargo refuses to load a workspace
+> whose member has no directory. That is also the honest shape: a new crate
+> arrives as a directory. The `$HOME` mount check was confirmed to
+> discriminate rather than ban the flag, since a `:ro` mount still passes.
+>
+> **Step 7, the circularity, is partly unverified.** `container_image.rs`
+> skips nothing by design, so the container leg exercises a real contract
+> rather than standing down. That intent was not observed inside the
+> container: `run-in-docker.sh` was not run directly. The push gate does run
+> it, so the next push is the verification.
+>
+> **Stale in this document:** Task 3's heading and Step 1 still say 48
+> assertions where the goal line says the corrected 54, and Task 2's preamble
+> repeats the old number. Step 1's group list still omits three of the ten
+> groups (docker guard, ref resolution, and the 17-assertion `TRIGGER_PATHS`
+> group), so a reader working only from it would under-convert.
+
 ## Why these two were held back
 
 The spec's words:

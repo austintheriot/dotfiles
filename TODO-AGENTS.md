@@ -132,80 +132,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   unit tests are the inner one, and they are what make a failure land at the
   edit rather than at the next launch.
 
-- DONE 2026-09-09, and the intent was narrower than this entry said: keep the
-  Nord status bar, make the TERMINAL ground full black. The blue was never
-  the ground. Alacritty painted `0x2E3440` (Nord polar night) as
-  `colors.primary.background`, and both nvim (`transparent = true`) and
-  Nord's tmux panes (`bg=default`) show the terminal through, so one line
-  in alacritty.toml was the whole change. Pinned by
-  tests/alacritty-platform-split.test.sh so a future Nord palette paste does
-  not drag it back.
-  NOT changed, on purpose: the palette `black = 0x3B4252`, which is what
-  makes the bar look like Nord. So the bar now sits as a grey-blue strip on
-  a black ground with a visible edge. If that edge is unwanted, the next
-  step is palette black to `0x000000`, and it recolours every `black` in
-  nvim and zsh too, so it is a separate decision.
-  Superseded reasoning kept: the earlier draft of this entry proposed
-  removing the plugin and rewriting the four status segments by hand. That
-  was solving the wrong layer.
-- DONE 2026-09-09: the two path-handling gaps that shared one cause, that
-  git C-quotes any path with a byte outside printable ASCII and the quoted
-  form matches no pathspec when fed back.
-    - `tests/leak-check.sh`: fixed with one line,
-      `export GIT_CONFIG_PARAMETERS="'core.quotePath=false'"`, which reaches
-      every git the script spawns including the ones under `xargs -0`, where
-      a shell function would not. THE RECORDED CONSEQUENCE WAS WRONG and is
-      corrected here: this entry predicted "scans zero lines and exits 0". 
-      Measured before the fix, a credential under `café/` exited 2, blocked
-      by unscannable_paths as "no readable diff" with a diagnosis naming
-      .gitattributes and binaries. So the gate failed closed and nothing
-      leaked; the real defect was that no non-ASCII path was committable at
-      all, and the message pointed at the wrong cause. Both sides are now
-      asserted: a clean file under such a path passes, a secret under it is
-      blocked as a secret.
-    - `setup.sh`: the move-aside loop was `for path in $(cfg ls-tree ...)`,
-      which word-splits a path with a space and receives the quoted form for
-      a non-ASCII one, so neither was moved and the retried checkout failed
-      under set -e. Now a heredoc-fed `while IFS= read -r` over
-      `-c core.quotePath=false` output, which is POSIX (`read -d ''` is not)
-      and keeps the loop in the main shell so the moved counter survives.
-      A path containing a newline is the one shape this still misses, and it
-      stays recorded as such below.
-- RESOLVED BY THE 2026-09-06 COLLAPSE, decided 2026-09-09. The `.sync-manifest`
-  parser this entry describes, with its `Shared`/`Excluded` classification,
-  went out with `config sync` and `config check`. A workspace-wide search for
-  `Excluded`, `SharedRule`, `Classification::` and `sync-manifest` finds only
-  an unrelated doc comment in deps-core. The decision taken stands as the
-  rule for the next manifest-style parser: reject an orphan exclusion at
-  parse time (a `!` pattern nested under no directory pattern is an error),
-  keeping a flat rule list. An orphan that silently widens a gate is the
-  fail-open shape this repo keeps paying for, so it must fail loudly at the
-  edge.
-- RESOLVED BY THE 2026-09-06 COLLAPSE, confirmed 2026-09-09 by reading the
-  crate rather than this entry: `crates/config-manifest` no longer has a
-  binary. `src/` is doctor.rs, git.rs, lib.rs, path.rs and stamp.rs, with no
-  `[[bin]]` and no main.rs, so the "nine sites" and the `Err` arm at
-  main.rs:86 this entry described are gone. What survives is one
-  `Rendered.exit_code: u8` in stamp.rs with three assignment sites (0, 1, 2),
-  each with a documented meaning, one consumer (config-cli's verify_stamps),
-  and a doc comment on why `u8`. The pain this entry recorded, one status
-  meaning eight things, does not exist in that shape. An `Outcome` sum over
-  three sites would be a refactor for its own sake, so none is made. The
-  design rule stands for the next crate: derive exit codes from a named
-  meaning in one place rather than scattering literals.
-- DONE 2026-09-09: the fossil branches `home`, `home-mac` and `work` (tips
-  eb6ca73d, 558f1fb9, bdd98825; last moved 2023) are deleted, with no
-  archive tags. The first plan was tags pushed to origin, and the leak guard
-  refused that push: those branches had NEVER been on origin (it holds only
-  linux, mac and main), so the push would have published three years of
-  never-published history, and one compiled Vim spell file in it
-  (.config/nvim/spell/en.utf-8.add.spl) is a binary the guard cannot scan.
-  Every text file scanned clean. The decision was to publish nothing and keep
-  nothing: the tips survive only in this machine's reflog for its expiry
-  window. `--branch` stays as the way to reach a real feature branch;
-  setup.sh's two comments no longer steer a reader at a 2023 tree, and
-  tests/setup.test.sh asserts that. The fixture branch that suite names
-  `work` is unrelated and unchanged.
 - Migrate the rest of the `config ...` scripts to Rust
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so
@@ -222,53 +148,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   clear a 40ms bar. `-C` would save nothing meaningful and removes the
   compaudit security check.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
-- CLOSED AS MEASURED 2026-09-09. `se` builds 21 windows x 5 panes = 105
-  panes in 6.6-9.7s, of which shell startup is 0.6s total because the 105
-  shells start in parallel; the rest is tmux creating panes. That is tmux's
-  pane-creation cost, not a defect, and the decision is to keep the eager
-  layout. Interactive zsh startup is 170-176ms, held under 400ms by
-  tests/zshrc-startup-budget.test.sh. Lazy window creation and a smaller
-  layout were weighed and declined. The earlier "minutes" has no surviving
-  measurement and is treated as a cold cache or a since-fixed eager init.
-- DONE 2026-09-09, both halves, decided as two commits.
-  COST (3aab00c2): the TODO's 57ms had no surviving method. Measured with
-  zsh's EPOCHREALTIME: the binary alone is 15-22ms per prompt (6-9ms process
-  start plus one 8-13ms `tmux list-windows`), the common path spawns no git
-  (repo.rs reads .git directly; `fallback_to_git_rev_parse` records zero
-  fallbacks across 21 live windows), and an unchanged rename is already
-  skipped (main.rs:414). Through the sh wrapper the same call was 25-36ms:
-  the exec hop was a third of every prompt. precmd now calls
-  `tmux-tools name-windows` directly; the wrapper stays for the tmux hooks
-  and the `re` alias. There was nothing to cache, so no cache was built.
-  LATENCY: a tracked .scripts/git-hooks/post-checkout runs
-  `tmux-tools name-windows -a &` on a branch checkout (flag 1; a file
-  checkout renames nothing), installed per repository by the new
-  `config install-repo-hooks [dir]` into the common git directory so one
-  install covers every worktree. Not a global core.hooksPath, which would
-  replace ~/.cfg's own hooks. tests/git-post-checkout-hook.test.sh stubs
-  tmux-tools on PATH and asserts a checkout invokes it with -a, from a
-  worktree too, that install is idempotent, and that a non-repo is refused
-  with exit 2. Installing into your existing repos is one
-  `config install-repo-hooks` each; not done here, since that is machine
-  state and the loop touches only the repo.
-- DONE 2026-09-10: expert agents for the machine an agent runs on. The
-  research split the subject three ways, one agent per lens:
-  `agent-sandboxing` (what a subprocess can reach, and whether the sandbox
-  claimed is the sandbox enforced), `agent-orchestration` (measured caps,
-  backpressure, supervision, stall detection, shared-checkout hazards, the
-  cost ledger), and `local-inference` (serving runtimes, KV-cache
-  arithmetic, quantization evidence, GPU sharing, when local is cheaper).
-  Rules files are in `~/.claude/rules/`, agent files in `~/.claude/agents/`,
-  and all three are wired into `/expert-review` (roster and trigger table),
-  `/expert-consult`, `/consult` and `/expert-plan`. The research notes, with
-  every claim tagged verified, found-unverified or inferred and a gaps list,
-  live untracked in `~/.claude/local/research-notes/`. The three findings
-  from 2026-09-07 each have a home in `agent-orchestration`: the cap picked
-  by feel (measure with 1, 2, 4, 8 agents and name the saturation signal),
-  the `cargo --locked` race (a worktree per agent, or one agent owns
-  dependency changes), and the hour-long stall (a five-state taxonomy built
-  from the telemetry events). The item below is now unblocked.
-
 - Track the Claude Code settings that can be public, and keep the local
   overrides untracked. `~/.claude/settings.json` is untracked in full today
   because some of its blocks name private detail, so nothing about the
@@ -533,4 +412,3 @@ labelled name`, `owned window follows branch changes`.
   run `install-hooks`, and assert the message names both the directory and
   the chmod. `tests/config-init.test.sh` and `tests/githooks-installed.test.sh`
   are the two suites that already drive these paths.
-

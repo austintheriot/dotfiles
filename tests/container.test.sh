@@ -160,10 +160,10 @@ assert_equals 'the hook does not invoke run-all.sh directly' \
 # --- TRIGGER_PATHS covers every path a suite reads -----------------------
 #
 # Several suites assert on workflow files (deps-harness, readme-badges),
-# as does crates/config-cli/tests/workflow_labels.rs. Exhaustiveness requires a .github/workflows/ edit to run
-# the suite, which is exactly the routine edit that skipped it before this
-# pattern was added: a push touching only .github/workflows/ ran no tests at
-# all.
+# as does crates/config-cli/tests/workflow_labels.rs. Exhaustiveness
+# requires a .github/workflows/ edit to run the suite, which is exactly
+# the routine edit that skipped it before this pattern was added: a push
+# touching only .github/workflows/ ran no tests at all.
 #
 # The pattern is matched against real example paths with `grep -E`, not
 # read as a substring of the hook text, so the assertion fails if the regex

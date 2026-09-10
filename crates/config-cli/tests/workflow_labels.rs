@@ -21,6 +21,14 @@
 
 use std::path::{Path, PathBuf};
 
+/// The checkout whose workflows are under test.
+///
+/// `CARGO_MANIFEST_DIR` rather than `DOTFILES_ROOT`, so the assertions read
+/// the tree this test was compiled from. `tests/rust-checks.sh` archives a
+/// git ref into a snapshot and builds there, and it lists `.github` in
+/// `COMPILE_TIME_PATHS` so the workflows travel with the snapshot. Reading
+/// `DOTFILES_ROOT` instead would test the live working tree while the gate
+/// checks a ref, which is the failure that gate exists to catch.
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()

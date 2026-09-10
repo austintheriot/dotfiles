@@ -21,7 +21,8 @@
 #                      terminal.
 #   -n, --dry-run      Print every step and change nothing.
 #   -b, --branch NAME  Check out NAME instead of `main`. The only branch
-#                      selector, and the only way to reach `work` or `home`.
+#                      selector. Reaches any feature branch; the 2023 `work`
+#                      and `home` trees are archived as tags, not branches.
 #   -r, --repo URL     Clone from URL instead of the default remote. Also
 #                      accepts a local path, which is what the tests use.
 #
@@ -314,7 +315,7 @@ fi
 # One branch. Platform differences are per-platform FILES selected at runtime
 # (.zshrc-mac, tmux-mac.conf, deps-mac.toml) by .scripts/platform.sh, so
 # nothing about this machine's OS implies a ref. --branch stays the only
-# branch selector: it is how a reader reaches `work` or `home`, which no
+# branch selector: it is how a reader reaches a real feature branch, which no
 # amount of uname implies.
 #
 # This used to read `branch=$platform`, after detecting Darwin as `mac` and

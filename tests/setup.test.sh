@@ -48,7 +48,8 @@ STUB
     git -C "$seed" -c user.email=t@t -c user.name=t commit -q -m 'main'
 
     # A second branch that no uname can imply, so the --branch override has
-    # something real to reach. `work` is one of the names the flag exists for.
+    # something real to reach. The name is a fixture: the real `work` branch
+    # was archived as a tag on 2026-09-09, and this seed is independent of it.
     git -C "$seed" checkout -q -b work
     printf 'work branch marker\n' > "$seed/.marker"
     git -C "$seed" add -A
@@ -198,6 +199,17 @@ assert_equals 'the backup keeps the original at the path with a space' \
     'user space' "$(cat "$odd_backup/my notes/marker.txt" 2>/dev/null)"
 assert_equals 'the backup keeps the original at the non-ASCII path' \
     'user utf8' "$(cat "$odd_backup/café/marker.txt" 2>/dev/null)"
+
+# --- the fossil branches are no longer advertised -----------------------------
+#
+# `home`, `home-mac` and `work` last moved in 2023 and differed from main in
+# ~360 of 354 tracked files, yet `--branch work` would check one out onto a
+# fresh machine and the usage text named them as the reason the flag exists.
+# Decided 2026-09-09: archived as tags `archive/<name>`, branches deleted.
+# --branch itself stays (it is how a real feature branch is reached); what
+# must not survive is the text steering a reader at a 2023 tree.
+assert_equals 'setup.sh no longer advertises the fossil branches' '' \
+    "$(grep -nE 'reach(es|ing)? `?(work|home)`?' "$SETUP" || true)"
 
 # --- refusing to clobber an existing setup ----------------------------------
 

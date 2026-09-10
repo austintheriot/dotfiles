@@ -193,17 +193,19 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   three sites would be a refactor for its own sake, so none is made. The
   design rule stands for the next crate: derive exit codes from a named
   meaning in one place rather than scattering literals.
-- Fossil branches are reachable from the bootstrap path. `home`,
-  `home-mac` and `work` last moved 2 to 3 years ago and each differs from
-  `mac` in about 360 of 354 tracked files, while `mac` and `linux` differ
-  in 8 (6 of which are unsynced planning docs). `setup.sh --branch work`
-  will check out a 2023 tree onto a fresh machine, where `config init`
-  then runs against a `.scripts/` layout predating every current
-  convention. `setup.sh:317` asserts these are "real branches" and
-  `setup.sh:26` advertises them.
-  Either archive them under a name that reads as archived and correct
-  those two comments, or delete them.
-
+- DONE 2026-09-09: the fossil branches `home`, `home-mac` and `work` (tips
+  eb6ca73d, 558f1fb9, bdd98825; last moved 2023) are deleted, with no
+  archive tags. The first plan was tags pushed to origin, and the leak guard
+  refused that push: those branches had NEVER been on origin (it holds only
+  linux, mac and main), so the push would have published three years of
+  never-published history, and one compiled Vim spell file in it
+  (.config/nvim/spell/en.utf-8.add.spl) is a binary the guard cannot scan.
+  Every text file scanned clean. The decision was to publish nothing and keep
+  nothing: the tips survive only in this machine's reflog for its expiry
+  window. `--branch` stays as the way to reach a real feature branch;
+  setup.sh's two comments no longer steer a reader at a 2023 tree, and
+  tests/setup.test.sh asserts that. The fixture branch that suite names
+  `work` is unrelated and unchanged.
 - Migrate the rest of the `config ...` scripts to Rust
 - `tests/leak-check.sh` does not scan paths containing a newline or binary
   files, in either staged or range mode. Git quotes a newline path, so

@@ -15,8 +15,14 @@ tests themselves.
 ## Run the suite before you push
 
 Run `~/tests/run-all.sh` and confirm it passes before pushing a change to any
-of the paths above. It takes about 25 seconds, and announces each suite as
-`[n/total]` while it runs.
+of the paths above. It announces each suite as `[n/total]` while it runs.
+
+Budget about **six minutes** on the host. Measured 2026-09-10 on an M1 Max:
+374 seconds for `-q`, of which `config.test.sh` is 105 seconds because it
+calls `config-build` and compiles all six crates. This file said "about 25
+seconds" until that measurement; the claim was true when written and nothing
+updated it as suites accumulated. If you need a fast signal for a narrow
+change, run the specific suite rather than the whole set.
 
 A pre-push hook at `~/tests/pre-push` (symlinked from `~/.cfg/hooks/pre-push`)
 runs the suite too, gated to pushes whose commits touch tested code, and

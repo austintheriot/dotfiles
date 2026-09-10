@@ -326,6 +326,41 @@ Fix: split the event into `PrerequisiteNotInManifest` and
 the two-case decision at every match site instead of letting a `||` decide
 it silently.
 
+## 3a. The lint-tool acquisition path is unwritten (added 2026-09-10)
+
+Not part of this spec's seven items, recorded here because this is the spec
+that owns the dependency engine and the question has no other home.
+
+`stylua` and `selene` gate two test suites (`nvim-lua-format.test.sh` and the
+selene suite) and are acquired through **mason**, on nvim's first launch.
+Neither appears anywhere in this corpus: grepping every spec and plan for
+either name returns nothing. Nor does `mason`. So the boundary between
+"the deps engine installs it" and "nvim's package manager installs it" is
+unwritten, not decided.
+
+The precedent for moving them is already in the manifest, in
+`deps/deps.toml`'s own comment on `tree-sitter-cli`: it was a mason package
+first, and it moved to the engine because "it must exist BEFORE nvim first
+runs", after which only 3 of 19 parsers compiled on a fresh machine. A test
+gate that needs a linter before nvim has ever launched is the same shape.
+
+Verified 2026-09-10 in an `ubuntu:24.04` container: **neither tool is in
+apt.** `apt-cache policy` reports no candidate for `stylua` or `selene`, while
+`shellcheck` has 0.9.0-1. Both are in brew. So the Linux path cannot be a
+`Named` availability and needs a `ViaTarball` arm, which means two new
+`TarballRelease` variants. `stylua` ships a `.zip` release asset and `selene`
+a `.tar.gz`, and `installer.rs` currently handles the gzipped-binary shape;
+whether it handles a `.zip` is unverified.
+
+What this buys, stated honestly so it is not oversold: it removes about 4 of
+the roughly 19 runtime skips that survive a Rust conversion. It does not
+touch the four platform-variant skips, which need the *other* platform's zsh
+and no dependency can supply that. The justification is the fresh-machine
+bug, not the skip count.
+
+Unresolved and deliberately left so: whether two linters used by two suites
+justify a heavier bootstrap on every machine and every CI leg.
+
 ## 4. What this changes on disk
 
 | Path | Change |

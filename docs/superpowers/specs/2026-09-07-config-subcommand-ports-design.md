@@ -40,6 +40,8 @@ of those is a shim.
 | `config-help` | 60 | Ports, with a caveat; see 3.1. | |
 | `config-reload` | 30 | Ports. | |
 | `config-doctor` | 26 | Already a shim to `config-manifest doctor`. Delete it; see 3.3. | |
+| `config-install-repo-hooks` | 48 | **Added 2026-09-10, after this spec.** Ports its decision logic; see 3.4. | |
+| `config-prereqs` | 193 | **Not addressed by this spec.** Unclassified; see 3.5. | |
 
 **So this step is 259 lines across four scripts, not 742 across nine** before
 section 3.2's decision, and **113 lines across three scripts plus a 26-line
@@ -158,6 +160,33 @@ line and `config-manifest --describe` are two copies of one description, and
 the assertion tying them together exists only because both exist. That
 assertion goes with the shim, which the test's own comment already
 anticipates.
+
+### 3.4 `config-install-repo-hooks` did not exist when this spec was written
+
+Created 2026-09-10, so its absence from the table above is chronology rather
+than a decision. 48 lines that resolve a git common directory, refuse to
+replace a non-symlink hook, and `ln -sfn` a tracked `post-checkout` into
+place. `tests/git-post-checkout-hook.test.sh` already pins it with 11
+assertions.
+
+It is the best remaining port candidate in this set, on two grounds this spec
+already uses elsewhere. It runs only after a binary exists, so neither
+circularity argument in 3.2 applies. And it holds a genuine decision, not
+orchestration: `Install`, `Replace`, or `Refuse`, chosen from what is already
+at the hook path. That is a pure function over an observation, which is the
+shape `deps-core` exists to hold.
+
+Per the plan's shim correction, the script stays as a two-line
+`exec config-cli install-repo-hooks "$@"` with its `# usage:` and `# help:`
+headers intact, so `config help` keeps listing it.
+
+### 3.5 `config-prereqs` is unclassified, and this spec should not classify it
+
+193 lines, 29 branches, calling `cargo`, `curl`, `git`, `uname`. It is absent
+from this spec entirely. It is not being silently included in "the rest":
+whether it ports depends on the same fresh-machine question as 3.2, and
+answering that here would decide the release-artifact bootstrap by accident.
+Left open, named so it is not mistaken for finished work.
 
 ## 4. Order
 

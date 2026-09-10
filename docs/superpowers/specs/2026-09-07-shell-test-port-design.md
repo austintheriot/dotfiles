@@ -60,6 +60,42 @@ deleted). 130 Rust tests exist, all covering new `deps-core` and
 Rust suite has run green alongside them for a while. Converting a reversible
 migration into an irreversible one at the moment of the swap buys nothing.
 
+## 2a. Runtime, measured 2026-09-10 (added after the fact)
+
+This spec carried no timings. Grepping it for "second", "slow" or "fast" as a
+runtime measure returns nothing, so "the suite is slow" was never a premise
+here and must not become one retroactively. The numbers below exist so a
+later reader does not assume converting shell to Rust makes the suite faster.
+
+Measured on an M1 Max, host leg, `tests/run-all.sh -q`:
+
+| What | Wall time |
+|---|---|
+| The whole suite | **374s** |
+| `config.test.sh` alone | **105s** |
+| `config-usage.test.sh` | 15s |
+| `leak-check.test.sh` | 12s |
+| `config-manifest-lifecycle.test.sh` | 11s |
+| every other suite | under 8s each |
+
+Two consequences.
+
+**`config.test.sh` is 28% of the suite, and the cost is cargo, not shell.**
+Line 454 calls `config-build`, which compiles all six workspace crates. A
+conversion to Rust cannot remove that cost, and adds compile time of its own.
+Whatever is done about the 105s is a separate change from this spec, and this
+spec should not be credited with it.
+
+**`.claude/rules/dotfiles-tests.md` said "about 25 seconds".** That is a 15x
+understatement and it is corrected in the same commit as this amendment. The
+claim was written when it was true; nothing updated it as suites accumulated.
+
+**`config.test.sh` appears in no tranche.** It is absent from section 3
+entirely, which is an omission rather than a decision: it is the single most
+expensive suite in the set. Placing it needs the `config-build` question
+answered first, so it stays unplaced here deliberately, with the reason
+recorded.
+
 ## 3. The three tranches
 
 ### Tranche A: real parsers instead of regex (goes first, independently)

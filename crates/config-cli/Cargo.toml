@@ -19,7 +19,7 @@ pulldown-cmark = { version = "0.13", default-features = false }
 # Reads the workflows as YAML instead of by regex. workflow-labels.test.sh
 # shelled out to an inline Python parser for the same job, so its own
 # author had already reached for a real parser.
-serde_yaml = "0.9"
+yaml_serde = "0.10"
 tempfile = { workspace = true }
 
 [lints]

@@ -7,7 +7,7 @@
 //! because a whole-file grep matched the human-readable `label:` strings too
 //! and stayed green after the macOS runner was deleted. The shell had no
 //! parser, so it borrowed one, and then skipped ten assertions wherever no
-//! interpreter was on PATH. `serde_yaml` needs no interpreter, so those ten
+//! interpreter was on PATH. `yaml_serde` needs no interpreter, so those ten
 //! skips are gone rather than ported.
 //!
 //! GitHub falls back to the filename when a workflow has no `name:`, and to
@@ -70,11 +70,11 @@ fn workflow_files(root: &Path) -> Vec<PathBuf> {
     found
 }
 
-fn parse_workflow(text: &str) -> serde_yaml::Value {
-    serde_yaml::from_str(text).expect("a workflow parses as YAML")
+fn parse_workflow(text: &str) -> yaml_serde::Value {
+    yaml_serde::from_str(text).expect("a workflow parses as YAML")
 }
 
-fn read_workflow(path: &Path) -> serde_yaml::Value {
+fn read_workflow(path: &Path) -> yaml_serde::Value {
     let text = std::fs::read_to_string(path).expect("a workflow file is readable");
     parse_workflow(&text)
 }
@@ -87,8 +87,8 @@ fn file_name(path: &Path) -> String {
 }
 
 /// The jobs mapping of one workflow, as (key, job) pairs.
-fn jobs_of(workflow: &serde_yaml::Value) -> Vec<(String, &serde_yaml::Value)> {
-    let Some(jobs) = workflow.get("jobs").and_then(serde_yaml::Value::as_mapping) else {
+fn jobs_of(workflow: &yaml_serde::Value) -> Vec<(String, &yaml_serde::Value)> {
+    let Some(jobs) = workflow.get("jobs").and_then(yaml_serde::Value::as_mapping) else {
         return Vec::new();
     };
     jobs.iter()
@@ -107,11 +107,11 @@ fn suite_workflow_path() -> PathBuf {
 /// suite's comment at line 117 records why: a whole-file grep also matches
 /// the human-readable `label:` strings, so deleting the macOS entry from the
 /// matrix left the grep green.
-fn matrix_runners(workflow: &serde_yaml::Value) -> Vec<String> {
+fn matrix_runners(workflow: &yaml_serde::Value) -> Vec<String> {
     let mut found: Vec<String> = jobs_of(workflow)
         .iter()
         .filter_map(|(_, job)| job.get("strategy")?.get("matrix")?.get("include"))
-        .filter_map(serde_yaml::Value::as_sequence)
+        .filter_map(yaml_serde::Value::as_sequence)
         .flatten()
         .filter_map(|entry| entry.get("runner")?.as_str().map(str::to_string))
         .collect();
@@ -124,7 +124,7 @@ fn matrix_runners(workflow: &serde_yaml::Value) -> Vec<String> {
 ///
 /// Scoped to the steps rather than the whole file, so a mention of a script
 /// inside a comment cannot satisfy an assertion that the workflow runs it.
-fn suite_run_scripts(workflow: &serde_yaml::Value) -> String {
+fn suite_run_scripts(workflow: &yaml_serde::Value) -> String {
     jobs_of(workflow)
         .iter()
         .filter_map(|(_, job)| job.get("steps")?.as_sequence())
@@ -171,7 +171,7 @@ fn every_workflow_has_a_name() {
         .filter(|path| {
             read_workflow(path)
                 .get("name")
-                .and_then(serde_yaml::Value::as_str)
+                .and_then(yaml_serde::Value::as_str)
                 .is_none_or(str::is_empty)
         })
         .map(|path| file_name(path))
@@ -195,7 +195,7 @@ fn no_workflow_name_merely_restates_its_filename() {
         .filter_map(|path| {
             let name = read_workflow(path)
                 .get("name")
-                .and_then(serde_yaml::Value::as_str)?
+                .and_then(yaml_serde::Value::as_str)?
                 .trim()
                 .to_string();
             let file = file_name(path);
@@ -228,7 +228,7 @@ fn every_job_has_a_name() {
             jobs_seen += 1;
             let named = job
                 .get("name")
-                .and_then(serde_yaml::Value::as_str)
+                .and_then(yaml_serde::Value::as_str)
                 .is_some_and(|name| !name.trim().is_empty());
             if !named {
                 unnamed.push(format!("{}/{key}", file_name(path)));
@@ -262,11 +262,11 @@ fn a_workflow_runs_the_test_suite() {
 fn the_suite_workflow_runs_on_push() {
     let workflow = read_workflow(&suite_workflow_path());
     // `on` is the YAML 1.1 boolean `true`, which is why this reads the key
-    // both ways: serde_yaml resolves the bare word before the mapping is
+    // both ways: yaml_serde resolves the bare word before the mapping is
     // ours to inspect.
     let triggers = workflow
         .get("on")
-        .or_else(|| workflow.get(serde_yaml::Value::Bool(true)))
+        .or_else(|| workflow.get(yaml_serde::Value::Bool(true)))
         .expect("the suite workflow declares triggers");
     assert!(
         triggers.get("push").is_some(),
@@ -330,7 +330,7 @@ fn the_matrix_includes_a_macos_runner() {
 #[test]
 fn the_matrix_does_not_fail_fast() {
     let workflow = read_workflow(&suite_workflow_path());
-    let strategies: Vec<&serde_yaml::Value> = jobs_of(&workflow)
+    let strategies: Vec<&yaml_serde::Value> = jobs_of(&workflow)
         .iter()
         .filter_map(|(_, job)| job.get("strategy"))
         .collect();
@@ -340,7 +340,7 @@ fn the_matrix_does_not_fail_fast() {
     );
     for strategy in strategies {
         assert_eq!(
-            strategy.get("fail-fast").and_then(serde_yaml::Value::as_bool),
+            strategy.get("fail-fast").and_then(yaml_serde::Value::as_bool),
             Some(false),
             "the suite workflow's matrix must set fail-fast: false, so one \
              platform's failure does not hide the other's state"

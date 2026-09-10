@@ -158,6 +158,11 @@ fi
 # run is noise, and noise is what a reader learns to scan past.
 if [ -s "$DOTFILES_SKIP_LOG" ]; then
     skipped=$(wc -l < "$DOTFILES_SKIP_LOG" | tr -d ' ')
+    # One test that skips can appear more than once: cargo builds an
+    # integration target per lib and bin target of the crate under test, so
+    # the binary runs twice and each run records its own skip. The count is
+    # honest -- both runs really could not run -- but it is not a count of
+    # DISTINCT skipped checks. Read the reasons, not the number.
     printf 'rust-checks: %s skipped\n' "$skipped"
     sed -n 's/.*"reason":"\(.*\)"}/  skip: \1/p' "$DOTFILES_SKIP_LOG"
 fi

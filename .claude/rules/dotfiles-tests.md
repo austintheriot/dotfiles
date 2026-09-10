@@ -259,7 +259,7 @@ not, so create them once per machine:
 This also links the dispatcher itself into `~/.local/bin`, so `config` works
 as a plain command once the tracked files are checked out.
 
-`tests/githooks-installed.test.sh` asserts both symlinks exist, are
+`crates/config-cli/tests/githooks_installed.rs` asserts both symlinks exist, are
 executable, and point at the tracked scripts, so a machine that skipped this
 step fails the suite instead of pushing with no gates. It also asserts
 `core.hooksPath` is unset, because setting it replaces `.cfg/hooks` wholesale

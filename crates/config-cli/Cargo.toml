@@ -12,6 +12,9 @@ deps-core = { path = "../deps-core" }
 dotfiles-path = { path = "../dotfiles-path" }
 
 [dev-dependencies]
+# Drives the scripts and hooks the converted Group 2 suites take as their
+# subject, asserting on exit status and output the way `lib.sh` did.
+assert_cmd = "2"
 dotfiles-test-support = { path = "../dotfiles-test-support" }
 # `default-features = false` drops the crate's own CLI and HTML renderer,
 # which the Markdown-reading tests do not use.

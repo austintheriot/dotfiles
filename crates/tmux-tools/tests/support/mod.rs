@@ -89,6 +89,26 @@ impl Server {
         self.socket_dir.path()
     }
 
+    /// Runs one tmux command with `$HOME` pointed somewhere else.
+    ///
+    /// tmux derives its plugin path from `$HOME`, so the fresh-machine
+    /// test needs a `$HOME` of its own. Still goes through the same
+    /// `TMUX_TMPDIR`, so the socket lands in this server's directory and
+    /// [`Server::shutdown`]'s guards still apply.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `tmux` cannot be executed at all.
+    pub fn tmux_with_home(&self, home: &Path, arguments: &[&str]) -> Output {
+        Command::new("tmux")
+            .env("TMUX_TMPDIR", self.socket_dir.path())
+            .env("HOME", home)
+            .args(["-L", &self.socket])
+            .args(arguments)
+            .output()
+            .expect("tmux runs")
+    }
+
     /// Runs one tmux command against this server.
     ///
     /// # Panics
@@ -282,6 +302,33 @@ pub fn repo_root() -> PathBuf {
         .and_then(Path::parent)
         .expect("the repo root is two levels above this crate")
         .to_path_buf()
+}
+
+/// Records that a check could not run here, and why.
+///
+/// The same wire format `dotfiles_test_support::skip` writes, reimplemented
+/// because tmux-tools cannot depend on that crate without changing
+/// `crates/Cargo.lock`. A skip is green on purpose: it says a check could
+/// not execute here, not that it would have failed.
+///
+/// It must not be free. A gate that says nothing when it skips is
+/// indistinguishable from a gate that is not installed, so the line goes to
+/// the log `tests/rust-checks.sh` names and the gate reports the count.
+/// A no-op when no gate is listening, so a bare `cargo test` needs no setup.
+pub fn skip(reason: &str) {
+    let Some(log) = std::env::var_os("DOTFILES_SKIP_LOG") else {
+        return;
+    };
+    let escaped = reason.replace('\\', "\\\\").replace('"', "\\\"");
+    let line = format!("{{\"reason\":\"{escaped}\"}}\n");
+    if let Ok(mut handle) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log)
+    {
+        use std::io::Write;
+        let _ = handle.write_all(line.as_bytes());
+    }
 }
 
 /// The command a test window runs instead of an interactive shell.

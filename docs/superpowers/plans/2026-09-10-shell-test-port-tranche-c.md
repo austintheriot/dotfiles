@@ -22,6 +22,53 @@ So this tranche has no defect class behind it, unlike Tranche A, which had a rep
 
 The corollary: this plan is explicitly incremental and safe to stop between tasks. Ending after Task 3 with 20 suites converted and both harnesses alive is a valid state. Only Task 6 is irreversible.
 
+## Progress, 2026-09-10
+
+**Task 7 done** (`3c34a7ce`): `nvim-mason-runtimes`, 59 executed assertions
+against this plan's stated 53. Fourth count error of the day.
+
+**Task 1: 8 of 11 done.** `2dc4c534` doc-links, `ec1f785b`
+workflow-shell-quoting, `5b19fcbb` githooks-installed, `89463860`
+profile-path, `34a14f21` nvim-version-floor, `12b1046a` nvim-lua-format,
+`6f5d1e81` platform, `17401615` rust-gate. Remaining: `deps-manifest`,
+`alacritty-platform-split`, `deps-docs`.
+
+**`python3-yaml` is gone** from `tests/docker/Dockerfile`, removed in
+`17401615` with `rust-gate`, the second of its two importers.
+
+**`assert_cmd` is a dev-dependency** (`dfa08f35`), so Task 2 needs only its
+conversion.
+
+### Three defects the conversions found
+
+Reported as findings, not as this tranche's justification, per the honest
+case above.
+
+1. **`nvim-lua-format.test.sh` could not fail.** No `finish` call: its last
+   statement was an assertion inside an `if`, and `finish` is what returns
+   the exit status. An unformatted Lua file printed `FAIL:` and exited **0**,
+   so the stylua gate had been open since the suite was written. The port
+   exits 101 on the same sabotage.
+2. **`nvim-version-floor.test.sh` had a vacuous assertion.** Its live
+   simulation asserted the output contained `0.10`. With the guard disabled
+   so startup fell through, it still passed: the run reached lazy.nvim and
+   printed `markdown-preview.nvim v0.0.10`, while the guard's own message
+   appeared zero times.
+3. **`profile-path.test.sh` could not detect a bashism.** `[[ ]]` passes both
+   `sh -n` and `dash -n`, because dash parses `[[` as a command word. A parse
+   check is not an execution check.
+
+All three are now in `.claude/rules/dotfiles-tests.md`.
+
+### Two process notes for the remaining tasks
+
+- **`config status -uall` walks the whole home directory** and held the index
+  for over two minutes here, causing an `index.lock` collision. Do not use it.
+- **`config commit` without a pathspec commits everything staged**, including
+  another agent's in-flight work. One agent swept a sibling's staged files
+  into a commit and recovered with `config reset --soft`. Always commit
+  path-scoped when any other agent is running.
+
 ## Global Constraints
 
 Every one learned by executing Tranche A. Every task's requirements implicitly include this section.
@@ -52,11 +99,20 @@ disagrees with this one, recount before assuming the plan is right.
 
 Grouped by what the conversion needs, because that determines order.
 
-**Group 1, plain file and text reads (12 suites, 132 assertions).** Nothing
-but `repo::root()` and file reads. `doc-links`, `workflow-shell-quoting`,
+**Group 1, plain file and text reads (11 suites).** Nothing but
+`repo::root()` and file reads. `doc-links`, `workflow-shell-quoting`,
 `githooks-installed`, `profile-path`, `nvim-version-floor`,
-`python-interpreter`, `nvim-lua-format`, `platform`, `rust-gate`,
-`deps-manifest`, `alacritty-platform-split`, `deps-docs`.
+`nvim-lua-format`, `platform`, `rust-gate`, `deps-manifest`,
+`alacritty-platform-split`, `deps-docs`.
+
+> **CORRECTED 2026-09-10 during execution: `python-interpreter` moved to
+> Group 5.** It was filed here, and it does not belong: every one of its
+> assertions is about `PYTHON_BIN`, which after `rust-gate` converts exists
+> only in `tests/lib.sh`, `tests/run-all.sh`, and the suite itself. Its
+> subject is the harness Task 6 deletes, which makes it Task 5's
+> classification problem, not a conversion. The executing agent stopped
+> rather than improvising a classification this plan reserves for Task 5,
+> which was the right call.
 
 **Group 2, subprocess drivers (7 suites, 207 assertions).** Need `assert_cmd`
 to drive a binary or script and assert on exit codes and output. `notify`,
@@ -71,9 +127,9 @@ to drive a binary or script and assert on exit codes and output. `notify`,
 `leak-check`, `setup`. Each is a subsystem's whole contract and each gets its
 own commit.
 
-**Group 5, the harness's own tests (2 suites, 70 assertions).**
-`skip-reporting` and `run-all-filter`. **These are the ordering hazard.** See
-Task 5.
+**Group 5, the harness's own tests (3 suites).** `skip-reporting`,
+`run-all-filter`, and `python-interpreter` (moved here during execution).
+**These are the ordering hazard.** See Task 5.
 
 **Group 6, nvim mason runtimes (1 suite, 53 assertions).** `nvim-mason-runtimes`,
 which a first draft of this plan **omitted entirely** and which is the

@@ -108,16 +108,25 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       definition". The ecosystem answer is a generated neovim.yml std file;
       without it the gate reports every line of every file and gets muted
       within a day. Budget for that, not for the binary.
-    - Tests for the pure parts. Most of the config is declarative tables,
-      but a few pieces are real logic and are the pieces that broke: the
-      treesitter FileType callback, the lint runnable-filter, the mason
-      lock-to-ensure_installed mapping. Each is a pure function of its
-      inputs if extracted, and each currently lives inline inside a
-      `config = function()` where nothing can reach it.
-    - The refactor that follows from that: move the logic out of the plugin
-      spec closures into small modules under `lua/dotfiles/`, so the specs
-      stay declarative and the logic becomes testable. `lua/dotfiles/health.lua`
-      is the shape that already exists.
+    - DONE 2026-09-09, both halves. The three pieces of real logic now live
+      as pure modules under `lua/dotfiles/`, each taking its IO as an
+      injected predicate or table so no spec touches editor state:
+      `treesitter_start.should_start(lang, has_parser)`,
+      `lint_runnable.runnable(linters, is_executable)`,
+      `mason_ensure.ensure_list(names, mason_names, lock_packages)`. Specs
+      sit in `.config/nvim/tests/*_spec.lua` with a 20-line harness, run by
+      `nvim --headless -l` (nvim as the Lua interpreter, so `vim.*` is real
+      and no plenary or busted is needed) and driven from
+      `crates/config-cli/tests/nvim_lua_units.rs`, which asserts each spec
+      exits 0, keeping the gating assertion in Rust. The plugin specs call
+      the modules; `nvim_config_load.rs` is the runtime net and passed
+      unchanged after the rewiring.
+      One text-anchor gate moved with the code: nvim-mason-runtimes.test.sh
+      grepped lsp.lua for `version = version` and now greps the module, and
+      asserts lsp.lua requires it. Two lints learned in passing: selene's
+      lua51 std does not model `io.stderr` as a handle, so the harness
+      prints; and stylua rewrapping a file between a read and an edit is how
+      a match-by-memory edit silently no-ops.
   NOTE the interaction with the config-load test added today: that test
   catches "the config raises at runtime", which is the outer net. Lints and
   unit tests are the inner one, and they are what make a failure land at the

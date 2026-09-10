@@ -211,8 +211,15 @@ assert_succeeds 'the config reads the lockfile' \
 # this plugin's, and mixing them up is silent until first launch.
 assert_equals 'the tool-installer entries do not use the name@version string' '' \
     "$(printf '%s\n' "$lsp_code" | grep "package_name .. '@'" || true)"
+# The join moved out of lsp.lua into a pure module with its own spec
+# (.config/nvim/tests/mason_ensure_spec.lua), so the table-field rule is
+# asserted where the code is, and lsp.lua is asserted to call that module
+# rather than carry a second copy.
+ensure_code=$(sed -e 's/--.*//' "$NVIM_LUA/dotfiles/mason_ensure.lua")
 assert_succeeds 'the tool-installer entries pass version as a table field' \
-    test -n "$(printf '%s\n' "$lsp_code" | grep 'version = version' || true)"
+    test -n "$(printf '%s\n' "$ensure_code" | grep 'version = version' || true)"
+assert_succeeds 'lsp.lua builds ensure_installed through the mason_ensure module' \
+    test -n "$(printf '%s\n' "$lsp_code" | grep "require('dotfiles.mason_ensure')" || true)"
 assert_succeeds 'the config pins the registry from the lockfile' \
     test -n "$(printf '%s\n' "$lsp_code" | grep 'registries' || true)"
 assert_succeeds 'auto_update is disabled, so the lock is not overwritten' \

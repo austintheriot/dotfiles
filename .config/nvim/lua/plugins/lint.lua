@@ -87,14 +87,13 @@ return {
           -- Silently skipping is right here: a linter that is not installed
           -- yet has nothing to say, and `:checkhealth dotfiles` is where a
           -- missing tool gets reported. Erroring per keystroke is not.
-          local runnable = {}
-          for _, name in ipairs(lint.linters_by_ft[vim.bo.filetype] or {}) do
+          local declared = vim.tbl_map(function(name)
             local linter = lint.linters[name]
-            local cmd = type(linter) == 'table' and linter.cmd or name
-            if vim.fn.executable(cmd) == 1 then
-              table.insert(runnable, name)
-            end
-          end
+            return { name = name, cmd = type(linter) == 'table' and linter.cmd or name }
+          end, lint.linters_by_ft[vim.bo.filetype] or {})
+          local runnable = require('dotfiles.lint_runnable').runnable(declared, function(cmd)
+            return vim.fn.executable(cmd) == 1
+          end)
           if #runnable > 0 then
             lint.try_lint(runnable)
           end

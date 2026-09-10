@@ -83,7 +83,10 @@ return {
           --
           -- Reported from a real session opening the file explorer, whose
           -- buffer has filetype NvimTree. Every plugin buffer is this shape.
-          if #vim.api.nvim_get_runtime_file('parser/' .. lang .. '.so', false) == 0 then
+          local has_parser = function(name)
+            return #vim.api.nvim_get_runtime_file('parser/' .. name .. '.so', false) > 0
+          end
+          if not require('dotfiles.treesitter_start').should_start(lang, has_parser) then
             return
           end
 

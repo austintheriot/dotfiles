@@ -117,19 +117,14 @@ return {
       -- name, so the two are joined through the registry's own mapping
       -- rather than a second hand-written table.
       local mason_names = require('mason-lspconfig.mappings').get_mason_map().lspconfig_to_package
-      local ensure = {}
-      for _, name in ipairs(vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint', 'cspell', 'prettier', 'prettierd', 'selene' })) do
-        local package_name = mason_names[name] or name
-        -- A TABLE, not a `name@version` string. mason-tool-installer
-        -- destructures item[1] and item.version (its init.lua:235-238) and
-        -- passes the name straight to mason-registry.get_package, which does
-        -- not parse a version suffix. The string form fails at first launch
-        -- with `Cannot find package "rust-analyzer@2026-04-06"`. The
-        -- `name@version` spelling is mason-lspconfig's syntax, not this
-        -- plugin's.
-        local version = lock.packages[package_name]
-        table.insert(ensure, version and { package_name, version = version } or package_name)
-      end
+      -- The join lives in lua/dotfiles/mason_ensure.lua, where it is a pure
+      -- function with its own spec, including the rule that a pinned tool is a
+      -- { name, version = ... } TABLE and never a `name@version` string.
+      local ensure = require('dotfiles.mason_ensure').ensure_list(
+        vim.list_extend(vim.tbl_keys(servers), { 'stylua', 'markdownlint', 'cspell', 'prettier', 'prettierd', 'selene' }),
+        mason_names,
+        lock.packages
+      )
 
       require('mason-tool-installer').setup {
         ensure_installed = ensure,

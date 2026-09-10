@@ -89,7 +89,17 @@ trap 'rm -rf "$snapshot"' EXIT
 # One entry today. Kept as a list because the next crate that embeds a
 # tracked file will add to it, and a list makes that a one-word change
 # rather than a restructure.
-COMPILE_TIME_PATHS='deps'
+# `deps` is embedded at compile time. `README.md`, `.scripts` and
+# `.github` are read at RUN time by the converted suites (config_docs reads
+# the README and the config-* scripts, workflow_labels reads the workflows).
+#
+# Widening the snapshot rather than pointing those tests at $HOME is
+# deliberate, and it is this gate's own argument: the comment above says the
+# dominant bug class here is "the environment compensating for a gap the
+# engine has, and this gate exists to catch it." A test that reads the live
+# tree while the gate checks a ref cannot catch that. A test that skips when
+# the file is absent checks nothing at all.
+COMPILE_TIME_PATHS='deps README.md .scripts .github'
 
 archive_paths='crates'
 for compile_time_path in $COMPILE_TIME_PATHS; do

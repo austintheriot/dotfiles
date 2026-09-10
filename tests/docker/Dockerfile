@@ -35,6 +35,7 @@ COPY crates/Cargo.toml crates/Cargo.lock ./
 COPY crates/config-cli/Cargo.toml config-cli/
 COPY crates/config-manifest/Cargo.toml config-manifest/
 COPY crates/dotfiles-path/Cargo.toml dotfiles-path/
+COPY crates/dotfiles-test-support/Cargo.toml dotfiles-test-support/
 COPY crates/deps-core/Cargo.toml deps-core/
 COPY crates/tmux-core/Cargo.toml tmux-core/
 COPY crates/tmux-tools/Cargo.toml tmux-tools/
@@ -48,15 +49,16 @@ COPY crates/tmux-tools/Cargo.toml tmux-tools/
 # for every item the library genuinely exports. The three library crates used
 # to be left in place, which kept this one cache-bust away from failing that
 # way, and it did fail that way the first time the stub line itself changed.
-RUN mkdir config-cli/src config-manifest/src dotfiles-path/src deps-core/src tmux-core/src tmux-tools/src \
+RUN mkdir config-cli/src config-manifest/src dotfiles-path/src dotfiles-test-support/src deps-core/src tmux-core/src tmux-tools/src \
     && echo 'fn main() {}' > config-cli/src/main.rs \
     && echo '' > config-manifest/src/lib.rs \
     && echo '' > dotfiles-path/src/lib.rs \
+    && echo '' > dotfiles-test-support/src/lib.rs \
     && echo '' > deps-core/src/lib.rs \
     && echo '' > tmux-core/src/lib.rs \
     && echo 'fn main() {}' > tmux-tools/src/main.rs \
     && cargo build --release --locked --quiet \
-    && rm -rf config-cli/src config-manifest/src dotfiles-path/src deps-core/src \
+    && rm -rf config-cli/src config-manifest/src dotfiles-path/src dotfiles-test-support/src deps-core/src \
         tmux-core/src tmux-tools/src \
         target/release/config-cli target/release/tmux-tools \
         target/release/deps/config_cli* target/release/deps/config_manifest* \
@@ -71,6 +73,7 @@ COPY deps ../deps
 COPY crates/config-cli/src ./config-cli/src
 COPY crates/config-manifest/src ./config-manifest/src
 COPY crates/dotfiles-path/src ./dotfiles-path/src
+COPY crates/dotfiles-test-support/src ./dotfiles-test-support/src
 COPY crates/deps-core/src ./deps-core/src
 COPY crates/tmux-core/src ./tmux-core/src
 COPY crates/tmux-tools/src ./tmux-tools/src

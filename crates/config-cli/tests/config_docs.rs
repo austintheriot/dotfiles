@@ -20,28 +20,6 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// The README, or `None` where it is not in the tree.
-///
-/// `tests/rust-checks.sh` archives only `crates` (plus the compile-time
-/// paths) out of the bare repo, so under the gate there is no `README.md`
-/// and no `.scripts/`. That is deliberate: the snapshot is narrow so an
-/// older ref still checks the workspace. A test that reads a tracked file
-/// therefore has to skip there rather than fail, and it must say so, or the
-/// gate reports a pass over an assertion that never ran.
-fn readme() -> Option<String> {
-    let path = repo_root().join("README.md");
-    match std::fs::read_to_string(&path) {
-        Ok(text) => Some(text),
-        Err(_) => {
-            dotfiles_test_support::skip(
-                "no README.md in the tree (the rust-checks snapshot carries only crates/), \
-                 so the README assertions cannot run here",
-            );
-            None
-        }
-    }
-}
-
 /// Every subcommand named by a list item in the README, in document order.
 ///
 /// Reads inline code spans inside list items rather than matching a line
@@ -75,7 +53,7 @@ fn readme_subcommand_bullets(markdown: &str) -> Vec<String> {
 /// found something before asserting anything about what it did not find.
 #[test]
 fn the_readme_names_at_least_one_subcommand() {
-    let Some(readme) = readme() else { return };
+    let readme = std::fs::read_to_string(repo_root().join("README.md")).expect("README.md");
     let named = readme_subcommand_bullets(&readme);
     assert!(
         !named.is_empty(),
@@ -111,7 +89,7 @@ fn a_subcommand_name_with_a_digit_is_not_dropped() {
 #[test]
 fn the_readme_bullets_name_no_removed_subcommand() {
     let root = repo_root();
-    let Some(readme) = readme() else { return };
+    let readme = std::fs::read_to_string(repo_root().join("README.md")).expect("README.md");
     let named = readme_subcommand_bullets(&readme);
     assert!(!named.is_empty(), "positive control: the parser found bullets");
 
@@ -160,7 +138,7 @@ fn the_readme_bullets_name_no_removed_subcommand() {
 #[test]
 fn every_config_script_appears_in_the_readme_section() {
     let root = repo_root();
-    let Some(readme) = readme() else { return };
+    let readme = std::fs::read_to_string(repo_root().join("README.md")).expect("README.md");
 
     let script_directory = root.join(".scripts/config");
     let Ok(entries) = std::fs::read_dir(&script_directory) else {
@@ -199,7 +177,7 @@ fn every_config_script_appears_in_the_readme_section() {
 /// so descriptions have exactly one home.
 #[test]
 fn the_readme_points_at_config_help() {
-    let Some(readme) = readme() else { return };
+    let readme = std::fs::read_to_string(repo_root().join("README.md")).expect("README.md");
     assert!(
         readme.contains("config help"),
         "the README must send the reader to `config help` for descriptions"

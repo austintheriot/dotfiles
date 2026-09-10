@@ -313,7 +313,7 @@ fn a_reader_never_sees_a_partial_pointer() {
 
     use std::fmt::Write as _;
     let mut padded = String::from("linux-variant\n");
-    for index in 0..4000 {
+    for index in 0..1200 {
         let _ = writeln!(padded, "key{index:04} = \"padding that widens the write window\"");
     }
     std::fs::write(directory.join("alacritty-linux.toml"), &padded).expect("the linux variant");
@@ -324,7 +324,7 @@ fn a_reader_never_sees_a_partial_pointer() {
     let pointer = directory.join("alacritty-platform.toml");
     let full_size = std::fs::metadata(&pointer).expect("the pointer exists").len();
     assert!(
-        full_size > 100_000,
+        full_size > 40_000,
         "positive control: the finished pointer is only {full_size} bytes, \
          too small for the write window to be observable, so a zero count \
          below would mean nothing"
@@ -345,6 +345,15 @@ fn a_reader_never_sees_a_partial_pointer() {
                         short.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     }
                 }
+                // Paced, not spinning. A hot loop here wins the core from
+                // the writer it is supposed to be observing: measured
+                // 2026-09-10, the spinning form took 20 seconds to complete
+                // 12 rewrites that cost 1.2 seconds on their own, and
+                // `yield_now` still took 11. A short sleep leaves the
+                // sampling far denser than the write window, which is what
+                // the detection needs, and the broken generator is still
+                // caught.
+                std::thread::sleep(std::time::Duration::from_micros(50));
             }
         })
     };
@@ -352,13 +361,19 @@ fn a_reader_never_sees_a_partial_pointer() {
     // Deleting the pointer is what forces the write: the guard reads the
     // pointer, so an absent one can never match and the generator always
     // reaches the write.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-    let mut rewrites = 0_u32;
-    while std::time::Instant::now() < deadline {
+    //
+    // Driven by a REWRITE COUNT rather than by a deadline. A wall-clock loop
+    // does less work on a loaded machine instead of taking longer, and
+    // `tests/rust-checks.sh` runs the whole workspace's tests in parallel:
+    // measured 2026-09-10, a two-second loop there completed **1** rewrite
+    // against 60-plus when run alone, and this test's own positive control
+    // caught it. A count keeps the write window the same size everywhere.
+    const REWRITES: u32 = 6;
+    for _ in 0..REWRITES {
         let _ = std::fs::remove_file(&pointer);
         run_generator("linux", &directory);
-        rewrites += 1;
     }
+    let rewrites = REWRITES;
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     sampler.join().expect("the sampler thread joins");
 

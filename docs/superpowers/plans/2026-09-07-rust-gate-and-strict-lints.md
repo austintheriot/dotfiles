@@ -1,5 +1,33 @@
 # Rust Gate and Strict Lints Implementation Plan
 
+> **STATUS 2026-09-10: ALREADY IMPLEMENTED. Do not execute this plan.**
+>
+> Every task below describes work that has shipped. Verified against the
+> tree on 2026-09-10:
+>
+> - `tests/rust-checks.sh:139` runs `cargo test --locked --quiet`, and
+>   `:145` runs `cargo clippy --locked --all-targets -- -D warnings`.
+> - `tests/pre-push:17` documents that the Rust checks run on the host
+>   ahead of the container, and `:232` requires the script to be present
+>   and executable. `:219` records the original defect in its own comment:
+>   pre-push "printed 'SKIP cargo test (cargo not found)' and passed".
+> - `.github/workflows/test-suite.yml:163` runs the same clippy command.
+> - `crates/Cargo.toml:24` and `:33` carry `[workspace.lints.rust]` and
+>   `[workspace.lints.clippy]`, with the measured reasoning about
+>   `pedantic` and `must_use_candidate` in the surrounding comment. All six
+>   members opt in with `[lints] workspace = true`.
+> - `tests/pre-push:237` records a second defect found and fixed after this
+>   plan was written: git runs a hook with a minimal PATH omitting
+>   `~/.cargo/bin`, so the checks skipped on machines that did have a
+>   toolchain.
+>
+> The 36 unchecked boxes are therefore misleading rather than pending. They
+> are left in place rather than ticked, because nobody can now say which
+> commit satisfied which box, and inventing that mapping would be worse
+> than leaving the record honest. The spec's section 4a is the durable
+> description of what was built.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give `cargo test` a local pre-push gate and give

@@ -9,6 +9,7 @@ Commands:
   init           Finish a fresh clone: git config, hooks, toolchain, binary, deps
   install        Install the dependencies the manifest names
   install-hooks  Link the git hooks and put the dispatcher on PATH
+  install-repo-hooks Link the post-checkout hook into one repository
   prereqs        Install only what is needed to build the Rust engine
   reload         Reload the tmux config and print the line to re-source zsh
   stamp          Print the build stamp of each workspace crate

@@ -62,8 +62,9 @@ assert_succeeds 'the .my-scripts directory is gone' \
 EXECUTED_SCRIPTS='alacritty-platform.sh
 tmux-update-window-names.sh tmux-worktree-config.sh
 config/config-stamp config/config-build config/config
-config/config-install-hooks
-config/config-install config/config-test config/config-reload'
+config/config-install-hooks config/config-install-repo-hooks
+config/config-install config/config-test config/config-reload
+git-hooks/post-checkout'
 
 SOURCED_SCRIPTS='tmux-close.sh tmux-setup.sh tmux-split.sh tmux-start.sh
 zsh-git-widgets.sh platform.sh'

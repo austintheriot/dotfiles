@@ -82,6 +82,9 @@ hand-written and can, so `config help` wins on any disagreement:
   is the other half.
 - `config install` installs any missing tracked dependencies.
 - `config install-hooks` links the git hooks and puts `config` on PATH.
+- `config install-repo-hooks [dir]` links the tracked post-checkout hook into
+  one repository, so a branch change renames tmux windows on the event rather
+  than on the next prompt. One install covers every worktree of that repo.
 - `config prereqs` installs only what is needed to build the Rust engine
   (a C toolchain and rustup). The thin shell layer of the bootstrap;
   everything else is a `deps.toml` entry installed by `config install`.

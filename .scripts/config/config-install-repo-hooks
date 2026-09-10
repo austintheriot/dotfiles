@@ -1,0 +1,48 @@
+#!/bin/sh
+# help: Link the post-checkout hook into one repository
+#
+# usage: config install-repo-hooks [dir]
+#
+# Symlinks .scripts/git-hooks/post-checkout into the hooks directory of the
+# repository containing DIR (default: the current directory). The link goes
+# into the COMMON git directory, so one install covers every worktree of that
+# repository. Idempotent: running it again relinks the same path.
+#
+# Deliberately per repository rather than a global core.hooksPath: a global
+# hooks path replaces ~/.cfg's own pre-commit and pre-push hooks, which
+# tests/githooks-installed.test.sh asserts against.
+#
+# Exit 2 when DIR is not inside a git repository, the repo-wide code for a
+# caller error. Exit 1 when a hook file that is not ours already sits there:
+# overwriting a hook somebody wrote by hand is not this script's call.
+set -eu
+
+self=$(readlink -f "$0")
+here=$(dirname "$self")
+
+. "$here/usage.sh"
+usage_if_requested "${1:-}"
+
+target_dir=${1:-.}
+hook_source=$(cd "$here/../git-hooks" && pwd)/post-checkout
+
+# A hook or a pre-commit environment exports GIT_DIR, and with it set every
+# git call below would answer for THAT repository rather than DIR's.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
+
+if ! common_dir=$(git -C "$target_dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
+    printf 'config install-repo-hooks: %s is not inside a git repository\n' "$target_dir" >&2
+    exit 2
+fi
+
+hooks_dir="$common_dir/hooks"
+link="$hooks_dir/post-checkout"
+
+if [ -e "$link" ] && [ ! -L "$link" ]; then
+    printf 'config install-repo-hooks: %s exists and is not a symlink; not overwriting a hand-written hook\n' "$link" >&2
+    exit 1
+fi
+
+mkdir -p "$hooks_dir"
+ln -sfn "$hook_source" "$link"
+printf 'config install-repo-hooks: linked %s\n' "$link"

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Rename tmux windows on the checkout itself, not on the next prompt.
+#
+# Installed per repository by `config install-repo-hooks`. Nothing in tmux
+# watches git, and the other trigger, zsh's precmd, fires only when the pane
+# you typed in draws its next prompt. A checkout made from another pane, an
+# editor, or a script never renamed the window showing that repo until this.
+#
+# git passes: previous HEAD, new HEAD, and a flag that is 1 for a branch
+# checkout and 0 for `git checkout -- <file>`. A file checkout changes no
+# branch, so it renames nothing.
+[ "${3:-1}" = 1 ] || exit 0
+
+# -a, every window in every session: the window showing this repository is
+# not necessarily the one the checkout ran in. Backgrounded and silenced so
+# git returns at once and a missing binary on a fresh machine costs nothing.
+tmux-tools name-windows -a >/dev/null 2>&1 &

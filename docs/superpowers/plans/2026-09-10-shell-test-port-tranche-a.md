@@ -25,10 +25,47 @@ Copied from the spec and from this repo's standing rules. Every task's requireme
 - **The repo is public.** No employer or product names in tracked files.
 - **Never `--no-verify`.** Never disable a test instead of fixing it. Never commit code that does not compile.
 - **Commit messages** end with the attribution lines this session uses.
+- **`crates/Cargo.lock` is part of every commit that touches a manifest.**
+  Adding a member or a dependency changes the lock, and `cargo test --locked`
+  refuses to update it, so a commit without the lock fails its own gate. Run
+  `cargo update --offline -w` after a manifest edit, and add the lock. Found
+  the hard way in Task 1, whose own `config add` list omitted it.
+- **Every crate root needs
+  `#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]`.**
+  `tests/rust-gate.test.sh` asserts it per crate, and that suite is not
+  mentioned anywhere else in this plan. Without the attribute the suite goes
+  to `24 passed, 1 failed` and the push is blocked.
+- **Every integration-test file opens with a `//!` module doc.** All 13
+  existing ones do, and `missing_docs = "warn"` plus clippy's `-D warnings`
+  makes an omission a gate failure rather than a style note.
+- **`tests/rust-checks.sh` archives from a git ref, not the working tree.**
+  So a gate run before the commit exercises the OLD code. Verify after
+  committing, not before, or the run proves nothing about what you wrote.
+- **A test must never call `skip()` to prove skipping works.** `skip()` reads
+  the ambient `DOTFILES_SKIP_LOG`, which the gate sets, so such a test
+  appends a phantom skip and overstates missing coverage. Assert through
+  `skip_log_path()` and an explicit path instead. This was a real defect in
+  this plan's Task 1, caught during execution.
 
 ---
 
-### Task 1: The runtime-skip mechanism
+### Task 1: The runtime-skip mechanism -- DONE (`6a162f05`, 2026-09-10)
+
+> Landed with all gates green. The sabotage control worked. `nvim` is on
+> PATH here, so the correct outcome was no skip line, and there was none.
+>
+> Four defects in this task as written, all now fixed in the Global
+> Constraints above: the missing lock in the `config add` list, the missing
+> `deny(clippy::unwrap_used)` attribute that `rust-gate.test.sh` enforces,
+> the missing `//!` module doc, and a real bug in the third test, which
+> called `skip()` under a gate that sets the log and so appended a phantom
+> skip line.
+>
+> **Follow-up this task did not cover:** `nvim_runtime.rs:175` has a THIRD
+> skip, the Homebrew-Cellar case, still on bare `eprintln!`. On this machine
+> that is the branch that fires, so the one real skip here is still invisible
+> to the gate. Converted separately.
+
 
 Spec 4b.1. Everything else in Tranche A depends on this, because a converted suite that cannot record a skip silently drops platform-gated coverage.
 
@@ -236,8 +273,8 @@ Expected: on a machine with no `nvim` on PATH, the output ends with `rust-checks
 
 ```bash
 cd ~
-config add crates/Cargo.toml crates/dotfiles-test-support crates/config-cli/Cargo.toml \
-    crates/config-cli/tests/nvim_runtime.rs tests/rust-checks.sh
+config add crates/Cargo.toml crates/Cargo.lock crates/dotfiles-test-support \
+    crates/config-cli/Cargo.toml crates/config-cli/tests/nvim_runtime.rs tests/rust-checks.sh
 config commit -F - <<'MSG'
 tests: give Rust a runtime skip the gate can count
 
@@ -415,6 +452,55 @@ fn the_readme_bullets_name_no_removed_subcommand() {
     );
 }
 
+/// The forward direction, and the assertion this plan's first draft omitted:
+/// a script that exists but no bullet names. The shell suite had it at
+/// tests/config-docs.test.sh:38 with a `grep -qF "config $sub"` over the
+/// section, and dropping it in conversion would have lost coverage silently,
+/// which is the exact failure this plan names as its weakest link.
+///
+/// Note the asymmetry with the reverse direction: this one matches the
+/// section text rather than the parsed bullets, because a subcommand may be
+/// documented in prose (`config status`, `config commit` are named as git
+/// passthrough) without being a bullet. The shell suite's grep had the same
+/// property.
+#[test]
+fn every_config_script_appears_in_the_readme_section() {
+    let root = repo_root();
+    let readme = std::fs::read_to_string(root.join("README.md")).expect("README.md");
+
+    let script_directory = root.join(".scripts/config");
+    let Ok(entries) = std::fs::read_dir(&script_directory) else {
+        dotfiles_test_support::skip("no .scripts/config here, so scripts cannot be enumerated");
+        return;
+    };
+
+    let mut scripts: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .and_then(|name| name.strip_prefix("config-"))
+                .map(str::to_string)
+        })
+        .collect();
+    scripts.sort();
+    assert!(
+        !scripts.is_empty(),
+        "positive control: no config-* scripts found, so this assertion would \
+         pass vacuously"
+    );
+
+    let undocumented: Vec<&String> = scripts
+        .iter()
+        .filter(|name| !readme.contains(&format!("config {name}")))
+        .collect();
+    assert!(
+        undocumented.is_empty(),
+        "these subcommands exist but the README never names them: {undocumented:?}"
+    );
+}
+
 /// The section must point at the generated listing rather than restating it,
 /// so descriptions have exactly one home.
 #[test]
@@ -447,7 +533,7 @@ pulldown-cmark = { version = "0.13", default-features = false }
 
 Run from `~/crates`: `cargo test -p config-cli --test config_docs --locked`
 
-Expected: PASS, 5 tests. If `the_readme_bullets_name_no_removed_subcommand` fails, the README genuinely names a stale subcommand and the README is what to fix, not the test.
+Expected: PASS, 6 tests. If `the_readme_bullets_name_no_removed_subcommand` or `every_config_script_appears_in_the_readme_section` fails, the README genuinely disagrees with the tree and the README is what to fix, not the test.
 
 - [ ] **Step 5: Verify the conversion caught what the shell could not**
 

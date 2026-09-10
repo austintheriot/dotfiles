@@ -172,9 +172,9 @@ fn a_neovim_separated_from_its_runtime_is_reported_broken() {
 
     let resolved = std::fs::canonicalize(&nvim).unwrap_or_else(|_| nvim.clone());
     if resolved.to_string_lossy().contains("/Cellar/") {
-        eprintln!(
-            "skip: a Homebrew nvim resolves into its Cellar prefix, so an \
-             orphaned copy is still beside a real share/ tree"
+        dotfiles_test_support::skip(
+            "a Homebrew nvim resolves into its Cellar prefix, so an orphaned \
+             copy is still beside a real share/ tree",
         );
         return;
     }

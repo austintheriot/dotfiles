@@ -3,8 +3,9 @@
 # Gates the Lua under .config/nvim: formatting with stylua, correctness with
 # selene.
 #
-# WHY THIS EXISTS. Nothing checked the Lua at all. tests/shellcheck.test.sh
-# covers 25+ shell scripts, and the ~20 Lua files had no equivalent, so the
+# WHY THIS EXISTS. Nothing checked the Lua at all.
+# crates/config-cli/tests/shellcheck_lint.rs covers 25+ shell scripts, and
+# the ~20 Lua files had no equivalent, so the
 # only feedback on a Lua mistake was nvim failing at runtime -- which is how
 # the NvimTree and mason-version regressions both shipped.
 #

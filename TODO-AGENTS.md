@@ -171,23 +171,16 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       and keeps the loop in the main shell so the moved counter survives.
       A path containing a newline is the one shape this still misses, and it
       stays recorded as such below.
-- `crates/config-manifest`: an orphan `!` rule silently disables drift
-  checking for the paths it names. `manifest.rs:186-204` returns
-  `Classification::Excluded` for any path matching an `Excluded` pattern
-  whether or not an enclosing `Shared` rule exists, and `check.rs:47`
-  drops excluded paths from comparison. A typo (`!doc/private.md` against
-  a `docs/` rule), or deleting a shared rule and leaving its exclusions,
-  turns the guard off with no signal.
-  Two fixes were proposed. The structural one makes exclusions children of
-  the rule they modify (`SharedRule { pattern, exceptions }`), so an
-  orphan is unrepresentable and precedence stops being ordering logic;
-  cost is reassembling the flat file into a tree at parse time and
-  re-flattening it on print. The cheap one keeps the flat `Vec<Rule>` and
-  rejects, at parse time, any `Excluded` pattern not nested under some
-  `Shared` directory pattern.
-  Decide which before porting more scripts, because the next crate will
-  copy this one's shape.
-
+- RESOLVED BY THE 2026-09-06 COLLAPSE, decided 2026-09-09. The `.sync-manifest`
+  parser this entry describes, with its `Shared`/`Excluded` classification,
+  went out with `config sync` and `config check`. A workspace-wide search for
+  `Excluded`, `SharedRule`, `Classification::` and `sync-manifest` finds only
+  an unrelated doc comment in deps-core. The decision taken stands as the
+  rule for the next manifest-style parser: reject an orphan exclusion at
+  parse time (a `!` pattern nested under no directory pattern is an error),
+  keeping a flat rule list. An orphan that silently widens a gate is the
+  fail-open shape this repo keeps paying for, so it must fail loudly at the
+  edge.
 - RESOLVED BY THE 2026-09-06 COLLAPSE, confirmed 2026-09-09 by reading the
   crate rather than this entry: `crates/config-manifest` no longer has a
   binary. `src/` is doctor.rs, git.rs, lib.rs, path.rs and stamp.rs, with no
@@ -227,23 +220,14 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   clear a 40ms bar. `-C` would save nothing meaningful and removes the
   compaudit security check.
 - Our testing & repo infrastructure has grown quite complex. Let's consider porting some of these to Rust scripts -- both for ease of reading/writing/updating/managing/testing, but also for speed. Brainstorm options here
-- `se` is slow, but shell startup is no longer the cause. Re-measured
-  2026-09-05, after the lazy nvm and pyenv work landed.
-  Interactive zsh startup is 170-176ms against a ~7ms bare shell, and
-  tests/zshrc-startup-budget.test.sh now holds it under 400ms.
-  The full layout is 21 windows x 5 panes = 105 panes. Measured three
-  times on an isolated tmux server: build 6.1-7.8s, then 0.6-1.9s until
-  every pane reaches its prompt, 6.6-9.7s total. Not minutes.
-  The cost is tmux creating panes, NOT shell startup multiplied by 105:
-  split-window returns once the pane exists, so the 105 shells start in
-  parallel and cost 0.6s together rather than 105 x 176ms serially.
-  So shaving shell startup further buys almost nothing here. What is
-  left to consider, and why this is not closed:
-    - whether 105 panes is the right layout at all, given 15 worktrees
-    - whether windows can be created lazily, on first selection
-    - whether the earlier "minutes" was a cold cache, a since-fixed
-      eager init, or contention from something else on the machine.
-      No measurement from that period survives, so this is unresolved.
+- CLOSED AS MEASURED 2026-09-09. `se` builds 21 windows x 5 panes = 105
+  panes in 6.6-9.7s, of which shell startup is 0.6s total because the 105
+  shells start in parallel; the rest is tmux creating panes. That is tmux's
+  pane-creation cost, not a defect, and the decision is to keep the eager
+  layout. Interactive zsh startup is 170-176ms, held under 400ms by
+  tests/zshrc-startup-budget.test.sh. Lazy window creation and a smaller
+  layout were weighed and declined. The earlier "minutes" has no surviving
+  measurement and is treated as a cold cache or a since-fixed eager init.
 - Renaming tmux windows lags on a git branch change. Investigated
   2026-09-05; cause found, not yet fixed.
   Nothing in tmux watches git. The tmux hooks in .config/tmux/tmux.conf

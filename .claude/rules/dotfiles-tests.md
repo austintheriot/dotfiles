@@ -100,6 +100,34 @@ boxes, and re-verify if the banner is old.
 The durable record of intent is the **spec** in `docs/superpowers/specs/`,
 not the plan. A plan is scaffolding for one pass of work.
 
+## A suite with no `finish` call exits 0 no matter what
+
+`finish` is what returns the exit status. A suite that prints `FAIL:` and
+then falls off the end of the file exits **0**, and `run-all.sh` records a
+pass.
+
+Found 2026-09-10 converting `nvim-lua-format.test.sh`, which had no `finish`
+call at all: its last statement was an assertion inside an `if`. An
+unformatted Lua file made it print `FAIL:` and exit 0, so the stylua gate had
+been open since the suite was written. The Rust port exits 101 on the same
+sabotage.
+
+Two related shapes found the same day, both in suites that looked fine:
+
+- **`nvim-version-floor.test.sh`** asserted its live simulation's output
+  contained `0.10`. With the version guard disabled so startup fell through,
+  it still passed, because the run reached lazy.nvim and printed
+  `markdown-preview.nvim v0.0.10`. The guard's own message appeared zero
+  times. Assert the guard's message, and that what the guard prevents did not
+  happen.
+- **`profile-path.test.sh`** checked for bashisms with `sh -n` and `dash -n`.
+  Neither rejects `[[ ]]`: dash parses `[[` as a command word and the syntax
+  check passes. A parse check is not an execution check.
+
+The rule: **every suite ends with `finish`, and every gate must be shown to
+fail.** Before trusting a new suite, break its subject once and confirm a
+non-zero exit, not just a `FAIL:` line on stdout.
+
 ## Sabotage the measurement, not only the subject
 
 The standard sabotage check is "break the thing this test asserts about and
@@ -216,7 +244,7 @@ work, both in use here:
   afterwards without polling.
 - `:MasonInstall <pkg>` or the `pkg:install` API for one package.
 
-`tests/nvim-mason-runtimes.test.sh` asserts the gate still exists at the
+`crates/config-cli/tests/nvim_mason_runtimes.rs` asserts the gate still exists at the
 pinned commit, and skips where the plugin tree is absent, which is the case
 in the container. The assertion is deliberately about the gate rather than
 about mason's behaviour: when a bump removes the gate, a headless install

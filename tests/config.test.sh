@@ -11,7 +11,7 @@
 CONFIG_DIR="$DOTFILES_ROOT/.scripts/config"
 CONFIG="$CONFIG_DIR/config"
 
-EXPECTED_SUBCOMMANDS='build stamp install-hooks init install prereqs test reload help doctor deps'
+EXPECTED_SUBCOMMANDS='build stamp install-hooks install-repo-hooks init install prereqs test reload help doctor deps'
 
 make_fixture_home() {
     fixture_home="$FIXTURES/home-$1"

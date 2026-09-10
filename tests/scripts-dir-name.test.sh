@@ -207,8 +207,10 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
     # 42 -> 21 when the whole deps/ tree moved to the top level, and
     # 21 -> 22 when config-prereqs landed. Update it deliberately, in the
     # same commit as the change that moves it.
-    assert_equals 'all 22 scripts are committed, not only on disk' \
-        '22' "$committed_count"
+    # 22 -> 24 on 2026-09-10 when config-install-repo-hooks and
+    # git-hooks/post-checkout landed (the branch-change rename hook).
+    assert_equals 'all 24 scripts are committed, not only on disk' \
+        '24' "$committed_count"
 
     # The execute bits have to survive the commit too. A script committed
     # 100644 fails at runtime on a fresh clone while working on the machine
@@ -230,6 +232,8 @@ if git_cmd rev-parse --verify HEAD >/dev/null 2>&1; then
         "$NEW_NAME/config/config-help" \
         "$NEW_NAME/config/config-install" \
         "$NEW_NAME/config/config-install-hooks" \
+        "$NEW_NAME/config/config-install-repo-hooks" \
+        "$NEW_NAME/git-hooks/post-checkout" \
         "$NEW_NAME/config/config-prereqs" \
         "$NEW_NAME/config/config-reload" \
         "$NEW_NAME/config/config-stamp" \

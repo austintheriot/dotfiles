@@ -133,7 +133,7 @@ fn installed_nvim() -> Option<PathBuf> {
 #[test]
 fn the_installed_neovim_resolves_its_runtime() {
     let Some(nvim) = installed_nvim() else {
-        eprintln!("skip: no nvim on PATH, so there is no install to check");
+        dotfiles_test_support::skip("no nvim on PATH, so there is no install to check");
         return;
     };
 
@@ -166,7 +166,7 @@ fn the_installed_neovim_resolves_its_runtime() {
 #[test]
 fn a_neovim_separated_from_its_runtime_is_reported_broken() {
     let Some(nvim) = installed_nvim() else {
-        eprintln!("skip: no nvim on PATH, so there is nothing to orphan");
+        dotfiles_test_support::skip("no nvim on PATH, so there is nothing to orphan");
         return;
     };
 

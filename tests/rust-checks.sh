@@ -135,10 +135,31 @@ run_in_snapshot() {
     )
 }
 
+# The skip log. Rust's harness has no runtime skip, so a test that cannot run
+# here records one line to this file and the count is reported below. See
+# docs/superpowers/specs/2026-09-07-shell-test-port-design.md section 4b.1.
+#
+# Truncated rather than deleted: a stale count from a previous run would
+# overstate missing coverage, and a missing file is indistinguishable from a
+# run where nothing skipped.
+DOTFILES_SKIP_LOG="${TMPDIR:-/tmp}/dotfiles-rust-skips.jsonl"
+export DOTFILES_SKIP_LOG
+: > "$DOTFILES_SKIP_LOG"
+
 printf 'rust-checks: cargo test (%s)\n' "$ref"
 if ! run_in_snapshot cargo test --locked --quiet; then
     printf 'rust-checks: cargo test failed\n' >&2
     status=1
+fi
+
+# Report the skips the way run-all.sh does for the shell suites, because a
+# gate that says nothing when it skips is indistinguishable from one that is
+# not installed. Silent when nothing skipped: a trailing "0 skipped" on every
+# run is noise, and noise is what a reader learns to scan past.
+if [ -s "$DOTFILES_SKIP_LOG" ]; then
+    skipped=$(wc -l < "$DOTFILES_SKIP_LOG" | tr -d ' ')
+    printf 'rust-checks: %s skipped\n' "$skipped"
+    sed -n 's/.*"reason":"\(.*\)"}/  skip: \1/p' "$DOTFILES_SKIP_LOG"
 fi
 
 printf 'rust-checks: cargo clippy (%s)\n' "$ref"

@@ -11,7 +11,7 @@
 # rather than iterating zero crates.
 [workspace]
 resolver = "3"
-members = ["config-cli", "config-manifest", "deps-core", "dotfiles-path", "tmux-core", "tmux-tools"]
+members = ["config-cli", "config-manifest", "deps-core", "dotfiles-path", "dotfiles-test-support", "tmux-core", "tmux-tools"]
 
 # Lint policy lives here rather than in a command line, because a command
 # line binds one invocation: an IDE, a bare `cargo clippy`, and CI would all

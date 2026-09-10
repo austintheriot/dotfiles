@@ -125,6 +125,7 @@ dependencies = [
  "config-manifest",
  "deps-core",
  "dotfiles-path",
+ "dotfiles-test-support",
  "tempfile",
 ]
 
@@ -149,6 +150,13 @@ dependencies = [
 [[package]]
 name = "dotfiles-path"
 version = "0.1.0"
+
+[[package]]
+name = "dotfiles-test-support"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+]
 
 [[package]]
 name = "errno"

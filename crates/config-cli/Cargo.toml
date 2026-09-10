@@ -12,6 +12,7 @@ deps-core = { path = "../deps-core" }
 dotfiles-path = { path = "../dotfiles-path" }
 
 [dev-dependencies]
+dotfiles-test-support = { path = "../dotfiles-test-support" }
 tempfile = { workspace = true }
 
 [lints]

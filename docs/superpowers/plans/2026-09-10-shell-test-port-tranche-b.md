@@ -29,6 +29,39 @@ Copied from Tranche A's plan, where every one of these was learned by executing 
 - **The repo is public.** No employer or product names in tracked files.
 - **Never `--no-verify`.** Never disable a test instead of fixing it.
 
+> **STATUS 2026-09-10: IMPLEMENTED.** All five tasks, eight commits
+> (`ea6295c4`, `2d7bbe54`, `54fd9b56`, `81a5fb2a`, `b10372e4`, `c765b2ab`,
+> `33a79e89`, `e420e5df`). All seven suites converted; `ls tests/zshrc-*.test.sh`
+> is empty. Five errors in this plan were found by executing it:
+>
+> 1. **Assertion counts here are static call sites, not runtime assertions.**
+>    Loops fan out: `zshrc-platform-split` runs 19 not 15, `zsh-git-widgets`
+>    9 not 5, `zshrc-startup-budget` 2 not 4. The real total is 76, not 70.
+>    The same error appeared in Tranche A, where `bootstrap-harness` ran 99
+>    against a stated 77. Count executed assertions, not `assert_` lines.
+> 2. **Task 2's proposed "new contract 5" was a duplicate.** The plan claimed
+>    "exactly one variant loads ... nothing asserted that before". Assertions
+>    10 to 13 already did, behaviourally, driving both platforms through the
+>    `DOTFILES_PLATFORM` override. They were ported rather than a fifth
+>    contract invented. None of the 19 was vacuous: the re-derivation ended
+>    up confined to two doc comments, which is a smaller change than this
+>    plan predicted.
+> 3. **`run_interactive` never materialised.** With `run` now interactive, a
+>    second entry point would be identical. Two, not three. Tasks 3 and 4
+>    still say "use `zsh::run_interactive`" and that instruction is stale.
+> 4. **Tasks 4 and 5 say to run `tests/run-all.sh`**, which conflicts with the
+>    lead's instruction not to during parallel work. Reconcile before reuse.
+> 5. **`run_in_home` spawns an interactive shell**, so zsh sources the fixture
+>    `~/.zshrc` on startup by itself. A setup script passed to it expecting to
+>    run *before* the config gets two loads. Documented at the call site; it
+>    belongs in the fixture's own docs.
+>
+> **The finding worth carrying forward** is now in
+> `.claude/rules/dotfiles-tests.md`: sabotage the measurement, not only the
+> subject. The startup-budget test measured 405ms of terminal setup against a
+> 154ms signal, so a 1ms threshold still passed. Breaking the subject could
+> never have revealed it.
+
 ## The seven suites, measured
 
 | Suite | Assertions | Shape |

@@ -2,7 +2,7 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
 
 # TODOS:
 
-- nvim: `ensure_installed` NEVER RUNS HEADLESS, which invalidates the
+- CLAIMED 2026-09-10: nvim: `ensure_installed` NEVER RUNS HEADLESS, which invalidates the
   obvious CI test for it. Verified verbatim at
   mason-lspconfig/lua/mason-lspconfig/init.lua:31:
       if not platform.is_headless and #settings.current.ensure_installed > 0

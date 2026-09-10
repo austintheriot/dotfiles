@@ -82,11 +82,13 @@ RUN cargo build --release --locked --quiet
 FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
 
 # The tools the suite shells out to. tmux and zsh are the load-bearing ones:
-# lib.sh drives real tmux sessions, and zsh-git-widgets.test.sh sources the
-# widget file in a real zsh. fzf, ripgrep, and git are asserted as present by
-# that suite. dash is /bin/sh here, and the deps tests use it to catch
-# bashisms that macOS's bash-flavored /bin/sh accepts. python3 runs the
-# unittest suites under .claude/scripts.
+# lib.sh drives real tmux sessions, and the converted zsh suites under
+# crates/config-cli/tests spawn a real zsh (zsh_git_widgets.rs sources the
+# widget file in one, and the zshrc_* suites load the config itself). fzf,
+# ripgrep, and git are asserted as present by zsh_git_widgets.rs. dash is
+# /bin/sh here, and the deps tests use it to catch bashisms that macOS's
+# bash-flavored /bin/sh accepts. python3 runs the unittest suites under
+# .claude/scripts.
 #
 # ca-certificates is not for the suite itself but for any git operation that
 # reaches a remote; without it those fail with an opaque TLS error.

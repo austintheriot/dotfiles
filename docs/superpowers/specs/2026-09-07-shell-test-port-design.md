@@ -199,7 +199,7 @@ tranche C rests on consistency alone.
 
 ## 4. What the port must preserve
 
-- **The `skip` mechanism.** `tests/lib.sh` distinguishes a skipped assertion
+- **The `skip` mechanism.** DECIDED 2026-09-10; see section 4b. `tests/lib.sh` distinguishes a skipped assertion
   from a passing one, and `run-all.sh` reports the count (currently 49
   skipped). A port that turns skips into passes hides platform-gated
   coverage. `#[ignore]` is not equivalent: it hides the count.
@@ -220,6 +220,107 @@ tranche C rests on consistency alone.
   `run-all.sh` previously pointed `--manifest-path` at one crate, so
   `dotfiles-path`'s tests were outside the suite from the day it landed.
   Measured 4 test binaries before, 6 after.
+
+## 4b. The two designs this spec left open, decided 2026-09-10
+
+Section 4's `skip` bullet fixed the requirement and named no mechanism, and
+the tmux fixture helpers were never mentioned at all. Both are decided here,
+because a conversion that starts without them rebuilds the silent-skip defect
+this repo has already shipped once.
+
+### 4b.1 Runtime skips go to a sentinel file the gate reads
+
+**The defect, verified 2026-09-10 rather than reasoned about.**
+`crates/config-cli/tests/nvim_runtime.rs` already skips at runtime, with
+`eprintln!("skip: ...")` and an early `return`, and its own comment calls this
+"an uncomfortable choice: a skip is the shape that let the bootstrap bug
+through". `tests/rust-checks.sh:139` runs `cargo test --locked --quiet`.
+Measured: that command reports **0** lines matching `skip:`, and the same
+command with `--nocapture` reports them. So the gate is blind to Rust skips
+today, before any conversion. Converting 34 suites onto `eprintln` would scale
+the blindness by 34.
+
+**The mechanism.** A test that cannot run calls a `skip("reason")` helper. It
+appends one JSON line, naming the test and the reason, to the path in
+`DOTFILES_SKIP_LOG`. `tests/rust-checks.sh` truncates that file before the
+run and, after it, prints `rust-checks: N skipped` followed by each reason,
+which is what `run-all.sh` already does for the shell suites and what
+`pre-push` already shows.
+
+**Why this and not the alternatives.**
+
+`#[ignore]` was rejected in section 4 and remains rejected: it is a
+compile-time decision and hides the count.
+
+`--nocapture` plus a grep makes a skip visible without making it countable.
+Parallel test output interleaves, and every unrelated `eprintln` unblocks with
+it, so the number the gate reports stops being trustworthy exactly when tests
+run concurrently.
+
+`libtest-mimic` is the technically correct answer and was rejected on cost: it
+adds a dependency and changes how every converted test is declared, from
+`#[test] fn` to a registered closure. That is a tax on all 34 conversions to
+serve roughly 19 skips.
+
+The sentinel file keeps the assertion in Rust and the reporting in the gate,
+which is the split `crates/config-cli/tests/nvim_lua_units.rs` already uses:
+the Lua specs assert, and Rust decides whether the suite passed. It needs no
+dependency, leaves `#[test] fn` untouched so the conversions stay mechanical,
+and keeps `--quiet`.
+
+**It is itself testable, and must be tested.** A test asserts that a skipping
+test appends a line, and the sabotage control is the one this document's own
+habit requires: remove the append and the assertion must go red. Without that
+control the mechanism is a claim.
+
+**What it does not solve.** Nothing structurally prevents a test from
+returning early without recording a skip. The gate can only assert that the
+count is non-zero on a leg known to lack a tool, which the container and
+fresh-machine legs supply.
+
+**Scope note.** Of the 59 skips the shell suites currently report, the largest
+group ("crates/ not present here", "no repository here") is an artifact of
+`run-in-docker.sh` building the image with `git archive` per path. Those
+**disappear** under conversion, because a Rust test only runs where cargo and
+the workspace exist. What survives is roughly 15 "tool absent" skips plus the
+4 platform-variant ones in Tranche B. So this mechanism serves about 19 cases,
+not 59.
+
+### 4b.2 The tmux fixture already exists; promote it rather than design one
+
+`lib.sh`'s `new_test_session`, `in_pane`, `in_session` and `make_worktree`
+touch only **4 suites** (`notify`, `tmux-close`, `tmux-split`,
+`tmux-update-window-names`, 595 lines together), so this is a smaller problem
+than the helper count suggests.
+
+The successor is already written and running.
+`crates/tmux-tools/tests/name_windows.rs` and `split.rs` each carry a local
+`fn tmux(socket_dir, socket, arguments)` that sets `TMUX_TMPDIR` per call, and
+build their socket directory with
+`tempfile::Builder::new().prefix("tt-").tempdir_in("/tmp")`. That is exactly
+the shape the three tmux traps in `.claude/rules/dotfiles-tests.md` require,
+and it is duplicated across the two files.
+
+**The decision:** de-duplicate that helper into one support module under
+`crates/tmux-tools/tests/`, and convert the four suites onto it. Three
+specifics, each closing a trap the rules file records as having cost a
+debugging cycle:
+
+- The socket directory is created before the first tmux call, and the suite
+  asserts at the end that the **shared** directory holds no socket of its own.
+  When `TMUX_TMPDIR` names a directory whose parent is missing, tmux falls
+  back to the shared path and exits 0 silently.
+- The directory lives directly under `/tmp`. A Unix socket path is capped at
+  104 bytes on macOS, and a temp dir under `/var/folders/.../T/` overruns it.
+- The session fixture kills the server in `Drop`, **through the same wrapper
+  that set `TMUX_TMPDIR`**. A teardown that misses this aims at a path that no
+  longer exists, leaves the real server running, and then removes its socket
+  from under it.
+
+`in_pane` and `in_session` need no successor abstraction: they are `.env()`
+calls on the Rust side already. `isolate_hooks` becomes an explicit no-op hook
+at index `[0]`, not an empty string, because setting a hook to `''` leaves the
+inherited global array entry firing, which `8591f242` fixed once already.
 
 ## 4a. The gate hole this port closes, and the one it does not
 

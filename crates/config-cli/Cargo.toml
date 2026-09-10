@@ -13,6 +13,9 @@ dotfiles-path = { path = "../dotfiles-path" }
 
 [dev-dependencies]
 dotfiles-test-support = { path = "../dotfiles-test-support" }
+# `default-features = false` drops the crate's own CLI and HTML renderer,
+# which the Markdown-reading tests do not use.
+pulldown-cmark = { version = "0.13", default-features = false }
 tempfile = { workspace = true }
 
 [lints]

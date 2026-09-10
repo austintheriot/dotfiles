@@ -788,9 +788,42 @@ Claude-Session: https://claude.ai/code/session_015V9aqvoTCJYbbVKbXXgqot
 MSG
 ```
 
-- [ ] **Step 5: Convert the remaining six, one commit each**
+- [x] **Step 5: Convert the remaining suites, one commit each** -- DONE for three of five; the last two are re-scoped below.
 
-In this order, cheapest first so the pattern is established before the hardest: `workflow-action-versions`, `readme-badges`, `shellcheck`, `check-deps`, `bootstrap-harness`, `deps-harness`.
+> **CORRECTED 2026-09-10 during execution.** This step named six suites.
+> Two of those instructions were wrong:
+>
+> **`check-deps.test.sh` does not exist.** It was deleted in `13df32d5`,
+> "Retire check-deps.sh, and delete the fixture that hid its worst bug", on
+> 2026-09-07. The spec's section 3 table still lists it and this plan
+> inherited the error. So the count is five, not six, and Step 6's "seven
+> fewer suites" is five fewer.
+>
+> **`bootstrap-harness` and `deps-harness` must NOT be converted wholesale.**
+> Measured: 484 lines and 77 assertions, of which 9 parse YAML; 526 lines and
+> 52 assertions, of which 3 parse YAML. The other ~115 are greps over
+> Dockerfiles and shell text, file-mode checks, `git ls-tree` reads, TOML
+> greps, and two behaviours driven against fixture `$HOME`s with their own
+> bare repos.
+>
+> Deleting the shell files would drag those ~115 assertions into Rust as the
+> same substring matching, gaining nothing against the defect class this
+> tranche targets, and would land the fixture-harness work the spec assigns
+> to tranche C. The spec says so directly at its lines 111-124: the tranches
+> "OVERLAP ... A suite in both gets its parser work in A and its fixture work
+> in C."
+>
+> The tranche-A win in these two is real and still worth taking: both parse
+> workflows with `python3`, and both carry python-gated skips
+> (`bootstrap-harness.test.sh:132-133`, and `deps-harness`'s 60-line inline
+> parser). `yaml_serde` removes the interpreter dependency and those skips.
+> That is a **scoped extraction**: move only the YAML assertions to Rust and
+> leave each shell suite owning its Dockerfile, fixture and file-mode
+> assertions. It is deferred to its own task rather than improvised here,
+> because the Global Constraints forbid two harnesses owning one assertion
+> and the split needs deciding, not inventing.
+
+Converted, in this order, cheapest first: `workflow-action-versions` (`28a54d83`), `readme-badges` (`a6743f02`), `shellcheck` (`10c83f09`).
 
 For each, repeat Task 3's steps 1 through 8 exactly: read the suite and state every assertion in a sentence, write one test per assertion with a positive control, watch it fail, implement, watch it pass, sabotage each test to prove it is load-bearing, delete the shell file, run both gates, commit. Do not batch two suites into one commit; a reviewer must be able to reject one conversion while accepting its neighbor.
 

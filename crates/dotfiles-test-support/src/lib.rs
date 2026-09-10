@@ -270,8 +270,7 @@ pub mod zsh {
     ///
     /// Panics when zsh cannot be spawned. Callers guard with [`available`],
     /// so reaching this means the shell vanished mid-run.
-    fn spawn(home: &Path, script: &str) -> Output {
-        let path = std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".to_string());
+    fn spawn_with_path(home: &Path, path: &str, script: &str) -> Output {
         Command::new("zsh")
             .args(["-l", "-i", "-c"])
             .arg(script)
@@ -281,6 +280,36 @@ pub mod zsh {
             .env("TERM", "xterm")
             .output()
             .expect("zsh spawns")
+    }
+
+    /// The caller's `PATH`, or a minimal one when it has none.
+    fn inherited_path() -> String {
+        std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".to_string())
+    }
+
+    fn spawn(home: &Path, script: &str) -> Output {
+        spawn_with_path(home, &inherited_path(), script)
+    }
+
+    /// The same shell with an explicit `PATH`.
+    ///
+    /// `PATH` is the one variable a startup-resolution test cannot let the
+    /// caller decide. `.zshrc` skips its shim prepend when the shims are on
+    /// `PATH` anywhere, so a caller whose `PATH` already carries them further
+    /// back leaves them there, behind whatever came first. Run from a shell
+    /// with Homebrew ahead of the pyenv shims, the shell suite's two
+    /// resolution assertions failed while a real login shell on the same
+    /// machine resolved correctly: same config, two answers, decided by the
+    /// caller. `zshrc-python-startup.test.sh:110` pinned
+    /// `/usr/bin:/bin:/usr/sbin:/sbin` for exactly that block, which is what
+    /// `path_helper` starts a login shell with.
+    ///
+    /// # Panics
+    ///
+    /// Panics when zsh cannot be spawned.
+    #[must_use]
+    pub fn run_with_path(path: &str, script: &str) -> Output {
+        spawn_with_path(&super::repo::root(), path, script)
     }
 
     /// An interactive login shell in the repo itself, so the tracked

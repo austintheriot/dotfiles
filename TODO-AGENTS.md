@@ -269,8 +269,42 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   dependency changes), and the hour-long stall (a five-state taxonomy built
   from the telemetry events). The item below is now unblocked.
 
-- Automate the sandboxing, inference and GPU configuration in this repo,
-  once the agent above exists to say what the configuration should be.
+- Track the Claude Code settings that can be public, and keep the local
+  overrides untracked. `~/.claude/settings.json` is untracked today because
+  its auto-mode environment and marketplace blocks name the employer, so
+  nothing about the sandbox, telemetry or timeouts is under version control.
+  Panel brief from `/expert-consult` on 2026-09-10 (`agent-sandboxing`,
+  `agent-orchestration`, `local-inference`):
+    - First slice: move the employer-named blocks (`autoMode`,
+      `enabledPlugins`, `extraKnownMarketplaces`, `mcpServers`) into
+      `~/.claude/settings.local.json`, then track `~/.claude/settings.json`
+      with `sandbox.enabled`, `failIfUnavailable: true`,
+      `allowUnsandboxedCommands: false`, a `filesystem.denyRead` list for
+      credential paths, and `env.CLAUDE_CODE_ENABLE_TELEMETRY=1` with console
+      exporters. Pin it with `tests/claude-settings.test.sh`: the file is
+      tracked, the three sandbox keys read true, true, false, and
+      `leak-check.sh` passes over it. Enable the sandbox for unattended runs
+      first. On the interactive session every new network host becomes a
+      prompt, and a prompt looks like a stall from outside.
+    - Second slice: a ceilings check in `config doctor`. Pure
+      `sum_ceilings(host, docker_vm, metal)` in `deps-core` with verdicts
+      Fits, Oversubscribed and Unmeasured, plus `undeclared_runtimes`.
+      Measured 2026-09-10: 64 GiB host, Docker `MemoryMiB` 32768, Metal
+      working set 53,084 MiB, sum 131%. A cap of 16384 fits with 4,068 MiB of
+      headroom. The check reads Docker's settings file and never writes it,
+      and stays silent on Linux.
+    - Open decisions: the Docker cap value (whether 16 GiB is enough for the
+      47-suite pre-push run is unmeasured), `github.com` on the network
+      allowlist (the push workflow needs it, and it is the exfiltration path
+      the rules file records), `maxTurns` on review agents (none of 80 set
+      it), and Ollama 0.18.2 with 34 GB of stale models in
+      `~/.ollama/models`, installed and declared nowhere.
+    - Not shippable: `isolation: worktree`, because `~` is a bare-repo
+      worktree with no `.git`. The `cargo --locked` race between agents stays
+      a manual worktree per agent.
+    - Machine hygiene, outside the repo: a credentials env file under
+      `~/.claude/` is mode 0644 and a registry token sits in the shell
+      environment. Both are readable by any subprocess today.
   Deliberately a second item: the first decides what is correct, this one
   makes a fresh machine arrive at it without a human remembering the steps.
   The shape this repo already uses:

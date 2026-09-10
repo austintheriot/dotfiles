@@ -250,6 +250,40 @@ pub fn shared_socket_path(socket: &str) -> PathBuf {
     PathBuf::from(format!("/tmp/tmux-{}/{socket}", uid.trim()))
 }
 
+/// The checkout under test, for the tests that assert against a tracked
+/// shell shim.
+///
+/// `DOTFILES_ROOT` then `HOME`, accepting either only when
+/// `crates/Cargo.toml` is under it, and falling back to the manifest walk-up
+/// for the `rust-checks.sh` snapshot where neither variable points at the
+/// archived tree. This mirrors `dotfiles_test_support::repo::root`, which
+/// this crate cannot depend on without changing `crates/Cargo.lock`.
+///
+/// Not `CARGO_MANIFEST_DIR` alone: that is a compile-time constant, so a
+/// binary built in one tree and run against another reads the wrong root,
+/// which is how tests passed on the host and failed under the gate.
+///
+/// # Panics
+///
+/// Panics when no candidate holds `crates/Cargo.toml` and the manifest
+/// directory has no grandparent.
+#[must_use]
+pub fn repo_root() -> PathBuf {
+    for variable in ["DOTFILES_ROOT", "HOME"] {
+        if let Some(value) = std::env::var_os(variable) {
+            let candidate = PathBuf::from(value);
+            if candidate.join("crates/Cargo.toml").is_file() {
+                return candidate;
+            }
+        }
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("the repo root is two levels above this crate")
+        .to_path_buf()
+}
+
 /// The command a test window runs instead of an interactive shell.
 ///
 /// A process that sits there gives a window with a real working directory

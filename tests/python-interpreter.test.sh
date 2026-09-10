@@ -6,9 +6,12 @@
 # The `python3` on PATH is a pyenv shim: a bash script that execs
 # `pyenv exec python3`, which re-resolves the version and execs again.
 # Measured here at 750ms per call against 40ms for the interpreter the shim
-# eventually reaches. The suite starts python five times across run-all.sh,
-# deps-harness and workflow-labels, so it pays roughly 3.5 seconds to arrive
-# at the same interpreter -- and run-all.sh gates a pre-commit hook.
+# eventually reaches. Every start the suite makes pays that difference to
+# arrive at the same interpreter -- and run-all.sh gates a pre-commit hook.
+#
+# The count of starts used to be named here. It is not any more: converting
+# workflow-labels to Rust removed three of the five, and a literal count in
+# a comment is a claim nothing checks.
 #
 # lib.sh resolves it once and exports PYTHON_BIN. Every suite sources lib.sh,
 # so one resolution serves all of them, and a suite that needs python asks for

@@ -340,8 +340,5 @@ fn a_directory_that_is_not_a_repository_is_refused_with_exit_two() {
     let plain = fixtures.path().join("plain-dir");
     fs::create_dir_all(&plain).expect("the fixture directory is creatable");
 
-    AssertCommand::new(installer())
-        .arg(&plain)
-        .assert()
-        .code(2);
+    AssertCommand::new(installer()).arg(&plain).assert().code(2);
 }

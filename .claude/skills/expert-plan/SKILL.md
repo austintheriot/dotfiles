@@ -35,6 +35,9 @@ These are the experts consulted during step 1 (model-discretion, tactical) and s
 - **`distsys-data`** -- storage, replication, sharding, consistency, schema evolution, isolation levels.
 - **`distsys-runtime`** -- retries, queues, idempotency, caching, sagas, timeouts, circuit breakers, metastable failures.
 - **`security`** -- threat model, trust boundaries, AuthN / AuthZ design, OWASP / CWE concerns at the spec level, secrets handling, supply chain.
+- **`agent-sandboxing`** -- fires when the spec describes an agent, a subprocess tree, or an automation that runs code. Has the spec named the boundary, the processes inside it, what is readable, the paths out, and the behavior when the mechanism is unavailable? A spec that says "sandboxed" without those five has not decided anything.
+- **`agent-orchestration`** -- fires when the spec proposes more than one agent or worker at once. Is the cap measured or felt, what is the checkout topology, what signal marks a stall, what restarts what, and is the reviewer's bandwidth in the cost ledger?
+- **`local-inference`** -- fires when the spec chooses a model, a runtime, a context length, or a GPU. Has the resident set at peak context been computed, and what else on the machine wants that memory?
 - **`observability-practice`** -- SLO design, alert plans, on-call ergonomics, error-budget policy, debugging workflows the spec needs to support.
 - **`performance`** -- algorithmic and I/O shape concerns visible at the spec level (N+1 risks, hot-path cost, expected scale).
 - **`accessibility`** -- POUR concerns when the spec describes UI surfaces. Skip when the feature is backend / CLI / config.

@@ -83,6 +83,9 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`build-systems`** -- the build graph: incrementality and correctness, hermeticity, reproducibility, cache keys and poisoning, per-toolchain mechanics, monorepo build shape.
 - **`crash-and-release-health`** -- crash capture and symbolication, crash-free metrics and their vendor incomparability, staged-rollout gating, and the client telemetry problems servers do not have.
 - **`llm-app`** -- prompt engineering, tool use, RAG, evals, context management (caching / compaction), prompt-injection defense, agentic patterns.
+- **`agent-sandboxing`** -- the boundary around an agent's subprocesses: Seatbelt / bubblewrap / Landlock / seccomp / containers / microVMs, read-everything defaults, fail-open, config-file persistence, network allowlists that are hostname trust, the CVE trail against agent CLIs.
+- **`agent-orchestration`** -- running several agents at once: measured concurrency caps, rate-limit arithmetic and cache exemption, backpressure and retry budgets, OTP-style supervision, a stall taxonomy from telemetry, worktree isolation and the `Cargo.lock` / `index.lock` races, the cost ledger.
+- **`local-inference`** -- local model serving: llama.cpp / vLLM / SGLang / Ollama / mlx-lm, KV-cache arithmetic, quantization evidence, Apple unified memory and the Docker VM, MIG / MPS / time-slicing, when local is cheaper than an API.
 - **`browser-spec`** -- WhatWG specs, DOM event model, modern platform primitives (`<dialog>`, Popover, AbortController, `Intl.*`), Web Components.
 - **`web-analytics`** -- Mixpanel / Amplitude / Segment / PostHog; event taxonomy, identity correctness, funnels / retention, A/B test instrumentation, privacy.
 - **`neovim`** -- config load order and timing, Lua API pitfalls (fast events, index bases, option scope), plugin managers and `vim.pack`, LSP and treesitter transitions, agent-editor integration over RPC.
@@ -189,6 +192,9 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "Why does this rebuild / how do I make the build cacheable / is this build hermetic" | `build-systems` |
 | "How do I set up crash reporting / symbolicate this / decide whether to halt a rollout" | `crash-and-release-health` |
 | "How should I prompt Claude / structure tool use / design my RAG" | `llm-app` |
+| "Is this agent sandbox real, and what can the agent reach" | `agent-sandboxing` |
+| "How many agents should I run, and why did two of them collide or stall" | `agent-orchestration` |
+| "Can this model run on my machine, and is local cheaper than the API" | `local-inference` |
 | "Is there a platform API for this / should I use `<dialog>` / `Intl.*`" | `browser-spec` |
 | "How should I name this event / structure my funnel / track this A/B test" | `web-analytics` |
 

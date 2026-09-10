@@ -251,40 +251,23 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   with exit 2. Installing into your existing repos is one
   `config install-repo-hooks` each; not done here, since that is machine
   state and the loop touches only the repo.
-- Create an expert agent for agent sandboxing, local inference, GPU
-  allocation, and orchestration. Nothing in `~/.claude/agents/` covers any of
-  it: grep for gpu, sandbox, infer, orchestr or local returns no agent file.
-  The lens is the machine an agent runs on rather than the code it writes,
-  which is why none of the existing specialists fit. Roughly, what it should
-  hold:
-    - sandboxing and isolation. What a subagent can reach, filesystem and
-      network scope, containers versus VMs versus per-process confinement,
-      seccomp and namespaces on Linux, the sandbox-exec and TCC model on
-      macOS, and the failure mode where a sandbox is asserted rather than
-      enforced.
-    - local inference. Serving runtimes (llama.cpp, vLLM, Ollama, MLX on
-      Apple silicon), quantisation tradeoffs, context-window versus VRAM
-      arithmetic, batching, and when local is genuinely cheaper than an API
-      rather than assumed to be.
-    - GPU allocation. Which process gets which device, VRAM budgeting across
-      concurrent agents, unified memory on Apple silicon versus discrete
-      VRAM, MIG and time-slicing, and detecting contention rather than
-      discovering it as a slowdown.
-    - orchestration. Concurrency limits, queueing and backpressure, what a
-      stalled agent looks like from outside, resource-aware scheduling, and
-      the cost model that decides how many agents are worth running at once.
-  Use `/create-expert-agent`, which already knows how to research a domain
-  and wire a new lens into `/expert-review`, `/expert-plan` and `/consult`.
-  Worth splitting if the research shows it is really two agents: the
-  sandboxing and orchestration half is a systems-and-safety lens, while local
-  inference and GPU allocation is a hardware-and-serving lens, and that
-  split is the sort of thing the skill is meant to decide on evidence.
-  Evidence this is worth having: a session on 2026-09-07 ran up to four
-  subagents concurrently and hit real resource questions with no expert to
-  ask. It picked a concurrency cap of three to four by feel, discovered by
-  accident that `cargo --locked` fails transiently while a concurrent agent
-  rewrites `Cargo.lock`, and had one agent stall in a wait loop for over an
-  hour before anyone noticed. Every one of those is in this agent's lens.
+- DONE 2026-09-10: expert agents for the machine an agent runs on. The
+  research split the subject three ways, one agent per lens:
+  `agent-sandboxing` (what a subprocess can reach, and whether the sandbox
+  claimed is the sandbox enforced), `agent-orchestration` (measured caps,
+  backpressure, supervision, stall detection, shared-checkout hazards, the
+  cost ledger), and `local-inference` (serving runtimes, KV-cache
+  arithmetic, quantization evidence, GPU sharing, when local is cheaper).
+  Rules files are in `~/.claude/rules/`, agent files in `~/.claude/agents/`,
+  and all three are wired into `/expert-review` (roster and trigger table),
+  `/expert-consult`, `/consult` and `/expert-plan`. The research notes, with
+  every claim tagged verified, found-unverified or inferred and a gaps list,
+  live untracked in `~/.claude/local/research-notes/`. The three findings
+  from 2026-09-07 each have a home in `agent-orchestration`: the cap picked
+  by feel (measure with 1, 2, 4, 8 agents and name the saturation signal),
+  the `cargo --locked` race (a worktree per agent, or one agent owns
+  dependency changes), and the hour-long stall (a five-state taxonomy built
+  from the telemetry events). The item below is now unblocked.
 
 - Automate the sandboxing, inference and GPU configuration in this repo,
   once the agent above exists to say what the configuration should be.

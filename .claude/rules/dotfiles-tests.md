@@ -100,6 +100,28 @@ boxes, and re-verify if the banner is old.
 The durable record of intent is the **spec** in `docs/superpowers/specs/`,
 not the plan. A plan is scaffolding for one pass of work.
 
+## Stage path-scoped whenever anything else might be running
+
+`config add <file>` stages that file. `config commit` then commits
+**everything staged**, including work another process put there.
+
+Both halves bit this repo on 2026-09-10. An agent's unscoped commit swept a
+sibling's staged files; it recovered with `config reset --soft`. Later a
+commit whose message describes only a new Rust test also carried a 264-line
+suite deletion that a concurrent agent had staged, and that commit's message
+does not mention it. The tree was correct both times; the history is not.
+
+So, whenever another agent, a hook, or a background task might touch the
+index:
+
+- Stage your own paths, then **verify** with `config diff --cached --name-only`
+  before committing. Read it; do not assume.
+- Prefer `config commit -o <paths>` so the commit cannot take more than you
+  named.
+- Never run `config status -uall` in this situation: it walks all of `$HOME`,
+  held the index for over two minutes here, and caused an `index.lock`
+  collision.
+
 ## A suite with no `finish` call exits 0 no matter what
 
 `finish` is what returns the exit status. A suite that prints `FAIL:` and

@@ -368,12 +368,29 @@ fn a_reader_never_sees_a_partial_pointer() {
     // measured 2026-09-10, a two-second loop there completed **1** rewrite
     // against 60-plus when run alone, and this test's own positive control
     // caught it. A count keeps the write window the same size everywhere.
-    const REWRITES: u32 = 6;
-    for _ in 0..REWRITES {
+    //
+    // Driven until the SAMPLER has observed the file, not for a fixed number
+    // of rewrites. A count is still machine-dependent, one layer further in:
+    // the generator takes 114ms on this macOS host and 3ms in the Linux test
+    // container, so six rewrites span 700ms here and 18ms there. Because the
+    // loop deletes the pointer before each rewrite, a fast machine can finish
+    // every existence window between two samples and the positive control
+    // below then fails on a run where nothing is wrong.
+    //
+    // MIN_SAMPLES is what the assertion actually needs: enough observations
+    // of a present file for `short == 0` to mean something. REWRITE_CAP keeps
+    // a genuinely broken sampler from looping forever, and tripping it fails
+    // the positive control rather than passing quietly.
+    const MIN_SAMPLES: u64 = 200;
+    const REWRITE_CAP: u32 = 4000;
+    let mut rewrites = 0;
+    while rewrites < REWRITE_CAP
+        && sampled.load(std::sync::atomic::Ordering::Relaxed) < MIN_SAMPLES
+    {
         let _ = std::fs::remove_file(&pointer);
         run_generator("linux", &directory);
+        rewrites += 1;
     }
-    let rewrites = REWRITES;
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     sampler.join().expect("the sampler thread joins");
 
@@ -384,10 +401,12 @@ fn a_reader_never_sees_a_partial_pointer() {
         "positive control: only {rewrites} rewrites happened, so the sampler \
          had no write window to observe"
     );
+    let samples = sampled.load(std::sync::atomic::Ordering::Relaxed);
     assert!(
-        sampled.load(std::sync::atomic::Ordering::Relaxed) > 0,
-        "positive control: the sampler read the pointer zero times, so a zero \
-         short-read count says nothing about how the write happens"
+        samples >= MIN_SAMPLES,
+        "positive control: the sampler read the pointer {samples} time(s) in \
+         {rewrites} rewrite(s), short of the {MIN_SAMPLES} a zero short-read \
+         count needs to mean anything"
     );
     assert_eq!(
         short.load(std::sync::atomic::Ordering::Relaxed),

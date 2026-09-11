@@ -3,13 +3,19 @@
 #
 # usage: config test [-q|--quiet] [-d|--docker] [-w|--watch] [suite]
 #
-# Runs every suite in ~/tests by default. Name a suite to run only that one:
-# `config test deps-manifest` runs tests/deps-manifest.test.sh.
+# Runs `cargo test --locked` from crates/ by default. Name a suite to filter:
+# `config test leak_check` passes that to cargo as a test-name filter, so it
+# runs every test whose name contains it.
+#
+# The suites were shell scripts under ~/tests until 2026-09-10 and are Rust
+# integration tests now. A name that used to resolve to tests/<name>.test.sh
+# resolves to a cargo filter instead, which usually means replacing a hyphen
+# with an underscore.
 #
 # Options:
-#   -q, --quiet    Print only failures and the summary, not every passing
-#                  assertion. Honored by the whole-suite run only, so it
-#                  cannot be combined with --docker or a suite name.
+#   -q, --quiet    Passes cargo's --quiet, so a passing run prints one line
+#                  per test binary rather than one per test. Unlike the old
+#                  shell runner's -q, this composes with a suite name.
 #   -d, --docker   Run in the Debian container from tests/docker/, the same
 #                  image the pre-push hook uses. Slower, and the container has
 #                  no repository, so git-dependent assertions skip there.

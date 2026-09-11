@@ -235,6 +235,18 @@ fn config_build_installs_and_stamps() {
         skip("cargo is not installed, so the config-build assertions cannot run");
         return;
     }
+    // config-build shells out to config-stamp, which asks git what the
+    // worktree contains. The container runs from an archived snapshot with no
+    // .git, so the stamp cannot be computed there at all.
+    let in_a_repository = git_command(&repo_root())
+        .arg("rev-parse")
+        .arg("--git-dir")
+        .output()
+        .is_ok_and(|probe| probe.status.success());
+    if !in_a_repository {
+        skip("this tree is not a git repository, so config-build cannot compute a stamp");
+        return;
+    }
     let fixtures = tempfile::tempdir().expect("a temporary directory");
     let bin_dir = fixtures.path().join("bin");
 

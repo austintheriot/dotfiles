@@ -97,7 +97,8 @@ hand-written and can, so `config help` wins on any disagreement:
 To add one, drop a `config-<name>` script into `.scripts/config/` with a
 `# help:` line and a `# usage:` block, source `.scripts/config/usage.sh` and
 call `usage_if_requested "${1:-}"` before parsing anything, and add its name to
-`EXPECTED_SUBCOMMANDS` in `tests/config.test.sh`.
+`EXPECTED_SUBCOMMANDS` in
+`crates/config-cli/tests/config_dispatcher.rs`.
 
 `config help` shadows `git help`. Use `config -- <verb>` to send a verb
 straight to git: `config -- help rebase` opens the git manual page.

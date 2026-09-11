@@ -37,11 +37,7 @@ fn init_script() -> PathBuf {
 }
 
 fn write_executable(path: &Path, body: &str) {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the parent directory is creatable");
-    }
-    fs::write(path, body).expect("the file is writable");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("the file is executable");
+    dotfiles_test_support::stub::write(path, body).expect("the stub is writable");
 }
 
 fn git(directory: &Path, arguments: &[&str]) {
@@ -177,7 +173,10 @@ impl InitHome {
         if let Some(path) = path {
             command.env("PATH", path);
         }
-        let output = command.output().expect("the dispatcher runs");
+        // Through the shared runner: this spawn races the stubs the fixture
+        // just wrote, and a lost race is ETXTBSY on exec rather than anything
+        // this suite means to assert.
+        let output = dotfiles_test_support::stub::run(&mut command).expect("the dispatcher runs");
         (
             output.status.code().unwrap_or(-1),
             format!(

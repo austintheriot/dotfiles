@@ -334,3 +334,126 @@ pub mod zsh {
         spawn(home, script)
     }
 }
+
+/// Writing stub executables that a test is about to run.
+///
+/// The suites that drive `config` build fixture homes full of shell stubs and
+/// then execute them immediately. That write-then-exec sequence races: an
+/// `exec` of a file the kernel still considers open for writing fails with
+/// `ETXTBSY` ("Text file busy", errno 26), and the suite fails on the spawn
+/// rather than on anything it meant to assert.
+///
+/// Observed once in nine full push-gate runs, only inside the Linux test
+/// container, naming a different test each time. The precise trigger is NOT
+/// established: three probes (a write-then-exec loop on macOS, the same on
+/// Linux, and a cross-thread fork-inheritance probe on Linux) each reported
+/// zero occurrences. What is established is the failing syscall and that the
+/// failure is transient, which is what this module answers.
+pub mod stub {
+    use std::io;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+    use std::process::{Command, Output};
+    use std::time::Duration;
+
+    /// How many times [`run`] re-attempts a spawn that lost the race.
+    ///
+    /// Small on purpose. A real `ETXTBSY` clears as soon as the writing
+    /// descriptor closes, so one retry almost always suffices; a large budget
+    /// would turn a genuine "this file is permanently held open" defect into a
+    /// slow test rather than a failing one.
+    const ATTEMPTS: u32 = 5;
+
+    /// Writes `body` at `path` and marks it executable.
+    ///
+    /// Creates the parent directory, so a caller can name a stub inside a
+    /// fixture tree that does not exist yet.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying [`io::Error`] when the directory, the file, or
+    /// the permission change fails.
+    pub fn write(path: &Path, body: &str) -> io::Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, body)?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+    }
+
+    /// Runs `command`, re-attempting while the OS reports `ETXTBSY`.
+    ///
+    /// Every other error, and every non-zero exit, is returned unchanged: this
+    /// retries a spawn that could not start, never a program that ran and
+    /// failed. A test asserting on a failing exit status still sees it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the spawn error when it is not `ETXTBSY`, or when `ETXTBSY`
+    /// persists past [`ATTEMPTS`].
+    pub fn run(command: &mut Command) -> io::Result<Output> {
+        let mut backoff = Duration::from_millis(5);
+        for attempt in 1..=ATTEMPTS {
+            match command.output() {
+                Ok(output) => return Ok(output),
+                Err(error) if is_text_file_busy(&error) && attempt < ATTEMPTS => {
+                    std::thread::sleep(backoff);
+                    backoff *= 2;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        // ATTEMPTS is a non-zero constant, so the loop above always returns.
+        Err(io::Error::other("the retry loop did not run"))
+    }
+
+    /// Whether this spawn failure is the write-then-exec race.
+    fn is_text_file_busy(error: &io::Error) -> bool {
+        error.raw_os_error() == Some(26)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn write_creates_a_runnable_stub_in_a_missing_directory() {
+            let home = tempfile::tempdir().expect("a temporary directory");
+            let stub = home.path().join("nested/deeper/stub.sh");
+            write(&stub, "#!/bin/sh\nprintf ran\n").expect("the stub is writable");
+
+            let output = run(&mut Command::new(&stub)).expect("the stub runs");
+            assert!(output.status.success(), "the stub did not exit 0");
+            assert_eq!(String::from_utf8_lossy(&output.stdout), "ran");
+        }
+
+        /// A non-zero exit is a RESULT, not a spawn failure, so it comes back
+        /// intact rather than being retried away.
+        #[test]
+        fn run_returns_a_failing_exit_status_untouched() {
+            let home = tempfile::tempdir().expect("a temporary directory");
+            let stub = home.path().join("fails.sh");
+            write(&stub, "#!/bin/sh\nexit 3\n").expect("the stub is writable");
+
+            let output = run(&mut Command::new(&stub)).expect("the stub runs");
+            assert_eq!(output.status.code(), Some(3), "the exit status was rewritten");
+        }
+
+        /// The retry must not swallow a real error. A missing program is
+        /// ENOENT, not ETXTBSY, so it returns immediately.
+        #[test]
+        fn run_reports_a_missing_program_rather_than_retrying() {
+            let home = tempfile::tempdir().expect("a temporary directory");
+            let absent = home.path().join("no-such-stub");
+
+            let error = run(&mut Command::new(&absent)).expect_err("a missing program cannot run");
+            assert!(!is_text_file_busy(&error), "ENOENT was misread as the race");
+        }
+
+        #[test]
+        fn text_file_busy_is_recognised_and_other_errors_are_not() {
+            assert!(is_text_file_busy(&io::Error::from_raw_os_error(26)));
+            assert!(!is_text_file_busy(&io::Error::from_raw_os_error(2)));
+        }
+    }
+}

@@ -51,11 +51,7 @@ fn stamp_command() -> PathBuf {
 }
 
 fn write_executable(path: &Path, body: &str) {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the parent directory is creatable");
-    }
-    fs::write(path, body).expect("the file is writable");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("the file is executable");
+    dotfiles_test_support::stub::write(path, body).expect("the stub is writable");
 }
 
 /// Runs git in a directory, with any inherited git environment removed.

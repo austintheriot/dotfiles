@@ -21,7 +21,6 @@ use dotfiles_test_support::repo::root as repo_root;
 use dotfiles_test_support::skip;
 use std::fs;
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use tempfile::TempDir;
@@ -77,8 +76,7 @@ impl Stubs {
 }
 
 fn write_executable(path: &Path, body: &str) {
-    fs::write(path, body).expect("the stub is writable");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("the stub is executable");
+    dotfiles_test_support::stub::write(path, body).expect("the stub is writable");
 }
 
 /// Runs the hook outside tmux and returns what osascript received.

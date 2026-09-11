@@ -122,11 +122,7 @@ fn config() -> PathBuf {
 }
 
 fn write_executable(path: &Path, body: &str) {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the parent directory is creatable");
-    }
-    fs::write(path, body).expect("the file is writable");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("the file is executable");
+    dotfiles_test_support::stub::write(path, body).expect("the stub is writable");
 }
 
 fn is_executable(path: &Path) -> bool {
@@ -317,7 +313,10 @@ impl Home {
             .env_remove("GIT_OBJECT_DIRECTORY")
             .stdin(Stdio::null());
         configure(&mut command);
-        let output = command.output().expect("the script runs");
+        // Through the shared runner: this spawn races the stubs the fixture
+        // just wrote, and a lost race is ETXTBSY on exec rather than anything
+        // this suite means to assert.
+        let output = dotfiles_test_support::stub::run(&mut command).expect("the script runs");
         let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         Run {

@@ -70,11 +70,7 @@ fn all_subcommands() -> Vec<String> {
 }
 
 fn write_executable(path: &Path, body: &str) {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the parent directory is creatable");
-    }
-    fs::write(path, body).expect("the file is writable");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("the file is executable");
+    dotfiles_test_support::stub::write(path, body).expect("the stub is writable");
 }
 
 fn git(directory: &Path, arguments: &[&str]) {

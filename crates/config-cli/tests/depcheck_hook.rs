@@ -24,7 +24,6 @@
 
 use dotfiles_test_support::repo::root as repo_root;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
@@ -35,11 +34,7 @@ fn hook() -> PathBuf {
 }
 
 fn write_executable(path: &Path, body: &str) {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).expect("the parent directory is creatable");
-    }
-    fs::write(path, body).expect("the file is writable");
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).expect("the file is executable");
+    dotfiles_test_support::stub::write(path, body).expect("the stub is writable");
 }
 
 /// An isolated `$HOME` with a stub `config` whose exit status the caller

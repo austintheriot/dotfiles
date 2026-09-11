@@ -1006,13 +1006,15 @@ fn config_test_watch_reruns_on_a_tracked_change_and_stops_when_killed() {
         .spawn()
         .expect("the watch loop starts");
 
-    let runs_before = wait_for_lines(&runs, 1);
-    assert_eq!(runs_before, 1, "watch runs the suite once at start");
+    let runs_before = wait_for_lines(&runs, 1)
+        .unwrap_or_else(|seen| panic!("watch did not run the suite at start: saw {seen} run(s)"));
 
     fs::write(home_path.join("tracked.txt"), "changed\n").expect("writable");
     home.cfg(&["add", "tracked.txt"]);
 
-    let runs_after = wait_for_lines(&runs, runs_before + 1);
+    let runs_after = wait_for_lines(&runs, runs_before + 1).unwrap_or_else(|seen| {
+        panic!("watch did not rerun the suite after a tracked change ({runs_before} -> {seen})")
+    });
     assert!(
         runs_after > runs_before,
         "watch reruns the suite when a tracked file changes ({runs_before} -> {runs_after})"
@@ -1030,19 +1032,26 @@ fn config_test_watch_reruns_on_a_tracked_change_and_stops_when_killed() {
 /// A poll rather than a fixed sleep: the shell suite slept 2 and 3 seconds,
 /// which is both slower than it needs to be on a fast machine and flaky on a
 /// loaded one.
-fn wait_for_lines(path: &Path, target: usize) -> usize {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+///
+/// Returns `Err` with the last count seen when the deadline passes, so a
+/// caller cannot read a timeout as a real count. Returning the count either
+/// way made a 20-second timeout assert as `left: 0, right: 1`, which names
+/// neither the wait nor the deadline, and the push gate hit exactly that
+/// under load.
+fn wait_for_lines(path: &Path, target: usize) -> Result<usize, usize> {
+    let timeout = std::time::Duration::from_secs(120);
+    let deadline = std::time::Instant::now() + timeout;
     let mut seen = 0;
     while std::time::Instant::now() < deadline {
         seen = fs::read_to_string(path)
             .map(|text| text.lines().count())
             .unwrap_or(0);
         if seen >= target {
-            return seen;
+            return Ok(seen);
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
-    seen
+    Err(seen)
 }
 
 fn kill_tree(child: &mut std::process::Child) {

@@ -1086,6 +1086,91 @@ fn a_missing_pattern_file_blocks_unless_explicitly_permitted() {
         );
 }
 
+/// The persistent form of the opt-out above, and the reason it exists: the
+/// environment variable has to be retyped on every commit, so on a machine
+/// that legitimately has no pattern file it is either forgotten (the commit
+/// blocks) or exported from a shell profile, which turns the guard off
+/// everywhere and leaves no record.
+///
+/// `dotfiles.leakPatterns` lives in git config rather than the worktree, so
+/// it cannot be committed, and it reads back.
+#[test]
+fn a_declared_machine_permits_a_missing_pattern_file_and_says_so() {
+    let fixture = Fixture::new();
+    let absent = fixture.root().join("no-such-patterns.conf");
+    git(&fixture.repo(), &["config", "dotfiles.leakPatterns", "none"]);
+    fixture.stage("term-only.txt", &plant_term());
+
+    let run = fixture.run_with(&[], |command| {
+        command.env("LEAK_PATTERN_FILE", &absent);
+    });
+    run.assert_status(0, "a declared machine permits a run with no pattern file");
+    run.assert_contains(
+        "term rules INACTIVE",
+        "the declaration is announced on every run, never silent",
+    );
+}
+
+/// The narrower opt-out must not widen into "no guard". A machine with no
+/// TERMS to defend still has credentials to leak, and layer 1 has already run
+/// by the time the pattern file is read.
+#[test]
+fn a_declared_machine_still_blocks_a_credential() {
+    let fixture = Fixture::new();
+    let absent = fixture.root().join("no-such-patterns.conf");
+    git(&fixture.repo(), &["config", "dotfiles.leakPatterns", "none"]);
+    fixture.stage("cred-probe.txt", &plant_key('D'));
+
+    fixture
+        .run_with(&[], |command| {
+            command.env("LEAK_PATTERN_FILE", &absent);
+        })
+        .assert_status(1, "the declaration does not disable the credential rules");
+}
+
+/// Same lesson as `SKIP_LEAK_CHECK=0`: a value whose setter believes it means
+/// "off" must never silently mean "on", and an unrecognized one must name
+/// itself rather than be ignored.
+#[test]
+fn an_unrecognized_declaration_value_still_blocks_and_names_itself() {
+    let fixture = Fixture::new();
+    let absent = fixture.root().join("no-such-patterns.conf");
+    git(&fixture.repo(), &["config", "dotfiles.leakPatterns", "false"]);
+    fixture.stage("term-only.txt", &plant_term());
+
+    let run = fixture.run_with(&[], |command| {
+        command.env("LEAK_PATTERN_FILE", &absent);
+    });
+    run.assert_status(3, "an unrecognized declaration value still blocks");
+    run.assert_contains(
+        "dotfiles.leakPatterns=false",
+        "the unrecognized value is named rather than ignored",
+    );
+}
+
+/// The refusal has to be recoverable. It used to point at `~/DOTFILES-GL.md`,
+/// which does not exist on a reinstalled machine, so the instruction was a
+/// dead end. The message must name something runnable instead.
+#[test]
+fn the_refusal_names_a_runnable_opt_out_and_not_a_missing_file() {
+    let fixture = Fixture::new();
+    let absent = fixture.root().join("no-such-patterns.conf");
+    fixture.stage("term-only.txt", &plant_term());
+
+    let run = fixture.run_with(&[], |command| {
+        command.env("LEAK_PATTERN_FILE", &absent);
+    });
+    run.assert_status(3, "a missing pattern file still blocks by default");
+    run.assert_contains(
+        "dotfiles.leakPatterns none",
+        "the refusal names the persistent opt-out",
+    );
+    run.assert_lacks(
+        "DOTFILES-GL.md",
+        "the refusal must not point at a file that may not exist",
+    );
+}
+
 /// The sanctioned bypass of this repository's primary control must not fire on
 /// a value that reads as "do not skip".
 ///

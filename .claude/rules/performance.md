@@ -141,6 +141,9 @@ The dominant concerns in real React / Vue / Svelte applications.
 
 ## Backend / server performance
 
+### HTTP/2 servers hold state that HTTP/1.1 servers do not
+An HTTP/1.1 server parses a request and forgets it. An HTTP/2 server keeps per-connection and per-stream state, which means tunables exist that default badly and that reviewers rarely look at: `MaxConcurrentStreams` (spec-recommended minimum 100), max frame size, the per-connection and per-stream flow-control windows, the HPACK header-table sizes (default 4096), and the idle timeout -- which in Go's `x/net/http2` **defaults to none**, and where PING frames do not count as activity. The same state is what the 2023 stream-reset attack class abuses, since `RST_STREAM` is cheap for the client and not for the server. *Review flag:* an HTTP/2 or gRPC server with every tunable left at zero-value defaults and no idle timeout.
+
 ### Database
 Beyond N+1 and missing indexes:
 - **Locks held too long**: long transactions blocking other writers; advisory locks held across slow operations.
@@ -185,6 +188,7 @@ Beyond N+1 and missing indexes:
 
 ### Native generally
 - **Allocator pressure** in tight loops -- use arenas or stack allocation.
+- **Heap fragmentation in long-running Rust services reads as a leak that is not a leak.** Resident memory climbs steadily, then plateaus near 75% of total and stays there. glibc `malloc` fragments under many small short-lived allocations; MUSL's allocator is worse, which makes "static musl binary on the default allocator" an actively bad pairing. Swapping `#[global_allocator]` to jemalloc or mimalloc has been reported to cut resident memory more than 2x and flatten the curve, in two independent write-ups (Kerkour; Svix, 2023) -- three lines of code. **The trigger is allocation rate of small objects, not request rate**: a service that serves no traffic but *sends* thousands of requests per second and deserializes the responses is a canonical case. *Before reaching for it,* try the cheaper glibc-side knobs (`MALLOC_ARENA_MAX`, `malloc_trim`), which neither write-up mentions. *Selection:* jemalloc was deprecated by its author in 2025, so mimalloc is the default choice for new code; mimalloc's `secure` mode costs roughly 10% throughput (vendor figure, not independently measured). *Counter-case neither source names:* these allocators buy the flat curve partly by holding more virtual address space and trading RSS for speed, which can invert under a hard memory cgroup limit. Sample size is two anecdotes, each with a confounded variable -- measure, do not assume.
 - **Cache miss patterns**: hot loops over array-of-struct vs struct-of-array layouts.
 - **Branch prediction**: tight loops with unpredictable branches are slow; data-oriented design eliminates them.
 

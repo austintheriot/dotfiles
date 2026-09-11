@@ -450,6 +450,7 @@ Signal-to-noise matters; this is the high-yield list:
 - **Pagination that doesn't compose with filtering**: filter applied per-page, results wrong.
 - **Webhooks without signing**: forgeable.
 - **API keys in URLs**: logged everywhere; leaked via referrer headers.
+- **API-key format is a contract, and the usual one is unlookupable.** A key that is only a random secret forces the server to scan and hash every row, or to index the hash. Carry the row id inside the token: `prefix + version + base32_lower(uuidv7_id || secret_32_bytes)`. The server parses the id, does one indexed primary-key lookup, then constant-time-compares. The id may be low-entropy because security rests entirely on the 32-byte secret. *Each part earns its place:* the **prefix** lets secret scanners (GitHub push protection, gitleaks, trufflehog) regex it out of a leaked repo; the **version**, stored as a column, is the migration path when the hash algorithm changes without invalidating issued keys; **base32 lowercase rather than base64** keeps the key selectable with one double-click, since `+` and `/` break word selection in terminals and browsers.
 - **Polling-only APIs with no webhook alternative**: forces clients to choose between staleness and load.
 - **Required client clock sync**: brittle.
 - **Date-only with no timezone**: ambiguous.

@@ -225,6 +225,40 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   like it merely prints nothing. Run it redirected to a file to see the
   signal.
 
+- The builder stage never copies `crates/rust-toolchain.toml`, so it compiles
+  with the base image's 1.94.1 rather than the pinned 1.94.0. Found
+  2026-09-10 while giving the runtime stage a toolchain; the runtime side is
+  fixed and the builder is not. The pin has been declared but not applied
+  there since it was written.
+
+- `tests/pre-push:217-219` says "the runtime stage is Rust-free by design, so
+  `command -v cargo` is correctly false inside it and run-all.sh skips the
+  Rust leg." That stopped being true in `70272c37`. Left because the file was
+  outside the changing agent's scope.
+
+- Three pre-existing container failures, newly visible because cargo had
+  never run in that image:
+    - `config_manifest_lifecycle::config_build_installs_and_stamps` needs a
+      git repository, and the container's tree comes from `git archive`. It
+      wants the no-repository skip already used at
+      `config_manifest_lifecycle.rs:498`.
+    - `tmux_tools::conf_split::the_shared_half_of_the_split_survives` is a
+      **genuine Docker-only defect**, exactly the class the container leg
+      exists to catch: `.config/tmux/tmux.conf` ends with
+      `run '~/.tmux/plugins/tpm/tpm'`, and the image has plugins at
+      `~/.config/tmux/plugins/tpm`, so `source-file` exits 127.
+    - `config_dispatcher` / `config_init` hit `ExecutableFileBusy` under
+      cargo's parallel harness. Green single-threaded, and it names a
+      different test each run, so it is a race rather than a defect in one
+      test.
+
+- `config test` now recurses one level inside the container: it invokes
+  `run-all.sh`, which now finds cargo and runs the whole suite.
+  `container_image.rs`'s module docs already warn that "a build here would
+  recurse"; the recursion is live through `config test` rather than through
+  Docker. This resolves itself when `run-all.sh` is deleted, but confirm it
+  rather than assuming.
+
 # QUESTIONS (leave until queried)
 
 - Should the mac/linux two-branch model collapse to one branch?

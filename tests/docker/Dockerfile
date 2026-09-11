@@ -120,6 +120,29 @@ RUN apt-get update \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# tpm, the tmux plugin manager. Not cosmetic: tmux.conf's last line is
+# `run '~/.tmux/plugins/tpm/tpm'`, and tmux fails the whole source-file with
+# exit 127 when that path is missing. conf_split.rs asserts the config parses
+# cleanly, so without tpm the image fails a test that passes on every
+# developer machine.
+#
+# The path matches deps.toml's [tpm] entry and tmux.conf's
+# TMUX_PLUGIN_MANAGER_PATH, both of which say $HOME/.tmux/plugins/tpm.
+#
+# Pinned to a commit rather than a tag. tpm's v3.1.0 TAG points at a commit
+# that is not on master, while a DIFFERENT commit on master carries the title
+# v3.1.0, so the tag name does not identify the mainline release. A commit
+# sha names exactly one thing.
+#
+# --depth 1 fetches only that commit: the image needs tpm's files, not its
+# history, and the clone is a build-time network operation like apt-get above.
+RUN git clone --depth 1 https://github.com/tmux-plugins/tpm.git \
+        /root/.tmux/plugins/tpm \
+    && git -C /root/.tmux/plugins/tpm fetch --depth 1 origin \
+        e261deb1b47614eed3400089ce7197dc68acc4eb \
+    && git -C /root/.tmux/plugins/tpm checkout --detach \
+        e261deb1b47614eed3400089ce7197dc68acc4eb
+
 # The pinned toolchain, installed at BUILD time so `docker run` needs no
 # network.
 #

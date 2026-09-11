@@ -326,6 +326,37 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   entry above about whether machine network configuration belongs in the
   declared setup.
 
+- Reconsider the lazy-loaded nvim setup in favour of a non-lazy, statically
+  configured one. Raised by the owner 2026-09-11 after the third separate
+  highlighting breakage. The immediate defect was fixed the same day; this
+  entry is about the SHAPE, not that bug.
+  THE PATTERN, which is what makes this worth revisiting: every one of these
+  failures was silent, and each looked like a theme problem rather than a
+  loading problem.
+    - nvim-treesitter pinned to `main` was handed master-branch options
+      (`ensure_installed`, `highlight`, `indent`). `main` forwards to a
+      config table that accepts only `install_dir`, so every other key was
+      absorbed with no error. Measured: 1 of 19 parsers installed, and
+      highlighting never started on a .ts buffer.
+    - `language.add` succeeds for a name with no parser, and
+      `treesitter.start` then throws per buffer. Shipped as "Parser could
+      not be created for buffer 1 and language NvimTree".
+    - `runtime/queries` is not on the runtimepath, because lazy.nvim adds a
+      plugin's top level and `main` moved queries one directory down. The
+      only highlights.scm Neovim could find was vscode.nvim's `after/`
+      overlay, which refines a base query that was never loaded. Keywords
+      rendered white while treesitter reported itself active.
+  WHY THE CURRENT SHAPE RESISTS TESTING: the failure mode is an option or a
+  path that is silently ignored, so the config is indistinguishable from a
+  working one by inspection. Assertions have to drive a real editor and ask
+  what it actually resolved, which is why `nvim_runtime.rs` and
+  `nvim_config_load.rs` exist. A static setup would move most of this to
+  load time, where a wrong path is an error rather than an absence.
+  WHAT TO WEIGH, rather than assume the answer: lazy.nvim buys startup time
+  and a lockfile that pins parser source revisions transitively. Dropping it
+  means owning both. The question is whether that cost is smaller than three
+  silent breakages and the test machinery they required.
+
 # QUESTIONS (leave until queried)
 
 - Should the mac/linux two-branch model collapse to one branch?

@@ -39,7 +39,7 @@ return {
 
           local client = vim.lsp.get_client_by_id(event.data.client_id)
 
-          if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight) then
+          if client and client:supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight) then
             -- only enable document highlighting for smaller files (performance)
             if vim.fn.getfsize(vim.api.nvim_buf_get_name(event.buf)) < 50000 then
               local augroup = vim.api.nvim_create_augroup('lsp-highlight', { clear = false })
@@ -63,7 +63,7 @@ return {
             end
           end
 
-          if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint) then
+          if client and client:supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint) then
             map('<leader>th', function()
               vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf })
             end, 'Toggle Inlay Hints')

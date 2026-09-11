@@ -55,6 +55,23 @@ return {
     config = function()
       require('nvim-treesitter').setup()
 
+      -- The highlight QUERIES, without which treesitter reports itself
+      -- active and captures nothing. On `main` they live in `runtime/queries`
+      -- rather than the top-level `queries/` that `master` shipped, and
+      -- lazy.nvim puts only a plugin's TOP LEVEL on the runtimepath. So
+      -- nvim_get_runtime_file('queries/typescript/highlights.scm') found
+      -- exactly one file: vscode.nvim's `after/queries` overlay, which
+      -- REFINES a base query rather than standing in for one.
+      --
+      -- The symptom is not an absence of colour, which is what makes it hard
+      -- to recognise. Strings, comments and types still resolve through the
+      -- overlay and the LSP, so a buffer looks nearly right while `const`,
+      -- `await`, `export` and `return` render as plain foreground text.
+      -- Measured: 0 captures before this line, 46 after, on the same buffer.
+      vim.opt.runtimepath:append(
+        vim.fn.stdpath('data') .. '/lazy/nvim-treesitter/runtime'
+      )
+
       -- `main` ships no FileType handler, so starting the highlighter is
       -- config work now. Both of the guards below are load-bearing:
       --

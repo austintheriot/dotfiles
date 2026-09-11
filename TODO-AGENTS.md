@@ -179,6 +179,17 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   list", then a second variant. Worth fixing at the derivation rather than
   by adding `markdownlint` to a list, or a fourth noun arrives later.
 
+- Collapse the `skip` and `repo_root` mirrors in
+  `crates/tmux-tools/tests/support/mod.rs` into the real
+  `dotfiles-test-support` dependency. They exist because Task 4's brief
+  required those helpers while forbidding the `Cargo.lock` change that a new
+  dependency needs, so the agent reimplemented both locally rather than
+  break a constraint. It verified the `skip` wire format byte-for-byte
+  against a seeded `DOTFILES_SKIP_LOG` and used the same
+  `DOTFILES_ROOT` then `HOME` then manifest-walkup order, and documented both
+  as mirrors. Two implementations of one contract is exactly the shape that
+  drifts, so this wants collapsing once the lockfile is free.
+
 # QUESTIONS (leave until queried)
 
 - Should the mac/linux two-branch model collapse to one branch?

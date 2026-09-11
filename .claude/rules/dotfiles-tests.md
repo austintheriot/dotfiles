@@ -256,6 +256,14 @@ Route the EXIT trap's `kill-server` through the same wrapper that sets
 `TMUX_TMPDIR`, or it aims at a path that no longer exists, the real server
 survives, and `rm -rf` removes its socket from under a running process.
 
+**And assert it, because the obvious guard does not catch it.** Measured
+2026-09-10: a teardown missing `TMUX_TMPDIR` fails with "error connecting",
+leaves the real server running (confirmed by pid), and puts **nothing** in
+the shared directory. So the shared-directory assertion above, which catches
+the other two traps, is blind to this one. The check that works is
+`has-session` through the wrapper *after* the kill: the server must be gone.
+`crates/tmux-tools/tests/support/mod.rs` does this.
+
 ### A headless nvim test cannot assert that mason installed anything
 
 `mason-lspconfig` gates `ensure_installed` on an attached user interface.

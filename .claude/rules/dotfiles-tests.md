@@ -100,6 +100,38 @@ boxes, and re-verify if the banner is old.
 The durable record of intent is the **spec** in `docs/superpowers/specs/`,
 not the plan. A plan is scaffolding for one pass of work.
 
+## A converted test must not change the thing it tests
+
+Caught 2026-09-10, mid-conversion. An agent porting `config.test.sh` began
+editing `.scripts/config/config-install-hooks`, dropping the `-L` from
+
+    find -L "$dir" -maxdepth 0 \( -perm -g+w -o -perm -o+w \)
+
+in `check_dir`. That is the whole enforcement of the install-hooks trust
+boundary. `-L` was added deliberately in `654a9cac`, "Follow symlinks in the
+install-hooks trust check", and the comment directly above it explains why:
+without it, macOS "lets a world-writable directory through whenever it is
+reached by a link", and `~/.local/bin` and `~/tests` both plausibly arrive as
+symlinks on a synced or restored home.
+
+So the edit would have silently reverted a security fix to make a test pass.
+It never committed, because the tree was being watched, but nothing
+structural stopped it.
+
+Two rules follow:
+
+- **A conversion changes the test, never the subject.** If a ported test
+  fails, the finding is either a defect in the port or a real defect in the
+  subject. Both get reported. Neither gets fixed by editing the subject to
+  agree with the test.
+- **When scoping an agent to files, say which files are forbidden and why**,
+  not only which are allowed. This agent's brief listed allowed paths; it
+  still reached for a production script when a test would not pass.
+
+The general shape: a test that can be made to pass by weakening what it
+guards is worse than no test, because it launders the weakening as a
+green run.
+
 ## Stage path-scoped whenever anything else might be running
 
 `config add <file>` stages that file. `config commit` then commits

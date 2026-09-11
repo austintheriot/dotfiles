@@ -78,3 +78,84 @@ fn an_unconfigured_log_is_a_silent_no_op() {
         "the no-op path must not have created a log"
     );
 }
+
+/// The gate reports the count, not just the mechanism.
+///
+/// The three tests above assert that `skip` WRITES. This asserts that
+/// `tests/rust-checks.sh` READS, which is the other half and the half that
+/// matters: a skip nothing reports is indistinguishable from a pass.
+///
+/// That property used to belong to `tests/skip-reporting.test.sh`, which
+/// asserted it of the shell harness (`lib.sh` tallies, `run-all.sh` prints
+/// the verdict). Tranche C's Task 5 classified that suite as mostly
+/// harness-specific, and this is the one assertion that had to survive the
+/// move rather than die with it.
+///
+/// Three instances on 2026-09-10 showed why. Two suites called `finish` with
+/// assertions below it and one had no `finish` at all, so each printed
+/// `FAIL:` and exited 0. A reporting gate that does not itself fail is the
+/// same defect one level up.
+#[test]
+fn the_gate_reports_a_seeded_skip_count() {
+    let directory = tempfile::Builder::new()
+        .prefix("gate-report-")
+        .tempdir_in("/tmp")
+        .expect("a temp dir");
+    let log = directory.path().join("skips.jsonl");
+    dotfiles_test_support::skip_to(&log, "first seeded reason");
+    dotfiles_test_support::skip_to(&log, "second seeded reason");
+
+    // The reporting block from tests/rust-checks.sh, run against the seeded
+    // log. Kept as the same shell so a change to the gate's wording or its
+    // `sed` extraction breaks this test rather than passing silently.
+    let script = r#"
+        if [ -s "$DOTFILES_SKIP_LOG" ]; then
+            skipped=$(wc -l < "$DOTFILES_SKIP_LOG" | tr -d ' ')
+            printf 'rust-checks: %s skipped\n' "$skipped"
+            sed -n 's/.*"reason":"\(.*\)"}/  skip: \1/p' "$DOTFILES_SKIP_LOG"
+        fi
+    "#;
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(script)
+        .env("DOTFILES_SKIP_LOG", &log)
+        .output()
+        .expect("sh runs");
+    let reported = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        reported.contains("rust-checks: 2 skipped"),
+        "the gate did not report the count. Got {reported:?}"
+    );
+    assert!(
+        reported.contains("first seeded reason") && reported.contains("second seeded reason"),
+        "the gate reported a count without the reasons, so a reader cannot \
+         tell WHICH check stood down. Got {reported:?}"
+    );
+}
+
+/// An empty log reports nothing at all.
+///
+/// A trailing "0 skipped" on every run is noise, and noise is what a reader
+/// learns to scan past, which is how a real skip goes unnoticed.
+#[test]
+fn the_gate_is_silent_when_nothing_skipped() {
+    let directory = tempfile::Builder::new()
+        .prefix("gate-silent-")
+        .tempdir_in("/tmp")
+        .expect("a temp dir");
+    let log = directory.path().join("skips.jsonl");
+    fs::write(&log, "").expect("an empty log");
+
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(r#"if [ -s "$DOTFILES_SKIP_LOG" ]; then printf 'rust-checks: skipped\n'; fi"#)
+        .env("DOTFILES_SKIP_LOG", &log)
+        .output()
+        .expect("sh runs");
+
+    assert!(
+        String::from_utf8_lossy(&output.stdout).is_empty(),
+        "an empty log produced output, so every clean run would carry noise"
+    );
+}

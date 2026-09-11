@@ -271,19 +271,37 @@ fn loop_items(runner_text: &str, variable: &str) -> Vec<String> {
 /// update this file. That is how the `deps` tree was caught when it moved out
 /// from under `.scripts/` and stopped riding along on that `COPY`.
 fn referenced_root_paths() -> Vec<String> {
-    let tests_dir = repo_root().join("tests");
-    let entries = std::fs::read_dir(&tests_dir)
-        .unwrap_or_else(|error| panic!("cannot read {}: {error}", tests_dir.display()));
-    let mut found: Vec<String> = entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.to_str()
-                .is_some_and(|path| path.ends_with(".test.sh"))
-        })
-        .filter_map(|path| std::fs::read_to_string(path).ok())
-        .flat_map(|text| references_in(&text))
-        .collect();
+    // Both harnesses, because the suites moved.
+    //
+    // This read `tests/*.test.sh` alone. The 2026-09-10 port converted 47 of
+    // them to Rust, so that glob went from matching every suite to matching
+    // three, and the three that remain reference no root-level path. The
+    // positive control caught it at the push gate rather than letting the
+    // assertion pass over an empty set, which is exactly what it is for.
+    //
+    // Both directories are read so this keeps working while the last shell
+    // suites exist and after they are deleted.
+    let root = repo_root();
+    let mut found: Vec<String> = [
+        (root.join("tests"), ".test.sh"),
+        (root.join("crates/config-cli/tests"), ".rs"),
+    ]
+    .into_iter()
+    .filter_map(|(directory, suffix)| {
+        std::fs::read_dir(&directory)
+            .ok()
+            .map(|entries| (entries, suffix))
+    })
+    .flat_map(|(entries, suffix)| {
+        entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(move |path| path.to_str().is_some_and(|path| path.ends_with(suffix)))
+            .collect::<Vec<_>>()
+    })
+    .filter_map(|path| std::fs::read_to_string(path).ok())
+    .flat_map(|text| references_in(&text))
+    .collect();
     found.sort();
     found.dedup();
     found
@@ -294,11 +312,23 @@ fn referenced_root_paths() -> Vec<String> {
 /// Only a bare segment counts: `$DOTFILES_ROOT/tests/lib.sh` names `tests`, and
 /// anything carrying a further slash is a path inside a root-level entry that
 /// the entry's own `COPY` already covers.
+/// Every root-level segment the harness references.
+///
+/// Keyed on `DOTFILES_ROOT/`, which both harnesses use: the shell suites
+/// wrote `$DOTFILES_ROOT/tests`, and the converted suites carry the same
+/// literal in their fixture setup.
+///
+/// A second idiom, `repo_root().join("setup.sh")`, was added here on
+/// 2026-09-10 and then removed: sabotage showed it changed nothing, because
+/// `DOTFILES_ROOT/setup.sh` appears in this very file and so the control is
+/// satisfied without it. Verified against a simulated deletion of the last
+/// three shell suites too. An assertion nothing can break is not an
+/// assertion.
 fn references_in(text: &str) -> Vec<String> {
-    const MARKER: &str = "DOTFILES_ROOT/";
-    text.match_indices(MARKER)
+    let marker = "DOTFILES_ROOT/";
+    text.match_indices(marker)
         .filter_map(|(index, _)| {
-            let rest = &text[index + MARKER.len()..];
+            let rest = &text[index + marker.len()..];
             let segment: String = rest
                 .chars()
                 .take_while(|character| {

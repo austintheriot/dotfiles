@@ -513,3 +513,40 @@ labelled name`, `owned window follows branch changes`.
   run `install-hooks`, and assert the message names both the directory and
   the chmod. `tests/config-init.test.sh` and `tests/githooks-installed.test.sh`
   are the two suites that already drive these paths.
+
+- `tests/rust-checks.sh` is not hermetic: a stale artifact in the shared
+  target dir can be reused across snapshot runs.
+
+  The script archives `$ref` into a fresh `mktemp` snapshot so the gate
+  checks the pushed ref rather than the working tree. Line 123 then pins
+  `CARGO_TARGET_DIR` to `$HOME/.cache/config-manifest/target`, which
+  persists between runs. Cargo can therefore reuse a test binary compiled
+  from source that no longer exists at the ref being checked.
+
+  This is not theoretical. On 2026-09-11 a deliberate sabotage of
+  `crates/config-cli/tests/platform.rs` was committed, proven to fail the
+  gate, then reverted. Every later push was refused with
+  `SABOTAGE: deliberate failure ...` even though that string was absent
+  from the working tree, from HEAD, and from every unpushed commit.
+  `strings` on `target/debug/deps/platform-3552ac18136ec257` found it in a
+  binary built during the proof. Deleting that one artifact cleared the
+  refusal.
+
+  The block at lines 76-102 argues the snapshot exists because this repo's
+  dominant bug class is "the environment compensating for a gap the engine
+  has." A cache that outlives the snapshot is exactly that bug, in the gate
+  built to catch it.
+
+  What to change:
+  - Either set `--target-dir` inside the snapshot, or key the cache by ref
+    so two refs cannot share one fingerprint. Measure the rebuild cost
+    before choosing: a fully cold gate on this machine runs about 15
+    minutes, which is why the shared cache exists.
+  - A test must prove a stale artifact cannot be reused. Build a ref,
+    change a test's assertion at a second ref, run the gate against the
+    second, and assert the verdict follows the second ref's source. Without
+    that, the fix is unfalsifiable.
+
+- Flake: `config_test_watch_reruns_on_a_tracked_change_and_stops_when_killed`
+  failed once on an unrelated gate run and can intermittently block a push.
+  A watch-loop timing test. Needs a deterministic wait rather than a sleep.

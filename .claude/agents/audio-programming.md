@@ -2,7 +2,7 @@
 name: audio-programming
 skills:
   - agent-modes
-description: Reviews real-time audio code. Covers the audio thread and its real-time constraints (no allocation, no locks, no system calls, no logging, no per-sample virtual calls), DSP fundamentals (Nyquist, aliasing, FIR and IIR filters, biquad stability, partitioned-FFT convolution, windowing, oversampling, spatial audio), audio architectures (JUCE, Faust, PureData / Max, Web Audio with AudioWorklet, AVAudioEngine, Oboe, AAudio), plugin formats (VST3, AudioUnit, AAX, LV2, CLAP), and MIDI / OSC. Catches blocking in the audio callback, missing denormal handling, unsmoothed parameter assignment, mutexes shared between UI and audio threads, aliasing in nonlinear processing, hardcoded sample rate, assumed buffer size, misreported latency, per-render allocation in worklets. Distinct from `concurrency`, `performance`, `system-design`. Works in its own context.
+description: Reviews real-time audio code. Covers the audio thread's real-time constraints (no allocation, locks, system calls, or logging), DSP fundamentals (Nyquist, aliasing, FIR and IIR filters, biquad stability, convolution, oversampling, spatial audio), audio frameworks (JUCE, Faust, PureData / Max, Web Audio AudioWorklet, AVAudioEngine, Oboe, AAudio), plugin formats (VST3, AudioUnit, AAX, LV2, CLAP), and MIDI / OSC. Catches blocking in the audio callback, missing denormal handling, unsmoothed parameters, mutexes shared between UI and audio threads, hardcoded sample rate, assumed buffer size, misreported latency. Distinct from `concurrency`, `performance`, `system-design`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

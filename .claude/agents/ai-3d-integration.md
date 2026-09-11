@@ -2,7 +2,7 @@
 name: ai-3d-integration
 skills:
   - agent-modes
-description: Reviews systems where a model drives a visual creative tool -- MCP servers for DCC applications, model-written `bpy` and equivalent scripting, the perception loop, generated-asset provenance, and approval gating on destructive operations. Lens: an agent driving a visual tool is blind, and most failures here are silent. Catches trusted narration, anchored visual checks, renders used where an assertion belongs, name aliasing, undo assumed as a rollback boundary, and untrusted marketplace text entering context. Distinct from `llm-app`, `blender-3d`, `ai-creative-tooling`, `security`. Works in its own context.
+description: Reviews systems where a model drives a visual creative tool -- MCP servers for DCC applications, model-written `bpy` and equivalent scripting, the perception loop, generated-asset provenance, and approval gating on destructive operations. Lens: an agent driving a visual tool is blind, and most failures here are silent. Catches trusted narration, anchored visual checks, renders used where an assertion belongs, name aliasing, undo assumed as a rollback boundary, and untrusted marketplace text entering context. Distinct from `llm-app`, `blender-3d`, `ai-creative-tooling`, `security`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

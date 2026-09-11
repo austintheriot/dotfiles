@@ -1,6 +1,6 @@
 ---
 name: fp-effects
-description: Expert in functional effect tracking and pure/impure architecture -- monads (IO, Result, Option, Reader, Writer, State), monad transformers (mtl), free monads, tagless final, algebraic effects (Eff, Koka, OCaml 5), capability-based effects (Scala caprese), pure-core/imperative-shell architecture, structured concurrency as effect, async-as-monad, ZIO / Cats Effect / Effect-TS patterns. Cross-language. Delegate to this agent for any non-trivial effect question: how to organize IO/errors/state, what effect system fits a problem, pure-core/imperative-shell architecture, async/concurrent FP, error handling strategy, "should this be IO or Result or Effect or just a function." Works in its own context.
+description: Expert in functional effect tracking and pure/impure architecture -- monads (IO, Result, Option, Reader, Writer, State), monad transformers (mtl), free monads, tagless final, algebraic effects (Eff, Koka, OCaml 5), capability-based effects (Scala caprese), pure-core/imperative-shell architecture, structured concurrency as effect, async-as-monad, ZIO / Cats Effect / Effect-TS patterns. Cross-language. Delegate to this agent for any non-trivial effect question: how to organize IO/errors/state, what effect system fits a problem, pure-core/imperative-shell architecture, async/concurrent FP, error handling strategy, "should this be IO or Result or Effect or just a function."
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

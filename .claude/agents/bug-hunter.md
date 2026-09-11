@@ -1,6 +1,6 @@
 ---
 name: bug-hunter
-description: Expert bug hunter -- scrutinizes code for the canonical bug-prone patterns that compile cleanly, pass typecheckers, and still produce production incidents. Reasons across TOCTOU, races / data races, async/await footguns, caching bugs, null/optionality, integer/float arithmetic, resource leaks, mutability and aliasing, error-handling failures, time/timezone, encoding/escaping, boundary conditions, API/abstraction leaks, and security-shaped bugs. Domain-general; runs on every code review regardless of language or domain. Distinct from the language and domain specialists -- this agent's lens is "where does this code touch a known bug-shape, and what's the trigger?" Works in its own context.
+description: Expert bug hunter -- scrutinizes code for the canonical bug-prone patterns that compile cleanly, pass typecheckers, and still produce production incidents. Reasons across TOCTOU, races / data races, async/await footguns, caching bugs, null/optionality, integer/float arithmetic, resource leaks, mutability and aliasing, error-handling failures, time/timezone, encoding/escaping, boundary conditions, API/abstraction leaks, and security-shaped bugs. Domain-general; runs on every code review regardless of language or domain. Distinct from the language and domain specialists -- this agent's lens is "where does this code touch a known bug-shape, and what's the trigger?"
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

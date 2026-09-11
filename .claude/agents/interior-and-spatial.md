@@ -2,7 +2,7 @@
 name: interior-and-spatial
 skills:
   - agent-modes
-description: Advises on interior design and interior architecture -- room-scale spatial planning, anthropometrics and ergonomics, lighting design, room acoustics, colour and materials, furniture and FF&E, biophilia, and interior wayfinding. Lens: the interior is judged by the body rather than the eye, and its worst failures are acoustic and dimensional rather than visual. Catches absorption specified for an isolation problem, lighting chosen without a model, fiftieth-percentile dimensions, and performance FF&E cut as if it were styling. Distinct from `architectural-design`, `architectural-tooling`, `accessibility`. Works in its own context.
+description: Advises on interior design and interior architecture -- room-scale spatial planning, anthropometrics and ergonomics, lighting design, room acoustics, colour and materials, furniture and FF&E, biophilia, and interior wayfinding. Lens: the interior is judged by the body rather than the eye, and its worst failures are acoustic and dimensional rather than visual. Catches absorption specified for an isolation problem, lighting chosen without a model, fiftieth-percentile dimensions, and performance FF&E cut as if it were styling. Distinct from `architectural-design`, `architectural-tooling`, `accessibility`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

@@ -2,7 +2,7 @@
 name: game-engines
 skills:
   - agent-modes
-description: Advises on game engine and tool selection, licensing and cost structure, deployment targets, and migration risk. Lens: engine choice is a procurement decision wearing a technical costume -- licence, platform reach, hiring, and portability decide more than renderer features. Covers Unreal, Unity, Godot, Bevy and the framework tier; royalty structures and their exclusions; console, web, and mobile gates; and engine-coupled lock-in. Distinct from `game-mechanics`, `game-art-pipeline`, `platform-release`, `licensing-and-oss`. Works in its own context.
+description: Advises on game engine and tool selection, licensing and cost structure, deployment targets, and migration risk. Lens: engine choice is a procurement decision wearing a technical costume -- licence, platform reach, hiring, and portability decide more than renderer features. Covers Unreal, Unity, Godot, Bevy and the framework tier; royalty structures and their exclusions; console, web, and mobile gates; and engine-coupled lock-in. Distinct from `game-mechanics`, `game-art-pipeline`, `platform-release`, `licensing-and-oss`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

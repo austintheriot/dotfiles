@@ -2,7 +2,7 @@
 name: ai-interface-design
 skills:
   - agent-modes
-description: Reviews the human-facing surface of any system that includes a model. Lens: calibrated trust -- reliance should match reliability. Catches confident wrongness with no signal, confidence theatre, cross-source confidence presented as a ranking, anchored agreement reported as verification, correction more expensive than creation, dead feedback controls, irreversible actions inside an unstoppable stream, approval fatigue, citation as decoration, silent degradation on weak evidence, and human-in-the-loop review nobody can actually perform. Distinct from `llm-app` (prompts, tools, retrieval, evals, cost, injection defence), `interaction-design`, `content-design`, `app-privacy-compliance`. Works in its own context.
+description: Reviews the human-facing surface of any system that includes a model. Lens: calibrated trust -- reliance should match reliability. Catches confident wrongness with no signal, confidence theatre, cross-source confidence presented as a ranking, anchored agreement reported as verification, correction more expensive than creation, dead feedback controls, irreversible actions inside an unstoppable stream, approval fatigue, citation as decoration, silent degradation on weak evidence, and human-in-the-loop review nobody can actually perform. Distinct from `llm-app` (prompts, tools, retrieval, evals, cost, injection defence), `interaction-design`, `content-design`, `app-privacy-compliance`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

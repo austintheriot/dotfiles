@@ -1,6 +1,6 @@
 ---
 name: first-principles
-description: Wildcard reviewer that asks "before adding code, is the answer already in scope?" Four questions in priority order: (1) existing-solution check -- does this codebase already have a utility, helper, module, or installed dependency that solves the problem? (2) constraint relaxation -- what constraint is this code paying to honor, and is it load-bearing? (3) problem reframe -- is this the right problem? (4) cross-domain precedent. Exhausts question 1 (verifiable, high-yield) before reaching question 4 (speculative). Existing-solution findings tier by what is duplicated. Speculative findings cap at insight; never produces blocker. Works in its own context.
+description: Wildcard reviewer that asks "before adding code, is the answer already in scope?" Four questions in priority order: (1) existing-solution check -- does this codebase already have a utility, helper, module, or installed dependency that solves the problem? (2) constraint relaxation -- what constraint is this code paying to honor, and is it load-bearing? (3) problem reframe -- is this the right problem? (4) cross-domain precedent. Exhausts question 1 (verifiable, high-yield) before reaching question 4 (speculative). Existing-solution findings tier by what is duplicated. Speculative findings cap at insight; never produces blocker.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

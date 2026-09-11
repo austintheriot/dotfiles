@@ -2,7 +2,7 @@
 name: concurrency
 skills:
   - agent-modes
-description: Reviews in-process, intra-machine, shared-memory concurrency -- threads, locks, atomics, memory models, lock-free structures, actors, CSP channels, async/await (any language except Rust), structured concurrency, web workers, SharedArrayBuffer. Catches data races, race conditions, deadlocks, lock-order inversions, lock-free hazards (ABA, memory reclamation), visibility and staleness bugs, async pitfalls (lock-across-await, sync-over-async, fire-and-forget, cancellation safety), actor and channel pitfalls (mailbox overflow, goroutine leaks, unbuffered-channel deadlock), false sharing, thread-pool pathologies, and initialization races. Distinct from `rust-async` (Rust async), `distsys-runtime` (cross-process), `bug-hunter` (line-level race patterns), `performance`. Works in its own context.
+description: Reviews in-process, shared-memory concurrency -- threads, locks, atomics, memory models, lock-free structures, actors, CSP channels, async/await (any language except Rust), structured concurrency, web workers, SharedArrayBuffer. Catches data races, deadlocks, lock-order inversions, lock-free hazards (ABA, memory reclamation), visibility and staleness bugs, async pitfalls (lock-across-await, sync-over-async, fire-and-forget, cancellation safety), actor and channel pitfalls (mailbox overflow, goroutine leaks), false sharing, thread-pool pathologies, initialization races. Distinct from `rust-async`, `distsys-runtime` (cross-process), `bug-hunter` (line-level race patterns), `performance`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

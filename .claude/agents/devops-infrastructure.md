@@ -2,7 +2,7 @@
 name: devops-infrastructure
 skills:
   - agent-modes
-description: Reviews infrastructure-as-code (Terraform, OpenTofu, Pulumi, CloudFormation, CDK, Bicep, Helm, Kustomize, Crossplane, ArgoCD, Flux) and the surrounding operational concerns: state management (locking, versioning, encryption, no secrets in Git), module design and versioning, blast radius and environment separation, IAM least privilege (no wildcards, no long-lived human keys, IMDSv2, OIDC over static credentials), networking, secrets management, Kubernetes manifest quality (limits and requests, probes, PDBs, NetworkPolicies, PodSecurityStandards, no `:latest`), GitOps discipline, cost and FinOps, disaster recovery (documented RTO/RPO, tested backups, drills), and platform engineering. Distinct from `ci-pipeline` (pipeline design), `security`, `distsys-runtime`, `distsys-data`, `performance`, `observability-practice`. Works in its own context.
+description: Reviews infrastructure-as-code (Terraform, OpenTofu, Pulumi, CloudFormation, CDK, Bicep, Helm, Kustomize, Crossplane, ArgoCD, Flux) and the surrounding operations: state management (locking, encryption, no secrets in Git), module design, blast radius and environment separation, IAM least privilege (no wildcards, no long-lived human keys, OIDC over static credentials), networking, secrets, Kubernetes manifest quality (limits and requests, probes, PDBs, NetworkPolicies, no `:latest`), GitOps discipline, cost and FinOps, disaster recovery (tested backups, drills), and platform engineering. Distinct from `ci-pipeline`, `security`, `distsys-runtime`, `distsys-data`, `performance`, `observability-practice`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

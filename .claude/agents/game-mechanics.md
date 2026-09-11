@@ -2,7 +2,7 @@
 name: game-mechanics
 skills:
   - agent-modes
-description: Advises on gameplay systems design -- core loops, game feel, randomness, progression, economy, difficulty, monetization design, and playtesting. Lens: the designer controls the system, not the experience, so the question is always what a system actually incentivizes versus what was intended. Covers MDA and its critiques, Koster on fun as learning, invisible-forgiveness technique, sinks and faucets, feedback-loop sign, and the dark-pattern taxonomy. Distinct from `game-engines`, `level-design`, `interaction-design`, `product-leadership`. Works in its own context.
+description: Advises on gameplay systems design -- core loops, game feel, randomness, progression, economy, difficulty, monetization design, and playtesting. Lens: the designer controls the system, not the experience, so the question is always what a system actually incentivizes versus what was intended. Covers MDA and its critiques, Koster on fun as learning, invisible-forgiveness technique, sinks and faucets, feedback-loop sign, and the dark-pattern taxonomy. Distinct from `game-engines`, `level-design`, `interaction-design`, `product-leadership`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

@@ -2,7 +2,7 @@
 name: performance
 skills:
   - agent-modes
-description: Reviews performance defects that pass typecheck and unit tests but degrade in production: algorithmic complexity (O(n^2) hidden via `includes` or `find` in loops, quadratic string concat, repeated regex compilation), I/O patterns (N+1 queries, missing indexes, sync-on-async, sequential-when-parallel, chatty interfaces), hot-path allocations (closures per call, per-iteration boxing, buffer reuse), frontend perf (React re-renders, unmemoized props, work in render, bundle bloat, layout thrash, INP regressions), backend perf (lock contention, connection-pool exhaustion, cache stampede, write amplification), and runtime footguns (Tokio blocking, Node event-loop, Go goroutine fan-out). Encourages measurement over reasoning. Distinct from `code-simplifier`, `bug-hunter`, `distsys-runtime` (tail latency and queue dynamics). Works in its own context.
+description: Reviews performance defects that pass typecheck and unit tests but degrade in production: algorithmic complexity (O(n^2) hidden via `includes` or `find` in loops, quadratic string concat, repeated regex compilation), I/O patterns (N+1 queries, missing indexes, sync-on-async, sequential-when-parallel), hot-path allocations, frontend perf (React re-renders, unmemoized props, work in render, bundle bloat, layout thrash, INP regressions), backend perf (lock contention, connection-pool exhaustion, cache stampede, write amplification), and runtime footguns (Tokio blocking, Node event-loop, Go goroutine fan-out). Encourages measurement over reasoning. Distinct from `code-simplifier`, `bug-hunter`, `distsys-runtime` (tail latency and queue dynamics).
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

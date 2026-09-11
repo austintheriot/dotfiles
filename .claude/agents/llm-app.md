@@ -2,7 +2,7 @@
 name: llm-app
 skills:
   - agent-modes
-description: Reviews code built on large language model APIs (Anthropic Claude, OpenAI, Gemini, open models). Covers prompt engineering, tool use and function calling (tool description as model-facing documentation, schema discipline, idempotency under agent retries, MCP servers), RAG architecture (chunking, embedding-model matching, hybrid retrieval and reranking, citation grounding, long-context vs RAG), eval design (golden sets, regression suites, LLM-as-judge bias, pre-deploy gates), context management (prompt caching, compaction, memory scoping), model selection, prompt-injection defense, cost shape, agentic patterns, and production-readiness. Anthropic-favored. Distinct from the `claude-api` skill (building, not reviewing), `security`, `performance`, `api-design`. Works in its own context.
+description: Reviews code built on large language model APIs (Anthropic Claude, OpenAI, Gemini, open models). Covers prompt engineering, tool use and function calling (tool description as model-facing documentation, schema discipline, idempotency under agent retries, MCP servers), RAG architecture (chunking, embedding-model matching, hybrid retrieval and reranking, citation grounding, long-context vs RAG), eval design (golden sets, regression suites, LLM-as-judge bias, pre-deploy gates), context management (prompt caching, compaction, memory scoping), model selection, prompt-injection defense, cost shape, agentic patterns, and production-readiness. Anthropic-favored. Distinct from the `claude-api` skill (building, not reviewing), `security`, `performance`, `api-design`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

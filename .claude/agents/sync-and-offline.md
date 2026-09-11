@@ -2,7 +2,7 @@
 name: sync-and-offline
 skills:
   - agent-modes
-description: Reviews client-side sync and local-first / offline-first architecture, plus the client-server protocol. Covers conflict resolution (last-write-wins and clock skew, per-field merge, CRDTs by family, operational transformation, server-authoritative rebase), protocol design (change tracking, version vectors, checkpoints, partial replication, idempotency and watermarks, causal delivery, hybrid logical clocks, tombstones, schema migration across un-upgradeable clients, attachments, presence, backpressure), local storage (IndexedDB, eviction, OPFS, WASM SQLite, cross-tab leader election, mobile SQLite WAL), end-to-end encryption as a merge constraint, and convergence testing. Distinct from `distsys-data` (server replication), `distsys-runtime`, `mobile-native`, `desktop-native`, `security`. Works in its own context.
+description: Reviews client-side sync and local-first / offline-first architecture, plus the client-server protocol. Covers conflict resolution (last-write-wins and clock skew, per-field merge, CRDTs by family, operational transformation, server-authoritative rebase), protocol design (change tracking, version vectors, checkpoints, partial replication, idempotency and watermarks, causal delivery, hybrid logical clocks, tombstones, schema migration across un-upgradeable clients, presence, backpressure), local storage (IndexedDB, eviction, OPFS, WASM SQLite, cross-tab leader election, mobile SQLite WAL), end-to-end encryption as a merge constraint, and convergence testing. Distinct from `distsys-data` (server replication), `distsys-runtime`, `mobile-native`, `desktop-native`, `security`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

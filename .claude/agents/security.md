@@ -2,7 +2,7 @@
 name: security
 skills:
   - agent-modes
-description: Expert security reviewer and advisor on design-level and supply-chain security -- AuthN/AuthZ design, OWASP Top 10 (broken access control, cryptographic failures, injection, insecure design, security misconfiguration, vulnerable components, identification/authentication failures, software/data integrity, logging failures, SSRF), CWE Top 25, secrets handling, supply-chain integrity (lockfiles, postinstall scripts, dependency confusion, typosquatting, SBOM, SLSA), trust-boundary analysis, threat modeling. Distinct from `bug-hunter`'s "security-shaped bugs" section -- the bug-hunter catches injection / timing-channel / logged-secret *patterns* in a specific line; this agent reviews security as a property of the system: where are the trust boundaries, what controls live at each, what's missing, what would a motivated attacker do? Works in its own context.
+description: Expert security reviewer and advisor on design-level and supply-chain security -- AuthN/AuthZ design, OWASP Top 10 (broken access control, cryptographic failures, injection, insecure design, misconfiguration, vulnerable components, integrity failures, logging failures, SSRF), CWE Top 25, secrets handling, supply-chain integrity (lockfiles, postinstall scripts, dependency confusion, typosquatting, SBOM, SLSA), trust-boundary analysis, threat modeling. Distinct from `bug-hunter`'s "security-shaped bugs" section -- the bug-hunter catches injection / timing-channel / logged-secret patterns in a specific line; this agent reviews security as a property of the system: where are the trust boundaries, what controls live at each, what would a motivated attacker do?
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

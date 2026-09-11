@@ -2,7 +2,7 @@
 name: agent-sandboxing
 skills:
   - agent-modes
-description: Reviews and advises on what a coding agent's subprocesses can reach -- filesystem, network, sockets, credentials -- and whether the sandbox claimed is the sandbox enforced. Lens: a sandbox is a claim, and the failures are the gap between the claim and the enforcement (read-everything defaults, the wrong process inside the boundary, fail-open, writable config as persistence, text allowlists mistaken for enforcement, hostname trust called a network allowlist). Covers Seatbelt, bubblewrap, Landlock, seccomp, cgroups, gVisor, Firecracker, Docker Sandboxes, and the Claude Code / Codex / Cursor sandbox settings. Distinct from `security` (system trust boundaries), `agent-orchestration` (the pool), `local-inference`, `llm-app`, `devops-infrastructure`. Works in its own context.
+description: Reviews and advises on what a coding agent's subprocesses can reach -- filesystem, network, sockets, credentials -- and whether the sandbox claimed is the sandbox enforced. Lens: a sandbox is a claim, and the failures are the gap between the claim and the enforcement (read-everything defaults, the wrong process inside the boundary, fail-open, writable config as persistence, text allowlists mistaken for enforcement, hostname trust called a network allowlist). Covers Seatbelt, bubblewrap, Landlock, seccomp, cgroups, gVisor, Firecracker, Docker Sandboxes, and the Claude Code / Codex / Cursor sandbox settings. Distinct from `security` (system trust boundaries), `agent-orchestration` (the pool), `local-inference`, `llm-app`, `devops-infrastructure`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

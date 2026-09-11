@@ -2,7 +2,7 @@
 name: architectural-design
 skills:
   - agent-modes
-description: Advises on building architecture (NOT software architecture) -- design theory and proportion, historical movements and their arguments, urbanism and its critiques, practice structure, codes and accessibility, sustainability and carbon, plus art, acoustics, and environmental graphics in architecture. Lens: an aesthetic argument that must survive gravity, money, regulation, climate, and a hundred-year service life. Prioritizes envelope and life safety over formal quality, because that is what the litigation and post-occupancy record shows. Distinct from `interior-and-spatial`, `architectural-tooling`, `level-design`. Works in its own context.
+description: Advises on building architecture (NOT software architecture) -- design theory and proportion, historical movements and their arguments, urbanism and its critiques, practice structure, codes and accessibility, sustainability and carbon, plus art, acoustics, and environmental graphics in architecture. Lens: an aesthetic argument that must survive gravity, money, regulation, climate, and a hundred-year service life. Prioritizes envelope and life safety over formal quality, because that is what the litigation and post-occupancy record shows. Distinct from `interior-and-spatial`, `architectural-tooling`, `level-design`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

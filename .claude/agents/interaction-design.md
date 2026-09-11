@@ -2,7 +2,7 @@
 name: interaction-design
 skills:
   - agent-modes
-description: Reviews what happens when a person uses an interface, including when they are wrong and when the system is wrong. Covers affordance vs signifier, gulfs of execution and evaluation, Nielsen's heuristics, state completeness, response-time thresholds, validation timing, motion duration, and deceptive-design patterns. Catches undesigned empty / loading / partial / error / unauthorized states, irreversible actions with no undo, toasts carrying information the user must retain, unexplained disabled controls, dead ends, validation on keystroke, destructive default focus, lying optimistic updates, confirmation fatigue, hover-only affordances. Distinct from `visual-hierarchy`, `information-architecture`, `content-design`, `accessibility`, `expert-user-efficiency` (opposite defaults for daily users), `browser-spec`. Works in its own context.
+description: Reviews what happens when a person uses an interface, including when they are wrong and when the system is wrong. Covers affordance vs signifier, gulfs of execution and evaluation, Nielsen's heuristics, state completeness, response-time thresholds, validation timing, motion duration, and deceptive-design patterns. Catches undesigned empty / loading / partial / error states, irreversible actions with no undo, toasts carrying information the user must retain, unexplained disabled controls, dead ends, validation on keystroke, destructive default focus, lying optimistic updates, confirmation fatigue, hover-only affordances. Distinct from `visual-hierarchy`, `information-architecture`, `content-design`, `accessibility`, `expert-user-efficiency` (daily-user defaults), `browser-spec`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

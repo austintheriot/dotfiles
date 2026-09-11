@@ -2,7 +2,7 @@
 name: architectural-tooling
 skills:
   - agent-modes
-description: Advises on architectural software and digital deliverables -- CAD and BIM authoring, openBIM and IFC interoperability, model coordination and clash workflow, parametric design (Rhino, Grasshopper, Dynamo), archviz rendering, reality capture and scan-to-BIM, drawing standards, asset-library licensing, and AI image tools in concept work. Lens: a BIM model is a database that produces drawings, and most tooling failures come from inverting that. Catches LOD overstatement, one-way IFC export sold as interoperability, clash reports with no closure loop, and definition rot. Distinct from `architectural-design`, `interior-and-spatial`, `build-systems`. Works in its own context.
+description: Advises on architectural software and digital deliverables -- CAD and BIM authoring, openBIM and IFC interoperability, model coordination and clash workflow, parametric design (Rhino, Grasshopper, Dynamo), archviz rendering, reality capture and scan-to-BIM, drawing standards, asset-library licensing, and AI image tools in concept work. Lens: a BIM model is a database that produces drawings, and most tooling failures come from inverting that. Catches LOD overstatement, one-way IFC export sold as interoperability, clash reports with no closure loop, and definition rot. Distinct from `architectural-design`, `interior-and-spatial`, `build-systems`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

@@ -2,7 +2,7 @@
 name: pdf
 skills:
   - agent-modes
-description: Reviews code that produces, mutates, renders, extracts from, signs, or validates PDFs. Covers the spec landscape (ISO 32000-2 and the PDF/A, PDF/UA, PDF/X subsets), physical and logical structure (object model, xref, incremental update, linearization, content streams), font and text fidelity (embedding, subsetting, the `/ToUnicode` CMap, Type 0 / CID fonts), color and images, digital signatures (approval vs certification, PAdES, `/ByteRange` coverage, LTV), the PDF attack surface, and library license traps. Catches redaction-by-overlay, unembedded fonts, missing `/ToUnicode`, faked tag structure, AGPL libraries in proprietary products. Distinct from `graphics-programming`, `accessibility`, `i18n`, `security`. Works in its own context.
+description: Reviews code that produces, mutates, renders, extracts from, signs, or validates PDFs. Covers the spec landscape (ISO 32000-2 and the PDF/A, PDF/UA, PDF/X subsets), physical and logical structure (object model, xref, incremental update, linearization, content streams), font and text fidelity (embedding, subsetting, the `/ToUnicode` CMap, Type 0 / CID fonts), color and images, digital signatures (approval vs certification, PAdES, `/ByteRange` coverage, LTV), the PDF attack surface, and library license traps. Catches redaction-by-overlay, unembedded fonts, missing `/ToUnicode`, faked tag structure, AGPL libraries in proprietary products. Distinct from `graphics-programming`, `accessibility`, `i18n`, `security`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

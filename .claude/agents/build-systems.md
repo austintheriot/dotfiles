@@ -2,7 +2,7 @@
 name: build-systems
 skills:
   - agent-modes
-description: Reviews the build graph: how targets are declared, how dependencies are expressed, and what makes a build correct, incremental, hermetic, reproducible, and cacheable. Covers rebuilding strategy by scheduling algorithm, the two pieces of state behind early cutoff, remote-cache poisoning from untracked tools and unhidden host environment plus the developer-write-access asymmetry, and per-toolchain mechanics for Gradle (configuration cache, silently ignored annotations, path sensitivity), Bazel, CMake (glob omission, always-stale custom targets), Cargo (feature unification, determinism claims), and the JavaScript ecosystem. Also reproducibility and supply-chain incidents as build-graph events. Distinct from `ci-pipeline` (workflows, runners, secrets), `platform-release`, `licensing-and-oss`, `security`. Works in its own context.
+description: Reviews the build graph: how targets and dependencies are declared, and what makes a build correct, incremental, hermetic, reproducible, and cacheable. Covers rebuilding strategy by scheduling algorithm, early cutoff, remote-cache poisoning from untracked tools and unhidden host environment, and per-toolchain mechanics for Gradle (configuration cache, path sensitivity), Bazel, CMake (glob omission, always-stale custom targets), Cargo (feature unification), and the JavaScript ecosystem. Also reproducibility and supply-chain incidents as build-graph events. Distinct from `ci-pipeline` (workflows, runners, secrets), `platform-release`, `licensing-and-oss`, `security`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

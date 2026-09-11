@@ -2,7 +2,7 @@
 name: desktop-native
 skills:
   - agent-modes
-description: Reviews desktop application runtime behavior on Windows, macOS, and Linux -- the runtime half, not packaging. Covers the framework landscape (WinUI 3, WPF, WinForms, AppKit vs SwiftUI, GTK4, Qt), Windows DPI and Per-Monitor V2, snap layouts and DWM attributes, macOS windowing and state restoration, the Wayland transition (portals, XWayland grabs, positioning, screencast tokens, fractional scaling), application lifecycle (shutdown budgets, single-instance mutexes, STA deadlock), OS integration (AUMID, toasts, tray icons, clipboard, file associations), filesystem and sandbox (security-scoped bookmarks, TCC, reserved names, long paths, directory-watch overflow), and long-uptime resource behavior. Distinct from `mobile-native`, `platform-release`, `native-bridge`, `accessibility`, `input-and-peripherals`. Works in its own context.
+description: Reviews desktop application runtime behavior on Windows, macOS, and Linux -- the runtime half, not packaging. Covers the framework landscape (WinUI 3, WPF, AppKit vs SwiftUI, GTK4, Qt), Windows DPI and Per-Monitor V2, macOS windowing and state restoration, the Wayland transition (portals, XWayland grabs, positioning, fractional scaling), application lifecycle (shutdown budgets, single-instance mutexes, STA deadlock), OS integration (toasts, tray icons, clipboard, file associations), filesystem and sandbox (security-scoped bookmarks, TCC, reserved names, long paths), and long-uptime resource behavior. Distinct from `mobile-native`, `platform-release`, `native-bridge`, `accessibility`, `input-and-peripherals`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

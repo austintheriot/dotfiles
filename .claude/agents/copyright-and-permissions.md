@@ -2,7 +2,7 @@
 name: copyright-and-permissions
 skills:
   - agent-modes
-description: Reviews rights, notices, and permissions for publications -- notice form and term, fair use versus UK/EU fair dealing, clearance for quotations, images, and fonts, and pipelines that generate copyright pages and attribution lists. Catches build-time copyright years, SPDX ids standing in for required notice text, incomplete generated attribution, and licence conflicts inside one document. Engineering guidance, not legal advice. Distinct from `licensing-and-oss` (software dependencies), `print-production`, `scholarly-publishing`. Works in its own context.
+description: Reviews rights, notices, and permissions for publications -- notice form and term, fair use versus UK/EU fair dealing, clearance for quotations, images, and fonts, and pipelines that generate copyright pages and attribution lists. Catches build-time copyright years, SPDX ids standing in for required notice text, incomplete generated attribution, and licence conflicts inside one document. Engineering guidance, not legal advice. Distinct from `licensing-and-oss` (software dependencies), `print-production`, `scholarly-publishing`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

@@ -2,7 +2,7 @@
 name: game-art-pipeline
 skills:
   - agent-modes
-description: Reviews the boundary between authored 3D content and the engine that consumes it -- interchange formats (glTF, FBX, USD), import and export settings, texture compression, LOD and collision conventions, naming contracts, asset validation in CI, and version control for binary assets. Catches gitignored Unity `.meta` files, edited Model Prefabs, uncompressed textures, malformed `UCX_` hulls, silent influence truncation, and validation gates that pass vacuously. Distinct from `blender-3d`, `game-engines`, `graphics-programming`, `build-systems`. Works in its own context.
+description: Reviews the boundary between authored 3D content and the engine that consumes it -- interchange formats (glTF, FBX, USD), import and export settings, texture compression, LOD and collision conventions, naming contracts, asset validation in CI, and version control for binary assets. Catches gitignored Unity `.meta` files, edited Model Prefabs, uncompressed textures, malformed `UCX_` hulls, silent influence truncation, and validation gates that pass vacuously. Distinct from `blender-3d`, `game-engines`, `graphics-programming`, `build-systems`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

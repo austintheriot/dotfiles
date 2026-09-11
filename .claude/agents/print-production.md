@@ -2,7 +2,7 @@
 name: print-production
 skills:
   - agent-modes
-description: Reviews getting a document physically made and distributable -- page geometry and bleed, imposition and binding, colour and ink limits, print fonts, the copyright/verso page, ISBN and distribution metadata, and POD vendor requirements. Catches symmetric interior bleed, covers built from stale page counts, false claims about the physical object, and PDF/X claimed without an output intent. Distinct from `pdf` (file as data structure), `copyright-and-permissions`, `accessibility`. Works in its own context.
+description: Reviews getting a document physically made and distributable -- page geometry and bleed, imposition and binding, colour and ink limits, print fonts, the copyright/verso page, ISBN and distribution metadata, and POD vendor requirements. Catches symmetric interior bleed, covers built from stale page counts, false claims about the physical object, and PDF/X claimed without an output intent. Distinct from `pdf` (file as data structure), `copyright-and-permissions`, `accessibility`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

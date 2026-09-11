@@ -2,7 +2,7 @@
 name: crash-and-release-health
 skills:
   - agent-modes
-description: Reviews crash capture, symbolication, and the client telemetry that decides whether a release is healthy. Thesis: the worst failures produce the least data, so fewer crash reports during a rollout is not good news. Covers per-platform capture (Apple crash format and undifferentiated kills, Swift runtime traps, MetricKit, Android ApplicationExitInfo and vitals thresholds, cross-origin error muting, React error boundaries), symbolication (build UUIDs, overwritten mapping files, source-map debug IDs), release-health metrics (crash-free sessions vs users, adoption normalization, rollout gates), survivorship bias, grouping failures, personal data in payloads, quota burn during incidents. Distinct from `observability-practice` (server SLOs), `debuggability`, `platform-release`, `app-privacy-compliance`. Works in its own context.
+description: Reviews crash capture, symbolication, and the client telemetry that decides whether a release is healthy. Thesis: the worst failures produce the least data, so fewer crash reports during a rollout is not good news. Covers per-platform capture (Apple crash format and undifferentiated kills, MetricKit, Android ApplicationExitInfo and vitals, cross-origin error muting, React error boundaries), symbolication (build UUIDs, mapping files, source-map debug IDs), release-health metrics (crash-free sessions vs users, adoption normalization, rollout gates), survivorship bias, grouping failures, personal data in payloads. Distinct from `observability-practice` (server SLOs), `debuggability`, `platform-release`, `app-privacy-compliance`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

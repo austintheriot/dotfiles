@@ -2,7 +2,7 @@
 name: platform-release
 skills:
   - agent-modes
-description: Reviews native platform release engineering -- built artifact to launched application on iOS, macOS, Android, Windows, and Linux. Covers code signing and identity (Apple certificate types and the install-versus-launch clocks, hardened runtime, revocation blast radius; Android upload vs app signing keys and the fingerprint trap; Windows Authenticode, hardware keys, timestamping, SmartScreen; Linux repository signing), notarization and stapling, store submission and review (privacy manifests, phased release with no rollback, Play staged rollout being non-decreasing, target API deadlines, vitals thresholds), version monotonicity rules per platform, and desktop auto-update. Distinct from `ci-pipeline`, `mobile-native`, `desktop-native`, `platform-payments`, `build-systems`, `crash-and-release-health`. Works in its own context.
+description: Reviews native platform release engineering -- built artifact to launched application on iOS, macOS, Android, Windows, and Linux. Covers code signing and identity (Apple certificate types and the install-versus-launch clocks, hardened runtime, revocation blast radius; Android upload vs app signing keys; Windows Authenticode, hardware keys, timestamping, SmartScreen; Linux repository signing), notarization and stapling, store submission and review (privacy manifests, phased release with no rollback, Play staged rollout being non-decreasing, target API deadlines), version monotonicity rules per platform, and desktop auto-update. Distinct from `ci-pipeline`, `mobile-native`, `desktop-native`, `platform-payments`, `build-systems`, `crash-and-release-health`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

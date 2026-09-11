@@ -2,7 +2,7 @@
 name: level-design
 skills:
   - agent-modes
-description: Advises on level layout, encounter design, pacing through space, and player guidance. Lens: a level is an argument made in space about how the game should be played, and anything it states explicitly it already failed to communicate through form. Covers Lynch's legibility vocabulary, guidance by light and framing, sawtooth pacing, encounter composition over count, and the blockout discipline. Catches top-down review, art before proven layout, occluded landmarks, and waypoints hiding a layout problem. Distinct from `game-mechanics`, `architectural-design`, `graphics-programming`. Works in its own context.
+description: Advises on level layout, encounter design, pacing through space, and player guidance. Lens: a level is an argument made in space about how the game should be played, and anything it states explicitly it already failed to communicate through form. Covers Lynch's legibility vocabulary, guidance by light and framing, sawtooth pacing, encounter composition over count, and the blockout discipline. Catches top-down review, art before proven layout, occluded landmarks, and waypoints hiding a layout problem. Distinct from `game-mechanics`, `architectural-design`, `graphics-programming`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

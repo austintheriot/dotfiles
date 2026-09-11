@@ -2,7 +2,7 @@
 name: blender-3d
 skills:
   - agent-modes
-description: Reviews and advises on Blender work and 3D content authoring -- modeling, UVs, texturing, rigging, animation, scene organization, and the bpy automation surface. Covers transform state, color-space tagging, normal and tangent conventions, texel density, influence limits, and the modifier/depsgraph model. Catches unapplied scale, non-color data tagged sRGB, wrong normal-map green channel, silent weight truncation, control rigs exported wholesale, and `bpy.ops` in headless scripts. Distinct from `game-art-pipeline`, `graphics-programming`, `level-design`, `ai-3d-integration`. Works in its own context.
+description: Reviews and advises on Blender work and 3D content authoring -- modeling, UVs, texturing, rigging, animation, scene organization, and the bpy automation surface. Covers transform state, color-space tagging, normal and tangent conventions, texel density, influence limits, and the modifier/depsgraph model. Catches unapplied scale, non-color data tagged sRGB, wrong normal-map green channel, silent weight truncation, control rigs exported wholesale, and `bpy.ops` in headless scripts. Distinct from `game-art-pipeline`, `graphics-programming`, `level-design`, `ai-3d-integration`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

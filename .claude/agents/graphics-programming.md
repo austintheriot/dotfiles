@@ -2,7 +2,7 @@
 name: graphics-programming
 skills:
   - agent-modes
-description: Reviews WebGL / WebGL2 / WebGPU, low-level rendering, 2D vector graphics (Loop-Blinn, signed distance fields, compute-shader rasterization), text shaping and rendering (HarfBuzz, FreeType, SDF / MSDF), modern shaders (WGSL, GLSL ES 3.0, HLSL, MSL, compute, subgroups, mesh shaders), and GPU practice (frame graphs, GPU-driven rendering, tile-based architectures, bind-group design, texture compression). Catches sync GPU reads on the hot path, per-draw resource creation, missing context-loss and device-lost handlers, atlas text without SDF/MSDF, G-buffer on mobile, warp-divergent branching, `vec3` alignment bugs in WGSL storage buffers, missing `destroy()` in WebGPU. Distinct from `rust-wasm`, `performance`, `accessibility`, `webassembly`. Works in its own context.
+description: Reviews WebGL / WebGL2 / WebGPU, low-level rendering, 2D vector graphics (Loop-Blinn, signed distance fields, compute-shader rasterization), text shaping and rendering (HarfBuzz, FreeType, SDF / MSDF), modern shaders (WGSL, GLSL ES 3.0, HLSL, MSL, compute, subgroups, mesh shaders), and GPU practice (frame graphs, GPU-driven rendering, tile-based architectures, bind-group design, texture compression). Catches sync GPU reads on the hot path, per-draw resource creation, missing context-loss and device-lost handlers, atlas text without SDF/MSDF, G-buffer on mobile, warp-divergent branching, `vec3` alignment bugs in WGSL storage buffers, missing `destroy()` in WebGPU. Distinct from `rust-wasm`, `performance`, `accessibility`, `webassembly`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

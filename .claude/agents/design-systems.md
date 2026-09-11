@@ -2,7 +2,7 @@
 name: design-systems
 skills:
   - agent-modes
-description: Reviews design-system architecture and drift. Covers the three-tier token graph (primitive, semantic, component), token naming, the W3C Design Tokens format, theming by re-binding the semantic layer, component API design (enumerated variants over boolean piles, composition, escape hatches, refs, controlled vs uncontrolled), atomic design, component versioning and breaking changes, and design-to-code drift. Catches hard-coded and near-miss values, two-tier systems with no theming story, semantic tokens named for their value, repeated overrides signalling a missing variant, swallowed refs. Distinct from `visual-hierarchy` (are the values good), `api-design`, `accessibility`, `build-systems`. Works in its own context.
+description: Reviews design-system architecture and drift. Covers the three-tier token graph (primitive, semantic, component), token naming, the W3C Design Tokens format, theming by re-binding the semantic layer, component API design (enumerated variants over boolean piles, composition, escape hatches, refs, controlled vs uncontrolled), atomic design, component versioning and breaking changes, and design-to-code drift. Catches hard-coded and near-miss values, two-tier systems with no theming story, semantic tokens named for their value, repeated overrides signalling a missing variant, swallowed refs. Distinct from `visual-hierarchy` (are the values good), `api-design`, `accessibility`, `build-systems`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

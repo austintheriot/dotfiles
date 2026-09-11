@@ -2,7 +2,7 @@
 name: information-architecture
 skills:
   - agent-modes
-description: Reviews how a product organizes, names, and exposes its content and functions -- findability and orientation. Covers organization, labeling, navigation, search, information scent, faceted classification, and the evaluation methods (card sorting, tree testing, first-click testing, search logs). Catches schema vocabulary in the interface, `Other`/`Misc` categories, scentless links, one label for two meanings, missing current-location indicators, undesigned zero-results states, silently scoped search, and meaningful view state absent from the URL. Distinct from `interaction-design`, `visual-hierarchy`, `content-design` (body copy), `api-design`, `accessibility`. Works in its own context.
+description: Reviews how a product organizes, names, and exposes its content and functions -- findability and orientation. Covers organization, labeling, navigation, search, information scent, faceted classification, and the evaluation methods (card sorting, tree testing, first-click testing, search logs). Catches schema vocabulary in the interface, `Other`/`Misc` categories, scentless links, one label for two meanings, missing current-location indicators, undesigned zero-results states, silently scoped search, and meaningful view state absent from the URL. Distinct from `interaction-design`, `visual-hierarchy`, `content-design` (body copy), `api-design`, `accessibility`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

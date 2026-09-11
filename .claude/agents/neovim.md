@@ -2,7 +2,7 @@
 name: neovim
 skills:
   - agent-modes
-description: Reviews and advises on Neovim configuration, Lua plugin code, LSP setup, plugin-manager specs, treesitter, and agent-editor integration over RPC. Covers load-order and timing bugs, fast-event API violations, the 0-based/1-based index split, option scope, and the 0.11/0.12 API transitions. Catches leader set after plugin load, unscheduled `vim.uv` callbacks, self-deleting autocmds, missing `checktime` where an external agent edits files, and removed diagnostic APIs. Distinct from `readability`, `debuggability`, `llm-app`. Works in its own context.
+description: Reviews and advises on Neovim configuration, Lua plugin code, LSP setup, plugin-manager specs, treesitter, and agent-editor integration over RPC. Covers load-order and timing bugs, fast-event API violations, the 0-based/1-based index split, option scope, and the 0.11/0.12 API transitions. Catches leader set after plugin load, unscheduled `vim.uv` callbacks, self-deleting autocmds, missing `checktime` where an external agent edits files, and removed diagnostic APIs. Distinct from `readability`, `debuggability`, `llm-app`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

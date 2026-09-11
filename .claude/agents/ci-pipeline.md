@@ -2,7 +2,7 @@
 name: ci-pipeline
 skills:
   - agent-modes
-description: Reviews CI, build, and release pipelines (GitHub Actions, GitLab CI, Buildkite, Jenkins, CircleCI, Azure Pipelines, Tekton), Dockerfile design, branch protection, runner and agent security, caching strategy, build determinism, deployment gating, artifact signing and provenance (Sigstore, SLSA, SBOM), OIDC trust to clouds, and secrets management. Catches missing `permissions:` blocks, tag-pinned rather than SHA-pinned actions, `pull_request_target` traps, long-lived cloud credentials, OIDC trust wildcards, `latest` image tags, secrets in logs, persistent self-hosted runners on public repos, missing rollback paths, migrations bundled with breaking code, canary deploys with no success criteria. Distinct from `security` (code-level supply chain), `distsys-runtime`, `build-systems` (the build graph itself). Works in its own context.
+description: Reviews CI, build, and release pipelines (GitHub Actions, GitLab CI, Buildkite, Jenkins, CircleCI, Tekton), Dockerfile design, branch protection, runner security, caching, build determinism, deployment gating, artifact signing and provenance (Sigstore, SLSA, SBOM), OIDC trust to clouds, and secrets management. Catches missing `permissions:` blocks, tag-pinned actions, `pull_request_target` traps, long-lived cloud credentials, OIDC trust wildcards, `latest` image tags, secrets in logs, persistent self-hosted runners on public repos, missing rollback paths, canary deploys with no success criteria. Distinct from `security` (code-level supply chain), `distsys-runtime`, `build-systems` (the build graph itself).
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

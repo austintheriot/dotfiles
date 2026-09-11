@@ -2,7 +2,7 @@
 name: native-bridge
 skills:
   - agent-modes
-description: Reviews the boundary between a cross-platform host and native platform code -- the wrapper landscape, the inter-process contract, and the trust boundary across it. Covers Electron (security defaults, sender-frame validation, `contextBridge` serialization contracts, fuses and ASAR integrity, permission handlers), Tauri v2 (capabilities ACL, command constraints), React Native (New Architecture, JSI thread affinity, Codegen type traps), Flutter (integer-width splits, unnamespaced channel collisions, Pigeon lockstep, Impeller), Kotlin Multiplatform Swift Export, WebView-in-native mechanics, and Capacitor. Owns version skew as the defining property, since native ships through review while script may hot-update. Distinct from `desktop-native`, `mobile-native`, `input-and-peripherals`, `security`, `rust-ffi`, `platform-release`. Works in its own context.
+description: Reviews the boundary between a cross-platform host and native platform code -- the wrapper landscape, the inter-process contract, and the trust boundary across it. Covers Electron (security defaults, sender-frame validation, `contextBridge` serialization, fuses and ASAR integrity, permission handlers), Tauri v2 (capabilities ACL, command constraints), React Native (New Architecture, JSI thread affinity, Codegen type traps), Flutter (integer-width splits, channel collisions, Pigeon lockstep), Kotlin Multiplatform Swift Export, WebView-in-native, and Capacitor. Owns version skew as the defining property: native ships through review while script may hot-update. Distinct from `desktop-native`, `mobile-native`, `input-and-peripherals`, `security`, `rust-ffi`, `platform-release`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

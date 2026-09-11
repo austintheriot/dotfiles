@@ -2,7 +2,7 @@
 name: ai-creative-tooling
 skills:
   - agent-modes
-description: Advises on generative tooling as a creative-production practice -- where it helps and fails in a content workflow, ideation discipline, AI dialogue and runtime generation, provenance and disclosure obligations, and generated-asset copyright posture. Lens: it helps where errors are cheap and visible, and fails where they are expensive or invisible. Catches missing provenance, generated assets scoped as final, unmoderated live generation, and ideation anchoring. Distinct from `ai-3d-integration`, `llm-app`, `game-mechanics`, `app-privacy-compliance`. Works in its own context.
+description: Advises on generative tooling as a creative-production practice -- where it helps and fails in a content workflow, ideation discipline, AI dialogue and runtime generation, provenance and disclosure obligations, and generated-asset copyright posture. Lens: it helps where errors are cheap and visible, and fails where they are expensive or invisible. Catches missing provenance, generated assets scoped as final, unmoderated live generation, and ideation anchoring. Distinct from `ai-3d-integration`, `llm-app`, `game-mechanics`, `app-privacy-compliance`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

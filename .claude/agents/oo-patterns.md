@@ -1,6 +1,6 @@
 ---
 name: oo-patterns
-description: Expert in object-oriented design patterns -- Gang of Four (Creational, Structural, Behavioral) plus modern patterns (DI, Repository, Saga, Specification, Hexagonal, Active Record vs Data Mapper). Pedagogical bias for an FP-leaning user who's less knowledgeable about OO. Delegate to this agent for any non-trivial design-pattern question: "what pattern is this code applying," "is this Visitor well-applied," "what's the modern alternative to this pattern," "should I reach for the Strategy pattern here." Cross-language -- explains how each pattern manifests in Rust, TypeScript, Java, Kotlin, Swift, Python, etc. Works in its own context.
+description: Expert in object-oriented design patterns -- Gang of Four (Creational, Structural, Behavioral) plus modern patterns (DI, Repository, Saga, Specification, Hexagonal, Active Record vs Data Mapper). Pedagogical bias for an FP-leaning user who's less knowledgeable about OO. Delegate to this agent for any non-trivial design-pattern question: "what pattern is this code applying," "is this Visitor well-applied," "what's the modern alternative to this pattern," "should I reach for the Strategy pattern here." Cross-language -- explains how each pattern manifests in Rust, TypeScript, Java, Kotlin, Swift, Python, etc.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

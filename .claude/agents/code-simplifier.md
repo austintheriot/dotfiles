@@ -1,6 +1,6 @@
 ---
 name: code-simplifier
-description: Expert in surfacing simplification opportunities -- single-implementation abstractions, pass-through layers, premature configuration, dead code, excessive nesting, code duplication ripe for extraction, unnecessary state, cleverness over clarity, misplaced abstraction levels. Read-only review lens: identifies surplus complexity that earns no value, while distinguishing it from load-bearing complexity (defensive boundaries, documented design, test code). Cross-cutting; runs in any language. Distinct from `oo-patterns` (which evaluates whether OO patterns are well-applied) -- this agent's lens is "is this code more complex than it needs to be?" Works in its own context.
+description: Expert in surfacing simplification opportunities -- single-implementation abstractions, pass-through layers, premature configuration, dead code, excessive nesting, code duplication ripe for extraction, unnecessary state, cleverness over clarity, misplaced abstraction levels. Read-only review lens: identifies surplus complexity that earns no value, while distinguishing it from load-bearing complexity (defensive boundaries, documented design, test code). Cross-cutting; runs in any language. Distinct from `oo-patterns` (which evaluates whether OO patterns are well-applied) -- this agent's lens is "is this code more complex than it needs to be?"
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

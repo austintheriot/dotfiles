@@ -2,7 +2,7 @@
 name: agent-orchestration
 skills:
   - agent-modes
-description: Reviews and advises on running several coding agents at once on one machine or account -- concurrency caps, queueing and backpressure, supervision, stall detection, shared-checkout hazards, and the cost model. Lens: an agent pool is a queueing system whose bottleneck is never the one it was sized for (the API token bucket, one `Cargo.lock`, one `index.lock`, the human reviewer). Covers rate limits and cache exemption, Little's law, OTP supervision, structured concurrency, the stall taxonomy from agent telemetry, worktree isolation, and the Anthropic / Cognition / METR cost evidence. Distinct from `agent-sandboxing` (what one agent can reach), `distsys-runtime` (production services), `concurrency` (in-process), `llm-app`, `local-inference`. Works in its own context.
+description: Reviews and advises on running several coding agents at once on one machine or account -- concurrency caps, queueing and backpressure, supervision, stall detection, shared-checkout hazards, and the cost model. Lens: an agent pool is a queueing system whose bottleneck is never the one it was sized for (the API token bucket, one `Cargo.lock`, one `index.lock`, the human reviewer). Covers rate limits and cache exemption, Little's law, OTP supervision, structured concurrency, the stall taxonomy from agent telemetry, worktree isolation, and the Anthropic / Cognition / METR cost evidence. Distinct from `agent-sandboxing` (what one agent can reach), `distsys-runtime` (production services), `concurrency` (in-process), `llm-app`, `local-inference`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Runs ~/tests/run-all.sh inside a throwaway Linux container, so the suite's
-# side effects never touch this machine.
+# Runs the Rust suite (`cargo test --locked` from crates/) inside a throwaway
+# Linux container, so the suite's side effects never touch this machine.
 #
 # The suite mutates $HOME by design: fixture git repos, tmux sessions on the
 # default tmux server, and (before the install-path fix in
@@ -17,16 +17,21 @@
 # would reintroduce the side effects this exists to contain.
 #
 # Usage:
-#   ~/tests/run-in-docker.sh              # the whole suite
-#   ~/tests/run-in-docker.sh deps-manifest   # one suite, by name
+#   ~/tests/run-in-docker.sh                       # the whole suite
+#   ~/tests/run-in-docker.sh --test deps_manifest  # one test target
+#
+# Arguments are passed through to `cargo test`, not to a suite-name matcher:
+# the entrypoint is cargo now, so cargo's own filters are what narrow a run.
 #
 # $DOTFILES_TEST_REF overrides which ref is archived (default: the
 # checked-out branch). The working-tree overlay is skipped when it names
 # anything else, so the container tests that ref as committed.
 #
-# This does not replace ~/tests/run-all.sh on macOS. notify.test.sh is
-# macOS-only (aerospace and osascript) and is absent from the image, so a
-# green container run does not cover it.
+# This does not replace a host run on macOS. notify.test.sh is macOS-only
+# (aerospace and osascript) and is absent from the image, so a green container
+# run does not cover it. The python unit tests and the clippy leg are absent
+# too; both keep their own gates (test-suite.yml on the runner, and
+# tests/rust-checks.sh against the pushed ref).
 
 set -eu
 
@@ -61,7 +66,7 @@ fi
 
 if ! command -v docker >/dev/null 2>&1; then
     printf 'run-in-docker: docker is not on PATH. Install Docker and run this again.\n' >&2
-    printf 'run-in-docker: to run the suite directly on this machine instead: ~/tests/run-all.sh\n' >&2
+    printf 'run-in-docker: to run the suite directly on this machine instead: cd ~/crates && cargo test --locked\n' >&2
     exit 1
 fi
 
@@ -109,6 +114,21 @@ if [ "$branch" = "$current_branch" ]; then
 else
     printf 'run-in-docker: testing ref %s (no working-tree overlay)\n' "$branch"
 fi
+
+# Every cargo build directory under crates/, not only the workspace one.
+#
+# They are gitignored, so `git archive` never carries them, and the overlay
+# above copies the whole tree. Without this prune the host's build artifacts
+# reach the build context and then an image layer, where the runtime stage's
+# `COPY crates` bakes them in. Measured on this machine: 4.0GB at
+# crates/target plus a stray 613MB at crates/config-manifest/target, which
+# together made the image 3.8GB against a 305MB predecessor.
+#
+# A `find` rather than `rm -rf crates/target`, because the stray per-crate
+# directory is exactly what a single hardcoded path misses. The container
+# compiles its own artifacts with the pinned toolchain and must not inherit
+# any built by a different compiler on a different platform.
+find "${workdir:?}/crates" -type d -name target -prune -exec rm -rf {} + 2>/dev/null || true
 
 # .claude carries machine-local state that has no business in an image layer:
 # credentials, plugin caches, session transcripts, and the work environment

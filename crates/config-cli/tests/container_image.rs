@@ -424,6 +424,23 @@ fn the_image_installs_every_tool_the_suite_needs() {
 ///
 /// The image's job is "run the suite and exit with its status", which is what
 /// makes it usable from a pre-push hook or from CI.
+///
+/// The suite is the Rust one now. The entrypoint ran `tests/run-all.sh` while
+/// the shell suites existed; they were ported, the runtime stage gained a
+/// toolchain, and the runner became cargo.
+///
+/// Three assertions rather than one, because "the entrypoint mentions cargo"
+/// is satisfied by an entrypoint that gets the run wrong in either of the two
+/// ways this repository has already got it wrong:
+///
+/// 1. **`--locked`**, so a run cannot silently resolve a different dependency
+///    graph than the lockfile names. The host gate and both CI legs pass it,
+///    and a container leg that did not would disagree with all three.
+/// 2. **From inside `crates/`, never `--manifest-path`.** rustup honours
+///    `crates/rust-toolchain.toml` only when the working directory is under
+///    the tree that carries it, so `--manifest-path` declares the pin without
+///    applying it. That exact mistake has failed CI once already, and spec
+///    section 4a.1 names it.
 #[test]
 fn the_image_sets_home_and_runs_the_suite() {
     let dockerfile = Dockerfile::read();
@@ -440,8 +457,98 @@ fn the_image_sets_home_and_runs_the_suite() {
     ]
     .join(" ");
     assert!(
-        entrypoint.contains("run-all.sh"),
+        entrypoint.contains("cargo test"),
         "the entrypoint does not run the suite: {entrypoint}"
+    );
+    assert!(
+        entrypoint.contains("--locked"),
+        "the entrypoint runs cargo test without --locked, so the container \
+         can resolve a dependency graph the lockfile does not name: {entrypoint}"
+    );
+    assert!(
+        !entrypoint.contains("--manifest-path"),
+        "the entrypoint reaches the workspace with --manifest-path, which \
+         declares the rust-toolchain.toml pin without applying it: {entrypoint}"
+    );
+    assert!(
+        entrypoint.contains("/root/crates"),
+        "the entrypoint does not run from the workspace directory, so the \
+         toolchain pin does not apply: {entrypoint}"
+    );
+}
+
+/// The runtime stage carries a Rust toolchain and the workspace it compiles.
+///
+/// The counterpart to the entrypoint assertion above: an entrypoint that runs
+/// `cargo test` in an image with no cargo and no crate sources fails at run
+/// time with "cargo: not found", which reads as a broken image rather than as
+/// the missing prerequisite it is.
+///
+/// Read from the RUNTIME stage's instructions, never the whole file. The
+/// builder stage is a Rust image that copies every crate manifest, so a
+/// whole-file search reports both facts as satisfied while `/root/crates` does
+/// not exist and the runtime base is still Rust-free. That is the same
+/// measured defect `runtime_copy_sources` exists for: `COPY deps ../deps` in
+/// the builder made a whole-file scan report `deps/` as covered while
+/// `/root/deps` was absent, so the guard passed on the exact bug it was
+/// written for.
+#[test]
+fn the_runtime_stage_carries_the_toolchain_and_the_workspace() {
+    let dockerfile = Dockerfile::read();
+    let runtime = dockerfile.runtime_instructions.join("\n");
+    assert!(
+        runtime.starts_with("FROM "),
+        "positive control: the runtime stage does not begin with a FROM"
+    );
+    assert!(
+        runtime.lines().next().is_some_and(|from| from.contains("rust:")),
+        "the runtime stage is not built on a Rust base, so the entrypoint's \
+         cargo does not exist: {}",
+        runtime.lines().next().unwrap_or_default()
+    );
+    assert!(
+        dockerfile
+            .runtime_copy_sources()
+            .iter()
+            .any(|source| copy_source_covers(source, "crates")),
+        "the runtime stage copies no crates tree, so there is nothing for \
+         cargo test to compile"
+    );
+}
+
+/// The runtime stage installs the pinned toolchain at build time.
+///
+/// The base image's default toolchain is NOT the pin. Measured against the
+/// digest this Dockerfile names: the image ships 1.94.1 while
+/// `crates/rust-toolchain.toml` says 1.94.0, so the first cargo invocation
+/// inside `/root/crates` makes rustup download 1.94.0 over the network.
+///
+/// That turns every `docker run` into a network operation, and it fails
+/// outright on a machine with no route out, which is a state the pre-push
+/// gate has to survive. Resolving the pin in a build layer is what keeps the
+/// run offline.
+///
+/// Asserted on the rustup install AND on the toolchain file reaching the
+/// runtime stage, because either alone is vacuous: an install with no file
+/// installs the base image's default, and a file with no install leaves the
+/// download to run time.
+#[test]
+fn the_runtime_stage_installs_the_pinned_toolchain_at_build_time() {
+    let dockerfile = Dockerfile::read();
+    let runtime = dockerfile.runtime_instructions.join("\n");
+    assert!(
+        runtime.contains("rustup toolchain install"),
+        "the runtime stage never installs the pinned toolchain, so the first \
+         cargo run downloads it over the network"
+    );
+    assert!(
+        dockerfile
+            .runtime_copy_sources()
+            .iter()
+            .any(|source| copy_source_covers(source, "crates/rust-toolchain.toml")
+                || copy_source_covers(source, "crates")),
+        "the runtime stage copies no rust-toolchain.toml, so the install \
+         above resolves the base image's default rather than the pin"
     );
 }
 
@@ -551,6 +658,17 @@ fn run_without_docker(extra_environment: &[(&str, &str)]) -> (i32, String) {
 /// Asserted on the runner's own guard, not on any line mentioning "docker": the
 /// shell's own "command not found" would satisfy that even with the guard
 /// deleted, which makes it unfalsifiable.
+///
+/// The alternative it names is the Rust suite. It named `run-all.sh` while the
+/// shell suites existed; the container's entrypoint is cargo now, so a message
+/// pointing at the old runner would send a developer whose Docker is down to a
+/// script that runs a different set of tests than the gate they just failed.
+///
+/// Asserted on `cargo test` AND on the working directory, for the same reason
+/// the entrypoint assertion checks both: a suggestion the developer can paste
+/// has to carry the `cd`, because `cargo test` from `$HOME` picks up no
+/// workspace at all and `--manifest-path` would declare the pin without
+/// applying it.
 #[test]
 fn a_missing_docker_fails_clearly() {
     let (status, output) = run_without_docker(&[]);
@@ -560,8 +678,13 @@ fn a_missing_docker_fails_clearly() {
         "a missing docker does not explain itself: {output}"
     );
     assert!(
-        output.contains("run-all.sh"),
+        output.contains("cargo test"),
         "a missing docker does not name the direct alternative: {output}"
+    );
+    assert!(
+        output.contains("crates"),
+        "a missing docker names cargo test without the directory it must run \
+         from, so the suggestion does not work as printed: {output}"
     );
 }
 
@@ -643,6 +766,29 @@ fn ref_resolution_accepts_a_real_ref_and_refuses_an_unresolvable_one() {
 ///
 /// A hook that silently falls back to the host suite when Docker is down
 /// reintroduces the flake it exists to avoid, without saying so.
+///
+/// # Why this stopped asserting on `tests/run-all.sh`
+///
+/// It used to, and the string was the right one while `run-all.sh` was how a
+/// host run happened. It is the wrong one now, and it would have become worse
+/// than wrong: once `run-all.sh` is deleted the literal cannot appear in any
+/// file, so `!text.contains("tests/run-all.sh")` is a check no edit can ever
+/// fail. An assertion that cannot fail is the vacuous shape this suite's
+/// module docs catalogue, arrived at from the other direction.
+///
+/// The contract it was guarding is unchanged: **the hook must not run the
+/// suite on this machine.** The host route is now a bare `cargo test`, so that
+/// is what this refuses. The `rust-checks.sh` line is deliberately NOT
+/// refused: it runs cargo against an archived snapshot of the pushed ref, it
+/// mutates nothing (spec section 4a.1 verified that against an empty `$HOME`),
+/// and it is an additional gate rather than a substitute for the container
+/// one. Refusing it would delete a real gate to satisfy a string match.
+///
+/// Read from the hook's own command lines, comments dropped, for the reason
+/// the Dockerfile checks are read as instructions: the prose above the
+/// container call explains why there is no host fallback, and it names the
+/// host command while doing so. A whole-file search would read that
+/// explanation as the violation it exists to describe.
 #[test]
 fn the_pre_push_hook_runs_the_suite_in_the_container() {
     let hook = repo_root().join("tests/pre-push");
@@ -656,9 +802,28 @@ fn the_pre_push_hook_runs_the_suite_in_the_container() {
         text.contains("DOTFILES_TEST_REF"),
         "the hook does not pass the pushed ref to the runner"
     );
+
+    let commands: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .collect();
     assert!(
-        !text.contains("tests/run-all.sh"),
-        "the hook invokes the host suite directly"
+        commands
+            .iter()
+            .any(|line| line.contains("run-in-docker.sh")),
+        "positive control: no uncommented line of the hook calls the runner, \
+         so the refusals below compare against nothing"
+    );
+    let host_run: Vec<&&str> = commands
+        .iter()
+        .filter(|line| line.contains("cargo test") || line.contains("cargo clippy"))
+        .collect();
+    assert!(
+        host_run.is_empty(),
+        "the hook runs the suite on this machine instead of in the container, \
+         which reintroduces the flake the container leg exists to avoid: \
+         {host_run:?}"
     );
 }
 

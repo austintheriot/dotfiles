@@ -79,7 +79,17 @@ COPY crates/tmux-core/src ./tmux-core/src
 COPY crates/tmux-tools/src ./tmux-tools/src
 RUN cargo build --release --locked --quiet
 
-FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+# The runtime stage shares the builder's base image, so cargo and rustc reach
+# the suite without a second toolchain install and without a second pin to
+# keep in step. The image is no longer Rust-free: the entrypoint runs
+# `cargo test --locked` from /root/crates, which needs a compiler, the crate
+# sources, and the registry cache.
+#
+# The same digest as the builder, deliberately. A separate `rust:1.94-slim`
+# tag would float to a different patch release than the one that compiled the
+# binaries copied in below, so the suite would run under a compiler that never
+# built what it tests.
+FROM rust:1.94-slim-bookworm@sha256:cf9dd0ec73e75f827fe59123fff9dc65af1a1c8363c3c31ee8d7f8ad0b6a5fb2
 
 # The tools the suite shells out to. tmux and zsh are the load-bearing ones:
 # lib.sh drives real tmux sessions, and the converted zsh suites under
@@ -109,6 +119,37 @@ RUN apt-get update \
         shellcheck \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# The pinned toolchain, installed at BUILD time so `docker run` needs no
+# network.
+#
+# The base image ships 1.94.1 as its default toolchain while
+# crates/rust-toolchain.toml pins 1.94.0, so rustup would otherwise download
+# 1.94.0 on the first cargo invocation inside /root/crates. That turns a test
+# run into a network operation and fails on a machine with no route out.
+# Installing it here resolves the pin once, in a layer.
+#
+# The file is copied to its final path rather than to a scratch location: the
+# suite runs cargo from /root/crates, and the pin only applies when the file
+# is there.
+#
+# `--profile minimal`, and no clippy or rustfmt component. The entrypoint runs
+# `cargo test` only. Clippy keeps its own gates outside this image: the host
+# leg in tests/rust-checks.sh and the CI leg in test-suite.yml.
+#
+# The base image's own 1.94.1 toolchain stays on disk, unused. Uninstalling it
+# was tried and reverted: Docker layers are additive, so a later `RUN rustup
+# toolchain uninstall` cannot shrink the 713MB base layer that created it, and
+# the uninstall only adds a layer of its own. Removing that weight needs a
+# different base image, not a delete.
+#
+# `test -n` on the parsed channel so a rust-toolchain.toml whose shape changes
+# fails the build here, loudly, rather than installing the empty string and
+# leaving the pin silently unapplied.
+COPY crates/rust-toolchain.toml /root/crates/rust-toolchain.toml
+RUN pinned="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' /root/crates/rust-toolchain.toml)" \
+    && test -n "$pinned" \
+    && rustup toolchain install --profile minimal "$pinned"
 
 # tmux-update-window-names.sh is now a shim that execs this binary, so the
 # suite fails with "exec: tmux-tools: not found" without it. The builder
@@ -197,13 +238,63 @@ COPY setup.sh /root/setup.sh
 # line, caught by the guard in container.test.sh rather than by CI this time.
 COPY .profile /root/.profile
 
+# The crates workspace, because the entrypoint compiles and runs its tests.
+#
+# The builder stage gets crates/ too, but into its own tree at /build/crates,
+# which the runtime stage cannot see. dotfiles_test_support::repo::root walks
+# $HOME looking for crates/Cargo.toml, so this has to land at /root/crates or
+# every converted suite resolves the repo root to its own compile-time
+# CARGO_MANIFEST_DIR fallback and reads a tree that is not the one under test.
+#
+# One COPY of the whole directory rather than the builder's per-member list:
+# the builder splits it to keep a dependency-compile layer warm across a
+# source edit, and there is no such layer to protect here.
+COPY crates /root/crates
+
+# The dependency graph, fetched at BUILD time.
+#
+# Without this, the first `cargo test` inside the container updates the
+# crates.io index and downloads every dependency. Measured on a build with
+# this step removed: the run opened with "Updating crates.io index" and 60-odd
+# "Downloaded" lines. That makes the gate depend on crates.io being reachable
+# and on the network being up, in an image whose whole purpose is a
+# reproducible run, and `--network none` fails outright.
+#
+# `cargo fetch` rather than `cargo test --no-run`: both make the run offline,
+# and fetch does it without baking the debug `target/` directory into a layer.
+# Measured on this repo: prebuilding the test binaries cost 1.45GB and saved
+# 13 seconds of compile, so the compile stays at run time.
+#
+# --locked so the fetch resolves exactly the lockfile's graph, matching what
+# the entrypoint then compiles.
+#
+# From inside /root/crates, never with --manifest-path: rustup honours
+# rust-toolchain.toml only when the working directory is under the tree that
+# carries it, so a run from /root would declare the pin without applying it.
+# That exact mistake has failed CI once already.
+WORKDIR /root/crates
+RUN cargo fetch --locked
+WORKDIR /root
+
 # notify.test.sh drives aerospace and osascript, both macOS-only, so it can
 # never pass here. Removing it is honest: run-all.sh globs tests/*.test.sh,
 # so a skip-by-absence keeps the runner's suite count accurate instead of
 # reporting a failure that means nothing on Linux.
 RUN rm -f /root/tests/notify.test.sh
 
-# `docker run` with no arguments runs the whole suite and exits with its
-# status, which is what makes this usable from a pre-push hook or CI. Pass a
-# single suite name to run just that one.
-ENTRYPOINT ["/bin/bash", "/root/tests/run-all.sh"]
+# `docker run` with no arguments runs the Rust suite and exits with its
+# status, which is what makes this usable from a pre-push hook or CI. Extra
+# arguments are passed through to cargo, so a narrower run is
+# `docker run --rm dotfiles-tests --test container_image`.
+#
+# The entrypoint runs the RUST suite only, and that is a deliberate narrowing
+# rather than an oversight. run-all.sh also drove the python unit tests and a
+# clippy leg; both keep their own gates elsewhere (test-suite.yml runs them on
+# the runner, and tests/rust-checks.sh runs clippy against the pushed ref), so
+# neither loses coverage by being absent from this image. What this image is
+# uniquely for is the Docker-only defects the host run missed, and every one
+# of those lives in a suite that is now Rust.
+#
+# `cd` rather than --manifest-path, for the reason given at the build-time
+# compile above: the pin applies only from inside the tree that declares it.
+ENTRYPOINT ["/bin/sh", "-c", "cd /root/crates && exec cargo test --locked \"$@\"", "dotfiles-tests"]

@@ -1,30 +1,7 @@
 //! `config test` behavior, asserted against the built binary.
 
+use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
-
-/// A named suite is forwarded, not swallowed.
-#[test]
-fn a_named_suite_reaches_the_runner() {
-    let run = Command::new(env!("CARGO_BIN_EXE_config-cli"))
-        .args(["test", "definitely-not-a-real-suite"])
-        .output()
-        .expect("the binary runs");
-
-    let combined = format!(
-        "{}{}",
-        String::from_utf8_lossy(&run.stdout),
-        String::from_utf8_lossy(&run.stderr)
-    );
-
-    // Positive control: the command must say something, or the naming
-    // assertion below holds for a silent no-op.
-    assert!(!combined.is_empty(), "a bad suite name must be reported");
-    assert!(
-        combined.contains("definitely-not-a-real-suite"),
-        "the suite name must reach the runner and be named back: {combined:?}"
-    );
-    assert_ne!(run.status.code(), Some(0), "an unknown suite is not success");
-}
 
 /// `--help` executes no tests.
 #[test]
@@ -95,4 +72,100 @@ fn an_unknown_flag_is_a_usage_error() {
         .expect("the binary runs");
 
     assert_eq!(run.status.code(), Some(2), "an unknown flag is exit 2");
+}
+
+/// With no suite name, `config test` runs cargo's test harness over the
+/// workspace, not a shell script under `tests/`.
+///
+/// Asserted through `CARGO` rather than through a real run: a nested
+/// `cargo test` here would recurse into this very test binary. Pointing
+/// `CARGO` at a recorder that prints its own argv and exits proves which
+/// program and which arguments the subcommand chose.
+#[test]
+fn a_bare_run_invokes_cargo_test() {
+    let (_recorder_dir, recorder) = argv_recorder();
+    let run = Command::new(env!("CARGO_BIN_EXE_config-cli"))
+        .arg("test")
+        .env("CARGO", &recorder)
+        .output()
+        .expect("the binary runs");
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(
+        !stdout.is_empty(),
+        "positive control: the recorder printed nothing, so no program ran"
+    );
+    assert!(
+        stdout.contains("test") && stdout.contains("--locked"),
+        "a bare run must invoke `cargo test --locked`: {stdout:?}"
+    );
+}
+
+/// A suite name becomes a cargo test filter rather than a path to a shell
+/// script, so a name that matches nothing is cargo's problem, not a missing
+/// file.
+#[test]
+fn a_suite_name_becomes_a_cargo_filter() {
+    let (_recorder_dir, recorder) = argv_recorder();
+    let run = Command::new(env!("CARGO_BIN_EXE_config-cli"))
+        .args(["test", "definitely-not-a-real-suite"])
+        .env("CARGO", &recorder)
+        .output()
+        .expect("the binary runs");
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(
+        !stdout.is_empty(),
+        "positive control: the recorder printed nothing, so no program ran"
+    );
+    assert!(
+        stdout.contains("definitely-not-a-real-suite"),
+        "the suite name must reach cargo as a filter: {stdout:?}"
+    );
+    assert!(
+        !stdout.contains(".test.sh"),
+        "a suite name must not be resolved against tests/<name>.test.sh: \
+         {stdout:?}"
+    );
+}
+
+/// `--quiet` still reaches the runner, which is cargo's own `--quiet` now.
+#[test]
+fn quiet_reaches_the_runner() {
+    let (_recorder_dir, recorder) = argv_recorder();
+    let run = Command::new(env!("CARGO_BIN_EXE_config-cli"))
+        .args(["test", "-q"])
+        .env("CARGO", &recorder)
+        .output()
+        .expect("the binary runs");
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(
+        !stdout.is_empty(),
+        "positive control: the recorder printed nothing, so no program ran"
+    );
+    assert!(
+        stdout.contains("--quiet"),
+        "-q must reach the runner: {stdout:?}"
+    );
+}
+
+/// A shell script that prints its own arguments one per line and exits 0.
+/// Stands in for `cargo` so a test can read back which arguments
+/// `config test` chose without running a nested build.
+///
+/// The returned `TempDir` owns the script and must stay alive for the whole
+/// run: dropping it deletes the script, and the child would then fail to
+/// spawn rather than record anything.
+fn argv_recorder() -> (tempfile::TempDir, std::path::PathBuf) {
+    let directory = tempfile::TempDir::new().expect("a recorder directory");
+    let script = directory.path().join("cargo-recorder.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nfor argument in \"$@\"; do printf '%s\\n' \"$argument\"; done\n",
+    )
+    .expect("the recorder is written");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+        .expect("the recorder is executable");
+    (directory, script)
 }

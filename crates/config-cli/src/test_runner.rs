@@ -3,11 +3,12 @@
 //!
 //! Ported from `.scripts/config/config-test`. Argument validation lives
 //! here because the combinations that are usage errors (`-q` with a suite
-//! name, `-w` with `-d`) have to be rejected before anything runs. Suite
-//! selection itself stays in `tests/run-all.sh`: that script already
-//! resolves a bare name against `tests/<name>.test.sh`, and a second copy of
-//! that resolution here is exactly the drift this migration exists to
-//! remove.
+//! name, `-w` with `-d`) have to be rejected before anything runs.
+//!
+//! The suite itself is cargo's. A bare run is `cargo test --locked` from
+//! `crates/`, and a suite name is passed through as cargo's own test-name
+//! filter, so suite selection is cargo's job rather than a second
+//! resolution against `tests/<name>.test.sh`.
 
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
@@ -15,8 +16,10 @@ use std::time::Duration;
 
 /// `config test`'s arguments: the same four the shell script accepted.
 ///
-/// Runs every suite in `~/tests` by default. Name a suite to run only that
-/// one: `config test deps-manifest` runs `tests/deps-manifest.test.sh`.
+/// Runs `cargo test --locked` over the whole workspace by default. Name a
+/// suite to narrow the run: the name is cargo's own test-name filter, so
+/// `config test deps_manifest` runs every test whose path contains
+/// `deps_manifest`.
 ///
 /// `--quiet` is honored by the whole-suite run only, so it cannot be
 /// combined with `--docker` or a suite name. `--watch` cannot be combined
@@ -38,7 +41,7 @@ pub(crate) struct TestArgs {
     /// second.
     #[arg(short, long)]
     watch: bool,
-    /// Run only this suite, by name, with or without the `.test.sh` suffix.
+    /// Run only the tests whose name contains this filter.
     suite: Option<String>,
 }
 
@@ -72,7 +75,7 @@ fn usage_error() -> ExitCode {
     ExitCode::from(2)
 }
 
-/// Runs the suite exactly once, through whichever of the three runners the
+/// Runs the suite exactly once, through whichever of the two runners the
 /// arguments selected, and returns its exit status.
 fn run_once(home: &std::path::Path, arguments: &TestArgs) -> ExitCode {
     let (program, mut command) = if arguments.docker {
@@ -82,29 +85,48 @@ fn run_once(home: &std::path::Path, arguments: &TestArgs) -> ExitCode {
             command.arg(suite);
         }
         (program, command)
-    } else if let Some(suite) = &arguments.suite {
-        let program = home.join(format!("tests/{suite}.test.sh"));
-        (program.clone(), Command::new(program))
     } else {
-        let program = home.join("tests/run-all.sh");
-        let mut command = Command::new(&program);
-        if arguments.quiet {
-            command.arg("-q");
-        }
-        (program, command)
+        (cargo_program(), cargo_test(home, arguments))
     };
 
     match command.status() {
         Ok(status) => exit_code_from(&status),
         Err(error) => {
-            // The shell script this replaces execs the suite script
-            // directly, so a missing file surfaces as the shell's own "No
-            // such file or directory" naming the full path. Matched here so
-            // a typo'd suite name is still named back to the caller.
+            // The shell script this replaces execs the runner directly, so a
+            // missing one surfaces as the shell's own "No such file or
+            // directory" naming the full path. Matched here so a runner that
+            // is not installed is still named back to the caller.
             eprintln!("config test: {}: {error}", program.display());
             ExitCode::FAILURE
         }
     }
+}
+
+/// The cargo to invoke. `CARGO` is set by cargo itself for anything it
+/// spawns, so honouring it keeps a nested run on the same toolchain as its
+/// parent instead of whichever cargo `PATH` happens to resolve.
+fn cargo_program() -> PathBuf {
+    std::env::var_os("CARGO").map_or_else(|| PathBuf::from("cargo"), PathBuf::from)
+}
+
+/// `cargo test --locked` over the workspace, with a suite name passed
+/// through as cargo's own test-name filter.
+///
+/// Run from inside `crates/` rather than with `--manifest-path`, because
+/// rustup honours `crates/rust-toolchain.toml` only when the working
+/// directory is under `crates/`. From `$HOME` the pin is declared and not
+/// applied, which is the defect that once failed CI.
+fn cargo_test(home: &std::path::Path, arguments: &TestArgs) -> Command {
+    let mut command = Command::new(cargo_program());
+    command.current_dir(home.join("crates"));
+    command.args(["test", "--locked"]);
+    if arguments.quiet {
+        command.arg("--quiet");
+    }
+    if let Some(suite) = &arguments.suite {
+        command.arg(suite);
+    }
+    command
 }
 
 /// Reruns the suite after every change to a tracked file, polling a

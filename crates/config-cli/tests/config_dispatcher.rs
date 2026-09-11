@@ -754,12 +754,18 @@ fn install_hooks_reads_a_symlinked_directory_through_the_link() {
 
 // --- thin wrappers ----------------------------------------------------------
 
-/// A fixture home wired with stubs for `config-cli`, `run-all.sh` and
+/// A fixture home wired with stubs for `config-cli`, `cargo` and
 /// `run-in-docker.sh`, so the wrapper tests assert delegation rather than
 /// running a real suite.
 struct WrapperFixture {
     home: Home,
     shim_dir: PathBuf,
+    /// Holds the `cargo` stub and a link to the freshly-built `config-cli`.
+    /// Kept apart from `shim_dir` because the `config test` assertions need
+    /// the REAL `config-cli`: adding the directory that also shadows it made
+    /// every one of them read `cli:test` and prove nothing about the runner
+    /// selection.
+    cargo_shim_dir: PathBuf,
 }
 
 impl WrapperFixture {
@@ -768,16 +774,35 @@ impl WrapperFixture {
         let home_path = home.path();
         let shim_dir = home.root().join("shims");
         fs::create_dir_all(&shim_dir).expect("creatable");
+        let cargo_shim_dir = home.root().join("cargo-shim");
+        fs::create_dir_all(&cargo_shim_dir).expect("creatable");
+        // The `config-test` shim execs `config-cli` off PATH, which would
+        // otherwise resolve to whatever `config build` last installed. That
+        // binary is stale the moment this crate's source changes, so the
+        // assertions below would describe the installed build rather than
+        // the one under test. Link the built binary in ahead of it.
+        std::os::unix::fs::symlink(
+            env!("CARGO_BIN_EXE_config-cli"),
+            cargo_shim_dir.join("config-cli"),
+        )
+        .expect("the built config-cli is linkable");
         fs::create_dir_all(home_path.join("deps")).expect("creatable");
         fs::create_dir_all(home_path.join("tests")).expect("creatable");
+        // `config test` runs cargo from $HOME/crates, so the directory has to
+        // exist for the spawn to succeed at all.
+        fs::create_dir_all(home_path.join("crates")).expect("creatable");
 
         write_executable(
             &shim_dir.join("config-cli"),
             "#!/bin/sh\nprintf 'cli:%s\\n' \"$@\"\n",
         );
+        // `config test` runs `cargo test --locked` from `$HOME/crates`, so
+        // the observable is a stub cargo rather than a stub suite script.
+        // Printed as one line so a changed argument list is one diff rather
+        // than a reordered set.
         write_executable(
-            &home_path.join("tests/run-all.sh"),
-            "#!/bin/sh\n[ \"$#\" -eq 0 ] && printf 'all:(none)\\n' || printf 'all:%s\\n' \"$@\"\n",
+            &cargo_shim_dir.join("cargo"),
+            "#!/bin/sh\nprintf 'cargo:%s\\n' \"$*\"\nprintf 'cwd:%s\\n' \"$(basename \"$PWD\")\"\n",
         );
         write_executable(
             &home_path.join("tests/run-in-docker.sh"),
@@ -785,7 +810,11 @@ impl WrapperFixture {
              || printf 'docker:%s\\n' \"$@\"\n",
         );
 
-        Self { home, shim_dir }
+        Self {
+            home,
+            shim_dir,
+            cargo_shim_dir,
+        }
     }
 
     /// Runs the dispatcher with the stub `config-cli` ahead of the real one.
@@ -803,14 +832,24 @@ impl WrapperFixture {
 
     /// Runs the dispatcher against the REAL `config-cli`.
     ///
-    /// `config test` is not a pure delegation: `config-cli test` resolves
-    /// `$HOME/tests/run-all.sh` and `$HOME/tests/run-in-docker.sh` itself, so
-    /// the observable is the stub runner in the fixture home, not a stub
-    /// `config-cli`. Shadowing `config-cli` here made every `config test`
-    /// assertion read `cli:test` and prove nothing about the runner
-    /// selection. Found by running the port.
+    /// `config test` is not a pure delegation: `config-cli test` chooses
+    /// between cargo and `$HOME/tests/run-in-docker.sh` itself, so the
+    /// observable is the stub runner, not a stub `config-cli`. Shadowing
+    /// `config-cli` here made every `config test` assertion read `cli:test`
+    /// and prove nothing about the runner selection. Found by running the
+    /// port.
+    ///
+    /// `cargo_shim_dir` goes on `PATH` because the cargo stub and the built
+    /// `config-cli` both live there. `CARGO` is cleared as well: cargo sets
+    /// it for everything it spawns, so this test binary's own parent cargo
+    /// would otherwise win over the stub and run a real build.
     fn run_against_real_cli(&self, arguments: &[&str]) -> Run {
-        self.home.run(arguments)
+        let path = std::env::var("PATH").unwrap_or_default();
+        let cargo_shim_dir = self.cargo_shim_dir.clone();
+        self.home.run_with(arguments, move |command| {
+            command.env("PATH", format!("{}:{path}", cargo_shim_dir.display()));
+            command.env_remove("CARGO");
+        })
     }
 }
 
@@ -826,6 +865,10 @@ fn config_install_delegates_to_config_cli_and_passes_flags_through() {
     );
 }
 
+/// `config test` picks between cargo and the docker runner, runs cargo from
+/// `crates/` rather than with `--manifest-path` (rustup honours
+/// `crates/rust-toolchain.toml` only from inside that directory), and passes
+/// `-q` and a suite name through to whichever runner it picked.
 #[test]
 fn config_test_selects_the_host_suite_or_the_docker_one() {
     let _cli = config_cli_lock();
@@ -833,15 +876,22 @@ fn config_test_selects_the_host_suite_or_the_docker_one() {
 
     assert_eq!(
         fixture.run_against_real_cli(&["test"]).stdout_trimmed(),
-        "all:(none)",
-        "config test runs the host suite"
+        "cargo:test --locked\ncwd:crates",
+        "config test runs the cargo suite from crates/"
     );
     assert_eq!(
         fixture
             .run_against_real_cli(&["test", "-q"])
             .stdout_trimmed(),
-        "all:-q",
-        "config test -q passes -q through"
+        "cargo:test --locked --quiet\ncwd:crates",
+        "config test -q passes quiet through to cargo"
+    );
+    assert_eq!(
+        fixture
+            .run_against_real_cli(&["test", "deps_manifest"])
+            .stdout_trimmed(),
+        "cargo:test --locked deps_manifest\ncwd:crates",
+        "config test <name> passes the name to cargo as a test filter"
     );
     assert_eq!(
         fixture
@@ -911,10 +961,9 @@ fn config_test_rejects_bad_argument_combinations_with_exit_two() {
 /// `config test --watch` runs the suite once at start and again when a
 /// tracked file changes, and stops when killed.
 ///
-/// Driven with a stub `run-all.sh` that appends one line per run, so the
-/// count is the observable. The kill is asserted rather than assumed: a watch
-/// loop that survives its parent is a process leak in every developer's
-/// session.
+/// Driven with a stub `cargo` that appends one line per run, so the count is
+/// the observable. The kill is asserted rather than assumed: a watch loop
+/// that survives its parent is a process leak in every developer's session.
 #[test]
 fn config_test_watch_reruns_on_a_tracked_change_and_stops_when_killed() {
     let _cli = config_cli_lock();
@@ -922,15 +971,33 @@ fn config_test_watch_reruns_on_a_tracked_change_and_stops_when_killed() {
     let home_path = home.path();
     let runs = home_path.join("runs");
 
-    fs::create_dir_all(home_path.join("tests")).expect("creatable");
+    // `config test` runs cargo from $HOME/crates, so the directory has to
+    // exist for the spawn to succeed at all.
+    fs::create_dir_all(home_path.join("crates")).expect("creatable");
+    let shim_dir = home.root().join("shims");
+    fs::create_dir_all(&shim_dir).expect("creatable");
     write_executable(
-        &home_path.join("tests/run-all.sh"),
+        &shim_dir.join("cargo"),
         &format!("#!/bin/sh\nprintf 'run\\n' >> '{}'\n", runs.display()),
     );
 
+    // As in WrapperFixture: the `config-test` shim execs `config-cli` off
+    // PATH, so the built binary is linked in ahead of the installed one,
+    // which is stale whenever this crate's source has changed.
+    std::os::unix::fs::symlink(
+        env!("CARGO_BIN_EXE_config-cli"),
+        shim_dir.join("config-cli"),
+    )
+    .expect("the built config-cli is linkable");
+
+    let path = std::env::var("PATH").unwrap_or_default();
     let mut child = Command::new(config())
         .args(["test", "--watch"])
         .env("HOME", &home_path)
+        .env("PATH", format!("{}:{path}", shim_dir.display()))
+        // cargo sets CARGO for everything it spawns, so without this the
+        // real cargo wins over the stub and the run count never moves.
+        .env_remove("CARGO")
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
         .stdin(Stdio::null())

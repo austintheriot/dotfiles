@@ -1,6 +1,6 @@
 name: Test suite (linux + macOS)
 
-# Runs tests/run-all.sh on both platforms this repo supports.
+# Runs the test suite on both platforms this repo supports.
 #
 # Before this existed no workflow ran the suite at all: it only ever ran from
 # the local pre-push hook, so a green push meant "Docker was running on the
@@ -150,9 +150,9 @@ jobs:
         run: config-cli deps install --yes
 
       # The lint policy lives in crates/Cargo.toml, so this step enforces it
-      # rather than defining it. Explicit here as well as inside run-all.sh
-      # so a lint failure is legible in the Actions UI instead of buried in a
-      # suite's captured output, and so it fails before the slower suites.
+      # rather than defining it. Its own step so a lint failure is legible in
+      # the Actions UI rather than buried in another step's output, and so it
+      # fails before the slower test steps below.
       #
       # working-directory rather than --manifest-path, for the reason the
       # build step above already gives: rustup honours
@@ -187,9 +187,55 @@ jobs:
           mkdir -p "$HOME/.config"
           ln -sfn "$GITHUB_WORKSPACE/.config/tmux" "$HOME/.config/tmux"
 
-      - name: Run the test suite
+      # One step per layer, rather than one step that runs all of them.
+      # A red run then names the layer in the Actions sidebar instead of
+      # burying it in a runner script's captured output.
+      #
+      # working-directory rather than --manifest-path, for the reason the
+      # build and clippy steps above already give: rustup honours
+      # crates/rust-toolchain.toml only when the working directory is under
+      # crates/. crates/ is also the workspace root, so this runs every
+      # member's tests rather than one crate's.
+      - name: Cargo tests
+        working-directory: crates
         env:
           DOTFILES_ROOT: ${{ github.workspace }}
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
-        run: tests/run-all.sh
+        run: cargo test --locked
+
+      # The python unit tests live next to the code they cover rather than in
+      # one directory, so they are discovered rather than listed. Two trees
+      # are excluded, both ephemeral and neither this repo's code: plugins/
+      # is vendored third-party, and jobs/<id>/ is a background job's scratch
+      # workspace holding checkouts it cloned in order to read them.
+      #
+      # `unittest discover` is run once per directory because it takes a
+      # single -s. A failure in any directory fails the step: the loop keeps
+      # going so every directory is reported in one run, and the exit status
+      # is the accumulated one rather than the last directory's.
+      - name: Python unit tests
+        env:
+          DOTFILES_ROOT: ${{ github.workspace }}
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+        run: |
+          set -uo pipefail
+          directories=$(find "$DOTFILES_ROOT/.claude" "$DOTFILES_ROOT/.scripts" \
+                          -name 'test_*.py' -type f \
+                          -not -path '*/plugins/*' -not -path '*/jobs/*' \
+                          -exec dirname {} + | sort -u)
+          # A find that matches nothing means the discovery pattern drifted
+          # away from where the tests live, which would otherwise pass this
+          # step green having run zero tests.
+          if [ -z "$directories" ]; then
+            echo "no test_*.py files found under .claude or .scripts" >&2
+            exit 1
+          fi
+          status=0
+          while IFS= read -r directory; do
+            echo "::group::python unit tests in ${directory#"$DOTFILES_ROOT"/}"
+            python3 -m unittest discover -s "$directory" -p 'test_*.py' || status=1
+            echo "::endgroup::"
+          done <<< "$directories"
+          exit "$status"

@@ -100,6 +100,29 @@ boxes, and re-verify if the banner is old.
 The durable record of intent is the **spec** in `docs/superpowers/specs/`,
 not the plan. A plan is scaffolding for one pass of work.
 
+## Revert every sabotage, and verify the revert
+
+Sabotage is how this repo proves an assertion is load-bearing, so it runs
+constantly. Twice on 2026-09-10 a sabotage was left in the tree:
+
+- Two `// staleness probe` comments appended to
+  `crates/config-cli/src/doctor.rs`, production code, still modified when the
+  agent moved on. Harmless in content, and it would have shipped.
+- A `find -L` flag dropped from `config-install-hooks`, which is a security
+  control. That one was heading for a commit.
+
+The discipline:
+
+- **Back up before, restore after, and `touch` the file.** A restore-by-move
+  carries the backup's older mtime, so cargo runs the stale binary and the
+  next result is a lie in either direction.
+- **Verify the revert**, with `config diff --stat -- <path>` or by reading the
+  lines back. "I restored it" is not evidence.
+- **Prefer sabotaging a copy.** Point the test at a fixture rather than the
+  real file where the test's design allows it.
+- **Never leave a sabotage staged.** Check `config diff --cached --name-only`
+  before committing; an unrelated production file in that list means stop.
+
 ## A converted test must not change the thing it tests
 
 Caught 2026-09-10, mid-conversion. An agent porting `config.test.sh` began

@@ -184,9 +184,15 @@ fn the_suite_workflow_runs_on_push() {
     );
 }
 
-/// The workflow must run the suite runner itself, not a subset of it.
+/// The workflow must actually execute the tests, not merely install their
+/// dependencies and lint.
+///
+/// This asserted `run-all.sh` until that runner stopped being what CI
+/// invokes. The failure it guards against is unchanged and is a fail-open:
+/// drop the step that runs the tests and every other step still passes, so
+/// the run reports green having executed no test at all.
 #[test]
-fn the_suite_workflow_runs_run_all_sh() {
+fn the_suite_workflow_runs_the_tests() {
     let workflow = read_workflow(&suite_workflow_path());
     let scripts = run_scripts(&workflow);
     assert!(
@@ -194,9 +200,14 @@ fn the_suite_workflow_runs_run_all_sh() {
         "positive control: the suite workflow has no run: scripts at all"
     );
     assert!(
-        scripts.contains("run-all.sh"),
-        "no step in the suite workflow runs run-all.sh; its scripts are \
-         {scripts}"
+        scripts.contains("cargo test"),
+        "no step in the suite workflow runs the cargo tests; its scripts \
+         are {scripts}"
+    );
+    assert!(
+        scripts.contains("unittest"),
+        "no step in the suite workflow runs the python unit tests; its \
+         scripts are {scripts}"
     );
 }
 

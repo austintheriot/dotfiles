@@ -72,7 +72,12 @@ const EXCLUDES: &str = "SC1091,SC2016";
 
 /// The floor a broken discovery step has to clear. A lint that checks nothing
 /// passes trivially.
-const MINIMUM_LINTED: usize = 25;
+///
+/// Measured, not guessed: 29 tracked `*.sh` paths minus the 5 zsh exclusions
+/// is 24. The previous value of 25 was above what the broken discovery could
+/// reach and below what a whole-repo walk would reach, so it failed loudly
+/// only after discovery was fixed.
+const MINIMUM_LINTED: usize = 24;
 
 /// True when this run is a place the lint has to gate rather than an ad-hoc
 /// host run.
@@ -126,11 +131,20 @@ fn deps_install_step(workflow: &yaml_serde::Value) -> Option<&yaml_serde::Value>
 /// Tracked files only: the worktree is the whole home directory, so a plain
 /// walk would visit every vendored plugin and cache in it. The container has
 /// no repository, so it falls back to the directories this repo owns.
+///
+/// The pathspec has to be rooted with `:/` and the output asked for with
+/// `--full-name`. A bare `*.sh` is relative to the current directory, and
+/// cargo runs an integration test from the crate directory, so it resolves
+/// against `crates/config-cli` and matches nothing. That made the whole
+/// branch dead on every run: it returned zero paths, fell through to the
+/// walk below, and the walk covers neither `deps/` nor the root, so ten
+/// tracked scripts were never linted. Measured from `crates/config-cli`:
+/// `ls-files "*.sh"` returns 0, `ls-files --full-name ":/*.sh"` returns 29.
 fn shell_scripts(root: &Path) -> Vec<String> {
     let tracked = Command::new("git")
         .arg(format!("--git-dir={}", root.join(".cfg").display()))
         .arg(format!("--work-tree={}", root.display()))
-        .args(["ls-files", "*.sh"])
+        .args(["ls-files", "--full-name", ":/*.sh"])
         .output();
     if let Ok(output) = tracked
         && output.status.success()

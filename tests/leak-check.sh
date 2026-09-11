@@ -282,9 +282,45 @@ report "bare UUID (possible token)" \
 # --- Layer 2: project term rules, loaded from outside this repo -------------
 
 if [ ! -r "$PATTERN_FILE" ]; then
-  if [ "${LEAK_ALLOW_NO_PATTERNS:-}" = 1 ]; then
+  # A persistent, machine-local declaration that this machine keeps no term
+  # rules. It exists because the env-var opt-out below has to be retyped on
+  # every commit, so in practice it is either forgotten (the commit blocks on
+  # a machine where that is expected) or exported from a shell profile, which
+  # turns the guard off everywhere and leaves no record of the decision.
+  #
+  # Kept in git config rather than a marker file: it is a deliberate act, it
+  # lives outside the worktree so it can never be committed, and it reads back
+  # with `config config --get dotfiles.leakPatterns`.
+  #
+  # What it does NOT do is reduce this to "no guard". Layer 1 above has
+  # already run, and a credential still blocks. The machine that declares
+  # this has no TERMS to defend; it still has credentials to leak.
+  declared=$(git config --get dotfiles.leakPatterns 2>/dev/null)
+
+  # Only the exact string `none` counts. Same lesson as SKIP_LEAK_CHECK=0
+  # above: a value whose setter believes it means "off" must never silently
+  # mean "on", and the reverse is worse, so anything unrecognized keeps the
+  # block and says why.
+  declared_none=0
+  case "$declared" in
+    none) declared_none=1 ;;
+    '') ;;
+    *)
+      echo "  $hook: dotfiles.leakPatterns=$declared is not a recognized value, expected 'none'" >&2
+      ;;
+  esac
+
+  if [ "${LEAK_ALLOW_NO_PATTERNS:-}" = 1 ] || [ "$declared_none" = 1 ]; then
+    if [ "$declared_none" = 1 ]; then
+      permitted="dotfiles.leakPatterns=none"
+    else
+      permitted="LEAK_ALLOW_NO_PATTERNS"
+    fi
+    # Announced on every run rather than once. An inactive layer that stops
+    # being mentioned stops being remembered, and this one is invisible in
+    # its passing case by construction.
     echo "" >&2
-    echo "  $hook: term rules INACTIVE, permitted by LEAK_ALLOW_NO_PATTERNS" >&2
+    echo "  $hook: term rules INACTIVE, permitted by $permitted" >&2
     echo "  Generic credential rules still ran." >&2
     echo "" >&2
   else
@@ -300,8 +336,16 @@ if [ ! -r "$PATTERN_FILE" ]; then
     echo "" >&2
     echo "  $hook: BLOCKED, no readable pattern file at $PATTERN_FILE" >&2
     echo "  The project term rules cannot run, so this scan is incomplete." >&2
-    echo "  Restore the file (see ~/DOTFILES-GL.md), or set" >&2
-    echo "  LEAK_ALLOW_NO_PATTERNS=1 for a machine with no terms to defend." >&2
+    echo "  Two ways forward, and they are not interchangeable:" >&2
+    echo "    - Restore the file, if this machine defends project terms." >&2
+    echo "      It is untracked on purpose, so it arrives by a private" >&2
+    echo "      channel and never through this repo. It pairs with" >&2
+    echo "      $ALLOW_FILE; without that one, tracked files" >&2
+    echo "      that legitimately carry terms block every commit." >&2
+    echo "    - Declare this machine as keeping no term rules, once:" >&2
+    echo "        config config dotfiles.leakPatterns none" >&2
+    echo "      Credential rules keep running. Term rules do not." >&2
+    echo "      For a single commit instead, LEAK_ALLOW_NO_PATTERNS=1." >&2
     echo "" >&2
     exit 3
   fi

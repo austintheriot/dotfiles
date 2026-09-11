@@ -538,6 +538,67 @@ status=0
     "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
 assert_equals 'the explicit opt-out permits a run with no pattern file' '0' "$status"
 
+# The env-var opt-out above has to be retyped on every commit, so on a machine
+# that legitimately has no pattern file it is either forgotten (the commit
+# blocks) or exported into a shell profile (the guard is off everywhere,
+# invisibly). The persistent form is a machine-local git config key, which is
+# a deliberate act, lives outside the worktree, and can be read back.
+missing="$FIXTURES/no-such-patterns.conf"
+
+git -C "$repo" config dotfiles.leakPatterns none
+printf 'internal note about %s\n' "$FAKE_TERM" > "$repo/term-only.txt"
+git -C "$repo" add term-only.txt
+
+status=0
+(cd "$repo" && LEAK_PATTERN_FILE="$missing" "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
+assert_equals 'a declared machine permits a run with no pattern file' '0' "$status"
+
+out=$(cd "$repo" && LEAK_PATTERN_FILE="$missing" "$LEAK_CHECK" 2>&1; echo "exit=$?")
+assert_contains 'the declaration is announced on every run, never silent' \
+    'term rules INACTIVE' "$out"
+
+# The whole point of the narrower opt-out: layer 1 must survive it. A machine
+# with no terms to defend still has credentials to leak.
+git -C "$repo" reset -q HEAD term-only.txt
+rm -f "$repo/term-only.txt"
+printf 'token = ghp_%s\n' "$(printf 'D%.0s' $(seq 1 24))" > "$repo/cred-probe.txt"
+git -C "$repo" add cred-probe.txt
+
+status=0
+(cd "$repo" && LEAK_PATTERN_FILE="$missing" "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
+assert_equals 'the declaration does not disable the credential rules' '1' "$status"
+
+git -C "$repo" reset -q HEAD cred-probe.txt
+rm -f "$repo/cred-probe.txt"
+
+# Same lesson as SKIP_LEAK_CHECK=0: a value the setter believes means "off"
+# must not silently mean "on", and an unrecognized one must say so.
+git -C "$repo" config dotfiles.leakPatterns false
+printf 'internal note about %s\n' "$FAKE_TERM" > "$repo/term-only.txt"
+git -C "$repo" add term-only.txt
+
+status=0
+(cd "$repo" && LEAK_PATTERN_FILE="$missing" "$LEAK_CHECK" >/dev/null 2>&1) || status=$?
+assert_equals 'an unrecognized declaration value still blocks' '3' "$status"
+
+out=$(cd "$repo" && LEAK_PATTERN_FILE="$missing" "$LEAK_CHECK" 2>&1; echo "exit=$?")
+assert_contains 'and the unrecognized value is named rather than ignored' \
+    'dotfiles.leakPatterns=false' "$out"
+
+git -C "$repo" config --unset dotfiles.leakPatterns
+
+# The refusal has to be recoverable. It used to point at ~/DOTFILES-GL.md,
+# which does not exist on a reinstalled machine, so the instruction was a dead
+# end. The message must name something runnable instead.
+out=$(cd "$repo" && LEAK_PATTERN_FILE="$missing" "$LEAK_CHECK" 2>&1; echo "exit=$?")
+assert_contains 'the refusal names the persistent opt-out' \
+    'dotfiles.leakPatterns none' "$out"
+assert_equals 'the refusal does not point at a file that may not exist' '' \
+    "$(printf '%s' "$out" | grep -o 'DOTFILES-GL\.md')"
+
+git -C "$repo" reset -q HEAD term-only.txt
+rm -f "$repo/term-only.txt"
+
 git -C "$repo" reset -q HEAD term-only.txt
 rm -f "$repo/term-only.txt"
 

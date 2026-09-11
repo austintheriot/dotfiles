@@ -14,30 +14,41 @@ tests themselves.
 
 ## Run the suite before you push
 
-Run `~/tests/run-all.sh` and confirm it passes before pushing a change to any
-of the paths above. It announces each suite as `[n/total]` while it runs.
+Run `cd ~/crates && cargo test --locked` and confirm it passes before pushing
+a change to any of the paths above. `config test` is the same run with a
+friendlier front end, and `config test <filter>` narrows it: the argument is
+cargo's own test-name filter, not a suite file name.
 
-Budget about **six minutes** on the host. Measured 2026-09-10 on an M1 Max:
-374 seconds for `-q`, of which `config.test.sh` is 105 seconds because it
-calls `config-build` and compiles all six crates. This file said "about 25
-seconds" until that measurement; the claim was true when written and nothing
-updated it as suites accumulated. If you need a fast signal for a narrow
-change, run the specific suite rather than the whole set.
+There is **one harness**. The shell harness -- a `lib.sh` library, a
+`run-all.sh` runner, and one `*.test.sh` file per suite, all under `tests/` --
+was deleted on 2026-09-11, after every suite that tested something other than
+the harness itself was ported to Rust. Anything that still tells you to run
+`run-all.sh` is stale.
+
+Budget about **six minutes** on the host. Measured 2026-09-10 on an M1 Max
+against the shell harness: 374 seconds, of which the `config` suite was 105
+seconds because it calls `config build` and compiles all six crates. The port
+did not change that cost. An earlier version of this file said "about 25
+seconds"; the claim was true when written and nothing updated it as suites
+accumulated. Re-measure before quoting a number, and if you need a fast signal
+for a narrow change, filter to the tests you touched.
 
 A pre-push hook at `~/tests/pre-push` (symlinked from `~/.cfg/hooks/pre-push`)
-runs the suite too, gated to pushes whose commits touch tested code, and
-blocks the push on failure. It runs the suite **in Docker**
-(`~/tests/run-in-docker.sh`), not on this machine, so it needs a running
-Docker daemon. There is no host fallback on purpose: the host suite spawns
-tmux sessions on the real server and writes fixture repos under `$HOME`,
-which made `tmux-update-window-names.test.sh` flaky enough to block a push
-whose code was fine.
+runs two gates and blocks the push on either.
+
+- `~/tests/rust-checks.sh` runs on the **host**, against a `git archive`
+  snapshot of the ref being pushed, not the working tree. It runs
+  `cargo test --locked --quiet` and `cargo clippy` there.
+- `~/tests/run-in-docker.sh` runs the same cargo suite **in Docker**, gated to
+  pushes whose commits touch tested code, so it needs a running Docker daemon.
+  There is no host fallback on purpose: on the host the tmux suites spawn
+  sessions on the real server, which made the window-naming suite flaky enough
+  to block a push whose code was fine.
 
 The hook tests the ref being pushed, not the working tree. It sets
 `$DOTFILES_TEST_REF` so the container archives that ref. When that variable
 names a ref other than the checked-out branch, the working-tree overlay is
-skipped and the container tests the ref exactly as it will land on the
-remote.
+skipped and the container tests the ref exactly as it will land on the remote.
 
 Run `~/tests/run-in-docker.sh` yourself first anyway. Discovering a failure
 from a blocked push costs a round trip.
@@ -74,6 +85,44 @@ triggered from a prompt hook serializes every pane behind cargo's build lock
 (a no-op release build measures 0.7 to 1.5 seconds). The guarantee is at
 pre-push, which refuses a push when any binary is stale for the ref being
 pushed, and `config doctor` is how you ask before then.
+
+### `config build` can leave the installed binary SIGKILLed, and it hides it
+
+**This cost three debugging cycles in one day (2026-09-10).** Read this before
+diagnosing any "the binary prints nothing" symptom.
+
+`config build` installs over the live `~/.local/bin/config-cli`. On macOS an
+in-place write invalidates the running image's code signature, so the kernel
+SIGKILLs the process. The binary then exits **137** printing nothing, and it
+keeps doing so on every later run until it is re-signed.
+
+Three things make the defect expensive to recognize:
+
+- `codesign -v` still reports the file as **valid**, so the symptom does not
+  read as a signing problem at all.
+- Any invocation through a pipe (`config-cli --version | head`) reports the
+  **pipeline's** exit status, not the 137, so the binary looks like it merely
+  prints nothing.
+- The failure travels. `config build` before a push left the binary killed,
+  and `tests/rust-checks.sh` then reported `config_dispatcher` failing 7 of 34
+  inside the archived snapshot with exit code `-1` and empty output, while the
+  same suite passed 34 of 34 on the host. The push was refused.
+
+The diagnosis, and it is the only reliable one:
+
+    ~/.local/bin/config-cli help > /tmp/h.txt 2>&1; echo $?
+
+**Redirect to a file.** A pipe hides the signal. An exit of 137 means the
+binary was killed, not that the command failed.
+
+The fix is `codesign -f -s - ~/.local/bin/config-cli`. After that the suite
+passed 34 of 34 in the snapshot too.
+
+So: **if `config-cli help` prints nothing, or a test fails with an empty
+`left: ""`, check for 137 before concluding anything about the code.** The
+proper repair is a rename-into-place in `config build` (write to a temp path
+in the same directory, then `rename(2)`), which is the standard way to replace
+a running executable. That is not done yet.
 
 ## Plan checkboxes are never ticked here, so an open box means nothing
 
@@ -177,30 +226,41 @@ index:
   held the index for over two minutes here, and caused an `index.lock`
   collision.
 
-## A suite with no `finish` call exits 0 no matter what
+## Prove every gate can fail, with a non-zero exit
 
-`finish` is what returns the exit status. A suite that prints `FAIL:` and
-then falls off the end of the file exits **0**, and `run-all.sh` records a
-pass.
+**The single most repeated defect in this repo is a gate that reports PASS
+while measuring nothing.** Four instances were found on 2026-09-10 alone, in
+one day, which makes it a pattern rather than an accident.
 
-**Two instances found 2026-09-10, in one day, which makes it a pattern
-rather than an accident.**
+Three of the four came from one mechanism in the deleted shell harness, and
+the mechanism is worth stating even though it is gone, because the general
+rule is what survives it. `lib.sh`'s `finish` was what returned a suite's exit
+status. A suite that printed `FAIL:` and then fell off the end of the file
+exited **0**, and the runner recorded a pass.
 
-`nvim-lua-format.test.sh` had no `finish` call at all: its last statement was
-an assertion inside an `if`. An unformatted Lua file made it print `FAIL:`
-and exit 0, so the stylua gate had been open since the suite was written. The
-Rust port exits 101 on the same sabotage.
+- `nvim-lua-format.test.sh` had no `finish` call at all: its last statement
+  was an assertion inside an `if`. An unformatted Lua file made it print
+  `FAIL:` and exit 0, so the stylua gate had been open since the suite was
+  written. The Rust port exits 101 on the same sabotage.
+- `deps-manifest.test.sh` was worse, because it looked correct. It **did**
+  call `finish`, and then carried four more assertions below it: the whole
+  piped-output block. Measured before deletion, sabotaging the first of them
+  printed `FAIL: the piped run produced output (exited 1)` and the suite
+  **exited 0**. A reviewer scanning for "does this file call `finish`" would
+  have passed it. The check was never whether `finish` is called but whether
+  it is **last**.
+- `skip-reporting.test.sh` called `finish` at line 229 with five assertions
+  below it. The suite written to guarantee a silent skip cannot ship had five
+  silent assertions of its own.
 
-`deps-manifest.test.sh` was worse, because it looked correct. It **did** call
-`finish`, and then carried four more assertions below it: the whole
-piped-output block, checking that no ANSI escape reaches a pipe, that the
-summary line stays greppable, and that a present row stays greppable.
-Measured before deletion: sabotaging the first of them printed
-`FAIL: the piped run produced output (exited 1)` and the suite **exited 0**.
+Cargo's harness cannot reproduce that exact shape: a `#[test]` that panics
+fails, and there is no trailing statement to strand. The general rule it
+produced is not about `finish` and still binds:
 
-A reviewer scanning for "does this file call `finish`" would have passed
-that file. The check is not whether `finish` is called but whether it is
-**last**.
+**Before trusting any gate, break its subject once and confirm a non-zero
+exit code.** Not a `FAIL:` line on stdout, not red text, not an error message
+in a log. The exit status, read directly. Every gate in this repo is consumed
+by something that branches on that status and by nothing else.
 
 Two related shapes found the same day, both in suites that looked fine:
 
@@ -213,10 +273,6 @@ Two related shapes found the same day, both in suites that looked fine:
 - **`profile-path.test.sh`** checked for bashisms with `sh -n` and `dash -n`.
   Neither rejects `[[ ]]`: dash parses `[[` as a command word and the syntax
   check passes. A parse check is not an execution check.
-
-The rule: **every suite ends with `finish`, and every gate must be shown to
-fail.** Before trusting a new suite, break its subject once and confirm a
-non-zero exit, not just a `FAIL:` line on stdout.
 
 ## Sabotage the measurement, not only the subject
 
@@ -240,54 +296,77 @@ claims, and every future run of that assertion is theatre.
 
 ## Where tests live
 
-Integration tests live in `~/tests/` as `<script-name>.test.sh`. They source
-`~/tests/lib.sh` for assertions, fixtures, and tmux session management.
+There is one harness. Integration tests live in `crates/<crate>/tests/` as
+Rust integration targets, one file per former shell suite, and each file opens
+with a `//!` module doc naming what it was converted from and how many
+assertions it carried. Shared helpers live in the `dotfiles-test-support`
+crate.
 
-Unit tests live next to the code they cover, named `test_*.py`, and run under
-stdlib `unittest`. Nothing in this repo installs pytest.
+Unit tests live next to the code they cover. Rust unit tests go in a
+`#[cfg(test)] mod tests` in the same file. Python unit tests are named
+`test_*.py` and run under stdlib `unittest`; nothing in this repo installs
+pytest, and `test-suite.yml` discovers them rather than listing them.
 
 ## Writing a new test
 
-Use the helpers in `lib.sh` rather than calling tmux directly:
-
-- `new_test_session` creates a detached session named after the test file and
-  the pid, registers it for teardown, and neutralises the globally installed
-  window-naming hooks so they cannot race the assertions.
-- `target_window` makes a window current. tmux resolves an unqualified target
-  to the current window of the current session and ignores `$TMUX_PANE`, so a
-  script that acts on "the current pane" needs this first.
-- `in_pane` runs a command with `$TMUX` cleared. This is a safety boundary, not
-  a convenience: without it a script that splits or kills "the current pane"
-  operates on the live pane you are sitting in.
-- `in_session` is for scripts that refuse to run when `$TMUX` is empty. It
-  points `$TMUX` at a test session instead of clearing it.
+- **Locate tracked files with `dotfiles_test_support::repo::root()`**, never
+  `CARGO_MANIFEST_DIR` alone. Cargo runs an integration test from the crate
+  directory, so a path relative to the cwd resolves against
+  `crates/<crate>`, not the repo root.
+- **`git ls-tree` and `git ls-files` from a test need a rooted pathspec
+  (`:/deps`) and `--full-name`.** A bare relative pathspec resolves against
+  the crate directory and matches nothing. That made one whole discovery
+  branch dead: it returned zero paths and ten tracked scripts were never
+  linted.
+- **Positive controls are required.** Any assertion expecting an empty result
+  must first prove its pipeline produced something. An assertion over an empty
+  set passes for the wrong reason.
+- **Strip comments and join backslash continuations before matching file
+  contents.** Both shapes made assertions vacuous during the port: a grep
+  satisfied by a comment, and a `^RUN (apt-get|pacman)` that could not see a
+  package list on a continuation line.
+- **Never use `#[ignore]` for a runtime skip.** Use
+  `dotfiles_test_support::skip(reason)` and return.
+- **Never call `skip()` to prove skipping works.** It writes to the ambient
+  `DOTFILES_SKIP_LOG` the gate sets, so such a test records a phantom skip.
+  That bit the skip mechanism's own first test.
 
 ### Skipping an assertion
 
-Call `skip '<reason>'` when a check cannot run in the current environment.
-Do not `printf` the skip yourself and do not silently `return`.
+Call `dotfiles_test_support::skip("<reason>")` and return when a check cannot
+run in the current environment. Do not print the skip yourself and do not
+silently return.
 
 A skip is green on purpose: it says a check could not execute here, not that
-it would have failed. The container harness builds its tree with
-`git archive` and so carries no repository, which is a correct reason for the
-commit-inspection block in `scripts-dir-name.test.sh` to stand down.
+it would have failed. The container harness builds its tree with `git archive`
+and so carries no repository, which is a correct reason for a
+commit-inspection assertion to stand down.
 
-What a skip must not be is free. That block used to print one line into a
-suite's captured output and nothing else, so `finish` counted only passes and
-failures and the pre-push Docker gate printed `PASS` over an assertion that
-never ran. A stale committed-script count shipped, and both CI platforms
-caught it instead, because `actions/checkout` gives a runner the repository
-the container lacks.
+What a skip must not be is **free**. The incident that produced this rule: a
+commit-inspection block used to print one line into a suite's captured output
+and nothing else, so the tally counted only passes and failures, and the
+pre-push Docker gate printed `PASS` over an assertion that never ran. A stale
+committed-script count shipped, and both CI platforms caught it instead,
+because `actions/checkout` gives a runner the repository the container lacks.
 
-`skip` counts the skip so `finish` reports it, and `run-all.sh` carries the
-count up to the per-suite verdict line and the run summary. Both survive
-`-q`, which is what the pre-push hook shows. A run with no skips says nothing
-about them: a trailing "0 skipped" everywhere is noise, and noise is what a
-reader learns to scan past.
+The rule the pre-push hook already states one level up: **a gate that says
+nothing when it skips is indistinguishable from a gate that is not installed.**
 
-The rule is the one the pre-push hook already states one level up: a gate that
-says nothing when it skips is indistinguishable from a gate that is not
-installed. `tests/skip-reporting.test.sh` holds this behavior in place.
+`skip` appends a line to `$DOTFILES_SKIP_LOG`, and `tests/rust-checks.sh`
+reads that log and prints the count **with each reason**. The count is not
+swallowed by `--quiet`, which is what the pre-push hook shows.
+`crates/dotfiles-test-support/tests/skip_log.rs` holds both halves in place:
+it runs the gate's own reporting block, so a change to its wording or its
+`sed` turns that test red. Proven load-bearing by sabotage: dropping the
+reasons turns that test alone red.
+
+A run with no skips says nothing about them, deliberately. A trailing "0
+skipped" on every run is noise, and noise is what a reader learns to scan past.
+`skip_log.rs` asserts that silence too.
+
+One count caveat, and it is honest rather than a defect: cargo builds an
+integration target per lib and bin target of the crate under test, so one
+skipping test can appear twice. Read the reasons, not the number.
 
 A test that starts its own tmux server with `-L <name>` must set
 `TMUX_TMPDIR` to a directory it owns and removes, because of three tmux
@@ -296,20 +375,23 @@ behaviours that each cost a debugging cycle on 2026-09-09:
 - tmux 3.4 does not unlink its socket file on `kill-server`, even on a clean
   exit. Without a private directory, every run left one dead socket per
   server in the shared `/tmp/tmux-<uid>/`; 1435 were found there.
-- A Unix socket path is capped at 104 bytes on macOS. `$FIXTURES` lives
-  under the long `/var/folders/.../T/` prefix, so a socket there came to
-  111 bytes and tmux failed with "File name too long". Make the directory
-  directly under `/tmp` (`mktemp -d /tmp/tmux-test-XXXXXX`, or
-  `tempfile::Builder::new().tempdir_in("/tmp")` in Rust).
+- A Unix socket path is capped at 104 bytes on macOS. The default temporary
+  directory on macOS lives under the long `/var/folders/.../T/` prefix, which
+  is where `tempfile` puts a scratch directory by default, so a socket there
+  came to 111 bytes and tmux failed with "File name too long". Put the
+  directory directly under `/tmp`:
+  `tempfile::Builder::new().tempdir_in("/tmp")`.
 - When `TMUX_TMPDIR` names a directory whose parent does not exist, tmux
   falls back to the shared directory and exits 0 with no message. Create the
-  directory before the first tmux call, and assert at the end of the suite
-  that the shared directory does not hold your socket. `tmux-conf-split`
-  and `tmux-plugin-path` are the shape to copy.
+  directory before the first tmux call, and assert at the end of the test
+  that the shared directory does not hold your socket.
+  `crates/tmux-tools/tests/conf_split.rs` and
+  `crates/tmux-tools/tests/plugin_path.rs` are the shape to copy.
 
-Route the EXIT trap's `kill-server` through the same wrapper that sets
+Route the teardown's `kill-server` through the same wrapper that sets
 `TMUX_TMPDIR`, or it aims at a path that no longer exists, the real server
-survives, and `rm -rf` removes its socket from under a running process.
+survives, and the scratch directory's removal takes its socket out from under
+a running process.
 
 **And assert it, because the obvious guard does not catch it.** Measured
 2026-09-10: a teardown missing `TMUX_TMPDIR` fails with "error connecting",
@@ -351,13 +433,18 @@ fail loudly rather than rot.
 
 Two failure modes are worth knowing about, because both have bitten this repo:
 
-- A test that creates tmux sessions must clean them up on signals, not only on
-  exit. `lib.sh` traps `INT`, `TERM`, and `HUP` alongside `EXIT` for this
-  reason. Enough orphaned sessions will bog the tmux server down.
+- A test that creates tmux sessions must clean them up on an abort, not only
+  on a normal return. The deleted shell harness trapped `INT`, `TERM` and
+  `HUP` alongside `EXIT` for this reason. In Rust the equivalent is a guard
+  whose `Drop` kills the server, because `Drop` runs while a panic unwinds and
+  an early `?` return. Enough orphaned sessions will bog the tmux server down.
 - A caller that exports a git environment, which a pre-commit or pre-push hook
   does, would otherwise redirect every fixture `git init` and `git commit` at
-  the dotfiles repo. `lib.sh` unsets those variables, and the pre-push hook
-  clears them too before it runs `run-all.sh`.
+  the dotfiles repo. Both callers clear it: `tests/pre-push` runs
+  `env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX` around its
+  container call, and `tests/rust-checks.sh` does the same around cargo. A
+  fixture that took `~/.cfg/index.lock` once blocked every `config` command
+  until the process was killed.
 
 ## The fetch refspec on another machine
 

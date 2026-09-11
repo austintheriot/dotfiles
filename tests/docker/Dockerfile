@@ -136,12 +136,6 @@ RUN apt-get update \
 #
 # --depth 1 fetches only that commit: the image needs tpm's files, not its
 # history, and the clone is a build-time network operation like apt-get above.
-RUN git clone --depth 1 https://github.com/tmux-plugins/tpm.git \
-        /root/.tmux/plugins/tpm \
-    && git -C /root/.tmux/plugins/tpm fetch --depth 1 origin \
-        e261deb1b47614eed3400089ce7197dc68acc4eb \
-    && git -C /root/.tmux/plugins/tpm checkout --detach \
-        e261deb1b47614eed3400089ce7197dc68acc4eb
 
 # The pinned toolchain, installed at BUILD time so `docker run` needs no
 # network.
@@ -218,6 +212,27 @@ COPY .scripts /root/.scripts
 COPY .claude /root/.claude
 # tmux-conf-split.test.sh loads the real config on a throwaway tmux server.
 COPY .config/tmux /root/.config/tmux
+
+# tpm and the plugins it manages. Ordered AFTER the config copy on purpose:
+# `install_plugins` reads the `@plugin` lines out of tmux.conf, so a clone
+# placed earlier in the file would install tpm and nothing else.
+#
+# Pinned to a commit rather than a tag. tpm's v3.1.0 TAG points at a commit
+# that is not on master, while a DIFFERENT commit on master carries the title
+# v3.1.0, so the tag name does not identify the mainline release.
+#
+# `bin/install_plugins` is tpm's own command-line entry point and needs no
+# running tmux server, which is what makes this work in a build layer.
+# plugin_path.rs asserts every declared `@plugin` is present, and skips only
+# when tpm itself is absent -- so installing tpm without its plugins turns
+# that skip into a failure.
+RUN git clone --depth 1 https://github.com/tmux-plugins/tpm.git \
+        /root/.tmux/plugins/tpm \
+    && git -C /root/.tmux/plugins/tpm fetch --depth 1 origin \
+        e261deb1b47614eed3400089ce7197dc68acc4eb \
+    && git -C /root/.tmux/plugins/tpm checkout --detach \
+        e261deb1b47614eed3400089ce7197dc68acc4eb \
+    && /root/.tmux/plugins/tpm/bin/install_plugins
 # alacritty-platform-split.test.sh reads the shared config and both variants
 # to check the import wiring. No Alacritty binary is needed -- the assertions
 # are about which file imports which.

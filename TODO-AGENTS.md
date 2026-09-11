@@ -213,6 +213,17 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   A rename-into-place (write to a temp path in the same directory, then
   `rename(2)`) instead of an in-place write avoids it, and is the standard
   fix for replacing a running executable.
+  **Escalated the same day: this blocked a push.** `config build` before a
+  push left the binary killed, and `tests/rust-checks.sh` then reported
+  `config_dispatcher` failing 7 of 34 inside the archived snapshot with exit
+  code `-1` and empty output, while the same suite passed 34 of 34 on the
+  host. The push was refused. `codesign -f -s -` restored it and the suite
+  passed 34 of 34 in the snapshot too.
+  Two things make it expensive to diagnose. `codesign -v` reports the file
+  valid, and any invocation through a pipe (`config-cli --version | head`)
+  reports the pipeline's exit status rather than the 137, so the binary looks
+  like it merely prints nothing. Run it redirected to a file to see the
+  signal.
 
 # QUESTIONS (leave until queried)
 

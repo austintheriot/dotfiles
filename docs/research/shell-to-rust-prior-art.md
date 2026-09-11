@@ -394,10 +394,12 @@ direction. Likely publication bias; it cannot be claimed as support.
 
 ## This repo already built the alternatives
 
-`tests/lib.sh` already implements git's `test-lib.sh` pattern: 19 suites
-sourcing one harness, `assert_equals`/`assert_contains`/`assert_succeeds`,
-`isolate_hooks`, `make_repo`, `make_worktree`, `mktemp -d` fixtures, plus
-`run-all.sh` and `run-in-docker.sh`.
+The shell harness already implemented git's `test-lib.sh` pattern: 19 suites
+sourcing one library, `assert_equals`/`assert_contains`/`assert_succeeds`,
+`isolate_hooks`, `make_repo`, `make_worktree`, `mktemp -d` fixtures, plus a
+whole-suite runner and `run-in-docker.sh`. (Written while that harness was
+live. It was deleted on 2026-09-11, which is the decision this document was
+weighing.)
 
 And the harness already contains the rebuttal to the dependency-injection
 goal, in its own comment:

@@ -213,9 +213,9 @@ pub fn render_styled(report: &Report, verb: Verb, style: Style) -> Rendered {
     };
     // Bold rather than coloured: the heading is not a severity, and giving
     // it a colour would compete with the words that are. This is the line
-    // tests/run-all.sh parses with sed, so the escapes must sit outside the
-    // text it matches -- which Style::Plain guarantees for every non-tty
-    // caller.
+    // deps_manifest.rs greps and the deps-check workflow matches, so the
+    // escapes must sit outside the text they match -- which Style::Plain
+    // guarantees for every non-tty caller.
     let summary = format!(
         "{} {} entries\n",
         paint(style, BOLD, &format!("deps {heading}:")),
@@ -571,11 +571,11 @@ mod tests {
     /// Plain rendering is byte-identical to the uncoloured output.
     ///
     /// THE BREAKAGE CLASS THIS PREVENTS, and it is the one this repo keeps
-    /// hitting. Every gate here greps this output: `tests/run-all.sh` parses
-    /// the summary line with sed, the deps-check workflow greps for
-    /// `present   neovim`, and `tests/container.test.sh` matches assertion
-    /// text. An escape sequence in a piped stream breaks all of them, and it
-    /// breaks them only in CI, where nobody is watching a terminal.
+    /// hitting. Every gate here greps this output:
+    /// `crates/config-cli/tests/deps_manifest.rs` matches the summary line and
+    /// a `present` row, and the deps-check workflow greps for
+    /// `present   neovim`. An escape sequence in a piped stream breaks both,
+    /// and it breaks them only in CI, where nobody is watching a terminal.
     ///
     /// So `Style::Plain` is the contract, not a fallback: the caller decides
     /// at the IO edge, and a non-tty caller gets exactly the bytes it got

@@ -231,8 +231,9 @@ impl FixtureHome {
     ///
     /// A caller may be a pre-commit or pre-push hook, which exports
     /// `GIT_DIR` and `GIT_WORK_TREE`; without clearing them every fixture
-    /// git call would aim at the dotfiles repo instead. `lib.sh` unsets the
-    /// same variables for the same reason.
+    /// git call would aim at the dotfiles repo instead. The deleted shell
+    /// harness unset the same variables for the same reason, and
+    /// `tests/pre-push` and `tests/rust-checks.sh` still do.
     fn run_git(&self, arguments: &[&str]) {
         let output = Command::new("git")
             .args(arguments)

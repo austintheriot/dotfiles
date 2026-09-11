@@ -31,27 +31,27 @@ empty_tree='4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 # Paths whose edit is worth the Docker suite. A push touching none of them
 # skips it, which is what keeps a documentation-only push fast.
 #
-# The rule for adding one: if a suite READS a path, that path belongs here.
-# Otherwise a push editing only that path runs no tests, and the suite that
+# The rule for adding one: if a test READS a path, that path belongs here.
+# Otherwise a push editing only that path runs no tests, and the test that
 # reads it fails on somebody else's unrelated push instead. The config trees
-# are here for exactly that reason -- tmux-conf-split.test.sh reads
-# .config/tmux, and nvim-mason-runtimes.test.sh reads .config/nvim.
+# are here for exactly that reason -- tmux-tools' conf_split.rs reads
+# .config/tmux, and config-cli's nvim_runtime.rs reads .config/nvim.
 #
-# container.test.sh asserts each pattern against a real example path, so a
+# container_image.rs asserts each pattern against a real example path, so a
 # regex that stops matching fails there rather than silently skipping.
 #
 # `^deps/` covers the dependency manifests and their harness, which moved out
-# from under `^\.scripts/` when deps/ became a top-level directory. Six suites
+# from under `^\.scripts/` when deps/ became a top-level directory. Six tests
 # read that tree, and the conf files are what `config deps install` acts on, so
-# an edit there is the shape this gate exists for. container.test.sh asserts
+# an edit there is the shape this gate exists for. container_image.rs asserts
 # the pattern against three real paths under it.
 #
 # `^\.scripts/` is deliberately extension-free. It used to be
 # `^\.scripts/.*\.sh$`, which matched no `config-*` subcommand at all: every
 # one of them is extensionless, so a push editing only `config-stamp` or
-# `config-build` ran zero tests while config.test.sh and
-# config-manifest-lifecycle.test.sh read them both. `setup.sh` and `.zshrc`
-# were missing for the same reason, and zshrc-*.test.sh reads the latter.
+# `config-build` ran zero tests while config_dispatcher.rs and
+# config_manifest_lifecycle.rs read them both. `setup.sh` and `.zshrc` were
+# missing for the same reason, and the zshrc_*.rs tests read the latter.
 TRIGGER_PATHS='^\.scripts/|^deps/|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/|^\.github/workflows/|^crates/|^\.config/nvim/|^\.config/tmux/|^setup\.sh$|^\.zshrc'
 
 pushing_branch=0
@@ -213,19 +213,26 @@ fi
 #
 # Runs on the HOST, before the Docker handoff below, and this is deliberate.
 #
-# The container leg cannot run these: tests/docker/Dockerfile's runtime
-# stage is Rust-free by design, so `command -v cargo` is correctly false
-# inside it and run-all.sh skips the Rust leg. That is how a push once
-# printed "SKIP cargo test (cargo not found)" and passed.
+# These do NOT duplicate the container leg, even though the container now
+# runs cargo too. They run against a `git archive` snapshot of the ref being
+# pushed and they run clippy, which the container image deliberately omits:
+# its runtime stage installs the toolchain with `--profile minimal` and no
+# clippy component, so the lint has no gate inside it.
+#
+# The container's runtime stage was Rust-free until 70272c37, and this comment
+# used to say so. Back then `command -v cargo` was correctly false inside it
+# and the shell runner skipped the Rust leg, which is how a push once printed
+# "SKIP cargo test (cargo not found)" and passed. That is history now, and it
+# is why this host leg exists at all.
 #
 # This is NOT the host fallback the suite block below rejects. A fallback
 # silently substitutes a weaker check when the daemon is down; this always
 # runs and never replaces the container leg. The distinction matters because
-# the reason the shell suites need the container -- they mutate $HOME, spawn
-# tmux sessions, write fixture repos -- does not apply to cargo test. Those
-# crates are pure or test against their own temporary directories, verified
-# by running the workspace with HOME pointed at an empty directory and
-# finding it still empty afterwards.
+# the reason the suite wants the container -- the tmux tests spawn sessions on
+# the real server, and fixture repos land under $HOME -- does not apply to
+# running cargo against a snapshot here. Those crates are pure or test against
+# their own temporary directories, verified by running the workspace with HOME
+# pointed at an empty directory and finding it still empty afterwards.
 #
 # Before the Docker block because these take seconds and that takes minutes.
 
@@ -238,9 +245,9 @@ fi
 # reported "cargo not found" and skipped on machines that do have a toolchain --
 # a gate that passed because it measured nothing. Set here rather than inside
 # rust-checks.sh: that script must keep taking PATH at its word, because
-# rust-gate.test.sh proves the toolchain-less skip by running it with
-# PATH=/nonexistent, and a script that reaches past PATH to $HOME would make
-# that simulation meaningless.
+# crates/config-cli/tests/rust_gate.rs proves the toolchain-less skip by
+# running it with PATH=/nonexistent, and a script that reaches past PATH to
+# $HOME would make that simulation meaningless.
 if [ -x "$HOME/.cargo/bin/cargo" ]; then
     case ":$PATH:" in
         *":$HOME/.cargo/bin:"*) ;;
@@ -277,8 +284,8 @@ fi
 
 # The suite runs in a container, never on this machine. On the host it spawns
 # tmux sessions on the real server and writes fixture repos under $HOME,
-# which made tmux-update-window-names.test.sh flaky enough to block a push
-# whose code was fine. The container is thrown away with its side effects.
+# which made the window-naming tests flaky enough to block a push whose code
+# was fine. The container is thrown away with its side effects.
 #
 # There is deliberately no host fallback. Falling back when the daemon is
 # down would reintroduce the flake silently, and a gate that quietly changes

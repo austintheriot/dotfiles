@@ -54,14 +54,17 @@ const ZSH_SCRIPTS: [&str; 5] = [
 ///
 /// `depcheck-hook.sh` is sourced from `.zshrc` but is portable POSIX shell,
 /// not zsh-specific, so it is linted rather than excluded.
-const SOURCED_BASH: [&str; 2] = ["tests/lib.sh", "deps/depcheck-hook.sh"];
+///
+/// `tests/lib.sh` was the other entry and left with the shell harness on
+/// 2026-09-11.
+const SOURCED_BASH: [&str; 1] = ["deps/depcheck-hook.sh"];
 
 /// Codes excluded everywhere, as flags rather than a `.shellcheckrc`: the rc
 /// file needs shellcheck 0.10 or later and would have to be copied into the
 /// test image, while `-e` works on every version this repo runs against.
 ///
-/// `SC1091` is a sourced path shellcheck cannot resolve. `-x` follows
-/// `tests/lib.sh` where the working directory allows it; the container runs
+/// `SC1091` is a sourced path shellcheck cannot resolve. `-x` follows a
+/// sourced file where the working directory allows it; the container runs
 /// from a different directory and cannot, and that is not a defect.
 ///
 /// `SC2016` fires on single-quoted shell text. This repo prints shell
@@ -73,11 +76,16 @@ const EXCLUDES: &str = "SC1091,SC2016";
 /// The floor a broken discovery step has to clear. A lint that checks nothing
 /// passes trivially.
 ///
-/// Measured, not guessed: 29 tracked `*.sh` paths minus the 5 zsh exclusions
-/// is 24. The previous value of 25 was above what the broken discovery could
-/// reach and below what a whole-repo walk would reach, so it failed loudly
-/// only after discovery was fixed.
-const MINIMUM_LINTED: usize = 24;
+/// Measured, not guessed: 24 tracked `*.sh` paths minus the 5 zsh exclusions
+/// is 19. It was 24 against 29 tracked paths until 2026-09-11, when deleting
+/// the shell harness removed five: `tests/lib.sh`, `tests/run-all.sh`, and
+/// three `*.test.sh` suites whose subject was the harness itself.
+///
+/// An earlier value of 25 was above what a broken discovery step could reach
+/// and below what a whole-repo walk would reach, so it failed loudly only
+/// after discovery was fixed. Keep this at the real count minus the
+/// exclusions, never above it.
+const MINIMUM_LINTED: usize = 19;
 
 /// True when this run is a place the lint has to gate rather than an ad-hoc
 /// host run.

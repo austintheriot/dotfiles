@@ -102,10 +102,10 @@ fn style_for(is_terminal: bool, no_color: Option<&str>) -> Style {
 /// The style for this process, read from the real environment.
 ///
 /// Plain whenever stdout is not a terminal, which is the case every gate in
-/// this repo runs under: `tests/run-all.sh` parses the summary with sed, the
-/// deps-check workflow greps for `present   neovim`, and
-/// `tests/container.test.sh` matches assertion text. An escape in a piped
-/// stream breaks all of them, and only in CI.
+/// this repo runs under: `crates/config-cli/tests/deps_manifest.rs` matches
+/// the summary line and a `present` row, and the deps-check workflow greps for
+/// `present   neovim`. An escape in a piped stream breaks both, and only in
+/// CI.
 fn output_style() -> Style {
     style_for(
         std::io::stdout().is_terminal(),

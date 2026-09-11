@@ -27,9 +27,9 @@
 # checked-out branch). The working-tree overlay is skipped when it names
 # anything else, so the container tests that ref as committed.
 #
-# This does not replace a host run on macOS. notify.test.sh is macOS-only
-# (aerospace and osascript) and is absent from the image, so a green container
-# run does not cover it. The python unit tests and the clippy leg are absent
+# This does not replace a host run on macOS. The notify tests are macOS-only
+# (aerospace and osascript) and skip inside the image, so a green container
+# run does not cover them. The python unit tests and the clippy leg are absent
 # too; both keep their own gates (test-suite.yml on the runner, and
 # tests/rust-checks.sh against the pushed ref).
 
@@ -53,7 +53,7 @@ git_cmd() {
 # resolve later: this script also runs inside the test image, where there is
 # no .cfg repository to resolve anything against, and making resolution a
 # hard prerequisite there breaks the docker-guard assertions in
-# container.test.sh.
+# crates/config-cli/tests/container_image.rs.
 if [ -n "${DOTFILES_TEST_REF:-}" ]; then
     branch=$DOTFILES_TEST_REF
     if ! git_cmd rev-parse --verify --quiet "$branch" >/dev/null 2>&1; then

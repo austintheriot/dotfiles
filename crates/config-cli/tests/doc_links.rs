@@ -86,8 +86,9 @@ fn is_path_citation(span: &str) -> bool {
     {
         return false;
     }
-    // A bare filename with no directory (`lib.sh`, `tmux.conf`) is a pointer
-    // to a file the reader is expected to locate, not a claim about a path.
+    // A bare filename with no directory (`tmux.conf`, `deps.toml`) is a
+    // pointer to a file the reader is expected to locate, not a claim about a
+    // path.
     // This also keeps the suite branch-neutral: the research doc names
     // mac-only files while discussing what varies per platform.
     if !stripped.contains('/') {

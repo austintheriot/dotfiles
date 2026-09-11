@@ -33,7 +33,8 @@ ref=${1:-HEAD}
 # for any caller. Falling back to ~/.cfg keeps a bare `tests/rust-checks.sh`
 # working by hand, where nothing is exported.
 #
-# Hardcoding ~/.cfg was wrong and CI caught it: leak-check.test.sh drives the
+# Hardcoding ~/.cfg was wrong and CI caught it: the leak-check tests (now
+# crates/config-cli/tests/leak_check.rs) drive the
 # hook with GIT_DIR pointed at a throwaway fixture repo, so a ref that exists
 # only there could not be archived out of ~/.cfg, the archive failed, and the
 # hook blocked a push it should have allowed. The host run passed because the
@@ -118,8 +119,7 @@ fi
 
 # The shared cache, not a fresh directory under the snapshot. Measured on
 # this repo: a cold target directory takes over 120 seconds and the shared
-# one takes 7, and a 120-second gate is one somebody switches off. Same
-# default run-all.sh uses.
+# one takes 7, and a 120-second gate is one somebody switches off.
 CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/config-manifest/target}"
 export CARGO_TARGET_DIR
 
@@ -162,10 +162,14 @@ if ! run_in_snapshot cargo test --locked --quiet; then
     status=1
 fi
 
-# Report the skips the way run-all.sh does for the shell suites, because a
-# gate that says nothing when it skips is indistinguishable from one that is
-# not installed. Silent when nothing skipped: a trailing "0 skipped" on every
-# run is noise, and noise is what a reader learns to scan past.
+# Report the skips, because a gate that says nothing when it skips is
+# indistinguishable from one that is not installed. Silent when nothing
+# skipped: a trailing "0 skipped" on every run is noise, and noise is what a
+# reader learns to scan past.
+#
+# crates/dotfiles-test-support/tests/skip_log.rs runs this block and asserts
+# both halves, so a change to the wording or to the sed below turns that test
+# red rather than quietly dropping the reasons.
 if [ -s "$DOTFILES_SKIP_LOG" ]; then
     skipped=$(wc -l < "$DOTFILES_SKIP_LOG" | tr -d ' ')
     # One test that skips can appear more than once: cargo builds an

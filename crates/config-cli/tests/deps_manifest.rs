@@ -385,8 +385,7 @@ fn a_piped_run_stays_plain_and_greppable() {
                 .is_some_and(|count| count.parse::<u32>().is_ok())
         }),
         "the summary line is no longer greppable as `deps checked \
-         dependencies: <n> entries`, which run-all.sh's parser and the \
-         workflow both match"
+         dependencies: <n> entries`, which the deps-check workflow matches"
     );
     assert!(
         piped.lines().any(|line| {

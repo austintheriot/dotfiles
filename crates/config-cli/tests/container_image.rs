@@ -309,7 +309,7 @@ fn referenced_root_paths() -> Vec<String> {
 
 /// The root-level path segments one suite's text references.
 ///
-/// Only a bare segment counts: `$DOTFILES_ROOT/tests/lib.sh` names `tests`, and
+/// Only a bare segment counts: `$DOTFILES_ROOT/tests/pre-push` names `tests`, and
 /// anything carrying a further slash is a path inside a root-level entry that
 /// the entry's own `COPY` already covers.
 /// Every root-level segment the harness references.
@@ -552,33 +552,41 @@ fn the_runtime_stage_installs_the_pinned_toolchain_at_build_time() {
     );
 }
 
-/// The macOS-only suite is excluded from the image.
+/// The notify tests reach the platform only through injected stubs, so the
+/// image needs no exclusion for them.
 ///
-/// It drives aerospace and osascript. Neither exists on Linux, so it has to be
-/// removed rather than left to fail as a false negative.
+/// # Why this replaced an exclusion assertion
 ///
-/// Read from the INSTRUCTIONS, never the raw text. The shell version searched
-/// the concatenated files, and the comment above the removal line names the
-/// suite, so deleting the real `RUN rm -f` left the assertion green. Measured
-/// while converting this suite: with the removal deleted and only the comment
-/// left, the whole-file form still passed. A comment is not code, and an
-/// assertion a comment can satisfy is an assertion that cannot fail.
+/// The shell harness globbed `tests/*.test.sh`, so a suite that could not pass
+/// on Linux had to be DELETED from the image to keep the runner's suite count
+/// honest, and this test asserted that `RUN rm -f .../notify.test.sh` was
+/// present. The 2026-09-11 harness deletion removed both the glob and the
+/// `rm`, so asserting the exclusion would now pin a line that must not exist.
+///
+/// `notify.rs` addresses aerospace and osascript through `AEROSPACE_BIN` and
+/// `OSASCRIPT_BIN` and points both at stubs it writes itself, so it runs on
+/// Linux like any other test. THAT is the property worth holding: the moment
+/// a notify test shells out to a real macOS binary, it becomes a false
+/// negative in this image, and this test goes red instead.
 #[test]
-fn the_macos_only_suite_is_excluded() {
-    let dockerfile = Dockerfile::read();
-    let removes = dockerfile
-        .instructions
-        .iter()
-        .any(|instruction| instruction.contains("notify"));
-    let runner_excludes = read(&runner_path())
+fn the_notify_tests_reach_the_platform_only_through_stubs() {
+    let source = read(&repo_root().join("crates/config-cli/tests/notify.rs"));
+    assert!(
+        source.contains("AEROSPACE_BIN") && source.contains("OSASCRIPT_BIN"),
+        "positive control: notify.rs no longer names the two indirection \
+         variables, so this test is reading the wrong file"
+    );
+
+    let direct: Vec<&str> = source
         .lines()
         .map(str::trim)
-        .filter(|line| !line.starts_with('#'))
-        .any(|line| line.contains("notify"));
+        .filter(|line| !line.starts_with("//"))
+        .filter(|line| line.contains("Command::new(\"osascript\")") || line.contains("Command::new(\"aerospace\")"))
+        .collect();
     assert!(
-        removes || runner_excludes,
-        "neither the image nor the runner excludes the macOS-only suite \
-         (a comment naming it does not count)"
+        direct.is_empty(),
+        "notify.rs invokes a real macOS binary by name, so it cannot pass in \
+         the Linux container and becomes a false negative there: {direct:?}"
     );
 }
 

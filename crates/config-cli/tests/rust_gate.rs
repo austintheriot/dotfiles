@@ -24,7 +24,7 @@
 //! TWO ASSERTIONS ARE NOT CARRIED OVER, and neither is dropped silently.
 //! The shell suite asserted that `run-all.sh` runs clippy and that the
 //! clippy leg goes through `run_suite` so it is counted. Their subject is
-//! `tests/run-all.sh`, which Tranche C's Task 6 deletes outright, and the
+//! `tests/run-all.sh`, which Tranche C's Task 6 deleted outright, and the
 //! Rust harness has no `run_suite` to route a leg through: `rust-checks.sh`
 //! runs clippy directly and the pre-push hook calls it. The surviving half
 //! of that concern, that clippy runs at all and gates before merge, is

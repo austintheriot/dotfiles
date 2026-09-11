@@ -1,5 +1,5 @@
-# Runs ~/tests/run-all.sh against a throwaway Linux HOME, so the suite's side
-# effects never touch the developer's machine.
+# Runs the cargo test suite against a throwaway Linux HOME, so the suite's
+# side effects never touch the developer's machine.
 #
 # The suite mutates $HOME by design: it writes fixture git repos, spawns tmux
 # sessions on the default tmux server, and -- before the install-path fix in
@@ -92,7 +92,7 @@ RUN cargo build --release --locked --quiet
 FROM rust:1.94-slim-bookworm@sha256:cf9dd0ec73e75f827fe59123fff9dc65af1a1c8363c3c31ee8d7f8ad0b6a5fb2
 
 # The tools the suite shells out to. tmux and zsh are the load-bearing ones:
-# lib.sh drives real tmux sessions, and the converted zsh suites under
+# the tmux-tools tests drive real tmux sessions, and the zsh suites under
 # crates/config-cli/tests spawn a real zsh (zsh_git_widgets.rs sources the
 # widget file in one, and the zshrc_* suites load the config itself). fzf,
 # ripgrep, and git are asserted as present by zsh_git_widgets.rs. dash is
@@ -276,24 +276,26 @@ WORKDIR /root/crates
 RUN cargo fetch --locked
 WORKDIR /root
 
-# notify.test.sh drives aerospace and osascript, both macOS-only, so it can
-# never pass here. Removing it is honest: run-all.sh globs tests/*.test.sh,
-# so a skip-by-absence keeps the runner's suite count accurate instead of
-# reporting a failure that means nothing on Linux.
-RUN rm -f /root/tests/notify.test.sh
 
 # `docker run` with no arguments runs the Rust suite and exits with its
 # status, which is what makes this usable from a pre-push hook or CI. Extra
 # arguments are passed through to cargo, so a narrower run is
 # `docker run --rm dotfiles-tests --test container_image`.
 #
-# The entrypoint runs the RUST suite only, and that is a deliberate narrowing
-# rather than an oversight. run-all.sh also drove the python unit tests and a
-# clippy leg; both keep their own gates elsewhere (test-suite.yml runs them on
-# the runner, and tests/rust-checks.sh runs clippy against the pushed ref), so
-# neither loses coverage by being absent from this image. What this image is
-# uniquely for is the Docker-only defects the host run missed, and every one
-# of those lives in a suite that is now Rust.
+# The entrypoint runs the cargo suite only, and that is a deliberate narrowing
+# rather than an oversight. The deleted shell runner also drove the python
+# unit tests and a clippy leg; both keep their own gates elsewhere
+# (test-suite.yml runs them on the runner, and tests/rust-checks.sh runs
+# clippy against the pushed ref), so neither loses coverage by being absent
+# from this image. What this image is uniquely for is the Docker-only defects
+# the host run missed, and every one of those lives in a test that is now
+# Rust.
+#
+# notify.rs is macOS-only (aerospace and osascript) and takes the skip path
+# here rather than being deleted from the image, which is what the shell
+# runner needed: it globbed tests/*.test.sh, so the macOS-only suite had to be
+# removed from the tree to keep its suite count honest. cargo needs no such
+# surgery.
 #
 # `cd` rather than --manifest-path, for the reason given at the build-time
 # compile above: the pin applies only from inside the tree that declares it.

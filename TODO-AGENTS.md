@@ -231,11 +231,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   fixed and the builder is not. The pin has been declared but not applied
   there since it was written.
 
-- `tests/pre-push:217-219` says "the runtime stage is Rust-free by design, so
-  `command -v cargo` is correctly false inside it and run-all.sh skips the
-  Rust leg." That stopped being true in `70272c37`. Left because the file was
-  outside the changing agent's scope.
-
 - Three pre-existing container failures, newly visible because cargo had
   never run in that image:
     - `config_manifest_lifecycle::config_build_installs_and_stamps` needs a
@@ -251,13 +246,6 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
       cargo's parallel harness. Green single-threaded, and it names a
       different test each run, so it is a race rather than a defect in one
       test.
-
-- `config test` now recurses one level inside the container: it invokes
-  `run-all.sh`, which now finds cargo and runs the whole suite.
-  `container_image.rs`'s module docs already warn that "a build here would
-  recurse"; the recursion is live through `config test` rather than through
-  Docker. This resolves itself when `run-all.sh` is deleted, but confirm it
-  rather than assuming.
 
 # QUESTIONS (leave until queried)
 
@@ -435,23 +423,26 @@ aws/tap` and merged 2026-08-11, but the change has not reached
   full suite on `macos-latest`, a real macOS VM on Apple hardware, licensed,
   with Homebrew preinstalled. All 16 suites pass there, and no tmux suite
   flakes, because a fresh runner never loads `.config/tmux/tmux-common.conf`.
-- Isolate the test suite onto its own tmux server. `tests/lib.sh` calls bare
-  `tmux`, so every tmux suite runs on the live server -- currently 23 windows,
+- Isolate the test suite onto its own tmux server. Some tmux tests still call
+  bare `tmux`, so they run on the live server -- currently 23 windows,
   an attached client, and 6 global `after-*` hooks that fire
   `.scripts/tmux-update-window-names.sh` via `run-shell -b` (asynchronous).
   Those background invocations race the tests' own synchronous runs against
-  the tests' own windows. `tmux-update-window-names.test.sh` fails about 25%
-  of the time on the host (measured 5/20 runs) and 0/12 in the container,
+  the tests' own windows. The window-naming tests (now
+  `crates/tmux-tools/tests/update_window_names.rs`) failed about 25% of the
+  time on the host (measured 5/20 runs against the shell suite) and 0/12 in
+  the container,
   which is a pristine server with no client, no windows, and no hooks. Three
   different assertions rotate through the failure, which is why it reads as
   random: `switching active pane updates the name`, `empty name restores the
 labelled name`, `owned window follows branch changes`.
-  Proposed fix: point `TMUX_TMPDIR` at the per-run fixture directory and use a
-  dedicated socket (`tmux -L dotfiles-test-$$`) in `lib.sh`, giving the host
-  the isolation the container already has. Deferred because it touches
-  `lib.sh`, which every tmux suite depends on, so it wants a deliberate pass
-  rather than a drive-by. Not urgent: the pre-push gate runs in the container,
-  so this flake cannot block a push.
+  Proposed fix: route every remaining bare `tmux` call through the private
+  socket wrapper in `crates/tmux-tools/tests/support/mod.rs`, which already
+  sets `TMUX_TMPDIR` and a dedicated `-L` socket for the tests that use it.
+  That gives the host the isolation the container already has. Deferred
+  because it touches shared test support that every tmux test depends on, so
+  it wants a deliberate pass rather than a drive-by. Not urgent: the pre-push
+  gate runs in the container, so this flake cannot block a push.
   Two failed fix attempts, recorded so they are not repeated:
   (1) retrying the state read (2 attempts, then 5 with a 20ms backoff) did not
   help -- 4/20 then 6/20;

@@ -67,10 +67,8 @@ return {
       -- to recognise. Strings, comments and types still resolve through the
       -- overlay and the LSP, so a buffer looks nearly right while `const`,
       -- `await`, `export` and `return` render as plain foreground text.
-      -- Measured: 0 captures before this line, 46 after, on the same buffer.
-      vim.opt.runtimepath:append(
-        vim.fn.stdpath('data') .. '/lazy/nvim-treesitter/runtime'
-      )
+      -- Measured: 0 captures before this line, 47 after, on the same buffer.
+      vim.opt.runtimepath:append(vim.fn.stdpath 'data' .. '/lazy/nvim-treesitter/runtime')
 
       -- `main` ships no FileType handler, so starting the highlighter is
       -- config work now. Both of the guards below are load-bearing:

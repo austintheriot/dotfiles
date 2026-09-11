@@ -161,11 +161,45 @@ fn shell_scripts(root: &Path) -> Vec<String> {
         }
     }
     let mut found = Vec::new();
-    for directory in [".scripts", "tests", ".claude/hooks"] {
+    // The same set `ls-files` returns, because the two paths must agree.
+    //
+    // `tests/run-in-docker.sh` builds the container tree with `git archive`,
+    // so there is no repository there and `ls-files` cannot run: the walk is
+    // the container's only discovery path, and the container is the strictest
+    // gate this repo has.
+    //
+    // The list read `.scripts`, `tests`, `.claude/hooks` and so missed every
+    // script under `deps/` plus `setup.sh` at the root: ten files, which is
+    // exactly the set the rooted-pathspec fix in `f28cfed2` added on the host.
+    // Left as it was, the host would lint 24 and the container 14 against one
+    // floor, and the container would fail on a gap rather than on a defect.
+    for directory in [".scripts", "tests", ".claude/hooks", "deps"] {
         collect_scripts(root, &root.join(directory), &mut found);
     }
+    // Root-level scripts are not in any of those directories. `setup.sh` is
+    // the bootstrap entry point and had never been linted by either path.
+    collect_root_scripts(root, &mut found);
     found.sort();
     found
+}
+
+/// The `*.sh` files directly in the repository root.
+fn collect_root_scripts(root: &Path, found: &mut Vec<String>) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.is_file()
+            && path
+                .extension()
+                .is_some_and(|extension| extension == "sh")
+            && let Ok(relative) = path.strip_prefix(root)
+            && let Some(name) = relative.to_str()
+        {
+            found.push(name.to_string());
+        }
+    }
 }
 
 fn collect_scripts(root: &Path, directory: &Path, found: &mut Vec<String>) {

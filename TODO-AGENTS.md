@@ -190,6 +190,30 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   as mirrors. Two implementations of one contract is exactly the shape that
   drifts, so this wants collapsing once the lockfile is free.
 
+- `config doctor` requires the repository root as its working directory.
+  Found 2026-09-10 converting `config.test.sh`, and reported rather than
+  fixed because a conversion must not change its subject.
+  It gathers the expected side with `git add -- crates` through a temp index,
+  and that pathspec resolves against the current directory. Verified: from
+  `~/crates` it prints
+  `config doctor: git add -- crates failed: fatal: pathspec 'crates' did not
+  match any files`, and from `$HOME` it is correctly silent.
+  The old shell suite always ran from `$HOME` and so never saw it. A cargo
+  test runs from `crates/`, which is how it surfaced. It fails closed, so
+  this is a misleading diagnosis rather than a hole, and the fix is to
+  resolve the pathspec against the repo root rather than the cwd.
+
+- `config build` installs over the live `~/.local/bin/config-cli`, and on
+  macOS that invalidates the running image's code signature so the kernel
+  SIGKILLs it. Observed 2026-09-10: the binary exited **137** printing
+  nothing and kept doing so on every later run until it was re-signed with
+  `codesign -f -s -`. `codesign -v` still reported the file as valid, so the
+  symptom reads as "the binary silently prints nothing" rather than as a
+  signing problem, which cost a confusing full-suite failure to diagnose.
+  A rename-into-place (write to a temp path in the same directory, then
+  `rename(2)`) instead of an in-place write avoids it, and is the standard
+  fix for replacing a running executable.
+
 # QUESTIONS (leave until queried)
 
 - Should the mac/linux two-branch model collapse to one branch?

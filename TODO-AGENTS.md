@@ -162,6 +162,83 @@ Take the first item from this list. Mark it as claimed in one commit, do the wor
   class is an environment quietly compensating for a gap in the engine, so
   a setup that is documented but unverified will drift the same way.
 
+- Fix the flaky network on pop-os. Diagnosed 2026-09-11 from the
+  latin-books agent transcripts plus the journal; no fix applied yet, and
+  every path involved sits OUTSIDE this worktree, which is the point of
+  recording it here.
+  THE SYMPTOM, so it is recognisable next time: long agent runs die with
+  `API Error: Can't reach the API server -- check your internet or DNS
+  (ENOTFOUND)`. 22 occurrences in
+  `.claude/projects/-home-austin-Code-latin-books/e99e7d38-119a-4095-aa55-0025e93f6b91.jsonl`,
+  clustered 2026-09-10 13:05 to 15:00 and 2026-09-11 09:56 to 12:15 local.
+  It is a resolver failure, not a connectivity failure. The two are worth
+  keeping apart because they have different fixes.
+  RULED OUT, so it is not re-tested: suspend. The owner's hypothesis was
+  that the machine sleeps after about 24h of inactivity. It does not. The
+  current boot started 2026-09-07 22:28 and the last suspend entry in the
+  journal is 2026-09-07 20:36, before it. `sleep-inactive-ac-type` is
+  `nothing`. The failures also land DURING active agent work, not after
+  idle periods.
+  THREE CAUSES, measured, in order of impact:
+    1. The Wi-Fi ping-pongs between the two 5 GHz BSSIDs the router
+       advertises, on channels 52 and 136. 188 roams in this boot, in
+       bursts of 51 to 61 per hour. Signal sat at -60 to -68 dBm and the
+       TX rate was pinned at 29.2 Mbps for days before recovering to 245
+       Mbps. Every roam drops packets and restarts DHCP. The BSSIDs are
+       deliberately not written down here; this repo is public and an
+       SSID/BSSID pair geolocates the house.
+    2. `systemd-resolved` has exactly one upstream, the ISP-supplied
+       router, and no fallback. It flips between the UDP and TCP feature
+       sets about 490 times an hour while an agent is running, which is
+       one every 7 seconds. Consumer gateways proxy DNS through a shallow
+       request table, so a run that opens many parallel connections
+       saturates it. `getaddrinfo` returns ENOTFOUND in the gap.
+    3. `wifi.powersave = 3` is set. Its own entry is below.
+  THE FIX WORTH DOING FIRST is not a configuration change at all: the
+  onboard Ethernet reports `carrier 0`. The cable is unplugged on a
+  desktop that does not move. Plugging it in deletes causes 1 and 3
+  outright.
+  The two config changes, if it stays on Wi-Fi:
+    - Give the resolver fallbacks so a router stall is not a hard failure:
+      `nmcli connection modify <ssid> ipv4.dns "1.1.1.1 8.8.8.8"
+      ipv4.ignore-auto-dns yes`.
+    - Pin the BSSID to stop the ping-pong: `802-11-wireless.bssid`. Note
+      the cost before doing it: a pinned client will not fail over if that
+      radio goes down.
+  ONE THING DELIBERATELY NOT FIXED: `wlo1` has no global IPv6 address,
+  only link-local, while `api.anthropic.com` returns a AAAA record. Node's
+  Happy Eyeballs absorbs this, so it costs connect latency rather than
+  failures. Recorded because it looks alarming and is not the bug.
+  WHY THIS IS HARD TO VERIFY: at the time of measurement the link was
+  healthy. 60 pings to the router and 60 to 1.1.1.1 both returned 0% loss,
+  and 10 `dig` calls against the router all answered under 30ms. The fault
+  is intermittent, so "it works now" proves nothing and the journal is the
+  only reliable witness. The two greps that find it again:
+  `journalctl -b 0 | grep 'degraded feature set'` and
+  `journalctl -b 0 -k | grep 'for new auth'`.
+  THE REPO ANGLE, which is why this is a TODO and not a note: none of
+  `/etc/NetworkManager/conf.d/`, the connection profile, or the resolver
+  config is tracked or verified by anything here. This is the same shape
+  the Claude-settings entry above names, an environment quietly
+  compensating for a gap in the engine. Decide whether the network
+  configuration of a machine belongs in the declared setup at all before
+  reaching for a way to track it.
+
+- Remove the Wi-Fi power saving default on pop-os.
+  `/etc/NetworkManager/conf.d/default-wifi-powersave-on.conf` sets
+  `wifi.powersave = 3`, which is "enable". The file is dated 2022-06-09 and
+  ships with the distribution, so nothing here chose it. On a desktop it
+  buys no battery and costs latency and packet loss on `iwlwifi`, and it is
+  cause 3 of the flaky-network entry above.
+  The change is to write `wifi.powersave = 2` into that same file and
+  restart NetworkManager. Writing 2 rather than deleting the file is
+  deliberate: an empty conf.d drop-in would let a distribution upgrade
+  restore the original.
+  Not tracked by this repo today, and the path is outside the worktree, so
+  a fresh machine gets the distribution default back. Same decision as the
+  entry above about whether machine network configuration belongs in the
+  declared setup.
+
 # QUESTIONS (leave until queried)
 
 - Should the mac/linux two-branch model collapse to one branch?

@@ -327,6 +327,50 @@ A deletion that leaves the hooks calling a missing script fails open, which is t
 
 ---
 
+### Task 5: DONE, classification complete (`0fe74a49`)
+
+All three Group 5 suites classified by reading every assertion.
+
+**`run-all-filter` (28 assertions): entirely harness-specific.** Every one
+tests `run-all.sh`'s suite-name filter: a bare run runs every suite, a named
+suite runs only itself, the progress count reflects the filter, each accepted
+spelling works, an unknown name exits non-zero and runs nothing. Cargo's own
+`--test` selection and filter arguments provide that, and asserting cargo's
+behaviour would be testing the toolchain. **Dies with the harness in Task 6.**
+
+**`skip-reporting` (35 assertions): all but one harness-specific.** They
+assert `lib.sh`'s tally and `run-all.sh`'s verdict line: a skip does not fail
+a suite, the summary counts it, a mixed suite counts both, a skipping suite
+still reads PASS with "skipped" on its verdict line. Those mechanisms are
+cargo's and the gate's now.
+
+**The one property that had to survive** is that a skip is *reported*. The
+Rust side asserted the mechanism (a line is written, lines accumulate, an
+unconfigured log is a no-op) and nothing asserted that `rust-checks.sh` reads
+the log and prints the count with its reasons. That half moved to
+`crates/dotfiles-test-support/tests/skip_log.rs` in `0fe74a49`, running the
+gate's own reporting block so a change to its wording or its `sed` breaks the
+test. Proven load-bearing: dropping the reasons turns that test alone red.
+It also asserts silence on an empty log, since a trailing "0 skipped" every
+run is noise a reader learns to scan past.
+
+**`python-interpreter` (moved here from Group 1): entirely harness-specific.**
+Every assertion is about `PYTHON_BIN`, which after `rust-gate` converted
+exists only in `lib.sh`, `run-all.sh` and the suite itself. **Dies with the
+harness.**
+
+So Task 6 deletes all three shell suites, and the surviving property is
+already asserted in Rust rather than being carried at deletion time.
+
+**A defect found during the classification, fixed separately (`18b43dc8`).**
+`skip-reporting.test.sh` called `finish` at line 229 with five assertions
+below it, so its colour and piped-output checks printed but could never fail
+the suite. The suite written to guarantee a silent skip cannot ship had five
+silent assertions of its own. Third instance of that shape today; found by
+sweeping every surviving suite after `deps-manifest` showed the same thing.
+
+---
+
 ### Task 7: Group 6, `nvim-mason-runtimes` (53 assertions)
 
 Omitted from this plan's first draft. Placed after Task 4 because it shares

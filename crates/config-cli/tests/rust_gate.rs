@@ -314,10 +314,18 @@ fn rust_checks_with_stub_cargo(body: &str) -> (Option<i32>, String) {
 /// death the script read Ctrl-C as "cargo test failed" and went straight into
 /// a fresh clippy build that kept writing to the terminal for another 48
 /// seconds after the shell prompt returned.
+///
+/// The stub exits 130 rather than signalling itself. A disposition of
+/// SIG_IGN is inherited across exec and `trap - INT` does not restore it, so
+/// a stub that ran `kill -INT $$` was silently a no-op wherever a parent
+/// ignored SIGINT. cargo's harness does exactly that during a full-suite
+/// run, which made this test pass alone and fail under `cargo test`. 130 is
+/// the value a shell reports for a SIGINT death, and the status is the only
+/// thing the branch under test reads.
 #[test]
 fn an_interrupt_during_cargo_test_stops_the_gate() {
     let (code, output) = rust_checks_with_stub_cargo(
-        "if [ \"$1\" = clippy ]; then echo CLIPPY_RAN; exit 0; fi\nkill -INT $$",
+        "if [ \"$1\" = clippy ]; then echo CLIPPY_RAN; exit 0; fi\nexit 130",
     );
     assert!(
         !output.contains("CLIPPY_RAN"),
@@ -336,7 +344,7 @@ fn an_interrupt_during_cargo_test_stops_the_gate() {
 #[test]
 fn an_interrupt_during_clippy_stops_the_gate() {
     let (code, output) = rust_checks_with_stub_cargo(
-        "if [ \"$1\" = clippy ]; then kill -INT $$; fi\nexit 0",
+        "if [ \"$1\" = clippy ]; then exit 130; fi\nexit 0",
     );
     assert_eq!(
         code,

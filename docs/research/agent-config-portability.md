@@ -68,7 +68,7 @@ read explicitly by an agent naming the file path in prose.
 
 1. **No Claude API coupling in any agent body.** Checked all 80 for
    `Task(`, `subagent_type`, `Agent tool`, `SlashCommand`, `TodoWrite`:
-   zero hits. The panel coordinates through `rules/panel-contract.md`,
+   zero hits. The panel coordinates through `.claude/rules/panel-contract.md`,
    a markdown protocol in this repo, not a platform feature. 62 agents
    cite it.
 
@@ -79,8 +79,8 @@ read explicitly by an agent naming the file path in prose.
 3. **Only 5 tracked files mention "Claude Code", and 4 mention it as
    subject matter.** `agent-sandboxing.md` and `agent-orchestration.md`
    already treat Claude Code, Codex and Cursor as peers. The genuine
-   machinery is `settings.json`, `hooks/notify.sh`, and one line in
-   `skills/monitor-ci/SKILL.md`.
+   machinery is `settings.json`, `.claude/hooks/notify.sh`, and one line in
+   `.claude/skills/monitor-ci/SKILL.md`.
 
 ## What each tool reads natively
 
@@ -127,8 +127,9 @@ conversion. Its docs call `.agents/skills/` "the recommended standard".
   this repo's instruction file by configuration, no symlink.
 - **Its skills are already this format.** `.codex/skills/<name>/SKILL.md`
   with frontmatter `name` + `description`, byte-identical to the 28
-  skills here. The `agents/openai.yaml` sidecar beside it is optional
-  interface metadata.
+  skills here. The sidecar beside it,
+  `.codex/skills/<name>/agents/openai.yaml`, is optional interface
+  metadata.
 - **It ships a first-party migrator** (`codex-rs/external-agent-migration/`)
   that reads `.claude/settings.json` and converts agents, skills, MCP
   servers and commands.

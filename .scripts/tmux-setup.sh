@@ -47,13 +47,18 @@ setup_code_layout() {
 # Windows are left unnamed so tmux-update-window-names.sh can name them after
 # their git branch. Windows that a keybinding selects by name get a @wname_label
 # instead, which keeps a stable prefix in front of the branch.
+#
+# The trailing colon in `-t $SESSION_NAME:` is load-bearing. A bare `-t code`
+# also matches a window whose name starts with "code", and the naming hook
+# above names every worktree window "code/<branch>". tmux then reads the
+# target as that window and new-window fails with "index N in use".
 create_window() {
     local window=$1 dir=$2 label=${3:-}
 
     if [ "$window" = "1" ]; then
         tmux new-session -d -s $SESSION_NAME -c "$dir"
     else
-        tmux new-window -t $SESSION_NAME -c "$dir"
+        tmux new-window -t $SESSION_NAME: -c "$dir"
     fi
 
     [ -z "$label" ] || tmux set -w -t $SESSION_NAME:$window @wname_label "$label"

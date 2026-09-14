@@ -42,8 +42,15 @@ ref=${1:-HEAD}
 GIT_DIR_PATH="${GIT_DIR:-$HOME/.cfg}"
 WORK_TREE_PATH="${GIT_WORK_TREE:-$HOME}"
 
+# `-C` so a relative pathspec resolves against the work tree rather than the
+# caller's working directory. `git archive HEAD crates` matched nothing
+# whenever this script ran from anywhere but $HOME, which git reports as
+# "pathspec 'crates' did not match any files"; the snapshot was then empty
+# and BOTH checks failed for a reason unrelated to the code. `:/crates` is
+# not the fix here: git archive rejects that magic with "matches files
+# outside the current directory".
 git_cmd() {
-    git --git-dir="$GIT_DIR_PATH" --work-tree="$WORK_TREE_PATH" "$@"
+    git -C "$WORK_TREE_PATH" --git-dir="$GIT_DIR_PATH" --work-tree="$WORK_TREE_PATH" "$@"
 }
 
 # Loud, and exit 0. A machine with no Rust toolchain can still push a shell
@@ -157,7 +164,22 @@ export DOTFILES_SKIP_LOG
 : > "$DOTFILES_SKIP_LOG"
 
 printf 'rust-checks: cargo test (%s)\n' "$ref"
-if ! run_in_snapshot cargo test --locked --quiet; then
+run_in_snapshot cargo test --locked --quiet || test_status=$?
+if [ "${test_status:-0}" -ne 0 ]; then
+    # A signal is not a problem to report. Both checks run on a real failure
+    # so one push names every problem, but Ctrl-C is the developer asking for
+    # the run to STOP, and it arrives as the same non-zero status. Without
+    # this branch the interrupt read as "cargo test failed" and the script
+    # went straight into a fresh multi-minute clippy build that kept writing
+    # to the terminal long after the prompt came back.
+    #
+    # A command killed by a signal exits 128 + the signal number, so anything
+    # above 128 is a death rather than a verdict. Re-reported as-is, so the
+    # caller sees 130 and can tell an interrupt from a failing test.
+    if [ "$test_status" -gt 128 ]; then
+        printf 'rust-checks: interrupted (%s), stopping\n' "$test_status" >&2
+        exit "$test_status"
+    fi
     printf 'rust-checks: cargo test failed\n' >&2
     status=1
 fi
@@ -182,7 +204,12 @@ if [ -s "$DOTFILES_SKIP_LOG" ]; then
 fi
 
 printf 'rust-checks: cargo clippy (%s)\n' "$ref"
-if ! run_in_snapshot cargo clippy --locked --all-targets -- -D warnings; then
+run_in_snapshot cargo clippy --locked --all-targets -- -D warnings || clippy_status=$?
+if [ "${clippy_status:-0}" -ne 0 ]; then
+    if [ "$clippy_status" -gt 128 ]; then
+        printf 'rust-checks: interrupted (%s), stopping\n' "$clippy_status" >&2
+        exit "$clippy_status"
+    fi
     printf 'rust-checks: cargo clippy failed\n' >&2
     status=1
 fi

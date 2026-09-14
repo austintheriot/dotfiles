@@ -269,3 +269,101 @@ fn the_lint_policy_is_declared_and_every_member_opts_in() {
         );
     }
 }
+
+// --- an interrupt stops the gate ------------------------------------------
+
+/// A stub `cargo` on PATH, and the script run against it.
+///
+/// The script's own `$ref` handling is exercised by the tests above. What is
+/// under test here is only the branch that reads the status cargo returns, so
+/// the stub decides that status and the real toolchain never runs.
+fn rust_checks_with_stub_cargo(body: &str) -> (Option<i32>, String) {
+    let sandbox = tempfile::Builder::new()
+        .prefix("rust-checks-signal")
+        .tempdir_in("/tmp")
+        .expect("a temporary directory is creatable");
+    let stub = sandbox.path().join("cargo");
+    std::fs::write(&stub, format!("#!/bin/sh\n{body}\n")).expect("the stub is writable");
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755))
+            .expect("the stub is executable");
+    }
+
+    let inherited = std::env::var("PATH").unwrap_or_default();
+    let output = Command::new(repo_root().join("tests/rust-checks.sh"))
+        .arg("HEAD")
+        .env("PATH", format!("{}:{inherited}", sandbox.path().display()))
+        .output()
+        .expect("rust-checks.sh runs");
+
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    (output.status.code(), combined)
+}
+
+/// Ctrl-C during `cargo test` stops the gate instead of starting clippy.
+///
+/// THE INTERRUPT ASSERTION. The script deliberately runs both checks when one
+/// fails, so a single push names every problem. A signal is not a problem to
+/// report: it is the developer asking for the run to stop, and it arrives as
+/// the same non-zero status a failing test does. Without a test for signal
+/// death the script read Ctrl-C as "cargo test failed" and went straight into
+/// a fresh clippy build that kept writing to the terminal for another 48
+/// seconds after the shell prompt returned.
+#[test]
+fn an_interrupt_during_cargo_test_stops_the_gate() {
+    let (code, output) = rust_checks_with_stub_cargo(
+        "if [ \"$1\" = clippy ]; then echo CLIPPY_RAN; exit 0; fi\nkill -INT $$",
+    );
+    assert!(
+        !output.contains("CLIPPY_RAN"),
+        "an interrupted cargo test still started clippy, so Ctrl-C leaves a \
+         build running after the prompt returns: {output}"
+    );
+    assert_eq!(
+        code,
+        Some(130),
+        "an interrupted run did not report 130, so a caller cannot tell an \
+         interrupt from a failing test: {output}"
+    );
+}
+
+/// The same for an interrupt during the second check.
+#[test]
+fn an_interrupt_during_clippy_stops_the_gate() {
+    let (code, output) = rust_checks_with_stub_cargo(
+        "if [ \"$1\" = clippy ]; then kill -INT $$; fi\nexit 0",
+    );
+    assert_eq!(
+        code,
+        Some(130),
+        "an interrupt during clippy did not report 130: {output}"
+    );
+}
+
+/// The interrupt handling must not cost the both-checks-run behaviour.
+///
+/// The counterpart to the assertions above, and the reason they test for a
+/// status above 128 rather than for any non-zero status. A genuinely failing
+/// test still has to let clippy run, or one push stops naming every problem
+/// and the developer discovers them one at a time instead.
+#[test]
+fn a_failing_test_still_runs_clippy() {
+    let (code, output) = rust_checks_with_stub_cargo(
+        "if [ \"$1\" = clippy ]; then echo CLIPPY_RAN; exit 0; fi\nexit 1",
+    );
+    assert!(
+        output.contains("CLIPPY_RAN"),
+        "a failing cargo test skipped clippy, so one push no longer reports \
+         every problem: {output}"
+    );
+    assert_eq!(
+        code,
+        Some(1),
+        "a failing test did not block the push: {output}"
+    );
+}

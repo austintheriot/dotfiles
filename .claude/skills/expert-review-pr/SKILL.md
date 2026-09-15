@@ -63,6 +63,18 @@ Severity floor: `blocker` and `major` only. `minor`, `nit`, and `insight` are dr
 
 Confidence floor for posting: 70. A finding whose body says the reporter could not determine reachability is dropped rather than posted as a question, at any severity. Unresolved speculation posted to another person's pull request costs them time and costs the rest of the review its credibility.
 
+### Verify every survivor against the code
+
+Before a finding clears the filter, re-read the lines it cites and confirm the trigger it describes is the trigger the code has. A confidence number is a claim, not evidence. A 90 does not survive a fresh read that contradicts it.
+
+Check these specifically, because they are where confident findings fail:
+
+- **Stated durations and windows.** A claimed lost-update window of "hundreds of milliseconds" that the code shows is one lock release is a different finding, and usually not one.
+- **Stated races between timers.** Two periodic jobs only race when their intervals and phases allow it. Read the actual values before accepting the race.
+- **Maintenance hazards dressed as defects.** "A future field would be dropped here" fails the defect test when every current call site is correct. Drop it.
+
+A finding whose trigger does not survive the re-read is dropped, whatever its severity or confidence.
+
 ### Worked example
 
 Given a panel that returned: a non-transactional token rotation (blocker, 91), a quota check inside a per-file loop with load-test numbers attached (major, 84), a destructuring style preference (minor, 77), a naming inconsistency (nit, 88), trailing whitespace (nit, 95), a module-wide refactor suggestion (insight, 70), and a possible partial-write path the reporter could not determine was reachable (major, 52):
@@ -135,6 +147,8 @@ gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
   --jq '[.[] | select(.state=="PENDING" and .user.login=="<viewer>")] | {count: length, ids: [.[].id]}'
 ```
 
+This check goes stale. A human can start a review between the check and the post, so treat a `422` saying `User can only have one pending review per pull request` on the create call as a pending review that appeared mid-run, not as an error to retry. Switch to the append path below.
+
 **If a pending review exists**, it may contain comments the user wrote by hand. Fetch its comments, show the user what is already staged, and ask whether to append to it or create a separate review. Do not merge into a hand-written draft without asking.
 
 **If none exists**, create the review with all comments in one call. A single POST with a `comments` array and `event: "COMMENT"` both creates and submits:
@@ -160,6 +174,55 @@ Where `review.json` is:
 Build the JSON with a heredoc or `jq` rather than inline shell escaping; review bodies contain backticks, quotes, and newlines that break naive quoting.
 
 After posting, print the review URL.
+
+### Appending to a pending review
+
+REST cannot add a comment to an existing pending review. Do not spend calls rediscovering this:
+
+- `POST repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}/comments` returns `404`. It does not add comments to a pending review.
+- `POST repos/{owner}/{repo}/pulls/{pr}/comments` returns `422` with `user_id can only have one pending review per pull request`. It tries to create its own review instead of joining the pending one.
+
+Use GraphQL. First get the pending review's node ID:
+
+```bash
+gh api graphql -f query='query {
+  repository(owner:"OWNER", name:"REPO") {
+    pullRequest(number:NNN) {
+      reviews(last:5, states:PENDING) {
+        nodes { id state author { login } }
+      }
+    }
+  }
+}'
+```
+
+Then append each finding as a thread on that review with `addPullRequestReviewThread`, passing `pullRequestReviewId`, `path`, `line`, `side: RIGHT`, and `body`. One mutation per comment.
+
+**Read the human's existing comments first.** Fetch them before writing anything, so you do not restate a point they already made and do not touch what they wrote:
+
+```bash
+gh api graphql -f query='query {
+  repository(owner:"OWNER", name:"REPO") {
+    pullRequest(number:NNN) {
+      reviews(last:5, states:PENDING) {
+        nodes {
+          comments(first:20) { nodes { id databaseId path body } }
+        }
+      }
+    }
+  }
+}'
+```
+
+Pending-review comments are invisible to REST: `GET repos/{owner}/{repo}/pulls/comments/{comment_id}` returns `404` for one that belongs to an unsubmitted review, so the read-modify-write `PATCH` cycle does not work. Edit with the `updatePullRequestReviewComment` mutation, passing `pullRequestReviewCommentId` and the new `body`. That ID is the GraphQL node `id` (a `PRRC_...` string), not the `databaseId`. Passing `databaseId` fails.
+
+**Never write the review body.** On someone else's pending review the body is theirs, and text you put there publishes under their name. Leave it untouched and leave it empty if it is empty.
+
+**Attribution goes on each comment you author.** When the repository defines an AI-attribution convention, the body is not available to carry it, so every inline comment you write carries the prefix on its own line, then a blank line, then the finding. Never add the prefix to a comment the human wrote.
+
+### The summary as an extra inline comment
+
+When the body is unavailable, the paragraph that would have gone in it becomes one more inline comment. Anchor it to the changed line the findings are most about (the shared type, the shared call site, the shared branch). Open it with a sentence saying it summarizes the other comments, so a reader does not count it as one more defect.
 
 ## Clean runs
 
@@ -192,6 +255,7 @@ Any of these means stop and re-apply the filter or the voice rules:
 - Do not post without an approval that answers the question you asked.
 - Do not post a finding whose anchor you could not verify against the patch.
 - Do not append to someone's hand-written pending review without asking.
+- Do not write into another person's review body, and do not edit or re-prefix the comments they wrote.
 - Do not apply fixes or push commits. This skill reads and comments.
 - Do not report a finding count in the posted body. The comments speak for themselves.
 - Do not re-post a finding the pull request already carries as a comment. Fetch existing comments and match on the defect, not the location.

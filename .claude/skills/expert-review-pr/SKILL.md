@@ -110,7 +110,15 @@ The posted review says nothing about how it was produced. No mention of a panel,
 
 The review contains findings about the code and nothing about itself.
 
+**This rule is violated most often in a comment's opening clause**, where a scene-setting phrase feels like orientation rather than internals. Every one of these is a violation: "Test coverage pass.", "A second review pass focused on X.", "Second pass here.", "From the coverage review,". Delete the clause and open on the finding. A comment that begins by saying what kind of review it is has already broken the rule.
+
+The same applies across comments. Do not number or rank findings against each other in the posted text ("the first group", "the cheapest of the three", "my other four comments"), and do not tell the author that a second round happened. Each comment stands on its own defect. The one exception is the summary comment described below, which may say it summarizes the others, because a reader needs that to not count it as another defect.
+
+**Technique is not process.** Naming how you obtained evidence about the code is allowed, and often makes a finding credible: "deleting this line leaves the suite green at 1213 passed", "I could not get a mutant past this latch", "changing `??=` to `=` and re-running the suite". Those are facts about the code and its tests. Naming how the review was organized is not: passes, rounds, panels, lenses, agents, severities, confidence scores. Evidence in, org chart out.
+
 When naming what was examined (clean runs only, below), name the concern in plain language: "concurrency and race conditions", "authentication and access control", "input validation", "query patterns and load behavior". Never the internal name of a lens or agent.
+
+Before posting, re-read the first sentence of every comment on its own. If it describes the review rather than the code, rewrite it.
 
 ## Body shape
 
@@ -247,6 +255,8 @@ Any of these means stop and re-apply the filter or the voice rules:
 - A body sentence containing "approve", "requesting changes", "LGTM", "before merge", or "ship it".
 - A list of what was examined on a run that has findings.
 - Any sentence describing how the review was produced.
+- **A comment whose first clause names a kind of review rather than a defect**: "Test coverage pass.", "Second pass.", "A review focused on X." Read every comment's opening sentence alone; this is where internals leak.
+- A comment that positions itself against the others: "the first group", "the cheapest of the three", "my other four comments", "a second pass found".
 - The word "I" attached to a preference rather than an observation.
 
 ## What NOT to do

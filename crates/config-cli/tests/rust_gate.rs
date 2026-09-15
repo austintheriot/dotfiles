@@ -294,6 +294,14 @@ fn rust_checks_with_stub_cargo(body: &str) -> (Option<i32>, String) {
     let output = Command::new(repo_root().join("tests/rust-checks.sh"))
         .arg("HEAD")
         .env("PATH", format!("{}:{inherited}", sandbox.path().display()))
+        // Pinned, never inherited. Git exports GIT_DIR and GIT_WORK_TREE
+        // into a hook, and the script honours them on purpose, so a run
+        // under pre-push (or from any shell that exports them) resolved
+        // `HEAD` against the wrong repository, failed the ref check, and
+        // exited 1 long before reaching the branch under test. The same
+        // trap is documented in ~/.claude/rules/dotfiles-tests.md.
+        .env("GIT_DIR", repo_root().join(".cfg"))
+        .env("GIT_WORK_TREE", repo_root())
         .output()
         .expect("rust-checks.sh runs");
 

@@ -1,6 +1,6 @@
 ---
 name: expert-review-pr
-description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff, keeps only findings that name a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that.
+description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants), holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that.
 ---
 
 # Expert Review PR
@@ -45,6 +45,24 @@ Read `~/.claude/skills/expert-review/SKILL.md` for those stages rather than reim
 
 Do not tell the subagents to self-filter for severity. They obey that literally and drop real bugs. The filter below is applied once, at synthesis, where the whole set is visible.
 
+## The test pass
+
+Every run makes a second, independent pass over the tests. It is not optional, and it does not depend on whether `test-coverage` was matched to a region in Stage 3.
+
+Run it in parallel with the Stage 5 dispatch, as its own `test-coverage` agent call. Independent means the test pass reasons about the change from scratch rather than reading the other lenses' output: it asks what this change can get wrong, then asks whether any test fails when it does.
+
+Give it this scope, in addition to the standard dispatch template:
+
+> Review this change for what the tests do not catch. For each in-scope behavior: the branches and error paths no test exercises, the boundary and edge-case inputs no test supplies, the states and orderings no test reaches, and the assertions that pass whether or not the behavior is correct. Also audit the tests the change adds or edits: a test that cannot fail, asserts on a mock instead of the behavior, or re-asserts the implementation is a gap wearing a test's name.
+>
+> Ground findings in execution rather than reading where you can. Run the suite. Run coverage tooling if the repository configures it. Mutate the source -- invert a condition, drop a guard, change a boundary, delete a line -- re-run the affected tests, and report the mutants that survive. A surviving mutant is evidence a real defect could ship; name the mutation and the tests that stayed green.
+>
+> Findings will be posted publicly to the author of this change. Report your full range; the synthesis stage filters.
+
+Mutation is a local experiment, not an edit to the change. Every mutation is reverted before the pass reports, and the working tree is left as it was found. Confirm that with `git status --porcelain` before the local summary; if the tree is dirty from the pass, restore it before going further.
+
+The test pass and the code passes can flag the same region. Keep both: one says the code has a defect, the other says nothing would catch it.
+
 ## The filter
 
 Apply this after synthesis, to the merged finding list.
@@ -58,6 +76,10 @@ Apply this after synthesis, to the merged finding list.
 Write all three out for each candidate before deciding. A finding you cannot state in that form does not go in the review.
 
 **Everything else is dropped.** Dropped means absent from the posted artifact: not inline, not in the body, not a question, not a forward-looking note, not an aside, not a parenthetical. A finding removed from the inline set and then mentioned in the body has not been dropped. This is the most common way the filter fails.
+
+**A coverage finding meets those three through the bug it would let through.** A missing test is not itself a defect, so a finding that stops at "this path is untested" is dropped, whatever its confidence. To survive, it must name the specific wrong behavior that reaches production because no test fails: the defect is that behavior, the trigger is the input or state that produces it, the consequence is what the user or operator gets. "The retry path has no test" is dropped. "Nothing fails when the retry path double-charges, because the only test asserts the mock was called" is posted. A surviving mutant, named with the mutation and the tests that stayed green, is the strongest form of this evidence.
+
+Percentages and line-coverage numbers are not findings. Neither is a missing test for code that cannot fail, nor a request for tests in general.
 
 Severity floor: `blocker` and `major` only. `minor`, `nit`, and `insight` are dropped as a class, whatever their confidence. A 95-confidence nit is still a nit. High confidence that something is cosmetic is not a reason to post it.
 
@@ -81,6 +103,10 @@ Given a panel that returned: a non-transactional token rotation (blocker, 91), a
 
 Two findings are posted. The token rotation and the quota loop. The other five appear nowhere in the review, including the refactor suggestion and the unreachable-path question.
 
+Given a test pass that returned: `refresh.ts` at 41% branch coverage (major, 88), no test for the rotation error path (major, 80), a suite that stays green when the expiry comparison flips from `<` to `<=` so an expired token is accepted for one more request (major, 86), and a new test that asserts `mockStore.set` was called rather than what was stored (major, 75):
+
+One finding is posted: the surviving `<=` mutant, because it names the behavior that ships. The percentage is dropped. The untested error path is dropped as written, and would post only if it named what goes wrong when that path runs. The assert-on-the-mock test is dropped unless the behavior it fails to check is itself wrong.
+
 ## Local summary
 
 Before posting anything, print the complete intended review in chat:
@@ -90,6 +116,8 @@ Before posting anything, print the complete intended review in chat:
 - Every inline comment, each with its file, line, and full text.
 - Every `<details>` block.
 - A one-line count: how many findings the panel produced, and how many cleared the filter.
+
+The test findings are summarized here with the rest, in one list, ordered with them by severity. Do not print them as a separate section, do not hold them back for a later message, and do not ask about them separately. One summary, one question, one post.
 
 Then ask whether to post, and wait for the answer.
 
@@ -109,6 +137,8 @@ The posted review is Claude's own writing, and reads that way.
 The posted review says nothing about how it was produced. No mention of a panel, experts, lenses, agents, subagents, skills, severities, confidence scores, dispatch, or synthesis. No mention that the review is one of several passes, or that a local tool ran.
 
 The review contains findings about the code and nothing about itself.
+
+The test pass is an internal too. A surviving test finding is posted as a finding about the code, interleaved with the others by severity and anchored to its own line. Nothing in the posted review says a test pass ran, groups the test findings together, or labels them as being about coverage rather than about the defect.
 
 **This rule is violated most often in a comment's opening clause**, where a scene-setting phrase feels like orientation rather than internals. Every one of these is a violation: "Test coverage pass.", "A second review pass focused on X.", "Second pass here.", "From the coverage review,". Delete the clause and open on the finding. A comment that begins by saying what kind of review it is has already broken the rule.
 
@@ -238,7 +268,7 @@ When no finding clears the filter, say so in chat, and offer to post a short rev
 
 1. A headline verdict line stating that the review found no blocking problems.
 2. One short paragraph.
-3. A list of the concern areas examined, in plain language.
+3. A list of the concern areas examined, in plain language. Name the test examination among them, in plain words ("what the tests would catch if this broke"), when the test pass produced nothing that cleared the filter.
 
 That list of examined areas appears **only** on clean runs. On a run with findings it does not appear, because the findings are the substance and the inventory competes with them.
 
@@ -257,6 +287,9 @@ Any of these means stop and re-apply the filter or the voice rules:
 - Any sentence describing how the review was produced.
 - **A comment whose first clause names a kind of review rather than a defect**: "Test coverage pass.", "Second pass.", "A review focused on X." Read every comment's opening sentence alone; this is where internals leak.
 - A comment that positions itself against the others: "the first group", "the cheapest of the three", "my other four comments", "a second pass found".
+- A posted finding that stops at "this is untested" without naming the behavior that ships wrong.
+- A coverage percentage, a line-coverage number, or a coverage-tool name in the posted text.
+- Test findings grouped together, posted after the others, or surfaced in a second message.
 - The word "I" attached to a preference rather than an observation.
 
 ## What NOT to do
@@ -266,7 +299,7 @@ Any of these means stop and re-apply the filter or the voice rules:
 - Do not post a finding whose anchor you could not verify against the patch.
 - Do not append to someone's hand-written pending review without asking.
 - Do not write into another person's review body, and do not edit or re-prefix the comments they wrote.
-- Do not apply fixes or push commits. This skill reads and comments.
+- Do not apply fixes or push commits. This skill reads and comments; the test pass's mutations are reverted, never committed and never suggested as the change.
 - Do not report a finding count in the posted body. The comments speak for themselves.
 - Do not re-post a finding the pull request already carries as a comment. Fetch existing comments and match on the defect, not the location.
 

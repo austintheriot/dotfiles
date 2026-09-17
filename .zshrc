@@ -221,6 +221,14 @@ export EDITOR=nvim
 export VISUAL=nvim
 export GIT_EDITOR=nvim
 
+# Lean toolchain (elan installs lean and lake into ~/.elan/bin). Added only when
+# the directory exists, so a machine without Lean gets no dead PATH entry, and
+# guarded against duplicates because .zprofile and .profile can also run in the
+# same login and a PATH that grows on every source is a slow leak.
+if [[ -d "$HOME/.elan/bin" && ":$PATH:" != *":$HOME/.elan/bin:"* ]]; then
+    export PATH="$HOME/.elan/bin:$PATH"
+fi
+
 # CLAUDE #####################################################################################################
 export PATH="$HOME/.local/bin:$PATH"
 export CLAUDE_CODE_DISABLE_MOUSE=1

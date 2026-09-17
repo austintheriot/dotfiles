@@ -21,6 +21,18 @@ for profile_dir in "$HOME/.local/bin" "$HOME/.cargo/bin"; do
     esac
 done
 unset profile_dir
+
+# ~/.elan/bin is the Lean toolchain (elan installs lean and lake there). Unlike
+# the two above it is not needed for a usable shell and is not created by any
+# bootstrap step, so it is added only when it already exists: a machine without
+# Lean gets no entry instead of a dead PATH component. Same duplicate guard, for
+# the same reason as the loop above.
+if [ -d "$HOME/.elan/bin" ]; then
+    case ":$PATH:" in
+        *":$HOME/.elan/bin:"*) ;;
+        *) PATH="$HOME/.elan/bin:$PATH" ;;
+    esac
+fi
 export PATH
 
 # Sourced only when it exists. The previous version of this file sourced it

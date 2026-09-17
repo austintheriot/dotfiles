@@ -27,6 +27,7 @@ A default draft already absorbs surface Slack-casual norms ("Hey Name!", "no rus
 | Over-headlined, sectioned, bolded like a doc | Mostly plain paragraphs; structure only when there are genuinely parallel options |
 | Leaks the local AI workflow ("I had the security agent review this", "ran /expert-review", "the panel flagged", "delegated to a subagent") | Say it as Austin's own work: "I looked into the security side and...", "reviewed the diff and noticed". The teammate reads it as Austin's reasoning, not Claude's tooling |
 | "Claudese" tic-phrases ("belt-and-suspenders", "a sharp edge / sharp edges", "the load-bearing X", "footgun", "in the weeds", "non-trivial", "first-class", "out of the box", "to be fair", "that said") | Plain words: "a backup in case the first fails", "an easy thing to get wrong", "the part everything depends on", "tricky bit". Just say the thing literally |
+| Folksy stock offers ("just say the word", "happy to hop on a call", "more than happy to") | Plain and direct: "just let me know", "let me know". Keep the offer, drop the flourish |
 | Em dashes | `--` (two hyphens) always |
 
 ## Concrete patterns (use these; they are how Austin actually writes)
@@ -81,6 +82,7 @@ A default draft already absorbs surface Slack-casual norms ("Hey Name!", "no rus
 - Avoid combat/medical idioms for routine work: no "stop the bleeding", "rip the bandaid off", "chip away at it", "in the trenches". Say it literally: "stop adding new ones", "do it all at once", "work through them over time". (These leak in easily -- check for them explicitly.)
 - Avoid "Claudese" -- the stock LLM phrasings that read as machine-generated, not as a person: "belt-and-suspenders", "a sharp edge" / "sharp edges", "the load-bearing X", "footgun", "non-trivial", "first-class", "out of the box", "in the weeds", "to be fair", "that said", "it's worth noting", "at the end of the day". Say it plainly instead: "a backup", "easy to get wrong", "the part everything depends on", "tricky". (These are the tells that leak in hardest -- check for them explicitly. Note: this applies to teammate-facing prose only; the same phrases are fine in internal rule files and skill docs, which is why some appear in `~/.claude/CLAUDE.md` and the skills.)
 - Don't name the AI tooling: no "the security agent found", "ran /expert-review", "the panel flagged", "I delegated this to a subagent". Present findings as Austin's own (see "Never expose the local AI workflow" above).
+- Avoid folksy stock offers: "just say the word", "happy to hop on a call", "more than happy to", "shoot me a message". Austin writes the plain version -- "just let me know", "let me know what yall think". The offer is sincere; the packaging is not.
 - Don't over-apologize or over-offer into a wall of helpfulness; one plain offer is the Austin amount.
 - Don't manufacture certainty he doesn't have, and don't hedge the things he's sure about -- both miscalibrate.
 - Don't headline and bold a simple message into a faux-document.

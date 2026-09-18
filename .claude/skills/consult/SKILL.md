@@ -30,7 +30,9 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`distsys-runtime`** -- retries, idempotency, queues, sagas, caching, circuit breakers, timeouts, metastable failures.
 - **`fp-types`** -- ADT design, parametricity, totality, refinement types, "make illegal states unrepresentable."
 - **`fp-effects`** -- monads, monad transformers, free monads, tagless final, algebraic effects, pure-core/imperative-shell architecture.
-- **`fp-verification`** -- formal verification, dependently-typed programming, Lean / Agda / Coq / Idris / F*, Curry-Howard in practice. Use sparingly.
+- **`type-theory-foundations`** -- the Curry-Howard-Lambek correspondence, category theory (universal properties, adjunctions, initial algebras, Yoneda, optics), parametricity and where real languages break it, linear and dependent types, and the escalation ladder from ADTs to full verification with empirical costs.
+- **`lean-proof-engineering`** -- Lean 4 as a working tool: tactic discipline, Mathlib idiom and search, well-founded recursion, axiom and `sorry` hygiene, the AI-assisted proof workflow, and the feasibility gate for modeling a software problem in Lean.
+- **`separation-logic`** -- the frame rule and local reasoning, fractional permissions, Iris and ghost state, RustBelt, Miri's aliasing models, and the verification tool landscape (Verus, Creusot, Kani, VeriFast, Infer).
 - **`oo-patterns`** -- Gang of Four patterns, modern patterns (DI, Repository, Saga, Specification, Hexagonal, Active Record vs Data Mapper).
 - **`oo-architecture`** -- inheritance vs composition, polymorphism dispatch, encapsulation, SOLID / CUPID / GRASP, hexagonal / clean / onion.
 - **`oo-domain-modeling`** -- DDD, aggregates, entities, value objects, bounded contexts, ubiquitous language, anti-corruption layers.

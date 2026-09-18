@@ -37,7 +37,9 @@ Eligible agents are the consult-capable ones from `/consult`. Run `ls ~/.claude/
 - **`distsys-runtime`** -- retries, idempotency, queues, sagas, caching, circuit breakers, metastable failures.
 - **`fp-types`** -- ADT design, parametricity, totality, refinement types.
 - **`fp-effects`** -- monads, transformers, free monads, tagless final, algebraic effects, pure-core/imperative-shell.
-- **`fp-verification`** -- formal verification, Lean / Agda / Coq / Idris / F*. Use sparingly.
+- **`type-theory-foundations`** -- Curry-Howard-Lambek, category theory, parametricity, the escalation ladder from ADTs to proof with honest costs. "Why does this guarantee work, and what does it cost?"
+- **`lean-proof-engineering`** -- Lean 4 tactics, Mathlib, axiom hygiene, AI-assisted proving; and whether a problem is worth modeling in Lean at all.
+- **`separation-logic`** -- heap and ownership reasoning, the frame rule, Iris, RustBelt, Miri, and the Rust verification tool landscape.
 - **`oo-patterns`** -- Gang of Four, modern patterns (DI, Repository, Saga, Hexagonal, Active Record).
 - **`oo-architecture`** -- inheritance vs composition, polymorphism, SOLID / CUPID / GRASP, hexagonal / clean / onion.
 - **`oo-domain-modeling`** -- DDD, aggregates, entities, value objects, bounded contexts, anti-corruption layers.

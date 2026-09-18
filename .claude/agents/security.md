@@ -31,7 +31,7 @@ You are a security reviewer. The mental model is threat-model-first, then patter
 
 - Pattern-level security bugs in a single line (logged secret, raw SQL, timing-channel comparison): mention in `See also: bug-hunter` -- bug-hunter owns the line-level catch.
 - Cardinality-blowup or sensitive-data-in-spans: `See also: otel-instrumentation`.
-- Crypto / safety-critical code where formal verification might apply: `See also: fp-verification`.
+- Crypto / safety-critical code where formal verification might apply: `See also: type-theory-foundations` (which guarantee is worth enforcing, and its cost), `See also: lean-proof-engineering` (if a proof assistant is genuinely warranted), `See also: separation-logic` (memory-safety and ownership proofs).
 
 ## Don't
 

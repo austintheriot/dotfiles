@@ -23,7 +23,8 @@ Current review-capable agents (run `ls ~/.claude/agents/` at session start to pi
 - **Languages**: `typescript-types`, `rust-async`, `rust-backend`, `rust-unsafe`, `rust-wasm`, `rust-ffi`
 - **Distributed systems**: `distsys-data`, `distsys-runtime`
 - **Observability**: `otel-instrumentation`, `otel-pipeline`, `observability-practice`
-- **Functional programming**: `fp-types`, `fp-effects`, `fp-verification`
+- **Functional programming**: `fp-types`, `fp-effects`
+- **Formal methods and foundations**: `type-theory-foundations`, `lean-proof-engineering`, `separation-logic`. Split by trigger moment: `type-theory-foundations` fires at design time on what guarantee a type can carry and what it costs; `lean-proof-engineering` when Lean is in the repo or a problem passes its feasibility gate; `separation-logic` on heap, ownership, and aliasing. They replace the retired `fp-verification`.
 - **Object-oriented programming**: `oo-patterns`, `oo-architecture`, `oo-domain-modeling`
 - **Games and 3D**: `blender-3d`, `game-art-pipeline`, `level-design`, `game-engines`, `game-mechanics`, `ai-3d-integration`. Split by failure mode rather than by subject: authoring inside the tool (`blender-3d`), the contract crossing into the engine (`game-art-pipeline`), spatial layout as play (`level-design`), procurement and licensing (`game-engines`), systems and incentives (`game-mechanics`), and model-driven tool operation (`ai-3d-integration`).
 - **Built environment**: `architectural-design`, `interior-and-spatial`, `architectural-tooling`. Building architecture, not software architecture. `architectural-design` and `level-design` share a wayfinding vocabulary and nothing else -- route real buildings to the former and playable space to the latter.
@@ -33,7 +34,7 @@ Current review-capable agents (run `ls ~/.claude/agents/` at session start to pi
 ### Mandatory lenses (every invocation)
 
 - **`bug-hunter`** -- the canonical bug-pattern catalog. Domain-general.
-- **At least one FP agent.** Default `fp-types`. Add `fp-effects` if the code is substantially async / effectful. Add `fp-verification` only for safety-critical contexts or explicit `--verify`.
+- **At least one FP agent.** Default `fp-types`. Add `fp-effects` if the code is substantially async / effectful. Add `type-theory-foundations` only when an invariant's enforcement rung is genuinely in question, or on explicit `--verify`; it explains and prices guarantees rather than designing them, so it duplicates `fp-types` if dispatched reflexively.
 - **`first-principles`** -- wildcard reviewer that asks "is the answer already in scope?" before any code is added. Runs Q1 (existing-utility / already-installed-dependency check) on every invocation; Q2-Q4 (constraint relaxation, problem reframe, cross-domain precedent) when the diff / survey has substance to reframe. Never produces blocker; Q1 caps at major, Q2-Q4 cap at insight.
 
 ### Broadly-applicable lenses (fire on most reviews)
@@ -64,7 +65,9 @@ Match a region to a specialist via signals. Keep the table tight; the agent's ow
 | `observability-practice` | SLO / alert / runbook / dashboard / error-budget / postmortem files |
 | `fp-types` | type definitions, ADTs, enums, sealed classes, discriminated unions, pattern matching, smart constructors, branded primitives (also: mandatory FP lens by default) |
 | `fp-effects` | monads, `Result`/`Option` chains, async/await pipelines, IO interleaved with logic, Effect-TS / ZIO / Cats Effect / fp-ts |
-| `fp-verification` | safety-critical (crypto, kernel, financial settlement) OR explicit `--verify` |
+| `type-theory-foundations` | an invariant asserted where the enforcement rung is in question: branded / phantom types, typestate, smart constructors, refinement types, `Never`/`Void` uses; a parametricity or "callers cannot observe this" argument used as a boundary; a cost claim about formal methods; explicit `--verify`. Skip when the question is "what type should this be" (that is `fp-types`) |
+| `lean-proof-engineering` | `*.lean` files, `lakefile.toml` / `lakefile.lean`, `lean-toolchain`, Mathlib imports, `#print axioms` / `sorry` / `native_decide` in scope or in CI config. Also fires on a protocol / state-machine / event-schema / authorization design that passes its feasibility gate (bounded state, a stated invariant, decidable, under a day) -- it offers a model or names the better tool, and stays quiet otherwise |
+| `separation-logic` | `unsafe` blocks, raw pointers, `mem::forget` / `ManuallyDrop`, manual `Send` / `Sync` impls, custom allocators, lock-free or concurrent data structures, ownership crossing an API boundary, `Rc<RefCell<T>>`-heavy designs; verification tooling (Verus, Creusot, Prusti, Kani, VeriFast, Iris, Miri, Loom, Shuttle); static-analysis config where delivery timing is in question. Defer the concrete soundness verdict on a specific block to `rust-unsafe` |
 | `oo-patterns` | classes with methods, inheritance, factory/builder/visitor/observer/strategy/decorator patterns |
 | `oo-architecture` | deep class hierarchies, SOLID-flavored design, hexagonal/clean/onion, module boundaries |
 | `oo-domain-modeling` | aggregates, entities + value objects, repositories, domain events, bounded contexts |

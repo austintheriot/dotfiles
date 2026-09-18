@@ -1,6 +1,6 @@
 ---
 name: fp-review
-description: Expert review pass for functional-programming opportunities in changed code -- ADT design, exhaustiveness, mutability discipline, composition over inheritance, effect tracking, async-as-monad, error handling, pure-core/imperative-shell separation, parametricity, and pattern recognition for "where would a functional move help here?" Meets the language at hand (Rust, TypeScript, Java/Kotlin, Python, Swift, etc.) and suggests FP moves that work in that language rather than wholesale rewrites. Reviews the current branch diff against main by default, a specific file/PR with `/fp-review <path>` or `/fp-review <PR#>`, or a git range. Auto-routes deep questions to `fp-types`, `fp-effects`, or `fp-verification` subagents. Produces severity-labeled findings with file:line references. Does NOT post comments. Use when reviewing code from an FP lens, looking for outside-the-box functional solutions, or wanting a multi-paradigm reviewer's perspective.
+description: Expert review pass for functional-programming opportunities in changed code -- ADT design, exhaustiveness, mutability discipline, composition over inheritance, effect tracking, async-as-monad, error handling, pure-core/imperative-shell separation, parametricity, and pattern recognition for "where would a functional move help here?" Meets the language at hand (Rust, TypeScript, Java/Kotlin, Python, Swift, etc.) and suggests FP moves that work in that language rather than wholesale rewrites. Reviews the current branch diff against main by default, a specific file/PR with `/fp-review <path>` or `/fp-review <PR#>`, or a git range. Auto-routes deep questions to `fp-types`, `fp-effects`, or `type-theory-foundations` subagents. Produces severity-labeled findings with file:line references. Does NOT post comments. Use when reviewing code from an FP lens, looking for outside-the-box functional solutions, or wanting a multi-paradigm reviewer's perspective.
 ---
 
 # FP Review
@@ -130,7 +130,9 @@ When depth is needed, delegate. Pass a self-contained prompt with snippet + ques
 
 - **`fp-types`** -- ADT design, parametricity, totality, refinement types, GADTs, phantom types, type-level encodings, dependent-type opportunities. Use when the question is "what types should this have to capture the invariant?"
 - **`fp-effects`** -- effect tracking, monads, monad transformers, free monads, tagless final, algebraic effects, Reader/State/Writer, pure-core/imperative-shell architecture. Use when the question is "how should effects be organized here?"
-- **`fp-verification`** -- Curry-Howard, dependent types in practice, Lean / Agda / Coq / Idris / F* dipping, refinement types via LiquidHaskell / F*, formal verification opportunities. Use when the question is "is this a place where stronger guarantees would pay off?"
+- **`type-theory-foundations`** -- Curry-Howard-Lambek, category theory, parametricity and where real languages break it, refinement and dependent types, and the escalation ladder with honest costs. Use when the question is "is this a place where stronger guarantees would pay off, and what would they cost?"
+- **`lean-proof-engineering`** -- Lean 4 specifically, and whether a problem is worth modeling in a prover at all.
+- **`separation-logic`** -- ownership, aliasing, and heap reasoning; linear-vs-affine in practice.
 
 ## Process
 

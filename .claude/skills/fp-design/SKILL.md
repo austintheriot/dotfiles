@@ -17,7 +17,9 @@ At the start of the session, **read both** `~/.claude/rules/functional-programmi
 If the discussion gets deep:
 - ADT design, parametricity, type-level encodings, dependent types → `fp-types` subagent.
 - Effect organization, monads/effects, pure-core/imperative-shell → `fp-effects` subagent.
-- Curry-Howard, formal verification opportunities, Lean/Agda/Coq dipping → `fp-verification` subagent.
+- Curry-Howard-Lambek, category theory, parametricity, "which rung of the escalation ladder does this invariant need" → `type-theory-foundations` subagent.
+- Lean 4 specifically, or "is this worth modeling in a prover" → `lean-proof-engineering` subagent.
+- Ownership, aliasing, heap reasoning, linear-vs-affine in practice → `separation-logic` subagent.
 
 ## Stance
 

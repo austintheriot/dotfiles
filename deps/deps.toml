@@ -241,3 +241,34 @@ any_of = [
     { glob = { dir = "$HOME/.nvm/versions/node", pattern = "v*" } },
 ]
 docs = "https://nodejs.org/"
+
+# The Lean 4 toolchain manager, and the only install path for the Lean
+# language server. `lake serve` and `lean --server` are the two commands
+# lean.nvim starts (see .config/nvim/lua/plugins/lean.lua), and both are elan
+# SHIMS rather than real binaries: elan reads the project's own
+# `lean-toolchain` file and dispatches to the version that project pins, the
+# way rustup reads rust-toolchain.toml.
+#
+# NOT A MASON PACKAGE, deliberately, and not for lack of trying. The registry
+# does contain `lean-language-server`, which declares `languages: [Lean 3]`
+# and installs npm lean-language-server@3.4.0 -- a different, end-of-life
+# language with an incompatible protocol. A Rust assertion keeps it out of
+# mason-lock.json so that trap cannot be walked into later.
+#
+# THIS ENTRY PINS NO VERSION, unlike every other tool the editor uses. Lean
+# pins its toolchain per project, in a `lean-toolchain` file committed to the
+# project's own repository, and `.olean` build artifacts are not compatible
+# across toolchain versions. A global pin here would therefore be the wrong
+# version for every project that disagreed with it. The reproducibility story
+# for Lean lives in the Lean project, which is the correct owner.
+#
+# `command` alone would report a machine with elan installed as missing it:
+# elan puts its shims in $HOME/.elan/bin by editing $HOME/.profile, which a
+# non-interactive shell does not read. That is the same shape as the nvm and
+# node entries above, and the fallback is what asks the real question.
+[elan]
+any_of = [
+    { command = "elan" },
+    { file_non_empty = "$HOME/.elan/bin/elan" },
+]
+docs = "https://lean-lang.org/install/"

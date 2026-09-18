@@ -85,5 +85,84 @@ return {
         vim.health.error(string.format("Not found: '%s' -- required by %s. Install a node version through nvm: nvm install --lts", exe, needed_by))
       end
     end
+
+    -- Lean is the one language server this config does not pin, so it is the
+    -- one whose absence has to be reported rather than inferred from the
+    -- lockfile. lean.nvim starts `lake serve` (or `lean --server`), and when
+    -- those do not resolve the client simply never attaches: the infoview
+    -- stays empty and NOTHING is printed in the UI. This section is the
+    -- difference between that silence and a named cause.
+    --
+    -- WARN, not ERROR, and the distinction is deliberate: node is required by
+    -- servers this config installs unconditionally, while Lean tooling only
+    -- matters to someone editing Lean. A machine with no Lean is correct.
+    vim.health.start 'nvim config: lean'
+    local lean_version = vim.version.parse(require('dotfiles.lean_supported').floor)
+    if vim.version.ge(vim.version(), lean_version) then
+      vim.health.ok(string.format('Neovim is new enough for lean.nvim (needs %s)', require('dotfiles.lean_supported').floor))
+    else
+      -- The plugin is not loaded at all in this case, by lean.lua's own
+      -- guard, so say so rather than leaving the reader to wonder why a
+      -- plugin they installed does nothing.
+      vim.health.warn(
+        string.format(
+          "Neovim '%s' is below lean.nvim's floor of %s, so the Lean plugin is not loaded",
+          tostring(vim.version()),
+          require('dotfiles.lean_supported').floor
+        )
+      )
+    end
+
+    -- `lake` is what lean.nvim actually execs for a project with a lakefile,
+    -- and it is an elan SHIM rather than a real binary. Checking elan alone
+    -- would pass on a machine whose shims are not on PATH, which is the
+    -- state that breaks the server.
+    for exe, needed_by in pairs {
+      elan = 'the Lean toolchain manager, which provides the two below',
+      lake = 'lean.nvim in a project with a lakefile (`lake serve`)',
+      lean = 'lean.nvim for a standalone Lean file (`lean --server`)',
+    } do
+      if vim.fn.executable(exe) == 1 then
+        vim.health.ok(string.format("Found: '%s'", exe))
+      else
+        vim.health.warn(
+          string.format(
+            "Not found: '%s' -- needed by %s. Install elan (`config deps install`), "
+              .. 'then ensure $HOME/.elan/bin is on PATH. The Lean version itself comes '
+              .. "from each project's lean-toolchain file, not from this config.",
+            exe,
+            needed_by
+          )
+        )
+      end
+    end
+
+    -- A SECOND CAUSE OF THE SAME SYMPTOM, which is the only reason this block
+    -- is worth its length. When a project's lean-toolchain names a version
+    -- that is not installed, elan downloads it (hundreds of megabytes) on
+    -- first open. Measured 2026-09-18: `info: downloading ...` and
+    -- `info: installing ...` both go to STDERR, which Neovim's LSP client
+    -- discards, and stdout stays empty until the download finishes.
+    --
+    -- So the reader sees an empty infoview and no message -- exactly what a
+    -- missing elan looks like, with a different cause and a different fix
+    -- (wait, rather than install anything). Listing the installed toolchains
+    -- is what lets someone tell the two apart, by comparing this list against
+    -- the lean-toolchain file in the project they opened.
+    if vim.fn.executable 'elan' == 1 then
+      local toolchains = vim.fn.systemlist 'elan toolchain list'
+      if vim.v.shell_error == 0 and #toolchains > 0 then
+        vim.health.info('Installed Lean toolchains: ' .. table.concat(toolchains, ', '))
+      else
+        -- `executable` passes on a shim whose toolchain directory was
+        -- removed, so the binary existing is not the same as elan working.
+        vim.health.warn 'elan is on PATH but lists no toolchains, so no Lean version is installed yet'
+      end
+      vim.health.info(
+        'A project whose lean-toolchain names a version not listed above makes elan download it '
+          .. 'on first open. That download reports only on stderr, which Neovim discards, so the '
+          .. 'infoview stays empty with no message until it finishes.'
+      )
+    end
   end,
 }

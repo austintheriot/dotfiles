@@ -258,6 +258,28 @@ pub fn packages() -> PackageCatalog {
         PackageAvailability::ViaScript(ScriptInstaller::Rustup),
     );
 
+    // The Lean toolchain manager, and the only install path for the Lean 4
+    // language server -- `lake serve` and `lean --server` are elan shims.
+    //
+    // The script on every manager, exactly like rustup above, rather than a
+    // named package on any of them. Checked rather than assumed:
+    //   brew    has `elan-init` (4.2.4), which WOULD work.
+    //   pacman  has nothing in the official repositories; elan is AUR-only,
+    //           and this engine does not use the AUR.
+    //   apt     has `elan`, but Debian ships 4.1.2 against upstream 4.2.4.
+    //
+    // A version manager that lags is the one kind worth avoiding: it is the
+    // component that resolves every OTHER version, so a stale elan reports
+    // toolchains it cannot install. Using one path everywhere also keeps the
+    // three platforms on the same elan, which is what the shims' behaviour
+    // depends on.
+    insert(
+        &mut catalog,
+        "elan",
+        per_manager(Vec::new()),
+        PackageAvailability::ViaScript(ScriptInstaller::Elan),
+    );
+
     insert(
         &mut catalog,
         "nvm",
@@ -664,7 +686,7 @@ mod tests {
         // Positive control. Validation below passes vacuously against an
         // empty or partial union, so assert the union really spans all four
         // files first, naming one dependency exclusive to each.
-        assert_eq!(known.len(), 27, "the union must cover every conf file");
+        assert_eq!(known.len(), 28, "the union must cover every conf file");
         assert!(known.contains(&name("git")), "deps.toml entries are present");
         assert!(
             known.contains(&name("zsh-login-shell")),

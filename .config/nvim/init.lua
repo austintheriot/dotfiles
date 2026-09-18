@@ -33,6 +33,7 @@ require('lazy').setup({
   require 'plugins.treesitter',
   require 'plugins.file-explorer',
   require 'plugins.lint',
+  require 'plugins.lean',
 
   -- ui
   require 'plugins.theme',

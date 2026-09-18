@@ -79,6 +79,17 @@ pub enum ScriptInstaller {
     /// accident, and `nvm install --lts` still resolves node versions at run
     /// time, so the pin fixes the installer, not the node it installs.
     Nvm,
+    /// The Lean toolchain manager, the rustup of Lean.
+    ///
+    /// The fallback for every manager but apt and brew. It is not in the Arch
+    /// official repositories (only the AUR, which this engine does not use),
+    /// and Debian's `elan` lags upstream, so the script is what a current
+    /// Lean needs on the rest.
+    ///
+    /// Installs no toolchain of its own. elan resolves the Lean version from
+    /// each project's `lean-toolchain` file at run time, so this fixes the
+    /// manager, not the Lean it manages -- the same split as Nvm above.
+    Elan,
 }
 
 /// A closed set of git clone sources.

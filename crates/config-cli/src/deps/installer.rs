@@ -74,6 +74,9 @@ fn script_url(installer: ScriptInstaller) -> &'static str {
         ScriptInstaller::Zoxide => {
             "https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh"
         }
+        // A moving URL, like rustup's and unlike nvm's. Upstream publishes
+        // this exact command at https://lean-lang.org/install/ .
+        ScriptInstaller::Elan => "https://elan.lean-lang.org/elan-init.sh",
         // Pinned to a tag, unlike its three neighbours. nvm publishes no
         // moving install URL: its README's own command names a version, and
         // that is what made this dependency manual-only. Bumping this
@@ -734,6 +737,7 @@ fn script_path(installer: ScriptInstaller) -> OsString {
         ScriptInstaller::OhMyZsh => "oh-my-zsh-install.sh",
         ScriptInstaller::Zoxide => "zoxide-install.sh",
         ScriptInstaller::Nvm => "nvm-install.sh",
+        ScriptInstaller::Elan => "elan-init.sh",
     };
     let mut path = std::env::temp_dir();
     path.push(name);
@@ -782,12 +786,19 @@ fn script_argv(installer: ScriptInstaller) -> Vec<Vec<OsString>> {
     // bash, verified against debian:bookworm-slim, which is the slimmest.
     let interpreter = match installer {
         ScriptInstaller::Nvm => "bash",
-        ScriptInstaller::Rustup | ScriptInstaller::OhMyZsh | ScriptInstaller::Zoxide => "sh",
+        ScriptInstaller::Rustup
+        | ScriptInstaller::OhMyZsh
+        | ScriptInstaller::Zoxide
+        | ScriptInstaller::Elan => "sh",
     };
     let mut run = words([interpreter]);
     run.push(path);
     match installer {
-        ScriptInstaller::Rustup => run.extend(words(["-y"])),
+        // `-y` for the same reason rustup takes it, and it is load-bearing
+        // here: without it the script checks for a TTY and exits with
+        // "Unable to run interactively. Run with -y to accept defaults",
+        // so every unattended bootstrap would fail rather than prompt.
+        ScriptInstaller::Rustup | ScriptInstaller::Elan => run.extend(words(["-y"])),
         ScriptInstaller::OhMyZsh => run.extend(words(["--unattended", "--keep-zshrc"])),
         // The installer takes no flags. It writes into $NVM_DIR, which
         // defaults to $HOME/.nvm -- the directory deps.toml checks.
@@ -2629,11 +2640,12 @@ mod tests {
     /// hand-written list it replaced silently excluded `Nvm`, so the test
     /// that proves a fetched installer runs the file it fetched did not
     /// cover the one installer that runs under a different interpreter.
-    const EVERY_SCRIPT_INSTALLER: [ScriptInstaller; 4] = [
+    const EVERY_SCRIPT_INSTALLER: [ScriptInstaller; 5] = [
         ScriptInstaller::Rustup,
         ScriptInstaller::OhMyZsh,
         ScriptInstaller::Zoxide,
         ScriptInstaller::Nvm,
+        ScriptInstaller::Elan,
     ];
 
     #[test]
@@ -2643,7 +2655,8 @@ mod tests {
                 ScriptInstaller::Rustup
                 | ScriptInstaller::OhMyZsh
                 | ScriptInstaller::Zoxide
-                | ScriptInstaller::Nvm => {}
+                | ScriptInstaller::Nvm
+                | ScriptInstaller::Elan => {}
             }
         }
         let mut seen = EVERY_SCRIPT_INSTALLER.to_vec();

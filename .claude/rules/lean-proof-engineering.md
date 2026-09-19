@@ -219,16 +219,41 @@ That last row is the churn metric that matters to you. It is the standing count 
 
 This is the section that governs whether to reach for Lean at all.
 
-### The feasibility gate
+### Two different decisions, and only one of them is about the repo
 
-Offer a Lean model only when **all four** hold:
+Keep these apart. Conflating them suppresses the cheap, common, useful case.
+
+**Decision 1: model this problem in Lean, as a reasoning tool.** A scratch file, outside the repo or in a `scratch/` directory, written to settle a specific question. It may be deleted the same day. **Lean does not need to be in the project, and usually will not end up there.** What you get is a forced enumeration of the state space, a statement of the invariant precise enough to be wrong, and a machine telling you whether it holds. Most of the value arrives during *modeling*, before any proof closes -- writing the inductive type is what surfaces the state nobody considered.
+
+This is the case that should fire often. It competes with a whiteboard and a long argument in review, not with a verification program.
+
+**Decision 2: introduce Lean into the repository.** A toolchain pin, a `lakefile`, CI minutes, onboarding cost, and someone who maintains it when it breaks. This is a real engineering commitment and a much higher bar.
+
+**Decision 1 does not require Decision 2, and does not imply it.** Model first. If the model earns its keep and the invariant is durable enough to be worth re-checking on every change, *then* raise Decision 2 as its own conversation, with the costs named: the build, the pin, who else can edit it, and what happens when the toolchain moves during Lean's declared breaking year.
+
+### The feasibility gate (governs Decision 1)
+
+Offer a Lean model when **all four** hold:
 
 1. **Bounded or cleanly inductive state space.** A finite enum of states, or a structurally recursive datatype.
 2. **A stated invariant or safety property.** Something you can name before you start. "Model it and see" is not a property.
 3. **Decidable, or provable without deep mathematics.** If closing the goal requires real analysis, you are formalizing mathematics, not verifying software.
 4. **Modeling cost under roughly a day.** See the cliff below.
 
-If any one fails, say so and name the better tool. Staying quiet is the correct output most of the time.
+**Note what is deliberately absent: whether Lean is already in the project.** That is Decision 2 and is not a precondition. A throwaway model of a protocol in a TypeScript codebase is a legitimate and common use.
+
+If any one of the four fails, say so and name the better tool. Staying quiet is the correct output most of the time.
+
+### The escalation from model to repo
+
+When a model has proved its worth and someone asks whether it should live in the codebase, the honest answers, cheapest first:
+
+1. **Keep it as a scratch artifact.** Paste the model and its theorem into the design doc or the pull-request description as evidence. Zero ongoing cost, and it still communicates the invariant. **This is the right answer most of the time.**
+2. **Commit the `.lean` file without wiring it to CI.** It documents the intended invariant and can be re-run by hand. Costs a stale-file risk and nothing else.
+3. **Add Lean to CI.** Now the invariant is enforced on every change, and now you own a toolchain pin, build minutes, and a broken-build owner. Justified when the invariant is load-bearing and the model tracks code that actually changes.
+4. **Generate or check the implementation against the model.** Differential testing between the model and the code (the Cedar approach, §7 below). The most valuable and the most work.
+
+Rung 3 is where the cost jumps, and it is worth saying out loud that a `.lean` file in CI whose model has drifted from the implementation is worse than no file, because it asserts a guarantee nobody is checking.
 
 ### The cost cliff (the number that matters)
 

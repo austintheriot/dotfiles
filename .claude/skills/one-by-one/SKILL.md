@@ -19,10 +19,11 @@ This skill is the conversational counterpart to the user's `feedback_one_by_one_
 
 1. **Identify the list.** It's almost always the most recent multi-item output: review findings, design options, candidate refactors, items in a triage, alternatives in a brainstorm. If ambiguous, ask which list.
 
-2. **Re-present the list briefly.** One line per item, numbered. No prioritization, no skip-list, no recommendation. This re-orients the user before per-item prompts begin.
+2. **Do not re-present the list.** Go straight to the first `AskUserQuestion`. No numbered recap, no overview, no preamble. The user already has the list on screen.
 
 3. **Walk one item at a time, using `AskUserQuestion` per item.** For each item:
-   - Write a short summary of the item (context, tradeoffs, what's at stake, your opinion if relevant) as the question text.
+   - Open the question text with a very brief ELI5-style summary: one or two sentences, plain words, no jargon, saying what the item is and why it matters. Explain it as if to someone who has not read the code or the list.
+   - After the ELI5 line, add at most one short line on the tradeoff or your opinion, when that line changes the decision. Leave out anything else. The user picks `more-info` or `discuss` for depth.
    - Offer decision options: `action-now`, `defer`, `modify`, `drop`, `more-info`, `discuss`. Tailor the option labels and descriptions to the item where it helps -- e.g., for a review finding, `fix`, `defer`, `wontfix`, `discuss` may read more naturally. The user can always type a free-form response instead of picking; flag this implicitly by keeping option count small and option text specific.
    - Record the decision in a running tally (in your head / in a TaskList if it helps).
    - Move to the next item once the current one is resolved, either by their pick or by their free-form answer indicating they're done.
@@ -50,8 +51,7 @@ This skill is the conversational counterpart to the user's `feedback_one_by_one_
 The most common entry is mid-conversation: you produced a list with a synthesis at the bottom, the user pushed back. Behavior:
 
 - Acknowledge briefly. ("Got it -- backing up.")
-- Restate the list without the synthesis.
-- Open the first `AskUserQuestion` with #1's summary and decision options.
+- Open the first `AskUserQuestion` with #1's ELI5 summary and decision options. Do not restate the list.
 
 Do not re-apologize on every subsequent item. The user wants the pattern, not the meta-conversation about it.
 
@@ -64,7 +64,8 @@ Do not re-apologize on every subsequent item. The user wants the pattern, not th
 
 ## Anti-patterns
 
-- Listing all items, then jumping into deep discussion of #1 without an explicit "starting with #1, OK?" beat. The user may want #3 first.
+- Re-listing all items before the first question. The recap costs the user a scroll and adds nothing. If the user wants #3 first, they will say so in a free-form answer.
+- Long per-item summaries. The ELI5 line is the summary. Jargon, file paths, and multi-paragraph context belong in the `more-info` follow-up, not in the first question.
 - Producing the per-item discussion *and* a running synthesis ("so far it looks like..."). The synthesis comes only at the end.
 - Treating the walk as a script. The user can re-order, skip, branch, or ask follow-ups; follow them.
 - Forgetting decisions across items. Track them; surface them faithfully at the end.

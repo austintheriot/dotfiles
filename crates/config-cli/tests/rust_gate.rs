@@ -272,6 +272,61 @@ fn the_lint_policy_is_declared_and_every_member_opts_in() {
 
 // --- an interrupt stops the gate ------------------------------------------
 
+/// A git invocation in a fixture, with any ambient git environment cleared.
+///
+/// A pre-push hook exports `GIT_DIR` and friends, and the fixture's `git init`
+/// would otherwise target the developer's repository.
+fn fixture_git(directory: &Path, arguments: &[&str]) {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(directory)
+        .args(arguments)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_PREFIX")
+        .env_remove("GIT_OBJECT_DIRECTORY")
+        .output()
+        .expect("git runs");
+    assert!(
+        output.status.success(),
+        "git {arguments:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// A throwaway repository whose `HEAD` carries `crates/Cargo.toml`, which is
+/// all the script needs to get past its ref checks to the cargo calls.
+///
+/// Not the dotfiles repository itself. The container suite runs against a
+/// `git archive` of the pushed ref, so there is no `.cfg` there, and pointing
+/// `GIT_DIR` at `repo_root().join(".cfg")` failed the ref check before the
+/// branch under test ran.
+fn repo_with_a_workspace(parent: &Path) -> PathBuf {
+    let repo = parent.join("repo");
+    std::fs::create_dir_all(repo.join("crates")).expect("the fixture repo is creatable");
+    std::fs::write(repo.join("crates/Cargo.toml"), "[workspace]\n")
+        .expect("the fixture manifest is writable");
+    fixture_git(&repo, &["init", "-q", "."]);
+    fixture_git(&repo, &["add", "crates/Cargo.toml"]);
+    fixture_git(
+        &repo,
+        &[
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-q",
+            "-m",
+            "workspace",
+        ],
+    );
+    repo
+}
+
 /// A stub `cargo` on PATH, and the script run against it.
 ///
 /// The script's own `$ref` handling is exercised by the tests above. What is
@@ -290,6 +345,8 @@ fn rust_checks_with_stub_cargo(body: &str) -> (Option<i32>, String) {
             .expect("the stub is executable");
     }
 
+    let repo = repo_with_a_workspace(sandbox.path());
+
     let inherited = std::env::var("PATH").unwrap_or_default();
     let output = Command::new(repo_root().join("tests/rust-checks.sh"))
         .arg("HEAD")
@@ -300,8 +357,8 @@ fn rust_checks_with_stub_cargo(body: &str) -> (Option<i32>, String) {
         // `HEAD` against the wrong repository, failed the ref check, and
         // exited 1 long before reaching the branch under test. The same
         // trap is documented in ~/.claude/rules/dotfiles-tests.md.
-        .env("GIT_DIR", repo_root().join(".cfg"))
-        .env("GIT_WORK_TREE", repo_root())
+        .env("GIT_DIR", repo.join(".git"))
+        .env("GIT_WORK_TREE", &repo)
         .output()
         .expect("rust-checks.sh runs");
 

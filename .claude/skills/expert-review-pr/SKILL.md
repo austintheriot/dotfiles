@@ -1,6 +1,6 @@
 ---
 name: expert-review-pr
-description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants), holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that.
+description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants) and a required pass checking that new files and names match the project's existing structure and naming, holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that.
 ---
 
 # Expert Review PR
@@ -45,6 +45,39 @@ Read `~/.claude/skills/expert-review/SKILL.md` for those stages rather than reim
 
 Do not tell the subagents to self-filter for severity. They obey that literally and drop real bugs. The filter below is applied once, at synthesis, where the whole set is visible.
 
+## Model selection
+
+Every agent this skill dispatches runs on Sonnet or Haiku, unless the user names a model in the invocation or in the conversation. Pass `model` explicitly on every Agent call. Do not rely on the agent definition's frontmatter or on inheritance from the main session, because both resolve to the session model.
+
+| Agent call | Model |
+|---|---|
+| `pr-diff` (change-set fetch) | `haiku` |
+| Every specialist in the Stage 5 dispatch | `sonnet` |
+| The structure and naming pass | `sonnet` |
+| The test pass | `sonnet` |
+
+Synthesis, the filter, verification of survivors against the code, and posting stay in the main session. Those steps decide what goes public, so they do not move to a smaller model.
+
+A user instruction outranks this table. "Use Opus for the panel" or `--model opus` applies to every specialist call for that run. A model named for one agent applies to that agent only.
+
+## The structure and naming pass
+
+Every run dispatches `project-structure` and `naming-conventions`. The pass is required. It does not depend on whether Stage 3 matched either lens to a region. Run both in parallel with the Stage 5 dispatch, as two agent calls separate from the panel.
+
+The pass asks one question: **does this change fit the project as it already is?** The reference is the repository's existing structure and naming, not the agents' canon. A project that organizes by type, uses `userID`, and puts tests in a mirrored `test/` tree sets the standard for this pull request. A change that matches the project and departs from an ecosystem guide is correct for this review.
+
+Give each agent this scope, in addition to the standard dispatch template:
+
+> Before you judge anything in the diff, establish the project's existing conventions from the code on the base branch. Read any documented convention (`CLAUDE.md`, `CONTRIBUTING.md`, `ARCHITECTURE.md`, style guides, lint config). Then measure the undocumented ones by counting. For each convention the diff touches, report the count: "31 of 33 feature folders hold a single `*Slice.ts`", "`git grep -w userID` returns 212 hits and `userId` returns 4". The existing project is the standard. An ecosystem canon applies only where the project has no measurable convention.
+>
+> Then check every new or moved file, directory, module, import edge, and name in the diff against those conventions. For each departure, report the convention with its count, the departure with its location, and what the departure costs: a search that misses half the uses, a tool that does not discover the file, a second word for one concept, a boundary the project enforces elsewhere, a future change that must now touch two places.
+>
+> Report three classes separately. First, departures from an established project convention. Second, defects at a boundary (a name that changes spelling across serialization, storage, or a tool, or a file a tool reads under the wrong name), whether or not the project is consistent. Third, places where the project's existing convention is itself harmful. Report the third class only, never as a reason to depart from the convention in this change.
+>
+> Findings will be posted publicly to the author of this change. Report your full range; the synthesis stage filters.
+
+The pass and the panel can flag the same line. `readability` judges whether one name is clear. This pass judges whether the name matches the project. Keep both if both clear the filter, and merge them into one comment when they anchor to the same line.
+
 ## The test pass
 
 Every run makes a second, independent pass over the tests. It is not optional, and it does not depend on whether `test-coverage` was matched to a region in Stage 3.
@@ -81,7 +114,21 @@ Write all three out for each candidate before deciding. A finding you cannot sta
 
 Percentages and line-coverage numbers are not findings. Neither is a missing test for code that cannot fail, nor a request for tests in general.
 
-Severity floor: `blocker` and `major` only. `minor`, `nit`, and `insight` are dropped as a class, whatever their confidence. A 95-confidence nit is still a nit. High confidence that something is cosmetic is not a reason to post it.
+**An alignment finding meets those three through the project's own convention.** The defect is the departure from a convention the project demonstrably follows. The trigger is the new file, directory, import, or name, at its location. The consequence is the concrete cost the agent named. An alignment finding is posted when it has all of these:
+
+- **The convention is established.** A documented project rule, an enforced lint or boundary rule, or a measured count where the project follows the convention in nearly every case and the counts are stated. A count of 3 of 5 is not a convention. A count of 31 of 33 is.
+- **The change departs from it** at a line in the diff.
+- **The cost is concrete.** "Inconsistent" is not a cost. "A `git grep -w userID` now misses this field" is.
+
+Alignment findings that meet those three are exempt from the severity floor below, because the panel rates them `minor` even when they are worth posting. They still need the confidence floor and the verify step. Post the count in the comment. The count is evidence about the code, and it makes the finding something other than a preference.
+
+A departure toward a better convention is still a departure. Post it as an alignment finding. Do not post it as an endorsement of the new pattern. A pull request that wants to change the project's convention has to change it everywhere, or say in its description that a migration is starting.
+
+Findings in the third class (the existing convention is itself harmful) are never posted on someone else's pull request. They are not about this change. Show them in the local summary under a separate line so the user can raise them elsewhere.
+
+Boundary defects from the pass are ordinary findings. They take the normal severity floor and need no convention count.
+
+Severity floor: `blocker` and `major` only, except for alignment findings that meet the conditions above. `minor`, `nit`, and `insight` are otherwise dropped as a class, whatever their confidence. A 95-confidence nit is still a nit. High confidence that something is cosmetic is not a reason to post it.
 
 Confidence floor for posting: 70. A finding whose body says the reporter could not determine reachability is dropped rather than posted as a question, at any severity. Unresolved speculation posted to another person's pull request costs them time and costs the rest of the review its credibility.
 
@@ -116,6 +163,7 @@ Before posting anything, print the complete intended review in chat:
 - Every inline comment, each with its file, line, and full text.
 - Every `<details>` block.
 - A one-line count: how many findings the panel produced, and how many cleared the filter.
+- One line listing any convention the structure and naming pass found harmful in the existing project. These are not posted. Omit the line when there are none.
 
 The test findings are summarized here with the rest, in one list, ordered with them by severity. Do not print them as a separate section, do not hold them back for a later message, and do not ask about them separately. One summary, one question, one post.
 
@@ -268,7 +316,9 @@ When no finding clears the filter, say so in chat, and offer to post a short rev
 
 1. A headline verdict line stating that the review found no blocking problems.
 2. One short paragraph.
-3. A list of the concern areas examined, in plain language. Name the test examination among them, in plain words ("what the tests would catch if this broke"), when the test pass produced nothing that cleared the filter.
+3. A list of the concern areas examined, in plain language. Name the test examination among them, in plain words ("what the tests would catch if this broke"), when the test pass produced nothing that cleared the filter. Name the structure and naming examination the same way ("fit with the project's existing layout and naming") when it produced nothing that cleared the filter.
+
+The structure and naming pass is an internal, like the test pass. A posted alignment finding is a finding about the code, interleaved with the others by severity. Nothing in the posted review says that a structure or naming pass ran.
 
 That list of examined areas appears **only** on clean runs. On a run with findings it does not appear, because the findings are the substance and the inventory competes with them.
 
@@ -278,7 +328,9 @@ Ask before posting the clean review. The user may prefer silence on the pull req
 
 Any of these means stop and re-apply the filter or the voice rules:
 
-- An inline comment about whitespace, naming, formatting, or import order.
+- An inline comment about whitespace, formatting, or import order.
+- An inline comment about naming or file placement that does not state the project's convention with its count, or does not name a concrete cost.
+- An alignment comment that argues for an ecosystem guide over the project's own convention.
 - A finding you cut from inline that reappears in the body as a question or a note.
 - The words "consider", "might want to", "could be cleaner", "nit:", "worth a ticket" in the posted text.
 - A body that opens by praising the change.
@@ -306,5 +358,6 @@ Any of these means stop and re-apply the filter or the voice rules:
 ## Decision references
 
 - Panel process and dispatch: `~/.claude/skills/expert-review/SKILL.md`
+- Structure and naming lenses: `~/.claude/rules/project-structure.md`, `~/.claude/rules/naming-conventions.md`
 - Panel output contract: `~/.claude/rules/panel-contract.md`
 - Agent mode contract: `~/.claude/skills/agent-modes/SKILL.md`

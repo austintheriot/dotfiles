@@ -1,6 +1,6 @@
 ---
 name: expert-review-pr
-description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants) and a required pass checking that new files and names match the project's existing structure and naming, holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that.
+description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants) and, when the change adds files, modules, or public names, a pass checking that they match the project's existing structure and naming, holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that.
 ---
 
 # Expert Review PR
@@ -47,22 +47,52 @@ Do not tell the subagents to self-filter for severity. They obey that literally 
 
 ## Model selection
 
-Every agent this skill dispatches runs on Sonnet or Haiku, unless the user names a model in the invocation or in the conversation. Pass `model` explicitly on every Agent call. Do not rely on the agent definition's frontmatter or on inheritance from the main session, because both resolve to the session model.
+Every agent call uses the cheapest model that can do that call's job, chosen per call. The choice is between Haiku and Sonnet. Do not go above Sonnet unless the user names a model in the invocation or in the conversation. Pass `model` explicitly on every Agent call. Do not rely on the agent definition's frontmatter or on inheritance from the main session, because both resolve to the session model.
 
-| Agent call | Model |
-|---|---|
-| `pr-diff` (change-set fetch) | `haiku` |
-| Every specialist in the Stage 5 dispatch | `sonnet` |
-| The structure and naming pass | `sonnet` |
-| The test pass | `sonnet` |
+**Start from Haiku. Move a call to Sonnet when any of these is true:**
+
+- **The lens finds defects by reasoning about behavior.** `bug-hunter`, `security`, `concurrency`, `distsys-data`, `distsys-runtime`, `data-flow`, `rust-unsafe`, `rust-async`, `typescript-types`, `fp-types`, `sync-and-offline`, `platform-payments`, and any lens whose region touches money, auth, persistence, or concurrency. A missed defect here costs the most, and the main session cannot recover a finding that the agent never reported.
+- **The call runs experiments and explains them.** The test pass runs the suite and mutation testing, then must say what each surviving mutant lets through.
+- **The region is large or spread out.** More than roughly 300 changed lines for that agent, or changes across more than three top-level directories or modules.
+- **The call must weigh conventions against each other.** For the structure and naming pass: the change adds a new top-level directory, module, package, crate, or namespace, renames or moves across directories, or changes a name that crosses a serialization, storage, or protocol boundary.
+
+**Keep these on Haiku:**
+
+- `pr-diff`, and any other call that fetches, lists, or counts.
+- Checklist-shaped lenses on a small region: `documentation`, `readability`, `accessibility`, `i18n`, `ci-pipeline`, `licensing-and-oss`, and similar, when the region is under the size threshold above.
+- The structure and naming pass when the change only adds files beside existing siblings of the same kind, or adds local names inside existing modules. The job then is counting and comparing.
+
+When unsure between the two, pick Sonnet for a lens in the first list and Haiku otherwise.
+
+**Rerun once on Sonnet** when a Haiku call returns output without file and line references, contradicts the code on a fresh read, or obviously did not read the region (for example, it describes functions the diff does not contain). Do not rerun to get more findings from a call that returned a clean result with evidence.
 
 Synthesis, the filter, verification of survivors against the code, and posting stay in the main session. Those steps decide what goes public, so they do not move to a smaller model.
 
-A user instruction outranks this table. "Use Opus for the panel" or `--model opus` applies to every specialist call for that run. A model named for one agent applies to that agent only.
+A user instruction outranks this rule. "Use Opus for the panel" or `--model opus` applies to every specialist call for that run. A model named for one agent applies to that agent only.
+
+In the local summary, add one line listing each agent with the model it ran on, and any rerun. That line is how the user tunes this rule. It is never posted.
 
 ## The structure and naming pass
 
-Every run dispatches `project-structure` and `naming-conventions`. The pass is required. It does not depend on whether Stage 3 matched either lens to a region. Run both in parallel with the Stage 5 dispatch, as two agent calls separate from the panel.
+Dispatch `project-structure` and `naming-conventions` only when the change gives them something to judge. Decide each one separately from the change set, before the Stage 5 dispatch. When one fires, run it in parallel with the Stage 5 dispatch, as its own agent call separate from the panel. This decision replaces Stage 3 classification for these two lenses.
+
+**`project-structure` fires when the change does any of these:**
+
+- Adds, moves, renames, or deletes a file or directory. `git diff --name-status <base>...<head>` shows `A`, `R`, or `D`.
+- Adds a module, package, crate, namespace, workspace member, Gradle subproject, Swift target, or feature folder.
+- Adds an import that crosses a top-level directory, feature, or package boundary that did not cross before.
+- Adds or edits a barrel or `index` re-export, a path alias, project references, or boundary lint config.
+- Places a test, fixture, mock, story, or generated file.
+
+**`naming-conventions` fires when the change does any of these:**
+
+- Adds an exported or public name: a function, type, class, module, namespace, constant, or component.
+- Adds or renames a field in a serialized type, schema, migration, `.proto`, GraphQL schema, or OpenAPI document.
+- Adds or renames an environment variable, CLI flag, config key, HTTP header, route, metric, or event name.
+- Renames anything, including a case-only rename.
+- Adds a file whose name a tool reads (test files, stories, Go platform suffixes, framework-routed files).
+
+**Neither fires** when the change only edits bodies of existing functions and adds names visible only inside one function, or is documentation-only, lockfile-only, or generated output. Say in the local summary which of the two ran, and why, in one line.
 
 The pass asks one question: **does this change fit the project as it already is?** The reference is the repository's existing structure and naming, not the agents' canon. A project that organizes by type, uses `userID`, and puts tests in a mirrored `test/` tree sets the standard for this pull request. A change that matches the project and departs from an ecosystem guide is correct for this review.
 
@@ -120,15 +150,17 @@ Percentages and line-coverage numbers are not findings. Neither is a missing tes
 - **The change departs from it** at a line in the diff.
 - **The cost is concrete.** "Inconsistent" is not a cost. "A `git grep -w userID` now misses this field" is.
 
-Alignment findings that meet those three are exempt from the severity floor below, because the panel rates them `minor` even when they are worth posting. They still need the confidence floor and the verify step. Post the count in the comment. The count is evidence about the code, and it makes the finding something other than a preference.
+Alignment findings that meet those three take the lower floor described under Severity floor. They still need the confidence floor and the verify step. Post the count in the comment. The count is evidence about the code, and it makes the finding something other than a preference.
 
 A departure toward a better convention is still a departure. Post it as an alignment finding. Do not post it as an endorsement of the new pattern. A pull request that wants to change the project's convention has to change it everywhere, or say in its description that a migration is starting.
 
 Findings in the third class (the existing convention is itself harmful) are never posted on someone else's pull request. They are not about this change. Show them in the local summary under a separate line so the user can raise them elsewhere.
 
-Boundary defects from the pass are ordinary findings. They take the normal severity floor and need no convention count.
+Boundary defects from the pass need no convention count. They take the same lower floor as alignment findings.
 
-Severity floor: `blocker` and `major` only, except for alignment findings that meet the conditions above. `minor`, `nit`, and `insight` are otherwise dropped as a class, whatever their confidence. A 95-confidence nit is still a nit. High confidence that something is cosmetic is not a reason to post it.
+Severity floor: `blocker` and `major` only. `minor`, `nit`, and `insight` are dropped as a class, whatever their confidence.
+
+**Exception: findings from the structure and naming pass have a floor of `minor`** (the panel scale's medium level). `nit` and `insight` from the pass are still dropped. The lower floor applies only to findings those two agents report. A naming or placement finding from any other lens takes the normal floor. A 95-confidence nit is still a nit. High confidence that something is cosmetic is not a reason to post it.
 
 Confidence floor for posting: 70. A finding whose body says the reporter could not determine reachability is dropped rather than posted as a question, at any severity. Unresolved speculation posted to another person's pull request costs them time and costs the rest of the review its credibility.
 
@@ -316,7 +348,7 @@ When no finding clears the filter, say so in chat, and offer to post a short rev
 
 1. A headline verdict line stating that the review found no blocking problems.
 2. One short paragraph.
-3. A list of the concern areas examined, in plain language. Name the test examination among them, in plain words ("what the tests would catch if this broke"), when the test pass produced nothing that cleared the filter. Name the structure and naming examination the same way ("fit with the project's existing layout and naming") when it produced nothing that cleared the filter.
+3. A list of the concern areas examined, in plain language. Name the test examination among them, in plain words ("what the tests would catch if this broke"), when the test pass produced nothing that cleared the filter. Name the structure and naming examination the same way ("fit with the project's existing layout and naming") when it ran and produced nothing that cleared the filter. Do not name it when it did not run.
 
 The structure and naming pass is an internal, like the test pass. A posted alignment finding is a finding about the code, interleaved with the others by severity. Nothing in the posted review says that a structure or naming pass ran.
 

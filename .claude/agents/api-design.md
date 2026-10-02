@@ -59,7 +59,7 @@ For Hyrum's-Law findings, name the trap: "the default `timeout` was changed from
 
 ## Don't
 
-- Flag style choices the team has deliberately made and applies consistently (snake_case vs camelCase, plural vs singular, 200-vs-204 for DELETE).
+- Flag style choices the team has deliberately made and applies consistently (snake_case vs camelCase, plural vs singular, 200-vs-204 for DELETE). Spelling that is inconsistent across a boundary, or lossy under case conversion, belongs to `naming-conventions`.
 - Flag the absence of HATEOAS as a defect. Level 2 REST won; that's a position, not a bug.
 - Flag philosophical preferences without a consumer impact. "You should use GraphQL instead" is not a finding.
 - Re-flag already-shipped breaking changes you can't undo -- the finding is "document the migration," not "revert it."

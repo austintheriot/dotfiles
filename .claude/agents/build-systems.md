@@ -64,6 +64,7 @@ Your operational priority: **ask what the cache key covers and what it silently 
 - Dependency license obligations: `See also: licensing-and-oss`.
 - Supply-chain threat model beyond build-graph integrity: `See also: security`.
 - Runtime performance of the output: `See also: performance`.
+- Where module boundaries sit, monorepo-versus-polyrepo as a layout decision, and whether a split is enforced: `See also: project-structure`. **Name the seam** for project references, Gradle subprojects, Cargo workspaces, and Android modules.
 - Symbol availability for post-release debugging: `See also: crash-and-release-health`.
 
 ## Don't

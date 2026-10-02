@@ -32,7 +32,7 @@ Walk the categories from `readability.md`: naming, function shape, flow / layout
 
 ## Routing
 
-If `code-simplifier` flags a single-implementation abstraction, mention in `See also:` and move on. Your lens is "at appropriate complexity, can a human follow this?"
+If `code-simplifier` flags a single-implementation abstraction, mention in `See also:` and move on. Route convention and consistency across the codebase (acronym casing, synonyms for one concept, names that cross a serialization / database / env / file-name boundary) to `naming-conventions`, and directory layout to `project-structure`. Your lens is "at appropriate complexity, can a human follow this?"
 
 ## Don't
 

@@ -83,6 +83,8 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`print-production`** -- page geometry and bleed, imposition and binding, spine width, colour and ink limits, print fonts, the copyright / verso page and its notices, ISBN and distribution metadata, POD vendor requirements, print-ready builds from source.
 - **`licensing-and-oss`** -- license compatibility, copyleft scope, attribution and NOTICE obligations, source-available licenses, SBOM and scanning, policy-as-code. Engineering guidance, not legal advice.
 - **`build-systems`** -- the build graph: incrementality and correctness, hermeticity, reproducibility, cache keys and poisoning, per-toolchain mechanics, monorepo build shape.
+- **`project-structure`** -- directory and module layout: by-feature vs by-layer vs by-type, Redux feature folders and FSD, colocation of tests / fixtures / stories / generated code, small vs large projects, monorepo strategy, shared-folder dumping grounds, barrel files, boundary enforcement.
+- **`naming-conventions`** -- naming at system scope: per-ecosystem canon, acronym casing camps, one term per concept, verb semantics and linguistic antipatterns, names that cross JSON / SQL / env / header / metric boundaries, file names tools read, case-only renames.
 - **`crash-and-release-health`** -- crash capture and symbolication, crash-free metrics and their vendor incomparability, staged-rollout gating, and the client telemetry problems servers do not have.
 - **`llm-app`** -- prompt engineering, tool use, RAG, evals, context management (caching / compaction), prompt-injection defense, agentic patterns.
 - **`agent-sandboxing`** -- the boundary around an agent's subprocesses: Seatbelt / bubblewrap / Landlock / seccomp / containers / microVMs, read-everything defaults, fail-open, config-file persistence, network allowlists that are hostname trust, the CVE trail against agent CLIs.
@@ -192,6 +194,8 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "How do I prepare this for print / what bleed and trim / why did the printer reject this / how do I compute the spine" | `print-production` |
 | "Can I use this dependency / what does this license require / is this compatible" | `licensing-and-oss` |
 | "Why does this rebuild / how do I make the build cacheable / is this build hermetic" | `build-systems` |
+| "How should I organize this codebase / where should tests, stories, and fixtures live / are barrel files worth it" | `project-structure` |
+| "How should we name this across languages / why did this field come back undefined / userId or userID" | `naming-conventions` |
 | "How do I set up crash reporting / symbolicate this / decide whether to halt a rollout" | `crash-and-release-health` |
 | "How should I prompt Claude / structure tool use / design my RAG" | `llm-app` |
 | "Is this agent sandbox real, and what can the agent reach" | `agent-sandboxing` |

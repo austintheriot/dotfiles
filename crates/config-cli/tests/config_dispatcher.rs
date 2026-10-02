@@ -1460,6 +1460,8 @@ fn doctor_does_not_report_not_installed_when_dotfiles_root_is_not_home() {
         return;
     }
 
+    let _cli = config_cli_lock();
+
     let scratch = tempfile::tempdir().expect("a temporary directory");
     let split_root = scratch.path().join("split-root");
     fs::create_dir_all(split_root.join(".scripts/config")).expect("creatable");

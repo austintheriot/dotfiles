@@ -57,17 +57,19 @@ pub(crate) fn run(arguments: TestArgs) -> ExitCode {
         return usage_error();
     }
 
-    let Some(home) = std::env::var_os("HOME") else {
-        eprintln!("config test: $HOME is not set");
+    // DOTFILES_ROOT before HOME, as every other subcommand resolves it. On a
+    // CI runner HOME is not the checkout, so `$HOME/crates` does not exist
+    // and the cargo spawn failed before it ran anything.
+    let Some(root) = crate::deps::dotfiles_root() else {
+        eprintln!("config test: neither DOTFILES_ROOT nor HOME is set");
         return ExitCode::FAILURE;
     };
-    let home = PathBuf::from(home);
 
     if !arguments.watch {
-        return run_once(&home, &arguments);
+        return run_once(&root, &arguments);
     }
 
-    watch(&home, &arguments)
+    watch(&root, &arguments)
 }
 
 fn usage_error() -> ExitCode {
@@ -77,16 +79,16 @@ fn usage_error() -> ExitCode {
 
 /// Runs the suite exactly once, through whichever of the two runners the
 /// arguments selected, and returns its exit status.
-fn run_once(home: &std::path::Path, arguments: &TestArgs) -> ExitCode {
+fn run_once(root: &std::path::Path, arguments: &TestArgs) -> ExitCode {
     let (program, mut command) = if arguments.docker {
-        let program = home.join("tests/run-in-docker.sh");
+        let program = root.join("tests/run-in-docker.sh");
         let mut command = Command::new(&program);
         if let Some(suite) = &arguments.suite {
             command.arg(suite);
         }
         (program, command)
     } else {
-        (cargo_program(), cargo_test(home, arguments))
+        (cargo_program(), cargo_test(root, arguments))
     };
 
     match command.status() {
@@ -116,9 +118,9 @@ fn cargo_program() -> PathBuf {
 /// rustup honours `crates/rust-toolchain.toml` only when the working
 /// directory is under `crates/`. From `$HOME` the pin is declared and not
 /// applied, which is the defect that once failed CI.
-fn cargo_test(home: &std::path::Path, arguments: &TestArgs) -> Command {
+fn cargo_test(root: &std::path::Path, arguments: &TestArgs) -> Command {
     let mut command = Command::new(cargo_program());
-    command.current_dir(home.join("crates"));
+    command.current_dir(root.join("crates"));
     command.args(["test", "--locked"]);
     if arguments.quiet {
         command.arg("--quiet");
@@ -135,15 +137,15 @@ fn cargo_test(home: &std::path::Path, arguments: &TestArgs) -> Command {
 /// Never returns on its own: the loop is interrupted by the caller (a
 /// signal), matching the shell script, which had no exit condition of its
 /// own beyond that.
-fn watch(home: &std::path::Path, arguments: &TestArgs) -> ExitCode {
-    let mut last = fingerprint(home);
-    let _ = run_once(home, arguments);
+fn watch(root: &std::path::Path, arguments: &TestArgs) -> ExitCode {
+    let mut last = fingerprint(root);
+    let _ = run_once(root, arguments);
     loop {
         std::thread::sleep(Duration::from_secs(1));
-        let current = fingerprint(home);
+        let current = fingerprint(root);
         if current != last {
             last = current;
-            let _ = run_once(home, arguments);
+            let _ = run_once(root, arguments);
         }
     }
 }
@@ -152,13 +154,13 @@ fn watch(home: &std::path::Path, arguments: &TestArgs) -> ExitCode {
 /// worktree is the whole home directory, so listing untracked files walks
 /// all of it and takes minutes. Matches the shell script's `git ls-files
 /// --cached | xargs cksum | cksum` pipeline.
-fn fingerprint(home: &std::path::Path) -> Option<Vec<u8>> {
-    let git_dir = home.join(".cfg");
+fn fingerprint(root: &std::path::Path) -> Option<Vec<u8>> {
+    let git_dir = root.join(".cfg");
     let list = Command::new("git")
         .arg("--git-dir")
         .arg(&git_dir)
         .arg("--work-tree")
-        .arg(home)
+        .arg(root)
         .args(["ls-files", "-z", "--cached"])
         .stdout(Stdio::piped())
         .output()
@@ -169,7 +171,7 @@ fn fingerprint(home: &std::path::Path) -> Option<Vec<u8>> {
         if relative_path.is_empty() {
             continue;
         }
-        let path = home.join(String::from_utf8_lossy(relative_path).as_ref());
+        let path = root.join(String::from_utf8_lossy(relative_path).as_ref());
         if let Ok(contents) = std::fs::read(&path) {
             hasher_input.extend_from_slice(&contents);
         }

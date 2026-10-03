@@ -306,6 +306,7 @@ impl Home {
         command
             .args(arguments)
             .env("HOME", self.path())
+            .env("DOTFILES_ROOT", self.path())
             .env_remove("GIT_DIR")
             .env_remove("GIT_WORK_TREE")
             .env_remove("GIT_INDEX_FILE")
@@ -787,7 +788,7 @@ impl WrapperFixture {
         .expect("the built config-cli is linkable");
         fs::create_dir_all(home_path.join("deps")).expect("creatable");
         fs::create_dir_all(home_path.join("tests")).expect("creatable");
-        // `config test` runs cargo from $HOME/crates, so the directory has to
+        // `config test` runs cargo from $DOTFILES_ROOT/crates, so the directory has to
         // exist for the spawn to succeed at all.
         fs::create_dir_all(home_path.join("crates")).expect("creatable");
 
@@ -795,7 +796,7 @@ impl WrapperFixture {
             &shim_dir.join("config-cli"),
             "#!/bin/sh\nprintf 'cli:%s\\n' \"$@\"\n",
         );
-        // `config test` runs `cargo test --locked` from `$HOME/crates`, so
+        // `config test` runs `cargo test --locked` from `$DOTFILES_ROOT/crates`, so
         // the observable is a stub cargo rather than a stub suite script.
         // Printed as one line so a changed argument list is one diff rather
         // than a reordered set.
@@ -993,6 +994,7 @@ fn config_test_watch_reruns_on_a_tracked_change_and_stops_when_killed() {
     let mut child = Command::new(config())
         .args(["test", "--watch"])
         .env("HOME", &home_path)
+        .env("DOTFILES_ROOT", &home_path)
         .env("PATH", format!("{}:{path}", shim_dir.display()))
         // cargo sets CARGO for everything it spawns, so without this the
         // real cargo wins over the stub and the run count never moves.
@@ -1448,8 +1450,11 @@ fn doctor_is_silent_and_exits_zero_when_every_binary_is_current() {
 /// the checkout, so doctor reported "not installed" for a binary that was
 /// installed correctly.
 ///
-/// Asserted by pointing `DOTFILES_ROOT` at a copy while leaving the binary
-/// where `config-build` put it.
+/// Asserted by pointing `DOTFILES_ROOT` at a copy and `HOME` at a fixture
+/// whose `.local/bin` holds stub binaries. The stubs make the test own its
+/// precondition: it used to read whatever the developer's `$HOME` held, so it
+/// passed locally and failed on every CI runner where no sibling test had
+/// installed a binary first.
 #[test]
 fn doctor_does_not_report_not_installed_when_dotfiles_root_is_not_home() {
     if !has_repository() {
@@ -1493,9 +1498,28 @@ fn doctor_does_not_report_not_installed_when_dotfiles_root_is_not_home() {
         ],
     );
 
+    // Well-formed so doctor parses it, and all zeros so it never matches the
+    // source: doctor must then report the binary stale, never "not installed".
+    let zero_id = "0".repeat(40);
+    let stale_stamp = format!("{zero_id}:{zero_id}:{zero_id}");
+    let home = scratch.path().join("home");
+    for crate_name in ["config-cli", "tmux-tools"] {
+        write_executable(
+            &home.join(".local/bin").join(crate_name),
+            &format!("#!/bin/sh\necho {stale_stamp}\n"),
+        );
+    }
+
     let run = run_doctor(|command| {
-        command.env("DOTFILES_ROOT", &split_root);
+        command
+            .env("DOTFILES_ROOT", &split_root)
+            .env("HOME", &home)
+            .env_remove("CONFIG_BIN_DIR");
     });
+    run.assert_contains(
+        "config-cli",
+        "doctor compares the binary it found under HOME, so silence is not a pass",
+    );
     run.assert_lacks(
         "not installed",
         "doctor does not report a not-installed binary when DOTFILES_ROOT is not HOME",

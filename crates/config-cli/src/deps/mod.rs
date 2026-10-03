@@ -318,7 +318,7 @@ fn host_platform() -> selection::Platform {
 /// `DOTFILES_ROOT` wins, then `HOME`. Returns `None` when neither is set,
 /// which leaves a relative conf path relative to the working directory rather
 /// than silently rooting it somewhere the caller did not choose.
-fn dotfiles_root() -> Option<PathBuf> {
+pub(crate) fn dotfiles_root() -> Option<PathBuf> {
     std::env::var_os("DOTFILES_ROOT")
         .or_else(|| std::env::var_os("HOME"))
         .map(PathBuf::from)

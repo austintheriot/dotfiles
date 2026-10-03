@@ -14,6 +14,8 @@
 
 mod support;
 
+use std::fs;
+use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -76,17 +78,47 @@ fn server_from_config(label: &str, session: &str) -> Server {
 /// `-f /dev/null`. Without that flag tmux loads the user's own
 /// `~/.config/tmux/tmux.conf` at startup, which on this machine is the file
 /// under test, and the second behaviour above silences the check again.
+///
+/// The server also gets a fixture `$HOME` holding a no-op tpm. The config's
+/// last line runs `~/.tmux/plugins/tpm/tpm`, which the deps engine installs
+/// and a CI runner deliberately does not, so on a runner `source-file` exited
+/// 127 and this check failed for a config that parses. Installed plugins are
+/// `plugin_path.rs`'s subject, not this one's.
 fn parses_cleanly(config: &Path) -> (bool, String) {
+    let home = home_with_noop_tpm();
     let checker = Server::new("conf-parse");
-    checker.tmux(&["-f", "/dev/null", "new-session", "-d", "-s", "parse-check"]);
-    let sourced = checker.tmux(&[
-        "source-file",
-        config.to_str().expect("a utf-8 config path"),
-    ]);
+    checker.tmux_with_home(
+        home.path(),
+        &["-f", "/dev/null", "new-session", "-d", "-s", "parse-check"],
+    );
+    let sourced = checker.tmux_with_home(
+        home.path(),
+        &["source-file", config.to_str().expect("a utf-8 config path")],
+    );
     let clean = sourced.status.success();
     let said = String::from_utf8_lossy(&sourced.stderr).trim().to_string();
     checker.shutdown();
     (clean, said)
+}
+
+/// A `$HOME` whose tpm exits 0 and whose `.config/tmux` is the tracked one,
+/// so the platform variant the config sources is parsed too.
+fn home_with_noop_tpm() -> tempfile::TempDir {
+    let home = tempfile::Builder::new()
+        .prefix("tt-home-")
+        .tempdir_in("/tmp")
+        .expect("a fixture home");
+    let tpm = home.path().join(".tmux/plugins/tpm/tpm");
+    fs::create_dir_all(tpm.parent().expect("tpm has a parent")).expect("creatable");
+    fs::write(&tpm, "#!/bin/sh\nexit 0\n").expect("the tpm stub is writable");
+    fs::set_permissions(&tpm, fs::Permissions::from_mode(0o755)).expect("executable");
+    fs::create_dir_all(home.path().join(".config")).expect("creatable");
+    symlink(
+        repo_root().join(".config/tmux"),
+        home.path().join(".config/tmux"),
+    )
+    .expect("the tracked tmux directory is linkable");
+    home
 }
 
 /// This machine's platform name, from `.scripts/platform.sh` rather than
@@ -126,7 +158,7 @@ fn platform_variant(path: &Path) -> PathBuf {
 
 /// The `copy-pipe` command a variant file binds to `y` in copy mode.
 fn yank_command(variant: &Path) -> String {
-    let contents = std::fs::read_to_string(variant).unwrap_or_default();
+    let contents = fs::read_to_string(variant).unwrap_or_default();
     contents
         .lines()
         .find(|line| line.contains("copy-mode-vi 'y'") && line.contains("copy-pipe"))

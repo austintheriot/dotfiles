@@ -144,6 +144,8 @@ Write all three out for each candidate before deciding. A finding you cannot sta
 
 Percentages and line-coverage numbers are not findings. Neither is a missing test for code that cannot fail, nor a request for tests in general.
 
+**A coverage finding must also name the test that would catch it, or it is dropped.** Before posting, write out the specific test to add: which test file it goes in (or which existing test to extend), the setup or sequence it drives, and the assertion that fails when the behavior breaks. Prefer extending an existing test the file already has over a new one when the existing test already walks the path. When no test could realistically catch the behavior -- it needs a real OS, real hardware, real network timing, a microtask interleaving no harness can force deterministically, or a mock so deep the test would only re-assert the implementation -- drop the finding, whatever its severity or confidence. A gap that no feasible test closes is not actionable for the author.
+
 **An alignment finding meets those three through the project's own convention.** The defect is the departure from a convention the project demonstrably follows. The trigger is the new file, directory, import, or name, at its location. The consequence is the concrete cost the agent named. An alignment finding is posted when it has all of these:
 
 - **The convention is established.** A documented project rule, an enforced lint or boundary rule, or a measured count where the project follows the convention in nearly every case and the counts are stated. A count of 3 of 5 is not a convention. A count of 31 of 33 is.
@@ -254,7 +256,7 @@ The patch hunk headers (`@@ -old,count +new,count @@`) give the valid line numbe
 
 Attach to the closest changed line that relates to the issue. A finding about code a few lines from the edit still anchors to the edit, as long as the connection is clear from the comment text.
 
-Comment text is the finding itself: what breaks, what triggers it, what it costs, and the fix if it is short. No severity labels, no confidence numbers, no lens names.
+Comment text is the finding itself: what breaks, what triggers it, what it costs, and the fix if it is short. No severity labels, no confidence numbers, no lens names. For a coverage finding, the fix is the test: name the file, the scenario it drives, and the assertion that fails when the behavior breaks.
 
 ## Posting
 
@@ -372,6 +374,7 @@ Any of these means stop and re-apply the filter or the voice rules:
 - **A comment whose first clause names a kind of review rather than a defect**: "Test coverage pass.", "Second pass.", "A review focused on X." Read every comment's opening sentence alone; this is where internals leak.
 - A comment that positions itself against the others: "the first group", "the cheapest of the three", "my other four comments", "a second pass found".
 - A posted finding that stops at "this is untested" without naming the behavior that ships wrong.
+- A posted coverage finding that does not name the test to add (file, scenario, failing assertion), or that names a test no harness could realistically run.
 - A coverage percentage, a line-coverage number, or a coverage-tool name in the posted text.
 - Test findings grouped together, posted after the others, or surfaced in a second message.
 - The word "I" attached to a preference rather than an observation.

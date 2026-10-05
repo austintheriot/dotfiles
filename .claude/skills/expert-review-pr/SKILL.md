@@ -211,7 +211,8 @@ The posted review is Claude's own writing, and reads that way.
 - No praise, no flattery, no compliments on the change. Open on the finding, not on what the pull request does well.
 - No softeners: "ignore me", "worth a ticket if you agree", "just a thought", "feel free to disregard", "nice work but".
 - Plain literal words. A reader who has not seen the diff should follow it without decoding a figure of speech.
-- State uncertainty as a fact when it is load-bearing: "I did not verify X." Do not hedge a finding you are posting.
+- State uncertainty as a fact when it is load-bearing: "I did not verify X."
+- Hedge each posted finding lightly, so it reads as a likely bug, not a verdict. Open with "Possible bug here:", write the claim with "may" ("a close that lands during the upgrade may be dropped for good"), and say in one plain clause what the claim rests on ("based on reading through the code and tweaking the tests a bit"). The headline line of the body takes the same hedge. The hedge sets the tone only. Keep the trigger, the consequence, and any reproduction exact. The filter still decides what gets posted, and the hedge never lets through a finding that failed the filter.
 - Follow the repository's own attribution convention if it defines one. Read the repository `CLAUDE.md` for a rule about identifying AI-authored comments and follow what it says. Add no attribution line if the repository defines none.
 
 ## Internals stay out

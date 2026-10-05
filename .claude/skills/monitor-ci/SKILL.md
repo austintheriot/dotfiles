@@ -6,7 +6,7 @@ argument-hint: "[PR number or URL -- defaults to PR for current branch]"
 
 # Monitor CI + AI Review
 
-Watch CI status and any AI review bot's comments on a PR until the build completes and review feedback is in. Runs two wake mechanisms in tandem: a background blocking wait (precise — the harness notifies the moment CI finishes) plus a ~60s `ScheduleWakeup` safety-net poll, so a dropped notification can never leave the skill hanging.
+Watch CI status and any AI review bot's comments on a PR until the build completes and review feedback is in. Runs two wake mechanisms in tandem: an event wait (a background command or a `Monitor`, which wakes you the moment something changes) plus a long `ScheduleWakeup` fallback heartbeat, so a dropped notification can never leave the skill hanging.
 
 The monitoring shape below is universal. The project-specific parts — which CLI talks to CI, what the workflows are called, which jobs are manual gates — live in a local config file, not in this skill.
 
@@ -20,7 +20,7 @@ That file supplies:
 - **Status vocabulary** — which status strings mean terminal / running / not-yet / gated.
 - **Wait filters** — shorthand flags for narrowing what to wait on.
 - **Known manual gates** — gating job names and what approving each one would trigger.
-- **AI review bot** — login, opt-in / opt-out labels, workflow file.
+- **AI review bot** — login, opt-in / opt-out labels, workflow file, and the events that trigger a review.
 - **Prerequisites** — how the CLI is installed and how it stores its API token.
 
 **If the file is missing, or has no section for this repo**, do not guess. Say so, name the two or three things you would need (how to query CI status from the terminal, what the workflows are called, which jobs are manual gates), and offer to write a new section. A wrong guess about a deploy-adjacent job is the failure mode worth avoiding here.
@@ -77,6 +77,8 @@ Filter to entries where:
 - `user.login` matches the config's review-bot login AND `user.type == "Bot"`, AND
 - `created_at` (comments) or `submitted_at` (reviews) is after the monitor start time.
 
+Read the config's review trigger events. A review covers the commit that was the head when it was triggered. If the trigger does not fire on a push, commits pushed after that point stay unreviewed. Report which commit each review covered (`commit_id` on the review). When the head has moved past it, say so, and name the config's re-trigger step. Ask before you run that step, because it posts to the PR.
+
 ### 2c: Decide next state
 
 Evaluate cumulatively — one cycle can hit both a CI failure and new review comments, and both must surface.
@@ -94,38 +96,44 @@ A gated workflow does **not** keep the poll loop alive. If gated workflows are t
 
 Run **two** wake mechanisms at once. They are belt-and-suspenders, not alternatives -- a single dropped harness notification has caused this skill to hang indefinitely, so the poll exists to guarantee that can't happen.
 
-**1. Background blocking wait (primary, precise).** Launch the config's **blocking wait** command, applying whichever wait filter matches what you're waiting on, and tee it to a log:
+**1. Event wait (primary, precise).** Pick the tool by how many signals you wait on:
 
-```bash
-<wait command> 2>&1 | tee /tmp/ci-wait-<PR>.log
+- **One signal** (a CI workflow finishing): launch the config's **blocking wait** command with the Bash tool's `run_in_background: true`, applying whichever wait filter matches, and tee it to a log:
+
+  ```bash
+  <wait command> 2>&1 | tee /tmp/ci-wait-<PR>.log
+  ```
+
+- **Several signals** (CI, the AI review workflow run, new bot reviews or comments): arm one `Monitor` whose script loops, prints one line per change, and exits at the terminal state. Each printed line wakes you. Load `Monitor` with `ToolSearch` if it is deferred.
+
+**Run the loop body once in the foreground before you arm it.** A script error inside a background wait or a Monitor surfaces only after the wait is armed, so it costs a full re-arm cycle. One foreground iteration catches it first.
+
+**The scripts run under the user's login shell, which can be zsh.** In zsh, `status`, `pipestatus`, `argv`, and `path` are special variables. An assignment such as `status=$(...)` kills the script at once with `read-only variable: status`. Use names like `run_state` and `seen_reviews`.
+
+**2. Fallback heartbeat (`ScheduleWakeup`, always alongside).** Immediately after arming the wait, schedule one long fallback so a dropped notification cannot strand the skill:
+
+```
+ScheduleWakeup(delaySeconds: 1200, reason: "monitor-ci fallback heartbeat, PR <PR>", prompt: "<the original /monitor-ci invocation, verbatim>")
 ```
 
-Use the Bash tool's `run_in_background: true`.
+Use 1200 to 1800 seconds. The harness wakes you when a background command exits or a Monitor prints, so a short poll adds turns and catches nothing. Pass the same `/monitor-ci` input each time so the next firing re-enters this skill.
 
-**2. Safety-net poll (`ScheduleWakeup`, always alongside).** Immediately after launching the background wait, schedule a self-check ~60s out so you re-run Step 2 on a fixed cadence even if the background notification is late or never arrives:
+**Do not poll by hand while a wait is armed.** No `sleep N` followed by a read of the output file, and no "quick check" of the Monitor output. The notification is the wake signal. After arming, end the turn with a status line and let the user work. Read the output only when a notification or the heartbeat wakes you.
 
-```
-ScheduleWakeup(delaySeconds: 60, reason: "monitor-ci safety-net poll, PR <PR>", prompt: "<the original /monitor-ci invocation, verbatim>")
-```
+**Re-run eagerly once monitoring is active.** The first invocation is standing authorization to keep checking -- do NOT re-ask the user before each subsequent cycle. Every time a notification or the heartbeat wakes you, re-enter Step 2: read the log or Monitor output, re-classify, and surface anything new. If CI is still in flight: confirm the wait is still alive, re-arm it if it died or a Monitor expired, then schedule the next heartbeat. Keep this loop going until you hit a terminal state (Step 5) or the user says stop. **Deduplicate**: if both mechanisms fire close together, one Step-2 pass covers both -- don't double-report the same status or re-show review comments already surfaced this session.
 
-Deliberately sub-300s: the prompt cache stays warm and the whole point is a frequent liveness check. Pass the same `/monitor-ci` input each time so the next firing re-enters this skill and continues monitoring.
+Why a background wait rather than a Bash foreground timeout: real workflows routinely run longer than the foreground Bash limit (10 minutes). Backgrounding sidesteps that and lets the user keep talking to you while CI runs, and the harness pings you the moment the process exits -- a precise wake-up the foreground path can't give.
 
-**Re-run eagerly once monitoring is active.** The first invocation is standing authorization to keep checking -- do NOT re-ask the user before each subsequent poll. Every time you re-enter Step 2 (woken by the background notification *or* by the safety-net poll), re-read `/tmp/ci-wait-<PR>.log`, re-classify, and surface anything new. If CI is still in flight: confirm the background wait process is still alive and re-launch it if it died (background processes don't always survive across wake paths), then schedule the next ~60s `ScheduleWakeup`. Keep this loop going until you hit a terminal state (Step 5) or the user says stop. **Deduplicate**: if both mechanisms fire close together, one Step-2 pass covers both -- don't double-report the same status or re-show review comments already surfaced this session.
+Once both are armed, hand back to the user with a short status line ("backend workflow running, waiting in background with a 20-minute fallback -- you can keep working").
 
-Why a background wait rather than a Bash foreground timeout: real workflows routinely run longer than the foreground Bash limit (10 minutes). Backgrounding sidesteps that and lets the user keep talking to you while CI runs, and the harness pings you the moment the process exits — a precise wake-up the foreground path can't give. The safety-net poll then sits on top of that precision purely as the dropped-notification backstop.
-
-Once both are launched, hand back to the user with a short status line ("backend workflow running, waiting in background + polling every ~60s — you can keep working").
-
-**If backgrounding is unavailable** (the user declines, or you're in a context where it's inappropriate), drop the background wait and rely on `ScheduleWakeup` alone as the *only* wake mechanism. In that single-mechanism case, the ~60s safety-net cadence is too aggressive without a precise notification backstop, so use a longer interval matched to what you're waiting on:
+**If backgrounding is unavailable** (the user declines, or you're in a context where it's inappropriate), `ScheduleWakeup` becomes the only wake mechanism. Match the delay to what you're waiting on:
 
 | Situation | Delay |
 |-----------|-------|
 | First check immediately after PR creation | 120s (catch lint / type-check failures fast) |
 | Mid-build, no result imminent | 600s |
 | Long workflow known to take >10min | 1200s |
-| Right after a flake rerun | 270s (cache stays warm) |
-
-Never use exactly 300s — the prompt cache has expired but you haven't committed to a long wait.
+| Right after a flake rerun | 270s |
 
 ## Step 3: CI Failure
 
@@ -183,7 +191,7 @@ Print:
 ## Important
 
 - **Project specifics live in `~/.claude/local/ci-config.md`, never in this file.** This skill is checked into a public dotfiles repo; the config file is machine-local and untracked. Repo names, internal workflow and job names, deploy gates, and tool install paths belong in the config. If you learn a new gate or workflow name while monitoring, offer to add it to the config — do not write it here.
-- **Background wait and safety-net poll run together; neither is a pure fallback.** The background wait gives the precise wake-up; the ~60s `ScheduleWakeup` poll is the liveness backstop that catches a dropped or late notification. Run both whenever CI is in flight. Only when backgrounding is unavailable does `ScheduleWakeup` become the sole mechanism (with the longer interval table, not the 60s cadence). Once the user has invoked the skill, keep re-scheduling the poll each cycle without re-asking — stop only at a terminal state or on the user's say-so.
+- **The event wait and the fallback heartbeat run together.** The event wait gives the precise wake-up. The 1200-1800s `ScheduleWakeup` heartbeat only catches a dropped notification. Run both whenever CI is in flight, and never poll by hand between them. Only when backgrounding is unavailable does `ScheduleWakeup` become the sole mechanism (with the interval table in Step 2d). Once the user has invoked the skill, keep re-scheduling the heartbeat each cycle without re-asking -- stop only at a terminal state or on the user's say-so.
 - **A gated workflow is never waited out and never auto-approved.** It needs a human, so it is terminal-pending: report the gate (Step 3b), name it in the final report, and stop polling once it's the only thing left. Approving a manual gate is outside this skill's default the same way editing files is (see "Observe vs implement") -- and unlike a fix, an explicit "approve it" ask has no command behind it in most configs, so point the user at the CI UI rather than improvising one.
 - **Background processes don't survive session close.** The wait process is tied to the Claude Code session. If the developer exits Claude Code, they must re-invoke `/monitor-ci` to resume — same constraint as the polling path.
 - **Observe vs implement.** Default to observe-and-plan: surface the failure with a fix plan, let the developer apply it. The developer can opt into implementation by saying so ("fix it", "apply the fix", "and then continue monitoring") — in auto mode, treat the explicit ask as authorization to edit, build/lint locally, commit, push, and resume the wait.

@@ -118,7 +118,7 @@ Give it this scope, in addition to the standard dispatch template:
 
 > Review this change for what the tests do not catch. For each in-scope behavior: the branches and error paths no test exercises, the boundary and edge-case inputs no test supplies, the states and orderings no test reaches, and the assertions that pass whether or not the behavior is correct. Also audit the tests the change adds or edits: a test that cannot fail, asserts on a mock instead of the behavior, or re-asserts the implementation is a gap wearing a test's name.
 >
-> Ground findings in execution rather than reading where you can. Run the suite. Run coverage tooling if the repository configures it. Mutate the source -- invert a condition, drop a guard, change a boundary, delete a line -- re-run the affected tests, and report the mutants that survive. A surviving mutant is evidence a real defect could ship; name the mutation and the tests that stayed green.
+> Ground findings in execution rather than reading where you can. Run the suite. Run coverage tooling if the repository configures it. Mutate the source -- invert a condition, drop a guard, change a boundary, delete a line -- re-run the affected tests, and report the mutants that survive. A surviving mutant is evidence a real defect could ship; name the mutation and the tests that stayed green. For each survivor, also name the user-facing guarantee it leaves unprotected, and one plausible edit (a refactor, a feature reusing the path, a cleanup of a line that looks redundant) that would make the same change for an ordinary reason. Run mutants against every test file that imports the mutated module, not only the files the change touches.
 >
 > Findings will be posted publicly to the author of this change. Report your full range; the synthesis stage filters.
 
@@ -141,6 +141,24 @@ Write all three out for each candidate before deciding. A finding you cannot sta
 **Everything else is dropped.** Dropped means absent from the posted artifact: not inline, not in the body, not a question, not a forward-looking note, not an aside, not a parenthetical. A finding removed from the inline set and then mentioned in the body has not been dropped. This is the most common way the filter fails.
 
 **A coverage finding meets those three through the bug it would let through.** A missing test is not itself a defect, so a finding that stops at "this path is untested" is dropped, whatever its confidence. To survive, it must name the specific wrong behavior that reaches production because no test fails: the defect is that behavior, the trigger is the input or state that produces it, the consequence is what the user or operator gets. "The retry path has no test" is dropped. "Nothing fails when the retry path double-charges, because the only test asserts the mock was called" is posted. A surviving mutant, named with the mutation and the tests that stayed green, is the strongest form of this evidence.
+
+**A coverage finding must also name a likely edit that would cause the regression, or it is dropped.** A surviving mutant proves that a test is missing. It does not prove that anyone will ever make that change. The author's question is "why should I care that you could break it this way?" Answer it with an edit someone could plausibly make for an ordinary reason:
+- A refactor that moves or merges the code, for example folding this helper into its caller.
+- A new feature that reuses the path, for example adding a tab, a route, or a file type.
+- A cleanup that deletes a line that looks redundant, for example a reset that seems to run twice, or a guard whose reason is not visible at the call site.
+- A dependency or design-system change that alters a default the code relies on.
+
+Coverage findings are not the maintenance hazards the verify step drops: the behavior is correct today and unpinned, and the fix is a test, not a code change.
+
+**A coverage gap with no likely edit is still posted, as a short inline comment.** General coverage has value even when no specific edit threatens it. A surviving mutant with no likely edit is posted as a coverage gap when all of these are true:
+- **The behavior is relevant to the pull request.** New or changed code qualifies. Existing behavior also qualifies when the change depends on it, moves it, or reuses its path. A gap in unrelated code next to the change is not posted.
+- **A user or a contract depends on the behavior.** Ask whether anyone outside the code would notice if this behavior broke. That includes what a user sees or loses, an analytics property, a stored or sent value, and a function other modules call. The test is where the effect lands, not whether the function is public. A private helper qualifies when its output reaches the user, such as the function that decides which cards land in the deck. A branch no user or caller can reach does not qualify, such as a guard that only narrows a string to a union type.
+- **A feasible test is named,** under the same rule as other coverage findings.
+- **The panel rated the gap `minor` or higher.** A `nit` is still dropped.
+
+A coverage gap does not need the `major` severity floor or a likely edit. When a gap also has a likely edit, it is a full coverage finding and gets the full comment shape described under Inline comments.
+
+Keep coverage gaps from burying the real findings. When the gaps outnumber the other posted comments, keep the ones a user meets most directly and drop the rest.
 
 Percentages and line-coverage numbers are not findings. Neither is a missing test for code that cannot fail, nor a request for tests in general.
 
@@ -186,7 +204,7 @@ Two findings are posted. The token rotation and the quota loop. The other five a
 
 Given a test pass that returned: `refresh.ts` at 41% branch coverage (major, 88), no test for the rotation error path (major, 80), a suite that stays green when the expiry comparison flips from `<` to `<=` so an expired token is accepted for one more request (major, 86), and a new test that asserts `mockStore.set` was called rather than what was stored (major, 75):
 
-One finding is posted: the surviving `<=` mutant, because it names the behavior that ships. The percentage is dropped. The untested error path is dropped as written, and would post only if it named what goes wrong when that path runs. The assert-on-the-mock test is dropped unless the behavior it fails to check is itself wrong.
+One finding is posted: the surviving `<=` mutant, because it names the behavior that ships, and because someone tidying the comparison to match its neighbors is a likely way to make that edit. The posted comment opens on the user-facing guarantee ("an expired token is refused"), not on the mutation. The percentage is dropped. The untested error path is dropped as written, and would post only if it named what goes wrong when that path runs. The assert-on-the-mock test is dropped unless the behavior it fails to check is itself wrong.
 
 ## Local summary
 
@@ -212,7 +230,7 @@ The posted review is Claude's own writing, and reads that way.
 - No softeners: "ignore me", "worth a ticket if you agree", "just a thought", "feel free to disregard", "nice work but".
 - Plain literal words. A reader who has not seen the diff should follow it without decoding a figure of speech.
 - State uncertainty as a fact when it is load-bearing: "I did not verify X."
-- Hedge each posted finding lightly, so it reads as a likely bug, not a verdict. Open with "Possible bug here:", write the claim with "may" ("a close that lands during the upgrade may be dropped for good"), and say in one plain clause what the claim rests on ("based on reading through the code and tweaking the tests a bit"). The headline line of the body takes the same hedge. The hedge sets the tone only. Keep the trigger, the consequence, and any reproduction exact. The filter still decides what gets posted, and the hedge never lets through a finding that failed the filter.
+- Hedge each posted finding lightly, so it reads as a likely bug, not a verdict. Open with "Possible bug here:", write the claim with "may" ("a close that lands during the upgrade may be dropped for good"), and say in one plain clause what the claim rests on ("based on reading through the code and tweaking the tests a bit"). The headline line of the body takes the same hedge. A coverage finding is not a bug in today's code, so it does not open with "Possible bug here:". It opens on the guarantee, with the same light hedge: "Nothing currently pins that typed cards survive a click outside the modal." A short coverage-gap comment opens with "Possible coverage gap:" instead. The hedge sets the tone only. Keep the trigger, the consequence, and any reproduction exact. The filter still decides what gets posted, and the hedge never lets through a finding that failed the filter.
 - Follow the repository's own attribution convention if it defines one. Read the repository `CLAUDE.md` for a rule about identifying AI-authored comments and follow what it says. Add no attribution line if the repository defines none.
 
 ## Internals stay out
@@ -227,7 +245,7 @@ The test pass is an internal too. A surviving test finding is posted as a findin
 
 The same applies across comments. Do not number or rank findings against each other in the posted text ("the first group", "the cheapest of the three", "my other four comments"), and do not tell the author that a second round happened. Each comment stands on its own defect. The one exception is the summary comment described below, which may say it summarizes the others, because a reader needs that to not count it as another defect.
 
-**Technique is not process.** Naming how you obtained evidence about the code is allowed, and often makes a finding credible: "deleting this line leaves the suite green at 1213 passed", "I could not get a mutant past this latch", "changing `??=` to `=` and re-running the suite". Those are facts about the code and its tests. Naming how the review was organized is not: passes, rounds, panels, lenses, agents, severities, confidence scores. Evidence in, org chart out.
+**Technique is not process.** Naming how you obtained evidence about the code is allowed, and often makes a finding credible: "deleting this line leaves the suite green at 1213 passed", "I could not get a mutant past this latch", "changing `??=` to `=` and re-running the suite". Those are facts about the code and its tests. In a coverage comment, that evidence supports the guarantee and the likely edit. It never leads the comment and never replaces them (see Inline comments). Naming how the review was organized is not: passes, rounds, panels, lenses, agents, severities, confidence scores. Evidence in, org chart out.
 
 When naming what was examined (clean runs only, below), name the concern in plain language: "concurrency and race conditions", "authentication and access control", "input validation", "query patterns and load behavior". Never the internal name of a lens or agent.
 
@@ -258,6 +276,21 @@ The patch hunk headers (`@@ -old,count +new,count @@`) give the valid line numbe
 Attach to the closest changed line that relates to the issue. A finding about code a few lines from the edit still anchors to the edit, as long as the connection is clear from the comment text.
 
 Comment text is the finding itself: what breaks, what triggers it, what it costs, and the fix if it is short. No severity labels, no confidence numbers, no lens names. For a coverage finding, the fix is the test: name the file, the scenario it drives, and the assertion that fails when the behavior breaks.
+
+**A coverage comment is ordered by what the author cares about, not by how the gap was found:**
+
+1. **The guarantee.** One sentence on what a user or downstream system relies on this line for, in their terms: "Typed cards survive a stray click outside the modal." Not "removing `onInteractOutside` leaves the suite green."
+2. **The likely edit.** The plausible refactor, feature, or cleanup that would break the guarantee, and why it would look safe to the person making it: "this prop looks like a duplicate of `onEscapeKeyDown`, and nothing tells the next person why both are there."
+3. **The evidence.** At most one clause, after the first two: "No current test fails with it removed." Leave out test counts, suite sizes, and a list of every mutation you tried.
+4. **The test.** The file, the scenario, and the failing assertion.
+
+Use one guarantee per comment. If several mutants protect one guarantee, merge them into one comment that names the guarantee once. Do not list the mutants.
+
+**A coverage gap with no likely edit gets a short comment:** two or three sentences anchored to the line it covers. It opens with "Possible coverage gap:", names the untested case in user terms, and names the test that would cover it. It has no likely-edit story, no evidence clause, and no bug framing.
+
+> Possible coverage gap: no test pastes text into the dialog and then presses Escape, so nothing checks that the pasted text survives it. A case next to the existing "stays open on Escape" test would cover it.
+
+When several gaps anchor to the same line, merge them into one short comment with one sentence per case.
 
 ## Posting
 
@@ -376,6 +409,10 @@ Any of these means stop and re-apply the filter or the voice rules:
 - A comment that positions itself against the others: "the first group", "the cheapest of the three", "my other four comments", "a second pass found".
 - A posted finding that stops at "this is untested" without naming the behavior that ships wrong.
 - A posted coverage finding that does not name the test to add (file, scenario, failing assertion), or that names a test no harness could realistically run.
+- A coverage comment that opens on the mutation ("If this line is deleted, all N tests still pass"). The author reads it as "why should I care that you broke it this way?"
+- A full-shape coverage comment with no likely edit a real person would make. It belongs in the short "Possible coverage gap:" form.
+- A "Possible coverage gap:" comment that invents a future edit, frames the gap as a bug, covers code the pull request does not touch or depend on, or runs past three sentences.
+- Test counts or suite sizes ("all 1384 tests in 43 files") in a posted comment or body.
 - A coverage percentage, a line-coverage number, or a coverage-tool name in the posted text.
 - Test findings grouped together, posted after the others, or surfaced in a second message.
 - The word "I" attached to a preference rather than an observation.

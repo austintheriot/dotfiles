@@ -1,6 +1,6 @@
 ---
 name: expert-review-pr
-description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants) and, when the change adds files, modules, or public names, a pass checking that they match the project's existing structure and naming, holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that.
+description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants) and, when the change adds files, modules, or public names, a pass checking that they match the project's existing structure and naming, holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that. When asked, also dev-QAs the PR on its deployed build and drafts a separate Dev QA comment with screenshots of every checked state.
 ---
 
 # Expert Review PR
@@ -220,6 +220,30 @@ Before posting anything, print the complete intended review in chat:
 The test findings are summarized here with the rest, in one list, ordered with them by severity. Do not print them as a separate section, do not hold them back for a later message, and do not ask about them separately. One summary, one question, one post.
 
 Then ask whether to post, and wait for the answer.
+
+## Dev QA against the deployed build
+
+Run this only when the invocation asks for dev QA. It runs in parallel with the panel, in the main session, and produces a second artifact: a Dev QA comment, separate from the review.
+
+**Read `~/.claude/local/dev-qa.md` first.** It holds the project specifics: where the deployed URLs come from, how to find the deployed commit, which accounts to use, which writes are forbidden, browser quirks, and how to upload screenshots. If the file is missing, ask the user for the deployed URL and a test account before you test.
+
+**Target.** Before you test, prove the deployed build carries this pull request's code. When the deployed commit is behind the head, diff the two over the pull request's files. Say which files differ, and do not report results for them.
+
+**Accounts.** Before you rely on a negative result, such as a 404 or a hidden control, prove the session is signed in. A 404 while signed out proves nothing.
+
+**Steps.** Run the pull request's own Test Steps in order. When the deployed data makes a step impossible as written, run the closest path that reaches the same code, and say so. Also try, live, every panel candidate that a browser can reproduce. A finding reproduced live is stronger evidence than a re-read. A candidate that does not reproduce must be re-examined before it is posted.
+
+**Writes.** QA writes only data it creates, and removes it before it finishes. Ask the user before you confirm any delete, even of data QA created. Cancel every confirmation that would change shared state QA did not create.
+
+**Screenshots are required.** Capture one for every state a step checks, every failure, and both sides of every state change (before and after a save, a discard, a search, a delete). A step with no screenshot is reported as "not captured", never as a pass. Name them `NN-short-state.png` in run order, and copy the set to the scratchpad before the summary. Look at each screenshot you cite, and zoom or crop to check a small region, rather than trusting the file name.
+
+**The comment.** A `## Dev QA` heading, one plain paragraph with the result and the deployed commit, then each section in its own `<details>` block (one per Test Steps section, with a result line per step and its screenshots inline), then a closing status line. Never put step results outside a `<details>` block.
+
+**The verdict covers the listed steps only.** Dev QA passes when every step in the pull request's Test Steps passes. Adapted steps count, and "not verified" steps are named but do not fail it. Problems found outside the listed steps, such as a panel candidate reproduced live, do not fail Dev QA. They go in a separate `<details>` block titled as other observations, and never appear as "fail" lines. Be terse and matter-of-fact. Name every step as passed, failed, adapted, or not verified. A defect found during QA that also cleared the review filter goes in the review, and the QA comment links to it in one line rather than restating it.
+
+**Attaching.** Upload images as the local file describes, and embed the returned URLs. Uploads are permanent, so upload only after the user approves the post. Before approval, the local summary shows the comment with local file paths in place of the URLs.
+
+**Approval.** The local summary shows the review and the Dev QA comment together, and asks one question that covers both. The user can approve either one alone, or ask for them combined into one top-level comment.
 
 ## Voice
 

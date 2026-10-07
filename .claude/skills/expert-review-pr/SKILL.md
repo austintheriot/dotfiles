@@ -1,6 +1,6 @@
 ---
 name: expert-review-pr
-description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants) and, when the change adds files, modules, or public names, a pass checking that they match the project's existing structure and naming, holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that. When asked, also dev-QAs the PR on its deployed build and drafts a separate Dev QA comment with screenshots of every checked state.
+description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants) and, when the change adds files, modules, or public names, a pass checking that they match the project's existing structure and naming, holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that. When asked, also dev-QAs the PR on its deployed build and folds a Dev QA section, with screenshots of every checked state, into the same top-level review body.
 ---
 
 # Expert Review PR
@@ -223,7 +223,7 @@ Then ask whether to post, and wait for the answer.
 
 ## Dev QA against the deployed build
 
-Run this only when the invocation asks for dev QA. It runs in parallel with the panel, in the main session, and produces a second artifact: a Dev QA comment, separate from the review.
+Run this only when the invocation asks for dev QA. It runs in parallel with the panel, in the main session, and produces a Dev QA section that goes at the end of the review body. The review and the Dev QA result are one top-level comment, not two.
 
 **Read `~/.claude/local/dev-qa.md` first.** It holds the project specifics: where the deployed URLs come from, how to find the deployed commit, which accounts to use, which writes are forbidden, browser quirks, and how to upload screenshots. If the file is missing, ask the user for the deployed URL and a test account before you test.
 
@@ -237,13 +237,13 @@ Run this only when the invocation asks for dev QA. It runs in parallel with the 
 
 **Screenshots are required.** Capture one for every state a step checks, every failure, and both sides of every state change (before and after a save, a discard, a search, a delete). A step with no screenshot is reported as "not captured", never as a pass. Name them `NN-short-state.png` in run order, and copy the set to the scratchpad before the summary. Look at each screenshot you cite, and zoom or crop to check a small region, rather than trusting the file name.
 
-**The comment.** A `## Dev QA` heading, one plain paragraph with the result and the deployed commit, then each section in its own `<details>` block (one per Test Steps section, with a result line per step and its screenshots inline), then a closing status line. Never put step results outside a `<details>` block.
+**The section.** A `## Dev QA` heading, one plain paragraph with the result and the deployed commit, then each Test Steps section in its own `<details>` block (with a result line per step and its screenshots inline), then a closing status line. Never put step results outside a `<details>` block. The section is the last part of the review body (see Body shape), so the attribution line at the top of the body covers it. Do not repeat the attribution line above the heading.
 
-**The verdict covers the listed steps only.** Dev QA passes when every step in the pull request's Test Steps passes. Adapted steps count, and "not verified" steps are named but do not fail it. Problems found outside the listed steps, such as a panel candidate reproduced live, do not fail Dev QA. They go in a separate `<details>` block titled as other observations, and never appear as "fail" lines. Be terse and matter-of-fact. Name every step as passed, failed, adapted, or not verified. A defect found during QA that also cleared the review filter goes in the review, and the QA comment links to it in one line rather than restating it.
+**The verdict covers the listed steps only.** Dev QA passes when every step in the pull request's Test Steps passes. Adapted steps count, and "not verified" steps are named but do not fail it. Problems found outside the listed steps, such as a panel candidate reproduced live, do not fail Dev QA. They go in a separate `<details>` block titled as other observations, and never appear as "fail" lines. Be terse and matter-of-fact. Name every step as passed, failed, adapted, or not verified. A defect found during QA that also cleared the review filter goes in the review's findings, and the Dev QA section points to it in one line ("see the comment on `default.conf:192`") rather than restating it.
 
-**Attaching.** Upload images as the local file describes, and embed the returned URLs. Uploads are permanent, so upload only after the user approves the post. Before approval, the local summary shows the comment with local file paths in place of the URLs.
+**Attaching.** Upload images as the local file describes, and embed the returned URLs. Uploads are permanent, so upload only after the user approves the post, and before the review is created, because the URLs go into the review body. Before approval, the local summary shows the section with local file paths in place of the URLs.
 
-**Approval.** The local summary shows the review and the Dev QA comment together, and asks one question that covers both. The user can approve either one alone, or ask for them combined into one top-level comment.
+**Approval.** The local summary shows the whole review body, Dev QA section included, and asks one question. One approval posts one review. When the user asks for only the review or only the Dev QA result, post that part alone as the review body.
 
 ## Voice
 
@@ -282,6 +282,7 @@ The review body has exactly these parts, in this order:
 1. **A headline verdict line.** One short sentence naming what the review found. Declarative, and phrased as an observation rather than a decision about the pull request's fate: "Two correctness problems, both in the token rotation path." Never "Requesting changes", "Approving", "LGTM", "Two things to fix before merge", or any other phrase that reads as a merge decision. The review is a comment; the body must not imply otherwise.
 2. **One paragraph in plain language.** What breaks and what it costs, for a reader who has not read the diff. Walk the mechanism in order: when X happens, Y does Z, so W results. Keep it to one paragraph.
 3. **A `<details>` block per unanchored finding.** Only findings that cleared the filter and have no changed line to attach to. Each block: `<summary>` with a short title, then the finding in the same what-breaks, what-triggers-it, what-it-costs order, then the fix in one sentence.
+4. **The Dev QA section**, only when the invocation asked for dev QA. Its shape is under Dev QA against the deployed build. Never post it as a separate comment beside the review.
 
 Nothing else goes in the body on a run that has findings. No coverage inventory, no list of what was examined, no summary of what looked fine, no closing offer, no restatement of the inline comments.
 
@@ -402,6 +403,8 @@ Pending-review comments are invisible to REST: `GET repos/{owner}/{repo}/pulls/c
 
 When the body is unavailable, the paragraph that would have gone in it becomes one more inline comment. Anchor it to the changed line the findings are most about (the shared type, the shared call site, the shared branch). Open it with a sentence saying it summarizes the other comments, so a reader does not count it as one more defect.
 
+The Dev QA section cannot go in that body either, and it is too long for an inline comment. In this case only, post it as a separate top-level pull-request comment, with the attribution line at its top. Say in the local summary that it will post separately and why.
+
 ## Clean runs
 
 When no finding clears the filter, say so in chat, and offer to post a short review whose body is:
@@ -409,6 +412,7 @@ When no finding clears the filter, say so in chat, and offer to post a short rev
 1. A headline verdict line stating that the review found no blocking problems.
 2. One short paragraph.
 3. A list of the concern areas examined, in plain language. Name the test examination among them, in plain words ("what the tests would catch if this broke"), when the test pass produced nothing that cleared the filter. Name the structure and naming examination the same way ("fit with the project's existing layout and naming") when it ran and produced nothing that cleared the filter. Do not name it when it did not run.
+4. The Dev QA section, when dev QA ran.
 
 The structure and naming pass is an internal, like the test pass. A posted alignment finding is a finding about the code, interleaved with the others by severity. Nothing in the posted review says that a structure or naming pass ran.
 
@@ -421,6 +425,7 @@ Ask before posting the clean review. The user may prefer silence on the pull req
 Any of these means stop and re-apply the filter or the voice rules:
 
 - An inline comment about whitespace, formatting, or import order.
+- A Dev QA result posted as its own comment while the review body was available to carry it.
 - An inline comment about naming or file placement that does not state the project's convention with its count, or does not name a concrete cost.
 - An alignment comment that argues for an ecosystem guide over the project's own convention.
 - A finding you cut from inline that reappears in the body as a question or a note.

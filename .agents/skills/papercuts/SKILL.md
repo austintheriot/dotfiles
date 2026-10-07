@@ -1,6 +1,6 @@
 ---
 name: papercuts
-description: "Log genuine, recurring repository friction to .agents/PAPERCUTS.md — confusing setup, a flaky repo command or script, a misleading in-repo error, stale generated files, or a non-obvious gotcha that will cost the next contributor time. Also use to review, deduplicate, and resolve existing entries. Gate hard before logging: only friction the repository itself can fix counts. Never log the agent's own sandbox/permission errors, shell-scripting mistakes, transient flakiness, or third-party tool quirks the repo can't change."
+description: "Log genuine, recurring repository friction to ~/.agents/PAPERCUTS.md (one personal file for every repo) — confusing setup, a flaky repo command or script, a misleading in-repo error, stale generated files, or a non-obvious gotcha that will cost the next contributor time. Also use to review, deduplicate, and resolve existing entries. Gate hard before logging: only friction the repository itself can fix counts. Never log the agent's own sandbox/permission errors, shell-scripting mistakes, transient flakiness, or third-party tool quirks the repo can't change."
 metadata:
   internal: true
 ---
@@ -47,18 +47,21 @@ Only the former is a papercut.
 
 ## Log proactively
 
-1. Search `.agents/PAPERCUTS.md` for an equivalent entry and avoid duplicates.
+1. Search `~/.agents/PAPERCUTS.md` for an equivalent entry and avoid duplicates.
+   This is the only papercuts file, for every repo. Never create
+   `.agents/PAPERCUTS.md` inside a project repo.
 2. Append one unchecked item under `## Open` using this format:
 
    ```markdown
-   - [ ] `YYYY-MM-DDTHH:MM:SSZ` — `agent` — <friction, and the smallest useful fix or workaround>.
+   - [ ] `YYYY-MM-DDTHH:MM:SSZ` — `agent` — `repo` — <friction, and the smallest useful fix or workaround>.
    ```
 
 3. Keep it to one or two sentences: what got in the way, and the likely repo-side
    fix. Lead with the friction, not with what you were doing.
 4. Continue the original task. Do not expand a papercut into unrelated work.
 
-Use UTC timestamps and a short agent label (`codex`, `claude`, `human`). Add a
+Use UTC timestamps, a short agent label (`codex`, `claude`, `human`), and a
+repo label (the repo directory name, or `dotfiles` for this repo). Add a
 PR or task identifier only when it helps future triage.
 
 ## Review or resolve

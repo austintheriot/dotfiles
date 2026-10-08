@@ -52,6 +52,7 @@ Before handing back a draft, read it as the recipient and ask:
 - Did I drop the link/file/line Austin would have included?
 - Did I claim more certainty than the facts support, or hedge something obvious?
 - Did I over-offer help into a wall of eagerness instead of one plain offer?
+- Did I commit Austin to work he did not approve ("I can take it on", "I'll do a follow-up", "I'll open a ticket")? Remove the promise and leave the owner open, or ask him before posting.
 - Did I leak the local AI workflow -- naming a skill, an agent, an `/expert-review` panel, or a subagent delegation? Strip it; present the substance as Austin's own. (The posting disclaimer is the only sanctioned Claude mention.)
 - Any em dash, any marketing verb ("excited", "leverage", "seamless", "unlock"), any emoji where the surface forbids it?
 - Any "Claudese" tic-phrase -- "belt-and-suspenders", "a sharp edge", "the load-bearing X", "footgun", "non-trivial", "first-class", "out of the box", "to be fair", "that said"? Say it plainly instead.

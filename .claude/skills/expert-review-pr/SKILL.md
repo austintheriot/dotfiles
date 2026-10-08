@@ -9,28 +9,9 @@ Review another person's pull request and post the result to GitHub.
 
 Analysis comes from the `/expert-review` panel. Everything after analysis is different: a far harsher filter, a posted artifact, and a voice that is openly Claude's rather than the user's.
 
-## Two rules that override everything else in this file
+**Read `~/.claude/rules/outside-pr-review.md` first.** It holds the posture this skill shares with `/dev-qa`: the two overriding rules (post only on an answered approval, `COMMENT` only), scope resolution, the posting identity, voice, the internals rule, the local summary, uploads, and the GitHub posting mechanics. This file adds what is specific to a code review: the analysis, the filter, the body shape, and the inline comment shapes.
 
-1. **The review is posted only after the user says to post it, in a message that answers the question you asked.** Draft, summarize, ask, wait. Silence is not approval. A prior approval in this session does not carry to a second run.
-2. **The submitted review event is always `COMMENT`.** Never `APPROVE`. Never `REQUEST_CHANGES`. A human decides whether a pull request is approved or blocked.
-
-## Scope resolution
-
-No argument: resolve the open pull request for the checked-out branch.
-
-```bash
-gh pr view --json number,url,author,headRefName,baseRefName,title,body
-```
-
-An argument that is a number or a pull-request URL overrides the branch. If the branch has no open pull request, stop and say so; do not guess at a nearby one.
-
-Resolve the posting identity once, for the self-authorship check and for pending-review discovery:
-
-```bash
-gh api graphql -f query='query { viewer { login } }' --jq '.data.viewer.login'
-```
-
-If the pull request author equals that login, print one line and continue:
+For the self-authorship line, name `/expert-review`:
 
 > This pull request is authored by you. `/expert-review` is the skill built for your own work. Continuing.
 
@@ -223,57 +204,31 @@ Then ask whether to post, and wait for the answer.
 
 ## Dev QA against the deployed build
 
-Run this only when the invocation asks for dev QA. It runs in parallel with the panel, in the main session, and produces a Dev QA section that goes at the end of the review body. The review and the Dev QA result are one top-level comment, not two.
+Run this only when the invocation asks for dev QA. Invoke the `dev-qa` skill (Skill tool) in embedded mode, in the main session, right after the Stage 5 dispatch, so the listed steps run while the panel agents work. Pass the pull request number, the head, and the base. After synthesis, hand it the candidate findings that a browser can reproduce, for its live check. `/dev-qa` owns the target proof, the session proof, the steps, the evidence, the confirm stage, the writes, and the section shape. Do not restate or override its rules here.
 
-**Read `~/.claude/local/dev-qa.md` first.** It holds the project specifics: where the deployed URLs come from, how to find the deployed commit, which accounts to use, which writes are forbidden, browser quirks, and how to upload screenshots. If the file is missing, ask the user for the deployed URL and a test account before you test.
+Fold its hand-back into this review:
 
-**Target.** Before you test, prove the deployed build carries this pull request's code. When the deployed commit is behind the head, diff the two over the pull request's files. Say which files differ, and do not report results for them.
-
-**Accounts.** Before you rely on a negative result, such as a 404 or a hidden control, prove the session is signed in. A 404 while signed out proves nothing.
-
-**Steps.** Run the pull request's own Test Steps in order. When the deployed data makes a step impossible as written, run the closest path that reaches the same code, and say so. Also try, live, every panel candidate that a browser can reproduce. A finding reproduced live is stronger evidence than a re-read. A candidate that does not reproduce must be re-examined before it is posted.
-
-**Writes.** QA writes only data it creates, and removes it before it finishes. Ask the user before you confirm any delete, even of data QA created. Cancel every confirmation that would change shared state QA did not create.
-
-**Screenshots are required.** Capture one for every state a step checks, every failure, and both sides of every state change (before and after a save, a discard, a search, a delete). A step with no screenshot is reported as "not captured", never as a pass. Name them `NN-short-state.png` in run order, and copy the set to the scratchpad before the summary. Look at each screenshot you cite, and zoom or crop to check a small region, rather than trusting the file name.
-
-**The section.** A `## Dev QA` heading, one plain paragraph with the result and the deployed commit, then each Test Steps section in its own `<details>` block (with a result line per step and its screenshots inline), then a closing status line. Never put step results outside a `<details>` block. The section is the last part of the review body (see Body shape), so the attribution line at the top of the body covers it. Do not repeat the attribution line above the heading.
-
-**The verdict covers the listed steps only.** Dev QA passes when every step in the pull request's Test Steps passes. Adapted steps count, and "not verified" steps are named but do not fail it. Problems found outside the listed steps, such as a panel candidate reproduced live, do not fail Dev QA. They go in a separate `<details>` block titled as other observations, and never appear as "fail" lines. Be terse and matter-of-fact. Name every step as passed, failed, adapted, or not verified. A defect found during QA that also cleared the review filter goes in the review's findings, and the Dev QA section points to it in one line ("see the comment on `default.conf:192`") rather than restating it.
-
-**Attaching.** Upload images as the local file describes, and embed the returned URLs. Uploads are permanent, so upload only after the user approves the post, and before the review is created, because the URLs go into the review body. Before approval, the local summary shows the section with local file paths in place of the URLs.
-
-**Approval.** The local summary shows the whole review body, Dev QA section included, and asks one question. One approval posts one review. When the user asks for only the review or only the Dev QA result, post that part alone as the review body.
+- The Dev QA section is the last part of the review body (see Body shape). The review and the Dev QA result are one top-level comment, not two.
+- A candidate `/dev-qa` reproduced live is stronger evidence for that finding. It still goes through the filter. When it posts, the comment states the reproduction, and the section's Other observations block points to the comment in one line. A candidate it did not reproduce goes back through the verify step before it is posted.
+- A step failure that also cleared the filter is a review finding. The section points to its comment in one line.
+- The local summary shows the review and the section together, with one question. Upload the section's screenshots only after approval.
 
 ## Voice
 
-The posted review is Claude's own writing, and reads that way.
+Follow the voice rules in `~/.claude/rules/outside-pr-review.md`. One rule is specific to findings:
 
-- Do not invoke `/write-like-austin`. Do not imitate the user's voice.
-- No praise, no flattery, no compliments on the change. Open on the finding, not on what the pull request does well.
-- No softeners: "ignore me", "worth a ticket if you agree", "just a thought", "feel free to disregard", "nice work but".
-- Plain literal words. A reader who has not seen the diff should follow it without decoding a figure of speech.
-- State uncertainty as a fact when it is load-bearing: "I did not verify X."
-- Hedge each posted finding lightly, so it reads as a likely bug, not a verdict. Open with "Possible bug here:", write the claim with "may" ("a close that lands during the upgrade may be dropped for good"), and say in one plain clause what the claim rests on ("based on reading through the code and tweaking the tests a bit"). The headline line of the body takes the same hedge. A coverage finding is not a bug in today's code, so it does not open with "Possible bug here:". It opens on the guarantee, with the same light hedge: "Nothing currently pins that typed cards survive a click outside the modal." A short coverage-gap comment opens with "Possible coverage gap:" instead. The hedge sets the tone only. Keep the trigger, the consequence, and any reproduction exact. The filter still decides what gets posted, and the hedge never lets through a finding that failed the filter.
-- Follow the repository's own attribution convention if it defines one. Read the repository `CLAUDE.md` for a rule about identifying AI-authored comments and follow what it says. Add no attribution line if the repository defines none.
-
+- Hedge each posted finding lightly, so it reads as a likely bug, not a verdict. Open with "Possible bug here:", write the claim with "may" ("a close that lands during the upgrade may be dropped for good"), and say in one plain clause what the claim rests on ("based on reading through the code and tweaking the tests a bit", or for a finding reproduced on the deployed build, "reproduced on the preview: <what happened>"). The headline line of the body takes the same hedge. A coverage finding is not a bug in today's code, so it does not open with "Possible bug here:". It opens on the guarantee, with the same light hedge: "Nothing currently pins that typed cards survive a click outside the modal." A short coverage-gap comment opens with "Possible coverage gap:" instead. The hedge sets the tone only. Keep the trigger, the consequence, and any reproduction exact. The filter still decides what gets posted, and the hedge never lets through a finding that failed the filter.
 ## Internals stay out
 
-The posted review says nothing about how it was produced. No mention of a panel, experts, lenses, agents, subagents, skills, severities, confidence scores, dispatch, or synthesis. No mention that the review is one of several passes, or that a local tool ran.
-
-The review contains findings about the code and nothing about itself.
+Follow the internals rule in `~/.claude/rules/outside-pr-review.md`. The review contains findings about the code and nothing about itself. These parts are specific to a code review.
 
 The test pass is an internal too. A surviving test finding is posted as a finding about the code, interleaved with the others by severity and anchored to its own line. Nothing in the posted review says a test pass ran, groups the test findings together, or labels them as being about coverage rather than about the defect.
 
-**This rule is violated most often in a comment's opening clause**, where a scene-setting phrase feels like orientation rather than internals. Every one of these is a violation: "Test coverage pass.", "A second review pass focused on X.", "Second pass here.", "From the coverage review,". Delete the clause and open on the finding. A comment that begins by saying what kind of review it is has already broken the rule.
-
 The same applies across comments. Do not number or rank findings against each other in the posted text ("the first group", "the cheapest of the three", "my other four comments"), and do not tell the author that a second round happened. Each comment stands on its own defect. The one exception is the summary comment described below, which may say it summarizes the others, because a reader needs that to not count it as another defect.
 
-**Technique is not process.** Naming how you obtained evidence about the code is allowed, and often makes a finding credible: "deleting this line leaves the suite green at 1213 passed", "I could not get a mutant past this latch", "changing `??=` to `=` and re-running the suite". Those are facts about the code and its tests. In a coverage comment, that evidence supports the guarantee and the likely edit. It never leads the comment and never replaces them (see Inline comments). Naming how the review was organized is not: passes, rounds, panels, lenses, agents, severities, confidence scores. Evidence in, org chart out.
+In a coverage comment, evidence about the tests ("deleting this line leaves the suite green") supports the guarantee and the likely edit. It never leads the comment and never replaces them (see Inline comments).
 
 When naming what was examined (clean runs only, below), name the concern in plain language: "concurrency and race conditions", "authentication and access control", "input validation", "query patterns and load behavior". Never the internal name of a lens or agent.
-
-Before posting, re-read the first sentence of every comment on its own. If it describes the review rather than the code, rewrite it.
 
 ## Body shape
 
@@ -282,7 +237,7 @@ The review body has exactly these parts, in this order:
 1. **A headline verdict line.** One short sentence naming what the review found. Declarative, and phrased as an observation rather than a decision about the pull request's fate: "Two correctness problems, both in the token rotation path." Never "Requesting changes", "Approving", "LGTM", "Two things to fix before merge", or any other phrase that reads as a merge decision. The review is a comment; the body must not imply otherwise.
 2. **One paragraph in plain language.** What breaks and what it costs, for a reader who has not read the diff. Walk the mechanism in order: when X happens, Y does Z, so W results. Keep it to one paragraph.
 3. **A `<details>` block per unanchored finding.** Only findings that cleared the filter and have no changed line to attach to. Each block: `<summary>` with a short title, then the finding in the same what-breaks, what-triggers-it, what-it-costs order, then the fix in one sentence.
-4. **The Dev QA section**, only when the invocation asked for dev QA. Its shape is under Dev QA against the deployed build. Never post it as a separate comment beside the review.
+4. **The Dev QA section**, only when the invocation asked for dev QA. `/dev-qa` defines its shape. Never post it as a separate comment beside the review, except in the pending-review case the posture file's delivery table covers.
 
 Nothing else goes in the body on a run that has findings. No coverage inventory, no list of what was examined, no summary of what looked fine, no closing offer, no restatement of the inline comments.
 
@@ -290,13 +245,7 @@ Nothing else goes in the body on a run that has findings. No coverage inventory,
 
 Every filtered-in finding that has a changed line attaches to that line.
 
-Verify the anchor before posting. Fetch the patch for the file and confirm the line is in the changed range:
-
-```bash
-gh api "repos/$REPO/pulls/$PR/files" --jq '.[] | select(.filename=="<path>") | .patch'
-```
-
-The patch hunk headers (`@@ -old,count +new,count @@`) give the valid line numbers on the `RIGHT` side. A finding whose line does not verify moves to a `<details>` block in the body, described by file path alone. Never post an anchor you just disproved.
+Verify each anchor against the patch before posting, as the posture file describes. A finding whose line does not verify moves to a `<details>` block in the body, described by file path alone.
 
 Attach to the closest changed line that relates to the issue. A finding about code a few lines from the edit still anchors to the edit, as long as the connection is clear from the comment text.
 
@@ -319,91 +268,7 @@ When several gaps anchor to the same line, merge them into one short comment wit
 
 ## Posting
 
-Check for an existing pending review by the posting identity:
-
-```bash
-gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
-  --jq '[.[] | select(.state=="PENDING" and .user.login=="<viewer>")] | {count: length, ids: [.[].id]}'
-```
-
-This check goes stale. A human can start a review between the check and the post, so treat a `422` saying `User can only have one pending review per pull request` on the create call as a pending review that appeared mid-run, not as an error to retry. Switch to the append path below.
-
-**If a pending review exists**, it may contain comments the user wrote by hand. Fetch its comments, show the user what is already staged, and ask whether to append to it or create a separate review. Do not merge into a hand-written draft without asking.
-
-**If none exists**, create the review with all comments in one call. A single POST with a `comments` array and `event: "COMMENT"` both creates and submits:
-
-```bash
-gh api "repos/$REPO/pulls/$PR/reviews" \
-  --method POST \
-  --input review.json
-```
-
-Where `review.json` is:
-
-```json
-{
-  "body": "<the body>",
-  "event": "COMMENT",
-  "comments": [
-    { "path": "src/session/refresh.ts", "line": 88, "side": "RIGHT", "body": "<finding>" }
-  ]
-}
-```
-
-Build the JSON with a heredoc or `jq` rather than inline shell escaping; review bodies contain backticks, quotes, and newlines that break naive quoting.
-
-After posting, print the review URL.
-
-### Appending to a pending review
-
-REST cannot add a comment to an existing pending review. Do not spend calls rediscovering this:
-
-- `POST repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}/comments` returns `404`. It does not add comments to a pending review.
-- `POST repos/{owner}/{repo}/pulls/{pr}/comments` returns `422` with `user_id can only have one pending review per pull request`. It tries to create its own review instead of joining the pending one.
-
-Use GraphQL. First get the pending review's node ID:
-
-```bash
-gh api graphql -f query='query {
-  repository(owner:"OWNER", name:"REPO") {
-    pullRequest(number:NNN) {
-      reviews(last:5, states:PENDING) {
-        nodes { id state author { login } }
-      }
-    }
-  }
-}'
-```
-
-Then append each finding as a thread on that review with `addPullRequestReviewThread`, passing `pullRequestReviewId`, `path`, `line`, `side: RIGHT`, and `body`. One mutation per comment.
-
-**Read the human's existing comments first.** Fetch them before writing anything, so you do not restate a point they already made and do not touch what they wrote:
-
-```bash
-gh api graphql -f query='query {
-  repository(owner:"OWNER", name:"REPO") {
-    pullRequest(number:NNN) {
-      reviews(last:5, states:PENDING) {
-        nodes {
-          comments(first:20) { nodes { id databaseId path body } }
-        }
-      }
-    }
-  }
-}'
-```
-
-Pending-review comments are invisible to REST: `GET repos/{owner}/{repo}/pulls/comments/{comment_id}` returns `404` for one that belongs to an unsubmitted review, so the read-modify-write `PATCH` cycle does not work. Edit with the `updatePullRequestReviewComment` mutation, passing `pullRequestReviewCommentId` and the new `body`. That ID is the GraphQL node `id` (a `PRRC_...` string), not the `databaseId`. Passing `databaseId` fails.
-
-**Never write the review body.** On someone else's pending review the body is theirs, and text you put there publishes under their name. Leave it untouched and leave it empty if it is empty.
-
-**Attribution goes on each comment you author.** When the repository defines an AI-attribution convention, the body is not available to carry it, so every inline comment you write carries the prefix on its own line, then a blank line, then the finding. Never add the prefix to a comment the human wrote.
-
-### The summary as an extra inline comment
-
-When the body is unavailable, the paragraph that would have gone in it becomes one more inline comment. Anchor it to the changed line the findings are most about (the shared type, the shared call site, the shared branch). Open it with a sentence saying it summarizes the other comments, so a reader does not count it as one more defect.
-
-The Dev QA section cannot go in that body either, and it is too long for an inline comment. In this case only, post it as a separate top-level pull-request comment, with the attribution line at its top. Say in the local summary that it will post separately and why.
+Post through the mechanics in `~/.claude/rules/outside-pr-review.md`: the pending-review check, the single create call, the GraphQL append path, attribution per comment when the body is unavailable, and where the summary paragraph and the Dev QA section go when it is. The summary paragraph that moves into an inline comment anchors to the changed line the findings are most about (the shared type, the shared call site, the shared branch).
 
 ## Clean runs
 
@@ -459,6 +324,8 @@ Any of these means stop and re-apply the filter or the voice rules:
 
 ## Decision references
 
+- Shared outside-reviewer posture and posting: `~/.claude/rules/outside-pr-review.md`
+- Dev QA process and section shape: `~/.claude/skills/dev-qa/SKILL.md`, project bindings in `~/.claude/local/dev-qa.md`
 - Panel process and dispatch: `~/.claude/skills/expert-review/SKILL.md`
 - Structure and naming lenses: `~/.claude/rules/project-structure.md`, `~/.claude/rules/naming-conventions.md`
 - Panel output contract: `~/.claude/rules/panel-contract.md`

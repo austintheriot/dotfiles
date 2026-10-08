@@ -10,3 +10,5 @@
 # staged 19 source files by hand to avoid it. Ignoring it makes the safe
 # form the default one.
 crates/target
+
+**/.claude/.cc-writes/

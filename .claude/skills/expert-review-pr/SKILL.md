@@ -28,7 +28,7 @@ Do not tell the subagents to self-filter for severity. They obey that literally 
 
 ## Model selection
 
-Every agent call uses the cheapest model that can do that call's job, chosen per call. The choice is between Haiku and Sonnet. Do not go above Sonnet unless the user names a model in the invocation or in the conversation. Pass `model` explicitly on every Agent call. Do not rely on the agent definition's frontmatter or on inheritance from the main session, because both resolve to the session model.
+Every agent call uses the cheapest model that can do that call's job. Choose it per call, from the size and risk of the region the call reviews. The choice is between Haiku, Sonnet, and Opus. Pass `model` explicitly on every Agent call. Do not rely on the agent definition's frontmatter or on inheritance from the main session, because both resolve to the session model.
 
 **Start from Haiku. Move a call to Sonnet when any of these is true:**
 
@@ -43,7 +43,14 @@ Every agent call uses the cheapest model that can do that call's job, chosen per
 - Checklist-shaped lenses on a small region: `documentation`, `readability`, `accessibility`, `i18n`, `ci-pipeline`, `licensing-and-oss`, and similar, when the region is under the size threshold above.
 - The structure and naming pass when the change only adds files beside existing siblings of the same kind, or adds local names inside existing modules. The job then is counting and comparing.
 
-When unsure between the two, pick Sonnet for a lens in the first list and Haiku otherwise.
+When unsure between Haiku and Sonnet, pick Sonnet for a lens in the first list and Haiku otherwise.
+
+**Move a call to Opus when both of these are true:**
+
+- The lens finds defects by reasoning about behavior (the first bullet of the Sonnet list), and its region touches money, auth, persistence, sync, or concurrency.
+- The region is large or spread out, by the size threshold in the Sonnet list.
+
+Risk alone stays on Sonnet. Size alone stays on Sonnet. Agents that a skill or the repository dispatches with their own model setting, such as the dev QA confirmer, keep that setting.
 
 **Rerun once on Sonnet** when a Haiku call returns output without file and line references, contradicts the code on a fresh read, or obviously did not read the region (for example, it describes functions the diff does not contain). Do not rerun to get more findings from a call that returned a clean result with evidence.
 

@@ -120,6 +120,15 @@ Run each section's steps in order, through the driving recipes.
 
 Append to the evidence log as you go: one action entry per action with its observation and evidence references, then one step checkpoint per step with its verdict. Write the observation as what the screen showed, with no verdict words. End each section with the preliminary verdict event, then build and validate the trace.
 
+**Free play.** After a section's listed steps, play with the feature the way a curious user would. Test Steps cover the path the author thought of. Free play finds what the author did not think of. Start from what the diff touches, then go one step sideways:
+
+- Vary the inputs the steps used: empty, very long, non-Latin text, pasted, repeated quickly.
+- Interrupt the flow: back, refresh, a second tab, cancel halfway, resize to a narrow width, sign out and in.
+- Try the neighbours: other entry points to the same feature, other personas or account states, features that share the changed code or state.
+- Chase anything that looks off until it reproduces or clearly does not.
+
+Spend about as long on free play as on the listed steps, and stop sooner when nothing new turns up. Log each free-play action in the evidence log like any other action, with a screenshot of anything odd. Free-play results never change a verdict or the rollup. Each one goes in Other observations with the actions that reproduce it and its screenshot. The Writes rules apply in free play too.
+
 ### 6. Live check of panel candidates (embedded mode only)
 
 The caller hands in candidates after its synthesis, so this step runs after the listed steps and after that hand-in. For each candidate that a browser can reproduce, try it live in its own unit directory. Name each one's result: reproduced, did not reproduce, or not reachable from the deployed build. A reproduced candidate is stronger evidence than a re-read. A candidate that does not reproduce goes back to the caller for re-examination before it is posted.

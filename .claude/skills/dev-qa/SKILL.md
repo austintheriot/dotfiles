@@ -116,6 +116,7 @@ Run each section's steps in order, through the driving recipes.
 - Save them in the section's unit directory (the project file says where). Never cite a file you did not write.
 - Look at each frame you cite. Zoom or crop to check a small region, rather than trusting the file name.
 - Prefer a structured state read over a visual check when the driving recipes offer one. Save the read as `state-<N>.json`.
+- Never inject anything into the page under test to make a screenshot show state: no overlay, banner, or added element, and no restyled app element. A screenshot shows only what the app rendered. When a step asserts state with no visible UI (storage, analytics, network), the state read (`state-<N>.json`) is the outcome evidence, and the outcome frame is the unmodified page at the moment of the read. Quote the read's relevant values in the step's result text.
 - When a step turns on a quantity ("narrow width", "about a second"), test values across the range, and record each value.
 
 Append to the evidence log as you go: one action entry per action with its observation and evidence references, then one step checkpoint per step with its verdict. Write the observation as what the screen showed, with no verdict words. End each section with the preliminary verdict event, then build and validate the trace.

@@ -112,9 +112,9 @@ Run each section's steps in order, through the driving recipes.
 
 **Record a video and take screenshots, for every step.** The two serve different readers.
 
-- **Video is the posted evidence.** It shows the path to the state, not only the state, and a reader can replay a reproduction long after the build is gone. Use the recorder the project file names. Start one recording per step before the step's first action, and stop it when the outcome is on screen. Name it `step-<N>.<ext>`.
+- **Video is the posted evidence.** It shows the path to the state, not only the state, and a reader can replay a reproduction long after the build is gone. Make each video the way the project file's video skill says: its recorder, trimming, input marks, caption, and style. Start one recording per step before the step's first action, and stop it when the outcome is on screen. Name it `step-<N>.<ext>`.
 - **Screenshots are the confirmer's evidence.** The confirmer judges from images and state reads, and it cannot watch a video. While the recording runs, capture one screenshot for every state a step checks, every failure, and both sides of every state change (before and after a save, a discard, a search, a delete). The last frame of each step is the outcome frame: the asserted end state. Capture it just before you stop the recording. A step with no outcome frame is not `PASS`.
-- **Screenshots alone** are allowed only when the project file names no recorder for the driver, when the step has no screen (a test run, an API read), or when the recorder fails. Record the reason in the step's log entry.
+- **Screenshots alone** are allowed when the step checks something truly static, with no interaction to show (copy on a page, a layout, a static state), when the project file names no recorder for the driver, when the step has no screen (a test run, an API read), or when the recorder fails. Record the reason in the step's log entry.
 
 - Name frames `step-<N>-<SEQ>-<what-it-shows>.png`, with `SEQ` zero-padded in capture order. Name each frame for what it shows, not for the step's goal.
 - Save them in the section's unit directory (the project file says where). Never cite a file you did not write.
@@ -132,7 +132,7 @@ Append to the evidence log as you go: one action entry per action with its obser
 - Try the neighbours: other entry points to the same feature, other personas or account states, features that share the changed code or state.
 - Chase anything that looks off until it reproduces or clearly does not.
 
-Spend about as long on free play as on the listed steps, and stop sooner when nothing new turns up. Record free play on video (`free-play.<ext>`). Log each free-play action in the evidence log like any other action. When something looks off, screenshot the odd state, then reproduce it once more from a known start state as its own video (`repro-<SEQ>.<ext>`), so anyone can reproduce it after the fact. Use screenshots alone only when no recorder is available. Free-play results never change a verdict or the rollup. Each one goes in Other observations with the actions that reproduce it, its repro video, and its screenshot. The Writes rules apply in free play too.
+Spend about as long on free play as on the listed steps, and stop sooner when nothing new turns up. Record free play on video (`free-play.<ext>`) as a working record. It is never posted. Log each free-play action in the evidence log like any other action. When something looks off, screenshot the odd state, then reproduce it once more from a known start state as its own trimmed video (`repro-<SEQ>.<ext>`) that holds only the reproduction. Use screenshots alone only when no recorder is available. Free-play results never change a verdict or the rollup. Post only findings worth a reader's time: a defect, a confusing state, or a risk the author likely missed. Each posted finding goes in Other observations with a one-line statement of the problem, numbered repro steps from the known start state, what you expected and what happened, its repro video, and a screenshot of the problem. When free play finds nothing worth sharing, post nothing about it. The Writes rules apply in free play too.
 
 ### 6. Live check of panel candidates (embedded mode only)
 
@@ -167,8 +167,8 @@ Exactly these parts, in this order:
 
 1. `## Dev QA`
 2. One plain paragraph: the result, the deployed URL, and the deployed commit. If the results are unconfirmed, say so.
-3. One `<details>` block per Test Steps section. The `<summary>` is the section name and its rollup. Inside, one line per step: the step number, its verdict in plain words (`Pass`, `Fail`, `Inconclusive (<reason>)`, `Skipped (<reason>)`), `adapted:` and the change when adapted, then its video, embedded the way the project file says. Add a screenshot only for a step with no video, or to show a failure.
-4. An optional `<details>` block titled `Other observations`: problems outside the listed steps, and documentation disagreements. Never written as `Fail` lines. In embedded mode, a live-reproduced candidate that the caller posts as a finding gets one pointer line here, not a restatement. A candidate the caller drops does not appear.
+3. One `<details>` block per Test Steps section. The `<summary>` is the section name and its rollup. Inside, one line per step: the step number, its verdict in plain words (`Pass`, `Fail`, `Inconclusive (<reason>)`, `Skipped (<reason>)`), `adapted:` and the change when adapted, then its video, embedded the way the project file says. Add a screenshot next to the video when a still makes a point clearer than the video can: an error, exact copy, or a specific state or value the reader should not have to pause the video to find. A truly static step posts its screenshots alone.
+4. An optional `<details>` block titled `Other observations`: free-play findings worth sharing (problem, repro steps, expected and actual, repro video, screenshot), other problems outside the listed steps, and documentation disagreements. Leave the block out when there is nothing to report. Never written as `Fail` lines. In embedded mode, a live-reproduced candidate that the caller posts as a finding gets one pointer line here, not a restatement. A candidate the caller drops does not appear.
 5. A closing status line from the rollup table: `Dev QA: pass`, `Dev QA: fail (<n> steps)`, or `Dev QA: incomplete (<n> steps not run)`.
 
 Never put a step result outside a `<details>` block. Be terse and matter-of-fact. When a step's failure is also a posted code finding, point to it in one line ("see the comment on `default.conf:192`") rather than restating it. Write no attribution line inside the section. The body's attribution line covers it.
@@ -201,6 +201,7 @@ Stop and re-read the rule it breaks:
 - A step with screenshots but no video, with no stated reason, when the project names a recorder.
 - A video handed to the confirmer as a step's only evidence.
 - A free-play finding with no repro video when a recorder was available.
+- The raw free-play recording posted, or a free-play section that reports nothing.
 - A hand-rolled Test Steps parser in a repository whose project file maps an extractor.
 - A deployed-build check handed to the local run orchestrator.
 - An unconfirmed verdict presented as confirmed.

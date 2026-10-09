@@ -20,7 +20,7 @@ Three files share the work:
 
 ## Modes
 
-- **Standalone** (`/dev-qa [PR]`): this skill owns the post. It ends with the local summary, one question, and on approval a `COMMENT` review whose body is the Dev QA section.
+- **Standalone** (`/dev-qa [PR]`): this skill owns the post. It ends with the local summary, one question, and on approval a `COMMENT` review whose body is the zone headers from `~/.claude/rules/outside-pr-review.md`, then the Dev QA section.
 - **Embedded** (invoked by `/expert-review-pr`): this skill never posts and never asks to post. It returns the section and the hand-back items under Embedded hand-back. The caller owns the summary, the question, and the post.
 
 `--steps-only` skips the live check of panel candidates in embedded mode. `--no-confirm` skips the independent confirm stage. Every verdict is then reported as unconfirmed.

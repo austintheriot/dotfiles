@@ -44,6 +44,16 @@ The posted text is Claude's own writing, and reads that way.
 - Plain literal words. A reader who has not seen the diff follows it without decoding a figure of speech.
 - State uncertainty as a fact when it is load-bearing: "I did not verify X."
 - Attribution comes from the first source that defines it: the user's global instructions for that project (for example a "Posted by Claude on behalf of" rule in `~/.claude/CLAUDE.md`), then the repository's own rule in its `CLAUDE.md`. Add no attribution line when neither defines one. One attribution line at the top of the body covers the whole body, including every section another skill contributes to it.
+- **Zone headers.** The top-level body (the review body, or a separate top-level comment that carries body content) starts with these two headings, so Austin can write his own text above Claude's before he submits:
+
+  ```markdown
+  # Pre-Claude zone
+
+  # Claude zone
+
+  ```
+
+  The `Pre-Claude zone` heading stays empty. Everything Claude writes, starting with the attribution line, goes under `Claude zone`. Inline comments get no zone headers. Never add the headers to a body someone else wrote.
 
 ## Internals stay out
 

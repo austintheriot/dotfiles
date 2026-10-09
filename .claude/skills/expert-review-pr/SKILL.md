@@ -232,7 +232,7 @@ When naming what was examined (clean runs only, below), name the concern in plai
 
 ## Body shape
 
-The review body has exactly these parts, in this order:
+The review body starts with the zone headers from `~/.claude/rules/outside-pr-review.md`, then the attribution line. After those, it has exactly these parts, in this order:
 
 1. **A headline verdict line.** One short sentence naming what the review found. Declarative, and phrased as an observation rather than a decision about the pull request's fate: "Two correctness problems, both in the token rotation path." Never "Requesting changes", "Approving", "LGTM", "Two things to fix before merge", or any other phrase that reads as a merge decision. The review is a comment; the body must not imply otherwise.
 2. **One paragraph in plain language.** What breaks and what it costs, for a reader who has not read the diff. Walk the mechanism in order: when X happens, Y does Z, so W results. Keep it to one paragraph.

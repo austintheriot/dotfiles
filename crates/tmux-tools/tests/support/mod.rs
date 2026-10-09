@@ -28,6 +28,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::time::{Duration, Instant};
 
 /// A tmux server on a socket of its own, in a directory of its own.
 ///
@@ -143,16 +144,20 @@ impl Server {
     /// and it presents as flakiness rather than as a failure.
     pub fn new_session(&self, name: &str, directory: &Path) {
         let directory = directory.to_str().expect("a utf-8 directory");
-        self.tmux(&[
+        let pane = self.stdout(&[
             "new-session",
             "-d",
             "-s",
             name,
             "-c",
             directory,
+            "-P",
+            "-F",
+            "#{pane_id}",
             INERT_WINDOW_COMMAND,
             INERT_WINDOW_ARGUMENT,
         ]);
+        self.wait_until_inert(&pane);
         self.isolate_hooks(name);
     }
 
@@ -173,7 +178,41 @@ impl Server {
             INERT_WINDOW_COMMAND,
             INERT_WINDOW_ARGUMENT,
         ]);
-        self.stdout(&arguments)
+        let window = self.stdout(&arguments);
+        self.wait_until_inert(&window);
+        window
+    }
+
+    /// Returns once `target`'s pane runs the inert command.
+    ///
+    /// tmux replies to `new-window` and `new-session` as soon as it has
+    /// forked the pane's child, before the child execs. Until then macOS
+    /// reports the pane's command as `tmux`, and automatic-rename names the
+    /// window after it. tmux has no event for the exec, so this polls.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the pane still runs something else after
+    /// [`INERT_DEADLINE`].
+    fn wait_until_inert(&self, target: &str) {
+        let deadline = Instant::now() + INERT_DEADLINE;
+        loop {
+            let command = self.stdout(&[
+                "display-message",
+                "-p",
+                "-t",
+                target,
+                "#{pane_current_command}",
+            ]);
+            if command == INERT_WINDOW_COMMAND {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "{target} still runs {command:?}, not {INERT_WINDOW_COMMAND}, after {INERT_DEADLINE:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     /// Overrides every hook the real config installs globally, so a test
@@ -340,3 +379,7 @@ const INERT_WINDOW_COMMAND: &str = "sleep";
 
 /// `sleep`'s argument, kept beside it so the two cannot drift apart.
 const INERT_WINDOW_ARGUMENT: &str = "86400";
+
+/// How long a new pane gets to exec the inert command. Generous because a
+/// loaded CI runner is the case this exists for.
+const INERT_DEADLINE: Duration = Duration::from_secs(10);

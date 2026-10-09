@@ -76,27 +76,41 @@ fn a_started_server_puts_its_socket_in_the_fixtures_own_directory() {
     server.shutdown();
 }
 
-/// A window a test creates runs an inert command, not a shell.
+/// Every window the fixture hands back already runs the inert command, not a
+/// shell and not the forked tmux child that has yet to exec it.
 ///
 /// `.zshrc`'s precmd calls the window-naming script on every prompt, so a
 /// shell-backed window renames itself a beat after creation and overwrites
 /// the name an assertion is about to read. `8591f242` fixed that once.
+///
+/// The window count is not decoration. `new-window` returns once tmux has
+/// forked, and until the child execs, macOS reports the pane's command as
+/// `tmux`. One read lost that race about 1 time in 30 on a loaded host and
+/// failed two CI attempts in a row on run 37990239026; fifty reads make a
+/// fixture that does not wait fail here rather than somewhere downstream.
 #[test]
-fn test_windows_run_an_inert_command_rather_than_a_shell() {
+fn every_returned_window_already_runs_the_inert_command() {
+    const WINDOWS: usize = 50;
     let server = Server::new("inert");
-    server.new_session("probe", server.socket_dir());
-    let window = server.new_window("probe", server.socket_dir(), &[]);
+    let pane_command =
+        |target: &str| server.stdout(&["display-message", "-p", "-t", target, "#{pane_current_command}"]);
 
-    let command = server.stdout(&[
-        "display-message",
-        "-p",
-        "-t",
-        &window,
-        "#{pane_current_command}",
-    ]);
-    assert_eq!(
-        command, "sleep",
-        "a test window must not run a shell, or .zshrc's precmd races every assertion"
+    server.new_session("probe", server.socket_dir());
+    let session_window = ("probe:".to_string(), pane_command("probe:"));
+    let created_windows = (0..WINDOWS).map(|_| {
+        let window = server.new_window("probe", server.socket_dir(), &[]);
+        let command = pane_command(&window);
+        (window, command)
+    });
+    let not_yet_inert: Vec<(String, String)> = std::iter::once(session_window)
+        .chain(created_windows)
+        .filter(|(_, command)| command != "sleep")
+        .collect();
+
+    assert!(
+        not_yet_inert.is_empty(),
+        "a returned window must already run sleep, or a shell's precmd or the \
+         pre-exec tmux child races every assertion: {not_yet_inert:?}"
     );
 
     server.shutdown();

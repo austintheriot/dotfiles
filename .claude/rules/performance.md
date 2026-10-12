@@ -231,6 +231,11 @@ Most performance "obvious" optimizations are wrong. Modern compilers and runtime
 - **GC effects**: a benchmark that doesn't trigger GC tells you nothing about production.
 - **Single-shot timing in a script** is essentially noise.
 
+### Record absolute values, not only deltas
+- **Write down the absolute measurement and the baseline, never only the difference.** A figure such as "retained 135MB above baseline" hides drift in the baseline. When the baseline moves, the delta changes with no change in the thing measured. In one investigation, three "retained" memory figures looked contradictory. Every run settled at the same absolute RSS. Only the process's starting size had grown.
+- **When two delta figures disagree, compare the absolute values first.** Treat it as a measurement conflict only when the absolute values also disagree.
+- **Repeat a run before you call a difference real.** Two runs that agree prove the number reproduces. They do not prove you controlled the variable. Use enough repetitions per arm to see the run-to-run noise.
+
 ### Premature optimization is still real
 Knuth's full quote: "premature optimization is the root of all evil. *Yet we should not pass up our opportunities in that critical 3%.*" Identifying the 3% is the skill. Profile first, optimize the hottest path, leave the rest readable.
 

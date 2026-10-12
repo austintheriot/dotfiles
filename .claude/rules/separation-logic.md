@@ -255,7 +255,7 @@ What separation-logic thinking gives an engineer who will never open a prover:
 - **`&mut` uniqueness enables both reasoning and optimization.** `noalias` is the compiler exploiting the same fact the reviewer exploits.
 - **Capability-based design.** Hold a token to perform an action; the token is the resource; passing it is transfer.
 - **Region and arena allocation.** Lifetime made structural rather than per-object.
-- **Pure core, effects at the edges.** Reframed in these terms: a pure core has an empty heap footprint, so it needs no frame reasoning at all. This is why the sans-IO pattern makes code reviewable. See `[[feedback-sans-io-di-core]]`.
+- **Pure core, effects at the edges.** Reframed in these terms: a pure core has an empty heap footprint, so it needs no frame reasoning at all. This is why the sans-IO pattern makes code reviewable. See "Functional core, imperative shell" in `~/.claude/CLAUDE.md` and "Sans-IO core, injectable boundaries" in `~/.claude/rules/rust.md`.
 
 **Affine, not linear, and why the difference ships bugs.** Rust's ownership is **affine** (a value may be dropped) rather than **linear** (it must be consumed). `Copy` is the opt-in reinstatement of *contraction*; implicit `drop` is the ambient *weakening*. The **leakpocalypse** (`JoinGuard` and `mem::forget`, pre-1.0) is the canonical case: Rust cannot guarantee a destructor runs, so any design whose soundness depends on cleanup happening is broken. `mem::forget` is safe.
 

@@ -7,7 +7,7 @@ description: Walk through a list of items (review findings, design options, PR t
 
 Deliberate each item in a list before synthesizing across them. The user calls when (a) you just produced a list and synthesis, and they want to back up into per-item discussion, or (b) they want to set the mode in advance for the next list-shaped output.
 
-This skill is the conversational counterpart to the user's `feedback_one_by_one_discussion.md` memory: the memory is the default preference, this skill is the explicit invocation.
+This skill is the explicit invocation of the user's preference for item-by-item deliberation.
 
 ## When to use
 

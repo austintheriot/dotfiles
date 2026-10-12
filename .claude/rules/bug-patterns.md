@@ -75,6 +75,22 @@ Caches turn correctness questions into freshness, invalidation, and stampede que
 
 ---
 
+## One-shot effects keyed on a sticky marker
+
+An effect that must react once to "X finished" reads a marker that stays set after the event. Then the effect fires every time its condition is evaluated, not once per event.
+
+**Common shapes**:
+- *Sticky completion flag*: a store keeps `lastCompletedJobId` until the next job starts. A modal closes itself whenever that value is defined. After one completed job, the modal closes the moment it opens again. No error appears, because the close is a legitimate dispatch.
+- *Replayed notification*: a toast, redirect, or analytics event is keyed on a persistent `status === 'done'`. It fires again on every remount or route change.
+
+**Defenses**: key the effect on the event's identity, not on whether a marker is present. Remember the id the effect already handled (a ref, or a consumed-id field in the store), and act only when the id changes. Or clear the marker as part of handling the event.
+
+**Why tests miss it**: each test mounts fresh, with the marker clear, then fires the event. The bug appears only on the *second* occurrence in one session. A regression test must set the marker first, then mount or open.
+
+**Review heuristic**: for any effect whose job is "when X completes, do Y once", ask "what clears the condition, and what happens on the next mount before X happens again?"
+
+---
+
 ## Null and optionality bugs
 
 The billion-dollar mistake. `null` / `nil` / `None` / `undefined` represents "absence," and code that doesn't distinguish "this field is meaningfully absent" from "I forgot to set this" produces NullPointerException, segfault, or silent wrong behavior.

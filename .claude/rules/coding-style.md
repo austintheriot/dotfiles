@@ -36,6 +36,11 @@ Structural typing makes brands easy to forge, so:
 - **Prefer pure functions.** Use `const` over `let`, return new values instead of mutating arguments, and push side effects to the edges. Especially avoid global mutation.
 - **Lean on existing infrastructure.** Before writing new helpers, search for utilities the project (or adjacent subsystems) already provides. Match their patterns rather than parallel-implementing.
 
+## Linters
+
+- **Do not silence a linter. Restructure the code so the rule passes.** This covers `eslint-disable`, `@ts-ignore` / `@ts-expect-error`, `#[allow(...)]`, `# noqa`, `// nolint`, and every equivalent. A suppression hides the next real finding on the same line. The same rule applies to test code.
+- **A suppression is a very rare exception.** It is allowed only when restructuring cannot satisfy the rule: a known linter bug, generated code, or a rule that is wrong for this exact case. Scope it to one line and one rule, never a file or a block. Put the reason on the same line, with a URL when one exists.
+
 ## Error handling
 
 - Fail fast with descriptive messages.

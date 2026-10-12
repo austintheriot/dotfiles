@@ -54,6 +54,7 @@ This is Kent's "testing implementation details" point, generalized to any kind o
 - **Test behavior, not implementation.** Assert on observable outputs (responses, persisted state, emitted events, rendered output). Don't assert that a particular internal method was called unless that call *is* the contract being tested (e.g. when the unit under test is a wrapper whose job is to delegate).
 - **One behavior per test.** Multiple assertions are fine when they all describe the same behavior (status + body + side-effect). Don't pack two scenarios into one test to save a harness setup call; that's what parallel test runners are for.
 - **Names describe the scenario and expected outcome**, not the function under test. `subscribing_with_an_invalid_email_returns_400` beats `test_subscribe_2`. Table-driven negative cases should fold the case description into the failure message so a failing row is self-explanatory.
+- **Name the test file after its source module.** Tests for `xyz.ts` go in `xyz.test.ts`, even when the export under test has a different name. Split a module's tests into a second file (`xyz.distribution.test.ts`) only when the suite is large enough to need its own file. Never put a dot infix in a *source* module name (`Foo.bar.ts`).
 - **Never disable a failing test.** Fix it, or delete it with a note in the commit about why the behavior is no longer required. A skipped test rots and lies.
 
 ## Structure: prefer functions over nested grouping + lifecycle hooks

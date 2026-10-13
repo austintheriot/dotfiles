@@ -1,6 +1,6 @@
 ---
 name: dev-qa
-description: Use when asked to dev QA, smoke test, or verify a pull request on its deployed build (a per-commit preview URL, a review environment, or a staging deploy). The check runs the pull request's Test Steps in a browser and reports the result on the pull request. Also used by /expert-review-pr when a code review must include dev QA. Not for QA of an undeployed local branch. The repository's own local QA skills cover that.
+description: Use when asked to dev QA, smoke test, or verify a pull request on its deployed build (a per-commit preview URL, a review environment, or a staging deploy). The check runs the pull request's Test Steps in the test environments the project file names and reports the result on the pull request. Also used by /expert-review-pr when a code review must include dev QA. Not for QA of an undeployed local branch. The repository's own local QA skills cover that.
 argument-hint: "[<PR number | PR URL>] [--steps-only] [--no-confirm]"
 ---
 
@@ -12,11 +12,15 @@ Three files share the work:
 
 | File | Owns |
 |---|---|
-| This skill | The process, the verdict rules, the evidence rules, the section shape. Project-neutral. |
-| `~/.claude/local/dev-qa.md` | The project bindings: deployed URLs, deployed-commit proof, accounts, forbidden writes, browser quirks, the video recorder, uploads, and the mapping onto the repository's QA framework. |
+| This skill | The process, the verdict rules, the evidence rules, the section shape. Project-neutral and environment-neutral. |
+| `~/.claude/local/dev-qa.md` | The project and environment bindings: deployed URLs, deployed-commit proof, the test environments and which one to prefer, accounts, forbidden writes, driver quirks, the video recorder, uploads, and the mapping onto the repository's QA framework. |
 | `~/.claude/rules/outside-pr-review.md` | Approval, the `COMMENT`-only event, scope resolution, voice, the internals rule, the local summary, uploads, and GitHub posting. |
 
 **Read `~/.claude/local/dev-qa.md` and `~/.claude/rules/outside-pr-review.md` before you test.** If the project file does not exist, ask the user for the deployed URL and a test account before you test.
+
+## Test environments
+
+A test environment is where a step runs and what drives it: a browser on this machine, a virtual machine, a simulator, a device, or a remote browser, plus its driver and its recorder. This skill does not choose one. The project file names the environments for each platform, which one to prefer, when to fall back, and how to set each one up and tear it down. Use the preferred environment unless it cannot run the step. When you fall back, record the reason in the step's log entry. When the project file names no environment for a platform, use the drivers this session has, and say which one you used in the local summary.
 
 ## Modes
 
@@ -42,7 +46,7 @@ Work inside the repository's QA framework wherever it reaches. The project file 
 
 When the project file maps no framework, use the fallbacks: a `results.md` plus screenshots per section, and a fresh `general-purpose` subagent as the confirmer with the confirmer rules below. A session can deny a mapped command or agent, for example in an allowlisted unattended run. In that case, use the fallback for that role only. Name each role that fell back in the hand-back or the local summary.
 
-**The repository's run orchestrator is a different tool.** A local QA runner builds the branch and drives a simulator or a local dev server. It tests the branch, not the deployed build. Do not hand a deployed-build check to it. Some Test Steps need a platform this skill cannot drive, such as a native app or a desktop shell. Report each such step as `SKIP` with the reason. Name the repository command that runs it in the hand-back.
+**The repository's run orchestrator is a different tool.** A local QA runner builds the branch and drives its own targets. It tests the branch, not the deployed build. Do not hand a deployed-build check to it. Some Test Steps need a platform that no available test environment can drive. Report each such step as `SKIP` with the reason. Name the repository command that runs it in the hand-back.
 
 ## Verdicts
 
@@ -108,7 +112,7 @@ Sign in the way the project file says, with an account fit for each section (for
 
 ### 5. Drive and capture
 
-Run each section's steps in order, through the driving recipes.
+Run each section's steps in order, in the preferred test environment for the step's platform, through the driving recipes.
 
 **Record a video and take screenshots, for every step.** The two serve different readers.
 
@@ -119,6 +123,7 @@ Run each section's steps in order, through the driving recipes.
 - Name frames `step-<N>-<SEQ>-<what-it-shows>.png`, with `SEQ` zero-padded in capture order. Name each frame for what it shows, not for the step's goal.
 - Save them in the section's unit directory (the project file says where). Never cite a file you did not write.
 - Look at each frame you cite. Zoom or crop to check a small region, rather than trusting the file name.
+- Clear popups before every recording and every screenshot, the way the video skill's "Clear the screen before you record" says. A screenshot in which a popup covers the checked state is not evidence of that state. Dismiss the popup and take the screenshot again.
 - Prefer a structured state read over a visual check when the driving recipes offer one. Save the read as `state-<N>.json`.
 - Never inject anything into the page under test to make a screenshot show state: no overlay, banner, or added element, and no restyled app element. A screenshot shows only what the app rendered. When a step asserts state with no visible UI (storage, analytics, network), the state read (`state-<N>.json`) is the outcome evidence, and the outcome frame is the unmodified page at the moment of the read. Quote the read's relevant values in the step's result text.
 - When a step turns on a quantity ("narrow width", "about a second"), test values across the range, and record each value.
@@ -171,6 +176,8 @@ Exactly these parts, in this order:
 4. An optional `<details>` block titled `Other observations`: free-play findings worth sharing (problem, repro steps, expected and actual, repro video, screenshot), other problems outside the listed steps, and documentation disagreements. Leave the block out when there is nothing to report. Never written as `Fail` lines. In embedded mode, a live-reproduced candidate that the caller posts as a finding gets one pointer line here, not a restatement. A candidate the caller drops does not appear.
 5. A closing status line from the rollup table: `Dev QA: pass`, `Dev QA: fail (<n> steps)`, or `Dev QA: incomplete (<n> steps not run)`.
 
+**Leave the test environment out of the post.** The reader needs the result, not the rig. Do not name the machine, virtual machine, or simulator, the audio device, the browser profile, the driver, the recorder, or any workaround that made the rig run. Name an environment detail only when a reader needs it to reproduce or read a result: a repro that needs a specific setup (an account tier, a narrow window, a meeting with no calendar end), or a result that holds only under that setup. An adaptation always stays, because it changes what was tested ("a Google Meet call in place of a Zoom call"), but its rig reason does not ("the test machine has no Zoom"). The build under test (the deployed URL and commit, or the commit a local build came from) always stays. Environment details belong in the local summary and the hand-back.
+
 Never put a step result outside a `<details>` block. Be terse and matter-of-fact. When a step's failure is also a posted code finding, point to it in one line ("see the comment on `default.conf:192`") rather than restating it. Write no attribution line inside the section. The body's attribution line covers it.
 
 ## Embedded hand-back
@@ -197,6 +204,8 @@ Stop and re-read the rule it breaks:
 - Results reported for files the deployed commit does not carry.
 - A problem outside the listed steps written as a `Fail` line.
 - A screenshot cited that you did not open.
+- A posted video or screenshot in which a popup covers the window under test, when the step does not test that popup.
+- A video posted after a check of a few spot frames, with no contact sheets of the whole video.
 - A step with a video but no outcome screenshot.
 - A step with screenshots but no video, with no stated reason, when the project names a recorder.
 - A video handed to the confirmer as a step's only evidence.
@@ -207,3 +216,4 @@ Stop and re-read the rule it breaks:
 - An unconfirmed verdict presented as confirmed.
 - A delete confirmed without asking the user.
 - Any posted sentence naming a confirmer, an agent, a scenario record, or a run directory.
+- A posted sentence naming the test machine, the rig, the audio setup, the driver, or a rig workaround, when no result or repro depends on it.

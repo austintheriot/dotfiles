@@ -313,9 +313,13 @@ Circuit breakers stop calling a dependency you've established is down. The half-
 **Flag**: a circuit breaker per host when retries route around it; no alert on breaker open; multiplicative retries at every mesh hop amplifying a hiccup into an outage.
 
 ### Bulkhead Pattern
-Partition resources (thread pools, connections, queues) so one bad tenant cannot drain shared capacity. Reach for it in multi-tenant systems. Skip for single-tenant internal services.
+Partition resources (thread pools, connections, queues) so one bad tenant or one bad dependency cannot drain shared capacity. Two uses:
+- **Per tenant**, in multi-tenant systems.
+- **Per downstream dependency**, in any service that calls more than one dependency, single-tenant included. Give each downstream its own connection pool. Without it, one hung dependency holds every connection and takes down calls to the healthy ones. This is the main case in Newman's talks on progressive collapse (https://www.infoq.com/presentations/progressive-collapse-system-resilience/). He frames a circuit breaker as "a way of triggering a bulkhead on demand".
 
-**Flag**: statically-sized bulkheads. Set so the sum exceeds capacity (over-subscription fine if average usage low) but no single pool takes more than its share.
+Skip per-tenant bulkheads for single-tenant internal services. Do not skip per-dependency pools.
+
+**Flag**: one shared connection or thread pool for several downstream dependencies on a request path; statically-sized bulkheads. Set so the sum exceeds capacity (over-subscription fine if average usage low) but no single pool takes more than its share.
 
 ### Rate Limiting
 Three algorithms:

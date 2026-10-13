@@ -47,6 +47,10 @@ For every finding:
 - Project-conventional style choices the team has deliberately adopted (read `CLAUDE.md` / `.claude/rules/*.md` / `CONTRIBUTING.md` first; project rules win).
 - Pedantic nitpicks a senior engineer would not bother calling out. When in doubt, omit.
 
+## Vocabulary: robustness is not resilience
+
+Call retries, timeouts, circuit breakers, fallbacks, failover, and planned degraded modes **robustness** or **fault tolerance**. Keep **resilience** for the capacity to adapt to surprises the design did not plan for (David Woods's "graceful extensibility"; `distributed-systems.md` § 45 and § 48). A finding that says "add a retry for resilience" names the wrong property and hides the real question: what happens past the edge of the plan, and who can act there?
+
 ## Mode awareness
 
 The dispatch prompt names the mode (`diff` or `survey`):

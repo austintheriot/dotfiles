@@ -147,6 +147,8 @@ Load-bearing mental models for systems where more than one machine, process, or 
 
 **Apply when.** Every Remote Procedure Call (RPC), message handler, webhook receiver. Require a stable request ID at the boundary; record processed IDs; return the prior result on replay.
 
+**When the caller cannot send an ID: fingerprint the request.** Newman (https://www.infoq.com/presentations/distributed-systems-resiliency/) describes deduplication by hashing the request. Hash only stable fields, never timestamps or nonces. Bound the dedupe window in time. On replay, return the original response, not an "already done" error. The cost is real: a fingerprint also rejects legitimate duplicates (his example is a payment system that blocked two genuine same-value purchases inside five minutes). Prefer a client-supplied ID whenever you control the client. Reviewer flag: a fingerprint that includes a timestamp (dedupes nothing), an unbounded window, or a replay that returns an error the client will retry.
+
 ---
 
 # Part II: Operational Patterns
@@ -166,6 +168,8 @@ Principles 1 to 17 are about *what the system promises*. Principles 18 onward ar
 **Headline.** Plain exponential backoff lines clients up to retry at the same moment -- the exact failure mode backoff was meant to prevent.
 
 **Why.** Backoff spreads retries across time only if the spread is randomized. Identical timers fire identically.
+
+**Cap the delay at what the caller will wait (Newman).** Uncapped exponential growth produces delays far longer than any user waits, so the last retries run after the user has given up. Set the cap and the retry count together from the caller's total wait budget, and make both configurable without a deploy. The `cap` below is that budget. A delay that grows more slowly than exponential is fine if it is jittered and budgeted.
 
 **Pattern.** Full jitter as the default: `sleep = uniform(0, min(cap, base * 2**attempt))`. Decorrelated jitter is the runner-up: `sleep = min(cap, uniform(base, previous_sleep * 3))`. Reviewer flag: retry code that does `sleep(base * 2**attempt)` with no randomization, or a "tiny" jitter window (plus-or-minus 10 percent) too small to actually break correlation.
 
@@ -391,11 +395,50 @@ Parts I and II cover system shape and operational tactics. Part III is the organ
 
 **Pattern.** A per-dependency table: dependency, user-visible effect when gone, degraded behavior, how the path is exercised. A kill switch that enters the degraded mode without a deploy. Reviewer flag: a core path that hard-fails when an optional or third-party dependency fails; a degraded mode that no test or drill reaches; a mode switch (degraded mode, failover, breaker trip) that operators cannot see or override. Do not call retries, breakers, or fallbacks "resilience" in a finding. They are robustness. LLM-specific forms are in `llm-app.md` "Provider resilience".
 
+## 46. Timeouts protect the system, not the request
+
+**Headline.** A timeout trades one request's chance of success for the health of the whole system. Set it from measured latency and the user's patience, not from a default.
+
+**Why.** Newman (*Building Resilient Distributed Systems*, 2026, ch. 3; https://www.infoq.com/presentations/distributed-systems-resiliency/): "Timeouts are about prioritising system health over the success of a single request." A timeout that is too long holds connections and threads while a dependency hangs, and the pool runs dry for every other caller (his example: 30-second timeouts that exhausted a site's pools). A timeout that is too short fails healthy slow requests and feeds retries.
+
+**Pattern.**
+- Derive the value from the latency histogram of *successful* requests, never from an average. Look past p99: the timeout exists for the tail.
+- Cap it at what the user will wait. Past that point a success has no value.
+- Make it configurable without a deploy.
+- Treat wide latency variance as the defect. Move expensive operations to their own endpoints, or hedge, instead of raising the timeout to absorb the variance (principle 28).
+- Fit the timeout and the retries inside one budget (principle 19), and propagate the remaining deadline downstream.
+
+Reviewer flag: a remote call with no timeout, or with a library default nobody chose; a timeout longer than the user waits; one timeout value shared by endpoints with very different latency; a timeout set from mean latency. LLM calls have their own shape: see `llm-app.md` "Provider resilience".
+
+## 47. Progressive collapse: reduce hazards, strengthen parts, cut coupling
+
+**Headline.** A local failure becomes a system failure when load and coupling carry it from part to part. There are three levers, and a design review should ask which ones are in use.
+
+**Why.** Newman borrows the structural-engineering frame (*Building Resilient Distributed Systems*, ch. 11; https://www.infoq.com/presentations/progressive-collapse-system-resilience/): (1) **reduce hazards**, for example load shedding and rate limiting, (2) **strengthen components**, for example redundancy, weighed against its cost, (3) **reduce interconnection**, for example bulkheads, circuit breakers, and local fallbacks. Redundancy is not free: it adds failure modes of its own. His example is the redundant DNS automation whose interaction caused the 2025 AWS us-east-1 race. He also warns against hunting for a single cause of failure.
+
+**Pattern.** For each critical path, name the lever used at each hop. A design that uses only lever 2 (add replicas) is the common gap. Reviewer flag: redundancy added with no analysis of the new failure modes it brings; a critical path with no bulkhead or shedding between it and its noisiest dependency.
+
+## 48. Watch the capacity to adapt, not only the load
+
+**Headline.** Systems fail when they run out of room to maneuver. Measure how close you are, and watch for the compensation that hides the decline.
+
+**Why.** David Woods's adaptive-systems vocabulary ("Resilience as Graceful Extensibility to Overcome Brittleness", IRGC, 2016, https://irgc.org/wp-content/uploads/2018/09/Woods-Resilience-as-Graceful-Extensibility-to-Overcome-Brittleness.pdf) names three ways adaptive systems break down. Each has a software form:
+
+- **Decompensation.** Compensation (queues absorbing load, retries, people quietly fixing things by hand) holds the visible signals steady while the reserve drains, and then the system collapses suddenly. Rising compensation is a leading signal.
+- **Working at cross-purposes.** Parts that each adapt sensibly fight each other: per-service retries, independent autoscalers, breakers on both sides of a call (principles 18, 27).
+- **Getting stuck in outdated behaviors.** The system keeps applying a response after conditions changed, for example a failover that never fails back.
+
+The software-specific point from the same tradition (Sarter and Woods on automation surprises; Klein, Woods et al. 2004 on automation as a team player): automation that changes mode on its own must make the change visible and must let operators override or pause it.
+
+**Pattern.** Track the risk of saturation (remaining headroom against coming demand) beside utilization (principle 30). Alert on compensation: queue age, retry rate, manual-intervention count. Every automated mode switch (failover, breaker trip, autoscale, degraded mode, agent action) emits an event a human can see and has a documented override. Reviewer flag: an automated mode switch with no event or no override; two adaptive controllers on one resource with no coordination; dashboards that show load but no headroom.
+
+**Vocabulary.** Woods separates **robustness** (handling the disturbances you planned for) from **graceful extensibility** (stretching when the plan runs out). Retries, breakers, fallbacks, and degraded modes are robustness. Do not call them "resilience" in findings (see `panel-contract.md`).
+
 ## Meta-rules
 
 - Partition tolerance is not optional. Networks partition. Plan for it.
-- Every retry needs exponential backoff, jitter, and a budget (principles 18, 19, 20).
-- Every deadline must propagate down the call chain.
+- Every retry needs a growing, jittered, capped delay and a retry budget, and the whole sequence fits inside the caller's wait budget (principles 18, 19, 20).
+- Every remote call has a timeout set from measured latency (principle 46), and every deadline propagates down the call chain.
 - Every automated remediation is also a way to amplify an outage. Gate it on a circuit breaker scope and a human escape hatch.
 - The thing you did not test under load will surprise you under load.
 - The thing you did not restore from backup is not backed up.

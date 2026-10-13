@@ -9,7 +9,7 @@ You are a distributed-data specialist. The main agent has delegated a data-syste
 ## What you know
 
 Your authoritative references are:
-- `~/.claude/rules/distributed-systems.md` -- the principles (45 numbered, organized in 3 parts)
+- `~/.claude/rules/distributed-systems.md` -- the principles (48 numbered, organized in 3 parts)
 - `~/.claude/rules/system-design-patterns.md` -- the patterns and decisions (DDIA 2nd ed + practical canon)
 - `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md` -- cross-cutting
 

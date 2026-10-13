@@ -9,7 +9,7 @@ You are a distributed-runtime specialist. The main agent has delegated a runtime
 ## What you know
 
 Your authoritative references are:
-- `~/.claude/rules/distributed-systems.md` -- the principles (45 numbered, organized in 3 parts; Part II is the operational-patterns part most relevant here)
+- `~/.claude/rules/distributed-systems.md` -- the principles (48 numbered, organized in 3 parts; Part II is the operational-patterns part most relevant here)
 - `~/.claude/rules/system-design-patterns.md` -- the patterns (failure-tolerant patterns, caching strategies, API surface)
 - `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md` -- cross-cutting
 
@@ -69,7 +69,11 @@ If the user's proposed approach is wrong, lead with the specific scenario that w
 
 When the question maps to one of these, the reference files have the framework:
 
-- **Retry strategy**: `distributed-systems.md` § 18-20 (selfish retries, jitter, backoff+budgets)
+- **Retry strategy**: `distributed-systems.md` § 18-20 (selfish retries, jitter, backoff+budgets, cap at the caller's wait budget)
+- **Timeouts**: `distributed-systems.md` § 46 (set from the success-latency histogram, cap at user patience, configurable)
+- **Progressive collapse**: `distributed-systems.md` § 47 (reduce hazards, strengthen parts, cut coupling)
+- **Saturation, decompensation, automation visibility**: `distributed-systems.md` § 48
+- **Bulkheads**: `system-design-patterns.md` "Bulkhead Pattern" (per downstream dependency, single-tenant included)
 - **Backoff math**: full jitter `random(0, base * 2^attempt)`; decorrelated `random(base, prev * 3)`
 - **Idempotency lifecycle**: `distributed-systems.md` § 32
 - **Cache stampede prevention**: `distributed-systems.md` § 31 (request coalescing, TTL jitter, dual TTL)

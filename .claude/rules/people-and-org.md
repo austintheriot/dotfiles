@@ -262,9 +262,17 @@ Interaction modes: **collaboration** (intense, short-term), **X-as-a-service** (
 
 **"How Complex Systems Fail" (Richard Cook)**: 18 propositions about complex systems. Failure is the default; success is the surprise. Hindsight bias distorts post-incident analysis.
 
-**Five whys (Toyota)**: superficial in software contexts (Allspaw's critique). Real root causes are usually plural.
+**Five whys (Toyota)**: superficial in software contexts (Allspaw's critique). Cook goes further (proposition 7): attributing an incident to a "root cause" is fundamentally wrong, because failure needs several contributors at once. Newman also says to stop looking for single causes of failure. Describe contributing factors, not a root cause.
 
-**Action items with owners and dates** -- the only output that matters from a postmortem.
+**Blame is not sanction** (SNAFUcatchers, STELLA report, 2017, https://snafucatchers.github.io/). A process can promise no punishment and still assign blame. Both close down the account people give.
+
+**Local rationality** (Sidney Dekker, *The Field Guide to Understanding 'Human Error'*). Ask why the action made sense to the person at the time, with what they knew. Flag "should have", "failed to", and "simply" in write-ups: they are counterfactuals written with hindsight.
+
+**Incidents are model surprises** (STELLA). Record where responders' mental model of the system differed from the system. That gap is a finding in its own right, and it often recurs across incidents.
+
+**Study normal work, not only failures** (Erik Hollnagel, *Safety-I and Safety-II*, 2014). Most of the time things go right because people adapt. Near-misses and everyday workarounds show where the system leans on that adaptation (work-as-imagined versus work-as-done).
+
+**Action items with owners and dates.** They are a required output. Whether they are the *main* output is disputed (see "Schools of thought").
 
 ### For hiring
 
@@ -333,7 +341,7 @@ The peer escalation pattern: "I'll talk to your manager" is nuclear; almost alwa
 
 ### Postmortems
 
-Action-items-with-owners is the only output that matters. The postmortem document is internal artifact; the cultural value is the discipline of blameless analysis. Bad postmortems blame the person who pressed the button; good postmortems ask why pressing the button was possible.
+Action items with owners are a required output; their weight relative to learning is disputed (see "Schools of thought"). The postmortem document is internal artifact; the cultural value is the discipline of blameless analysis. Bad postmortems blame the person who pressed the button; good postmortems ask why pressing the button was possible.
 
 ### Communication patterns
 
@@ -408,6 +416,7 @@ The two jobs pull against each other. Spend shown without that framing turns int
 - **PIPs as legitimate development tool vs PIPs as legal cover**: real disagreement. Depends on the org's intent.
 - **Bezos's six-pager vs slide culture**: real performance gap; the written-narrative cultures consistently outperform on decision quality. The slide cultures persist for political / hierarchical reasons.
 - **Cagan vs Scrum / agile**: Cagan considers Scrum harmful to product (the "feature factory" critique).
+- **Postmortems: action items vs learning.** The SRE tradition treats owned, dated action items as the output that matters, and tracks their completion. The Learning from Incidents community (Allspaw, Hochstein, the STELLA authors) treats shared learning as the output and action-item counts as shallow data that rewards quick, local fixes. Newman sits between: prioritize post-incident fixes against RPO / RTO and their cost to own. Both agree that a postmortem nobody reads changed nothing.
 - **Pournelle's pessimism vs Laloux's optimism on bureaucracy**: both have evidence. The pragmatic stance: bureaucracy is a system; design it deliberately or watch it design itself badly.
 
 ---

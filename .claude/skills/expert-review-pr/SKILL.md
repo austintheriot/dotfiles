@@ -267,6 +267,8 @@ Verify each anchor against the patch before posting, as the posture file describ
 
 Attach to the closest changed line that relates to the issue. A finding about code a few lines from the edit still anchors to the edit, as long as the connection is clear from the comment text.
 
+Every inline comment has two parts, in this order: the attribution line from the posture file on its own line, when the project defines one, then a blank line, then the comment text. This applies to every shape below, the short coverage-gap comment and the summary comment included.
+
 Comment text is the finding itself: what breaks, what triggers it, what it costs, and the fix if it is short. No severity labels, no confidence numbers, no lens names. For a coverage finding, the fix is the test: name the file, the scenario it drives, and the assertion that fails when the behavior breaks.
 
 When the fix fits in a few lines and replaces lines the comment anchors to, write it as a GitHub `suggestion` block, so the author can apply it with one click. Check that the block replaces exactly the anchored lines and keeps their indentation. In a study of 22,326 AI review comments, comments that contained code were acted on 23.2% of the time, against 4.2% for comments without code (Sun et al., arXiv 2508.18771). When the fix spans other lines or files, describe it in one sentence instead.
@@ -284,13 +286,15 @@ Use one guarantee per comment. If several mutants protect one guarantee, merge t
 
 **A coverage gap with no likely edit gets a short comment:** two or three sentences anchored to the line it covers. It opens with "Possible coverage gap:", names the untested case in user terms, and names the test that would cover it. It has no likely-edit story, no evidence clause, and no bug framing.
 
+> _<attribution line>_
+>
 > Possible coverage gap: no test pastes text into the dialog and then presses Escape, so nothing checks that the pasted text survives it. A case next to the existing "stays open on Escape" test would cover it.
 
 When several gaps anchor to the same line, merge them into one short comment with one sentence per case.
 
 ## Posting
 
-Post through the mechanics in `~/.claude/rules/outside-pr-review.md`: the pending-review check, the single create call, the GraphQL append path, attribution per comment when the body is unavailable, and where the summary paragraph and the Dev QA section go when it is. The summary paragraph that moves into an inline comment anchors to the changed line the findings are most about (the shared type, the shared call site, the shared branch).
+Post through the mechanics in `~/.claude/rules/outside-pr-review.md`: the pending-review check, the single create call, the GraphQL append path, the attribution line on every inline comment, and where the summary paragraph and the Dev QA section go when it is. The summary paragraph that moves into an inline comment anchors to the changed line the findings are most about (the shared type, the shared call site, the shared branch).
 
 ## Clean runs
 
@@ -311,6 +315,7 @@ Ask before posting the clean review. The user may prefer silence on the pull req
 
 Any of these means stop and re-apply the filter or the voice rules:
 
+- An inline comment that does not start with the attribution line.
 - An inline comment about whitespace, formatting, or import order.
 - A change-level comment that asks "why was this needed?" or "could this be organized better?" without citing the existing code, the stated claim, or the leftover structure it rests on.
 - A finding cleared because the PR description or a code comment says the behavior is intended.

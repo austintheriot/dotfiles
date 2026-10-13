@@ -43,7 +43,7 @@ The posted text is Claude's own writing, and reads that way.
 - No softeners: "ignore me", "worth a ticket if you agree", "just a thought", "feel free to disregard", "nice work but".
 - Plain literal words. A reader who has not seen the diff follows it without decoding a figure of speech.
 - State uncertainty as a fact when it is load-bearing: "I did not verify X."
-- Attribution comes from the first source that defines it: the user's global instructions for that project (for example a "Posted by Claude on behalf of" rule in `~/.claude/CLAUDE.md`), then the repository's own rule in its `CLAUDE.md`. Add no attribution line when neither defines one. One attribution line at the top of the body covers the whole body, including every section another skill contributes to it.
+- Attribution comes from the first source that defines it: the user's global instructions for that project (for example a "Posted by Claude on behalf of" rule in `~/.claude/CLAUDE.md`), then the repository's own rule in its `CLAUDE.md`. Add no attribution line when neither defines one. One attribution line at the top of the body covers the whole body, including every section another skill contributes to it. **Every inline comment Claude writes also starts with the attribution line**, then a blank line, then the comment. An inline comment shows on its own in the Files tab and in notifications, so the body's line does not cover it.
 - **Zone headers.** The top-level body (the review body, or a separate top-level comment that carries body content) starts with these two headings, so Austin can write his own text above Claude's before he submits:
 
   ```markdown
@@ -152,7 +152,7 @@ Pending-review comments are invisible to REST: `GET repos/{owner}/{repo}/pulls/c
 
 **Never write the review body of someone else's pending review.** The body is theirs, and text you put there publishes under their name. Leave it untouched.
 
-**Attribution goes on each comment you author** when the body is unavailable to carry it: the prefix on its own line, a blank line, then the comment. Never add the prefix to a comment the human wrote.
+**Attribution goes on each comment you author**, the same as on any inline comment: the prefix on its own line, a blank line, then the comment. Never add the prefix to a comment the human wrote.
 
 **When the body is unavailable**, its content moves as follows. This table outranks any skill rule that says a part never posts separately.
 
@@ -174,6 +174,7 @@ Any of these means stop and re-read this file:
 - A comment or section whose first clause names a kind of review rather than a result.
 - The words "consider", "might want to", "could be cleaner", "nit:", "worth a ticket" in the posted text.
 - A post made without an approval that answers the question you asked.
+- An inline comment Claude wrote that does not start with the attribution line, when the project defines one.
 - An image uploaded before approval.
 
 ## What NOT to do

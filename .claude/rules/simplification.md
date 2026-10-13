@@ -87,6 +87,24 @@ A function or class operates at the wrong altitude -- mixing low-level details w
 
 **When not to flag**: the layering exists for testability or for genuine reuse from multiple call sites.
 
+### Structure the change made obsolete (diff mode)
+
+Human reviewers report that AI review does not ask "now that the code has changed, is there a better way to organize it?" Ask it in every diff-mode review. Judge the code around the change as it stands after the change, not the diff lines alone.
+
+**Common shapes**:
+- The change adds logic that now exists in two places, the new code and an old helper. The two copies must change together.
+- The change removes the second implementation of an interface, or the second caller of a helper. The abstraction now has one user.
+- After the change, every caller passes the same value for a parameter, or a flag has one live setting.
+- The change makes a branch, a fallback, or a compatibility shim unreachable, but leaves it in place.
+- The change moves the last outside caller out of a module, so the module now serves one place and lives in another.
+- A name no longer describes what its code does after the change.
+
+**State the reorganization concretely**: which code moves or merges, file:line on both sides, and what the next change in this area gets from it.
+
+**When not to flag**: the reorganization touches code the change does not depend on. The project has a documented reason for the current shape. The cleanup is large enough that it belongs in its own PR. In that case, say so in the finding and do not ask for it in this change.
+
+**Evidence caveat**: in the Yang et al. benchmark (arXiv 2610.13668), humans caught maintainability problems at 2.7 times the odds of agents. This category is where this lens is weakest. Report only shapes you can point at, with file:line.
+
 ---
 
 ## What is NOT a simplification opportunity
@@ -106,7 +124,7 @@ The dual lens matters as much as the primary one. Reviewers who flag every "this
 The `code-simplifier` produces findings at these severity levels (matching `/expert-review`'s scale):
 
 - **major**: substantial complexity that costs real understanding time. Single-implementation abstractions, pass-through layers, premature config, excessive nesting, unused state. Removable without behavior change.
-- **minor**: noticeable opportunity but not load-bearing. Modest duplication ripe for extraction, intermediate variables that would aid readability, dead branches in cold paths.
+- **minor**: noticeable opportunity but not load-bearing. Modest duplication ripe for extraction, intermediate variables that would aid readability, dead branches in cold paths. Structure the change made obsolete is `minor` by default, and `major` when the change leaves two copies of non-trivial logic that must change together.
 - **nit**: cosmetic. Names that could be shorter (or longer), comment-vs-code redundancy, formatting if not handled by the formatter.
 - **insight**: a deeper structural simplification -- "this whole module could be a single function," "this hierarchy is a sum type in disguise," "this state machine reduces to two states." Not a blocker; a refactor worth a conversation.
 

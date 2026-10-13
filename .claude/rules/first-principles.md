@@ -145,6 +145,19 @@ The dual filter matters. The agent's value is signal-to-noise; this list prevent
 - Q2-Q4 should fire only when the diff introduces something whose framing is questionable. If the diff is a small bug fix, Q3 reframes are noise.
 - Pre-existing duplication outside the diff is **not in scope** in diff mode (panel-contract rule). If the diff *adds* code that duplicates a pre-existing utility, that's in scope. If the pre-existing utility itself duplicates something else, it's out of scope.
 
+#### Necessity check: why was this change needed?
+
+Human reviewers report that AI review confirms a PR does what it says but does not ask why the PR was needed. Run this check before Q1 on every diff.
+
+1. Write the change's purpose in one sentence, from the PR description, the linked issue, and the commit messages. These are the author's claims (`panel-contract.md`, "Evidence discipline").
+2. Check that the diff serves that purpose, and only that purpose.
+3. Report a necessity finding in one of these shapes. Each shape needs evidence a reader can check.
+   - **The purpose is already served.** Existing code at file:line, or an installed dependency, already does what the change adds. This is a Q1 finding, with Q1 severity.
+   - **The change does something other than its stated purpose.** The description says one thing and the code does another, or the diff carries an unrelated change with no stated reason. Severity `minor`, or `major` when the unstated part changes behavior a user or caller sees.
+   - **No purpose is stated, and the change has a cost.** The cost is a new dependency, a new module or public name, a migration, or a behavior change. Name the cost. Severity `minor`.
+
+A bare "why is this needed?" with no evidence is not a finding. A change with a stated purpose that the diff serves produces no necessity finding, however much you would have built it differently.
+
 ### Survey mode (`/expert-review --survey <path>`)
 
 - Q1 still highest yield. Survey mode can flag pre-existing duplication too.

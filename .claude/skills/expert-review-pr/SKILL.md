@@ -35,6 +35,7 @@ Every agent call uses the cheapest model that can do that call's job. Choose it 
 - **The lens finds defects by reasoning about behavior.** `bug-hunter`, `security`, `concurrency`, `distsys-data`, `distsys-runtime`, `data-flow`, `rust-unsafe`, `rust-async`, `typescript-types`, `fp-types`, `sync-and-offline`, `platform-payments`, and any lens whose region touches money, auth, persistence, or concurrency. A missed defect here costs the most, and the main session cannot recover a finding that the agent never reported.
 - **The call runs experiments and explains them.** The test pass runs the suite and mutation testing, then must say what each surviving mutant lets through.
 - **The region is large or spread out.** More than roughly 300 changed lines for that agent, or changes across more than three top-level directories or modules.
+- **The change is a bug fix or is mixed** (Stage 3 change type), and the lens finds defects by reasoning about behavior. Agents catch fewer bugs on both kinds of change (Yang et al., arXiv 2610.13668).
 - **The call must weigh conventions against each other.** For the structure and naming pass: the change adds a new top-level directory, module, package, crate, or namespace, renames or moves across directories, or changes a name that crosses a serialization, storage, or protocol boundary.
 
 **Keep these on Haiku:**
@@ -166,9 +167,17 @@ Findings in the third class (the existing convention is itself harmful) are neve
 
 Boundary defects from the pass need no convention count. They take the same lower floor as alignment findings.
 
+**A change-level finding meets those three through evidence about the change itself.** These answer the two questions human reviewers say AI review skips: "why was this needed?" (`first-principles`, necessity check) and "is there a better way to organize this now that the code has changed?" (`code-simplifier`, structure the change made obsolete). A change-level finding is posted only in one of these shapes:
+
+- **The purpose is already served.** Existing code at file:line already does what the change adds. The cost is two implementations that drift.
+- **The code does something other than its stated purpose.** The description or linked issue says one thing, and the lines in the diff do another, or carry an unrelated behavior change with no stated reason. Quote the claim and cite the lines.
+- **The change left structure behind.** Logic now exists in two places that must change together, or the change made a branch, parameter, or abstraction dead or constant. Cite both sides with file:line, and name what the next change in this area pays.
+
+A bare question ("why was this needed?", "could this be organized better?") is dropped. A reorganization the change does not depend on is dropped. A missing description with no other evidence is dropped: that is a process note, not a finding about the code. Change-level findings take the same `minor` floor as alignment findings.
+
 Severity floor: `blocker` and `major` only. `minor`, `nit`, and `insight` are dropped as a class, whatever their confidence.
 
-**Exception: findings from the structure and naming pass have a floor of `minor`** (the panel scale's medium level). `nit` and `insight` from the pass are still dropped. The lower floor applies only to findings those two agents report. A naming or placement finding from any other lens takes the normal floor. A 95-confidence nit is still a nit. High confidence that something is cosmetic is not a reason to post it.
+**Exception: findings from the structure and naming pass, and change-level findings, have a floor of `minor`** (the panel scale's medium level). `nit` and `insight` from the pass are still dropped. The lower floor applies only to findings those two agents report. A naming or placement finding from any other lens takes the normal floor. A 95-confidence nit is still a nit. High confidence that something is cosmetic is not a reason to post it.
 
 Confidence floor for posting: 70. A finding whose body says the reporter could not determine reachability is dropped rather than posted as a question, at any severity. Unresolved speculation posted to another person's pull request costs them time and costs the rest of the review its credibility.
 
@@ -181,6 +190,8 @@ Check these specifically, because they are where confident findings fail:
 - **Stated durations and windows.** A claimed lost-update window of "hundreds of milliseconds" that the code shows is one lock release is a different finding, and usually not one.
 - **Stated races between timers.** Two periodic jobs only race when their intervals and phases allow it. Read the actual values before accepting the race.
 - **Maintenance hazards dressed as defects.** "A future field would be dropped here" fails the defect test when every current call site is correct. Drop it.
+- **Author claims used as proof.** A finding the panel cleared because a comment or the PR description says the behavior is intended was not verified. Check the behavior against what users and callers need. The reverse also holds: a "does not match the description" finding survives only when the mismatch is on the lines.
+- **Agreement standing in for evidence.** Several agents that flag one line with one pattern label count as one view. When a blocker or major finding turns on behavior you can run cheaply, probe it before posting (call the function on the triggering input, or write a throwaway test), then revert. A probe that contradicts the finding drops it. A finding confirmed by a probe says so in the comment, as "based on running X with Y".
 
 A finding whose trigger does not survive the re-read is dropped, whatever its severity or confidence.
 
@@ -258,6 +269,10 @@ Attach to the closest changed line that relates to the issue. A finding about co
 
 Comment text is the finding itself: what breaks, what triggers it, what it costs, and the fix if it is short. No severity labels, no confidence numbers, no lens names. For a coverage finding, the fix is the test: name the file, the scenario it drives, and the assertion that fails when the behavior breaks.
 
+When the fix fits in a few lines and replaces lines the comment anchors to, write it as a GitHub `suggestion` block, so the author can apply it with one click. Check that the block replaces exactly the anchored lines and keeps their indentation. In a study of 22,326 AI review comments, comments that contained code were acted on 23.2% of the time, against 4.2% for comments without code (Sun et al., arXiv 2508.18771). When the fix spans other lines or files, describe it in one sentence instead.
+
+A change-level comment opens on its evidence, not on a question, and does not open with "Possible bug here:". Example: "The description says this adds retry for upload timeouts, and `withRetry` in `net/retry.ts:22` already wraps this call, so a timeout now retries nine times."
+
 **A coverage comment is ordered by what the author cares about, not by how the gap was found:**
 
 1. **The guarantee.** One sentence on what a user or downstream system relies on this line for, in their terms: "Typed cards survive a stray click outside the modal." Not "removing `onInteractOutside` leaves the suite green."
@@ -297,6 +312,8 @@ Ask before posting the clean review. The user may prefer silence on the pull req
 Any of these means stop and re-apply the filter or the voice rules:
 
 - An inline comment about whitespace, formatting, or import order.
+- A change-level comment that asks "why was this needed?" or "could this be organized better?" without citing the existing code, the stated claim, or the leftover structure it rests on.
+- A finding cleared because the PR description or a code comment says the behavior is intended.
 - A Dev QA result posted as its own comment while the review body was available to carry it.
 - An inline comment about naming or file placement that does not state the project's convention with its count, or does not name a concrete cost.
 - An alignment comment that argues for an ecosystem guide over the project's own convention.

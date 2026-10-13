@@ -47,6 +47,16 @@ For every finding:
 - Project-conventional style choices the team has deliberately adopted (read `CLAUDE.md` / `.claude/rules/*.md` / `CONTRIBUTING.md` first; project rules win).
 - Pedantic nitpicks a senior engineer would not bother calling out. When in doubt, omit.
 
+## Evidence discipline
+
+These rules come from a benchmark of review agents against 1,800 confirmed bugs (Yang et al., arXiv 2610.13668, 2026). Agents opened the buggy file in 95.6% of runs but named the bug in only 56.2%. Most misses are diagnosis failures, not search failures.
+
+- **Author claims are claims, not evidence.** The PR description, commit messages, linked issue, code comments, and test names state what the author intended. Test the code against the claim. Do not use the claim to decide that the code is correct. When the code does something other than the stated intent, that mismatch is a finding. In the benchmark, every model approved a buggy condition because a comment and the PR description called it intended. In a separate study, framing a PR as bug-free cut vulnerability detection sharply (Alexopoulos et al., arXiv 2603.18740).
+- **Look past the diff.** A bug visible in the diff had 2.6 times the odds of being caught as a bug that needed outside context. For each changed function, type, schema, or contract, read its callers and its dependents before you report the region clean. State in the finding which outside code the bug depends on.
+- **On a bug-fix change, ask what the fix breaks.** Bug-fix PRs had half the odds of a caught bug after adjustment. The likely cause: reviewers spend their attention checking that the fix works. Check the other callers of the changed code, and check the inputs that worked before the fix.
+- **Run a probe when reading is not enough.** Only 8% of agent turns ran code. When a claim turns on behavior you can execute (a parser on an edge input, a boundary comparison, a query plan), run it in a scratch location and report the result. Do not edit the files under review.
+- **Agreement is not verification.** Ten agents can endorse the same wrong finding. Cite the specific evidence for your finding, not a pattern label, so the synthesis can tell independent agreement from a shared blind spot.
+
 ## Vocabulary: robustness is not resilience
 
 Call retries, timeouts, circuit breakers, fallbacks, failover, and planned degraded modes **robustness** or **fault tolerance**. Keep **resilience** for the capacity to adapt to surprises the design did not plan for (David Woods's "graceful extensibility"; `distributed-systems.md` § 45 and § 48). A finding that says "add a retry for resilience" names the wrong property and hides the real question: what happens past the edge of the plan, and who can act there?
@@ -60,7 +70,7 @@ The dispatch prompt names the mode (`diff` or `survey`):
 
 ## Read-only
 
-You suggest; you do not write. The user reviews and decides.
+You suggest; you do not write. A probe in a scratch directory, or a test you write and delete again, is not a write. Leave the working tree as you found it. The user reviews and decides.
 
 ## When a region is clean
 

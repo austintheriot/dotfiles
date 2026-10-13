@@ -35,11 +35,11 @@ Current review-capable agents (run `ls ~/.claude/agents/` at session start to pi
 
 - **`bug-hunter`** -- the canonical bug-pattern catalog. Domain-general.
 - **At least one FP agent.** Default `fp-types`. Add `fp-effects` if the code is substantially async / effectful. Add `type-theory-foundations` only when an invariant's enforcement rung is genuinely in question, or on explicit `--verify`; it explains and prices guarantees rather than designing them, so it duplicates `fp-types` if dispatched reflexively.
-- **`first-principles`** -- wildcard reviewer that asks "is the answer already in scope?" before any code is added. Runs Q1 (existing-utility / already-installed-dependency check) on every invocation; Q2-Q4 (constraint relaxation, problem reframe, cross-domain precedent) when the diff / survey has substance to reframe. Never produces blocker; Q1 caps at major, Q2-Q4 cap at insight.
+- **`first-principles`** -- wildcard reviewer that asks "is the answer already in scope?" before any code is added. In diff mode it first runs the necessity check ("why was this change needed?", and does the diff serve its stated purpose). Runs Q1 (existing-utility / already-installed-dependency check) on every invocation; Q2-Q4 (constraint relaxation, problem reframe, cross-domain precedent) when the diff / survey has substance to reframe. Never produces blocker; Q1 caps at major, Q2-Q4 cap at insight.
 
 ### Broadly-applicable lenses (fire on most reviews)
 
-- **`code-simplifier`** -- almost any production code can have surplus complexity.
+- **`code-simplifier`** -- almost any production code can have surplus complexity. In diff mode it also asks whether the change leaves a better organization available: logic now in two places, an abstraction left with one user, a branch made unreachable.
 - **`test-coverage`** -- almost any production code has coverage gaps. Skip only when diff / survey is entirely test code, config, docs, or generated bindings.
 - **`readability`** -- skip only for generated / lock / fixture files.
 - **`debuggability`** -- skip only for purely pure / static / generated content.
@@ -170,6 +170,8 @@ Read each in-scope file. For diff mode, read small (<400 lines) files in full fo
 
 For each region, assign one or more lenses via the table + the mandatory / broad rules. A region can (and should) match multiple lenses -- that's the point.
 
+In diff mode, also classify the change as a whole: `feature`, `bug fix`, `refactor`, `build`, or `mixed`. Use `mixed` when one diff carries two or more of the others. Detection falls as a diff grows and as it mixes kinds of change (Yang et al., arXiv 2610.13668: about 73% of bugs caught in diffs of 32 lines or fewer, about 42% over 708 lines, and about 37% when a PR mixes four kinds of change). When the change is `mixed`, or one lens's region exceeds roughly 300 changed lines, split that lens's dispatch into one call per coherent piece (the refactor, the feature, the fix) instead of one call over the whole diff. Say in the report header that the change was mixed or large, because the panel catches less on such changes.
+
 ### Stage 4: Soft warning
 
 Count (lens, region-cluster) pairs. If > 15, print:
@@ -205,6 +207,11 @@ When project conventions contradict your generic catalog, the project wins. Flag
 Repo context:
 <branch, base branch, relevant config flags (tsconfig.json, Cargo.toml, package.json), framework versions if affecting review>
 
+Change type: <feature | bug fix | refactor | build | mixed, from Stage 3>
+
+Stated intent (the author's claims, not evidence -- test the code against them, per "Evidence discipline" in the panel contract):
+<PR title and description, linked issue text, and commit subjects, verbatim. Diff mode only. Write "none stated" when there is none.>
+
 Code:
 <the code regions with file:line context. Diff mode: changed regions plus enough surrounding lines to reason. Survey mode: the files in full, or the representative sections for very large ones>
 ```
@@ -223,7 +230,7 @@ Steps:
 
 3. **Note agreements.** `(flagged by N experts)`. Strong signal, but not proof: agents can share the same blind spot, the same generic catalog, or be reacting to the same surface pattern that doesn't actually hold here. Bump confidence cautiously.
 
-4. **Synthesize confidence.** Merged confidence = max of inputs, +10 (capped 100) when 2+ experts independently agree. Then **adjust downward** based on the skepticism checks below.
+4. **Synthesize confidence.** Merged confidence = max of inputs, +10 (capped 100) when 2+ experts independently agree. Agreement is independent only when the experts cite different evidence: a different mechanism, a different caller, a probe result. Two experts that repeat one pattern label share one view, so add nothing. Then **adjust downward** based on the skepticism checks below.
 
 5. **Preserve disagreements.** If experts disagree (one blocker, one minor), show both views with their lenses and confidences. Do not collapse to an average.
 
@@ -241,6 +248,8 @@ Steps:
 - **Check reachability.** A theoretical bug pattern on an unreachable branch is not a finding. If no realistic input triggers it, drop or downgrade.
 - **Honor project conventions.** If the agent flags a deviation from a generic principle but the project's `CLAUDE.md` / `docs/` / lint config endorses the local pattern, the project wins.
 - **Resist generic-catalog overreach.** "Looks like an N+1" is not "is an N+1." "Could race" is not "does race given the actual synchronization here." Demand a concrete failure trigger, not a pattern label.
+- **Do not let the author's claims clear a finding.** A comment or PR description that says the behavior is intended does not make it correct. Check the code against what users and callers need. Equally, a finding that says "the code does not match the description" is real only when you confirm the mismatch on the actual lines.
+- **Probe when you can.** When a finding turns on behavior you can run cheaply (a function on one input, a boundary case), run it in a scratch location before you rank the finding. A probe result outranks any confidence number. Leave the working tree as you found it.
 
 The confidence score is the agent's, not yours -- weight the body of the finding over the number, and adjust when verification supports or undermines it.
 
@@ -278,9 +287,13 @@ Findings in severity order:
 Close with:
 
 1. **Cross-cutting concerns** -- findings spanning regions / files.
-2. **Areas the panel did not flag** -- regions reviewed and judged clean. Useful negative signal.
-3. **Lower-confidence findings (appendix)** -- collapsible, same format, confidence 50-69.
-4. **Disagreements worth your judgment** -- only if experts strongly disagreed on a finding.
+2. **Change-level questions** (diff mode) -- two short answers, each with evidence or "nothing found":
+   - *Why was this needed?* The stated purpose in one sentence, and whether the diff serves it. Name existing code that already serves it, and any part of the diff with no stated reason.
+   - *Is there a better organization now?* Structure the change made obsolete or left in two places, with file:line.
+   These come from `first-principles` and `code-simplifier`. Agents are weaker than humans on maintainability, so treat an empty answer as "the panel found nothing," not as "there is nothing."
+3. **Areas the panel did not flag** -- regions reviewed and judged clean. Useful negative signal.
+4. **Lower-confidence findings (appendix)** -- collapsible, same format, confidence 50-69.
+5. **Disagreements worth your judgment** -- only if experts strongly disagreed on a finding.
 
 ## Synthesis quality > agent count
 

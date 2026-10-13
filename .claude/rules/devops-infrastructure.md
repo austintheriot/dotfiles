@@ -301,6 +301,41 @@ Cost attribution requires consistent tagging. The standard tag set: `Environment
 
 Both must be documented per-system; the IaC and operational design must support them.
 
+Source for this section: Sam Newman, *Building Resilient Distributed Systems* (O'Reilly, 2026), ch. 10 "Disaster Recovery".
+
+- **Per workload, not per company.** Payments need a low RPO and a low RTO. Account sign-up can tolerate a higher one. One number for the whole system either overspends on the unimportant parts or underprotects the important ones.
+- **Set with stakeholders, against cost.** Zero RPO and zero RTO are not achievable, and cost rises steeply as both approach zero. A product owner who asks for a 10-minute RPO must hear the price (months of work, deferred features) before the number is fixed. Targets must exceed every service level agreement (SLA) commitment.
+- **RTO is more than restore time.** It includes data restore from the last recovery point, provisioning compute, and redirecting traffic. A plan that measures only the restore underestimates RTO.
+
+### RPO and RTO versus SLOs (unreconciled)
+
+Newman: RPO and RTO do not fit the SLO model, because disasters are too rare to produce a usable service level indicator (SLI). An SLO on replication lag measures RPO only indirectly. Verify DR objectives with drills, not with SLO dashboards. The Google SRE position (see `distributed-systems.md` #40) treats restore time as measurable through continuous automated restore tests. Both agree that a restore that has never run is not evidence. Keep both views.
+
+### The four DR patterns
+
+Ordered by rising cost and complexity and by falling RPO and RTO. Each builds on the one before it, so a team can climb the ladder over time. Different workloads in one system can use different rungs. All four need a way to reroute traffic. The last three need cross-site data replication.
+
+| Pattern | Data | Infrastructure at the failover site | Indicative RPO / RTO | RPO set by | RTO set by |
+|---|---|---|---|---|---|
+| Backup and restore | Periodic backup to a separate site | None until failover | Days to hours | Backup frequency | Time to provision and load the backup |
+| Pilot light | Continuous replication | Datastores only; compute provisioned on failover | Hours to minutes | Replication lag | Time to provision compute |
+| Warm failover | Continuous replication | Partial capacity running; scaled up on failover | Minutes to seconds | Replication lag | Near zero for the pre-provisioned share, longer for the rest |
+| Multisite active-active | Two-way replication | Full capacity, all sites serve traffic | Near zero | Replication lag | Zero if the surviving sites have the capacity |
+
+Notes:
+- Pilot light saves money only on public cloud. On owned hardware you pay for the failover site anyway, so run warm.
+- "Cold / warm / hot" are vendor marketing terms with no fixed meaning. Ask for the RTO number instead.
+- Keep the failover site on the same IaC as the primary. If the stacks differ, the IaC cannot be shared, and the failover path must be drilled more often.
+- A cheap way to drill backup and restore: restore into the secondary site as the setup step of a regular load test.
+
+### Infrastructure availability during a disaster
+
+A plan that provisions compute at failover time assumes the capacity exists. During a regional outage every tenant of that region fails over at once, and GPU and memory shortages (2025-2026) already limit capacity for non-AI workloads. Three responses:
+
+1. **Reserve capacity** where the provider sells it (for example, AWS On-Demand Capacity Reservations for EC2). You pay whether or not you use it. Many services offer no capacity guarantee at all. Newman's example: you cannot buy guaranteed availability of Lambda invocations. (Lambda reserved concurrency partitions the account's quota. It does not guarantee regional capacity.)
+2. **Prioritize critical services.** Per-workload RTO decides who gets the scarce capacity first. Write the order down before the incident.
+3. **Run fully redundant infrastructure.** Expensive. Recover the cost by putting the standby capacity to work (load-test environment, batch or CI workers) that you can preempt the moment DR starts.
+
 ### Backup strategy
 
 - **Snapshot frequency**: matches RPO.
@@ -309,7 +344,7 @@ Both must be documented per-system; the IaC and operational design must support 
 - **Encryption**: at rest, with per-account / per-organization KMS keys.
 - **Tested restoration**: backups untested are theater.
 
-**Flag**: no documented RTO / RPO; backups untested; single-region for production; manual failover (not automated where possible); no backup of state files themselves; no DR drill cadence.
+**Flag**: no documented RTO / RPO; one RPO / RTO for every workload; backups untested; single-region for production; manual failover (not automated where possible); no backup of state files themselves; no DR drill cadence; a DR pattern whose RPO / RTO cannot meet the documented target; failover that depends on on-demand capacity with no reservation and no priority order; failover-site IaC that diverges from the primary.
 
 ---
 
@@ -397,6 +432,9 @@ Both must be documented per-system; the IaC and operational design must support 
 - Manual failover.
 - No backup of state files.
 - No DR drill cadence.
+- One RPO / RTO for the whole system.
+- DR plan that assumes on-demand capacity during a regional outage.
+- Failover site on a different IaC stack, not drilled.
 
 ### GitOps
 - Manual `kubectl apply` alongside ArgoCD / Flux.
@@ -445,6 +483,7 @@ Both must be documented per-system; the IaC and operational design must support 
 - **Helm vs Kustomize**: templating vs overlay. Both ship.
 - **GitOps (ArgoCD / Flux) vs traditional CD**: pull vs push.
 - **Multi-cloud vs cloud-native**: portability vs leverage.
+- **RPO / RTO as SLOs**: Newman says they do not fit (no usable SLI from rare disasters; verify by drill). Google SRE measures restore time through continuous restore tests.
 - **Operator pattern vs imperative scripts**: declarative reconciliation vs imperative deploys.
 - **Service mesh vs library-based service connectivity**: Istio / Linkerd vs in-app SDK.
 - **Backstage vs build-your-own IDP**.
@@ -468,7 +507,7 @@ Both must be documented per-system; the IaC and operational design must support 
 Per `panel-contract.md`:
 
 - **blocker**: state stored without locking on team-shared infra (concurrent applies corrupt state); IAM policy with `Action: "*"` `Resource: "*"` on a privileged role; secrets committed to Git unencrypted; security group with `0.0.0.0/0:22` or `:3306` ingress; `prevent_destroy` missing on a production database; `terraform apply -auto-approve` without staging gate on production; CloudTrail disabled on production accounts.
-- **major**: modules without version pinning at call site; root module managing too much (blast radius); one state file across environments; Kubernetes pods without resource limits / probes / PDB / anti-affinity in production; missing PSS labels on namespaces; IMDSv1 enabled; single-AZ production; no DR drill cadence or RTO / RPO documented; secrets in K8s ConfigMaps; manual `kubectl apply` alongside ArgoCD; untested IaC merged without `terraform plan` in CI; no cost anomaly detection on accounts > $10k/month.
+- **major**: modules without version pinning at call site; root module managing too much (blast radius); one state file across environments; Kubernetes pods without resource limits / probes / PDB / anti-affinity in production; missing PSS labels on namespaces; IMDSv1 enabled; single-AZ production; no DR drill cadence or RTO / RPO documented; chosen DR pattern cannot meet the documented RPO / RTO; failover depends on unreserved capacity for a critical workload; secrets in K8s ConfigMaps; manual `kubectl apply` alongside ArgoCD; untested IaC merged without `terraform plan` in CI; no cost anomaly detection on accounts > $10k/month.
 - **minor**: missing tagging strategy; oversized instances; idle dev environments; HPA without sensible thresholds; suboptimal NAT routing when S3 Gateway endpoints would save egress.
 - **nit**: variable naming inconsistencies; module structure preferences; minor cost optimizations.
 - **insight**: structural -- "the platform team would benefit from Backstage at this scale"; "consider Karpenter for K8s autoscaling at this node count"; "this codebase has accreted three IaC tools; consider consolidating"; "Crossplane would simplify the K8s + cloud-resource composition story."
@@ -489,7 +528,7 @@ Confidence: high when the trigger is concrete (a specific policy with `*`, a spe
 8. **Walk networking.** Multi-AZ? Egress paths (NAT vs PrivateLink)? Security group rules? Flow logs?
 9. **Walk secrets.** In Git? In state? In ConfigMaps? Rotation?
 10. **Walk cost.** Tagging strategy? Reserved capacity? Idle resources? Anomaly detection?
-11. **Walk DR.** RTO / RPO documented? Backup tested? Multi-region story?
+11. **Walk DR.** RTO / RPO documented per workload? Which of the four patterns (backup-restore, pilot light, warm, active-active) and does it meet the target? Backup tested? Multi-region story? Capacity at failover reserved or prioritized? Failover site on the same IaC?
 12. **Walk GitOps** (if applicable). Manual apply alongside controller? Secrets unencrypted in Git? Drift remediation?
 13. **Walk observability of infra.** CloudTrail / flow logs / cost alarms enabled?
 14. **Route to other lenses** where the angle is theirs: pipeline → `ci-pipeline`; general security → `security`; runtime distsys → `distsys-runtime`; storage design → `distsys-data`; app perf → `performance`; SLO practice → `observability-practice`.

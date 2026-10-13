@@ -343,6 +343,8 @@ Parts I and II cover system shape and operational tactics. Part III is the organ
 
 **Pattern.** Defense in depth, three layers: (a) soft delete with a 30-to-60 day grace period to defeat user error and account hijack, (b) tiered backups (local snapshots, incremental copies, offsite/archival) sized to restore-time requirements, (c) out-of-band validation pipelines that detect creeping corruption before it ages out of backups. Test restores continuously and automatically, not once a quarter. Reviewer flag: a backup system whose last successful end-to-end restore was a tabletop exercise, or a "high availability" story that conflates replication with recovery.
 
+**Disagreement (unreconciled).** Newman (*Building Resilient Distributed Systems*, 2026, ch. 10) argues that RPO and RTO do not fit the SLO model: disasters are too rare to give a usable SLI, and an SLO on replication lag measures RPO only indirectly. Verify DR objectives by drill. The SRE view above measures restore time through continuous automated restores. Both agree that an unexercised restore is not evidence. DR patterns and per-workload RPO / RTO live in `devops-infrastructure.md`.
+
 ## 41. Distributed cron: prefer a missed launch over a double launch
 
 **Headline.** Most cron-driven actions (payroll, billing, emails) are not idempotent, so duplicates are worse than misses.
@@ -377,6 +379,16 @@ Parts I and II cover system shape and operational tactics. Part III is the organ
 
 **Pattern.** Distinguish pages (urgent, user-visible right now), tickets (non-urgent, needs eventual attention), and dashboards (trending and subcritical signals). Pages must be rare enough that every one is treated as urgent. Alert on SLO burn rate, not on every cause metric. Reviewer flag: a page on CPU above 80 percent, an SLO measured in averages, or a dashboard with no high-percentile latency panel (principle 28).
 
+## 45. Define the degraded mode before the failure
+
+**Headline.** For each dependency in a user-facing path, decide in advance what reduced service the user gets when that dependency is gone, and exercise that path.
+
+**Why.** Newman (*Building Resilient Distributed Systems*, 2026, ch. 7) applies graceful degradation to the dependency with the worst availability record in most new systems, the foundation-model provider: limit the feature instead of failing the page. David Woods's "graceful extensibility" is the resilience-engineering frame: adaptive capacity at the boundary of the design envelope matters more than robustness inside it. The degraded mode is a product decision (what is still worth showing?), so it must be made before the incident, not by whoever is on call.
+
+**Tension with principle 22.** Gabrielson and Brooker warn that fallback paths are untested and cascade. The two views meet on one rule: a degraded mode must be simpler than the primary path (serve less, not serve differently from another system), must place no new load on shared dependencies, and must be exercised regularly (feature-flag drills, fault injection). A degraded mode that calls a second complex system is a fallback in the principle-22 sense and carries its risks.
+
+**Pattern.** A per-dependency table: dependency, user-visible effect when gone, degraded behavior, how the path is exercised. A kill switch that enters the degraded mode without a deploy. Reviewer flag: a core path that hard-fails when an optional or third-party dependency fails; a degraded mode that no test or drill reaches. LLM-specific forms are in `llm-app.md` "Provider resilience".
+
 ## Meta-rules
 
 - Partition tolerance is not optional. Networks partition. Plan for it.
@@ -385,3 +397,4 @@ Parts I and II cover system shape and operational tactics. Part III is the organ
 - Every automated remediation is also a way to amplify an outage. Gate it on a circuit breaker scope and a human escape hatch.
 - The thing you did not test under load will surprise you under load.
 - The thing you did not restore from backup is not backed up.
+- Every third-party dependency in a user-facing path needs a decided degraded mode (principle 45).

@@ -368,6 +368,12 @@ Larson's *Staff Engineer* archetypes:
 
 Each requires different skills. Senior IC tracks fail when companies promote into "staff engineer" without clarity on which archetype the role is.
 
+### AI tool spend visibility
+
+James Stanier (CTO at Nordhealth; author of *Become an Effective Software Engineering Manager*), talk "LLMs: An Operator's View" (LeadDev Berlin, 2025), as cited in Newman, *Building Resilient Distributed Systems* (2026), ch. 7: make AI spend visible per person, and treat high spend as a question, not an accusation. His example: a QA engineer spent EUR 1,000 in one week on Claude Code. The manager paired with the engineer, found that the spend had more than doubled the engineer's output, and used that to spread the practice. Visibility serves two jobs: learning which uses of the tools pay off, and catching runaway spend before the annual budget is gone.
+
+The two jobs pull against each other. Spend shown without that framing turns into a leaderboard of shame, and people hide their best uses. Spend never shown lets a budget overrun build up unseen until finance finds it. Decide the framing before you publish the numbers: who sees them, what a high number triggers (a conversation, not a cap), and which threshold does trigger a cap.
+
 ---
 
 ## Anti-patterns
@@ -389,6 +395,7 @@ Each requires different skills. Senior IC tracks fail when companies promote int
 - **OKR theater**: form without function (Wodtke).
 - **Status meetings**: should be async; aren't.
 - **"Everyone is in every meeting"**: a sign of unclear decision-rights.
+- **AI spend as surveillance, or AI spend invisible**: per-person numbers used to shame, or no per-person numbers at all until the budget is gone (Stanier, via Newman).
 
 ---
 

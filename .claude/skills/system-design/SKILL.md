@@ -17,6 +17,8 @@ At the start of the session, **read both** `~/.claude/rules/distributed-systems.
 If the discussion gets deep into a specific domain, also consult:
 - Storage / replication / sharding / transactions → invoke the `distsys-data` subagent for an in-context expert opinion.
 - Messaging / retries / idempotency / failure modes → invoke the `distsys-runtime` subagent.
+- Disaster recovery (DR) patterns, failover-site capacity, IaC for the secondary site → consult `~/.claude/rules/devops-infrastructure.md` "Disaster recovery" or invoke the `devops-infrastructure` subagent.
+- Model-provider dependencies (degraded mode, second route, vendor chaining, LLM latency) → invoke the `llm-app` subagent. Vendor concentration and review cadence → `product-leadership`.
 - TypeScript- or Rust-specific design questions → invoke the language-specific subagent (`typescript-types`, `rust-async`, etc.).
 
 ## Routing on turn 1
@@ -39,7 +41,7 @@ Ask 3-5 targeted questions before designing. Skip ones you can confidently infer
 1. **Scale, with numbers.** "What's the rough QPS, data volume, growth rate?" Push for napkin estimates. Reject "we don't know yet" -- ask for orders of magnitude.
 2. **Read/write ratio and shape.** Heavy reads with denormalized projections? Heavy writes with low query diversity? Mixed?
 3. **Consistency requirements.** Where would a stale read cause real harm? Where can the system apologize after the fact?
-4. **Failure tolerance.** What's the cost of an hour of downtime? Of permanent data loss? Of an inconsistent state visible to one user?
+4. **Failure tolerance.** What's the cost of an hour of downtime? Of permanent data loss? Of an inconsistent state visible to one user? Ask for the recovery point objective (RPO, data loss) and recovery time objective (RTO, downtime) **per workload**, not one number for the system, and ask who agreed to the cost of meeting them.
 5. **Boundaries.** What does this system NOT need to do? (Often more important than what it does.)
 6. **Team and org context.** One team, many teams? Existing tech stack constraints? Skill availability?
 
@@ -69,6 +71,8 @@ For the recommended design, specify:
 - **API surface**: endpoints/messages, idempotency strategy, error semantics, versioning.
 - **Consistency model per data flow**: which paths are linearizable, causal, eventual; where reads-after-writes matter.
 - **Failure handling**: retries, idempotency keys, DLQ strategy, what happens on partial failure of multi-step operations.
+- **Degraded modes**: one row per external or third-party dependency (model provider included): what the user sees when that dependency is gone, how the degraded path is entered without a deploy, and how it is exercised (`distributed-systems.md` § 45, in tension with § 22).
+- **Disaster recovery**: RPO and RTO per workload, the DR pattern chosen for each (backup-restore, pilot light, warm failover, active-active), where failover capacity comes from during a regional outage (reserved, prioritized, or always running), and the drill cadence.
 - **Observability hooks**: where the SLIs live, what gets traced (mention these briefly -- the observability skill will deepen later).
 - **Capacity calc**: napkin math showing the design fits the scale numbers.
 - **Migration / rollout plan**: if replacing existing system, how data moves and how cutover happens.
@@ -100,6 +104,8 @@ Produce a **single markdown document** the user can save or share. Structure:
 ### API surface
 ### Consistency model
 ### Failure handling
+### Degraded modes
+### Disaster recovery
 ### Observability
 ### Capacity
 ### Migration
@@ -142,6 +148,9 @@ Apply this checklist against the design:
 11. **Cost of strong consistency**: anywhere consensus / 2PC / distributed transactions are claimed, is the operational cost (availability, latency) acknowledged?
 12. **End-to-end argument**: any place that relies on low-level guarantees (TCP retries, DB transactions) without an application-level correctness check?
 13. **Conway's law check**: do service boundaries match team boundaries? Is anyone signing up for a distributed monolith?
+14. **Degraded modes**: for each third-party dependency in a user-facing path (payment processor, auth provider, model provider), what does the user get when it is gone? Is the degraded path simpler than the primary path, and is it exercised? A flow that chains several model vendors needs all of them up at once.
+15. **Disaster recovery**: RPO and RTO stated per workload? Does the chosen DR pattern meet them? Does failover assume on-demand capacity that every other tenant will also want during the same regional outage? Is the failover site built from the same IaC, and when did the last drill run? Treat a DR plan that has never been drilled as no plan.
+16. **Vendor exposure**: which components depend on one vendor with no tested exit? Does a vendor itself depend on a single upstream provider? Route the commercial side to `product-leadership`.
 
 ### Step 3 -- Surface findings
 Group findings by severity, similar to `/ts-review` and `/distsys-review`:

@@ -9,7 +9,7 @@ You are a distributed-runtime specialist. The main agent has delegated a runtime
 ## What you know
 
 Your authoritative references are:
-- `~/.claude/rules/distributed-systems.md` -- the principles (44 numbered, organized in 3 parts; Part II is the operational-patterns part most relevant here)
+- `~/.claude/rules/distributed-systems.md` -- the principles (45 numbered, organized in 3 parts; Part II is the operational-patterns part most relevant here)
 - `~/.claude/rules/system-design-patterns.md` -- the patterns (failure-tolerant patterns, caching strategies, API surface)
 - `~/.claude/rules/coding-style.md` and `~/.claude/rules/testing.md` -- cross-cutting
 
@@ -74,7 +74,7 @@ When the question maps to one of these, the reference files have the framework:
 - **Idempotency lifecycle**: `distributed-systems.md` § 32
 - **Cache stampede prevention**: `distributed-systems.md` § 31 (request coalescing, TTL jitter, dual TTL)
 - **Circuit breaker vs load shedding**: `distributed-systems.md` § 21
-- **Fallback paths**: `distributed-systems.md` § 22 (fallbacks are untested code paths)
+- **Fallback paths**: `distributed-systems.md` § 22 (fallbacks are untested code paths) and § 45 (define the degraded mode first; the two are in tension)
 - **Constant work**: `distributed-systems.md` § 24
 - **Shuffle sharding**: `distributed-systems.md` § 25
 - **Queue management**: `distributed-systems.md` § 26 (LIFO sideline, deadline timeouts)

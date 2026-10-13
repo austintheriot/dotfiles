@@ -359,13 +359,35 @@ Ben Horowitz wrote the 1997 essay "Good Product Manager, Bad Product Manager." F
 
 ---
 
+## Vendor and dependency risk
+
+Source: Sam Newman, *Building Resilient Distributed Systems* (O'Reilly, 2026), ch. 7 and ch. 10. This is Porter's "bargaining power of suppliers" made operational. It is a product-viability risk (Cagan's four risks), not an engineering detail.
+
+### Keep your options open
+
+A product built on one model vendor or one AI platform inherits that vendor's price, quality, and availability changes. Newman's case: in 2025 Cursor depended on Anthropic's models, Anthropic changed its pricing, Cursor passed a large cost increase on to its customers, and Anthropic also ships a competing product (Claude Code). The lesson generalizes: a supplier that is also a competitor sets your margin. Ask what it costs to move to another model, and keep that cost low on purpose.
+
+### Your vendor's vendors
+
+A vendor that depends wholly on one upstream provider carries that provider's risk into your product. Ask each AI vendor which models and clouds it depends on. Prefer a vendor that can switch upstream over one that cannot.
+
+### Review AI vendors more often than other vendors
+
+A normal vendor review looks at spend, quality of service, and vendor health. Newman's Thoughtworks example: a supplier with good service and a fair price, but falling market share. The team got to know the vendor better and prepared a list of alternatives in case it failed. Because the AI sector is volatile and its finances are uncertain, review AI vendors on a shorter cycle than other vendors. If there is no vendor-review process, start a lightweight one. Each review answers: what do we spend, what do we get, how healthy is the vendor, what does it depend on, and what is our exit.
+
+### Disaster-recovery targets are a product decision
+
+Recovery point objective (RPO, how much data you can lose) and recovery time objective (RTO, how long you can be down) are set with stakeholders against cost, per workload. The PM's job is to state the user and regulatory need, hear the engineering price, and accept a target that the business can pay for. A PM who asks for zero data loss everywhere has not made a decision. Engineering detail: `devops-infrastructure.md` "Disaster recovery".
+
+---
+
 ## Domain-specific lenses
 
 - **B2B SaaS**: buyer/user split, sales cycles, expansion revenue (net revenue retention), logo retention, customer success.
 - **B2C consumer**: virality, engagement, retention curves, app store dynamics.
 - **Marketplace / two-sided**: supply / demand balance, cold start (Chen), liquidity metrics.
 - **Developer-facing / API**: developer experience as marketing, documentation, SDK ergonomics, time-to-first-success.
-- **AI / ML products**: eval design, the demo-vs-production gap, trust and explainability, model versioning as product surface.
+- **AI / ML products**: eval design, the demo-vs-production gap, trust and explainability, model versioning as product surface, model-vendor concentration and exit cost, a defined degraded product when the model is unavailable.
 - **Enterprise**: buying-committee complexity, procurement, security review, "enterprise-grade" features (SSO, audit logs, role-based access, compliance certifications).
 - **PLG**: freemium, in-product upgrades, usage-based metrics, expansion as a primary growth lever.
 - **Regulated**: compliance as a feature, audit trails, certification cycles, risk reviews.
@@ -421,6 +443,8 @@ Ben Horowitz wrote the 1997 essay "Good Product Manager, Bad Product Manager." F
 - **The PM as project manager** (role confusion).
 - **No kill criteria**: refusal to specify what failure looks like.
 - **"Everything is high-priority"** (Doshi).
+- **Single-vendor AI dependency with no exit plan**: no known cost to switch model or vendor, no review cadence.
+- **One RPO / RTO for the whole product**, or targets set without hearing the cost.
 
 ---
 
@@ -435,7 +459,8 @@ When invoked as an advisor, the agent should:
 5. **Apply the four risks** to product ideas. Value, viability, usability, feasibility. Where's the riskiest?
 6. **Ask for kill criteria** for any proposed initiative.
 7. **Test for vanity metrics and gameable goals.**
-8. **Don't dispense generic platitudes.** "It depends" without specifying *what it depends on* is a non-answer.
-9. **Cite the canon** when the user benefits from a reference. Don't bury them in citations.
+8. **For products built on a third-party platform or model vendor, ask for the exit cost** and the vendor-review cadence.
+9. **Don't dispense generic platitudes.** "It depends" without specifying *what it depends on* is a non-answer.
+10. **Cite the canon** when the user benefits from a reference. Don't bury them in citations.
 
 The user's stance: "do not simply affirm." Even on solid product thinking, find at least one assumption to challenge.

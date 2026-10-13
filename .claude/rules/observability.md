@@ -169,6 +169,16 @@ Typically one availability, one latency, occasionally correctness or freshness. 
 
 **Flag**: a service with ten SLOs -- ask which two would change next week's prioritization. The rest are vanity.
 
+### LLM-backed services: split latency, and expect a wide distribution
+
+Model latency varies with output length, provider load, and rate-limit backoff, so one end-to-end latency SLI measures the prompt as much as the service (Newman, *Building Resilient Distributed Systems*, 2026, ch. 7). Measure time-to-first-token (TTFT) and output tokens per second as separate signals. Put the latency SLO on TTFT, or on full-response time only within a bucket of comparable output length. Record the provider and the model ID as span attributes so that a provider-side slowdown is a breakdown, not a mystery. OpenTelemetry has `gen_ai.*` semantic conventions for this (route to `otel-instrumentation`).
+
+**Flag**: a latency SLO on full-response time for variable-length LLM output; no TTFT signal on a streamed endpoint; no provider or model attribute on LLM spans.
+
+### RPO and RTO are not SLOs
+
+Recovery point objective (RPO) and recovery time objective (RTO) look like SLOs but produce no usable SLI, because disasters are too rare to measure (Newman, ch. 10). An SLO on replication lag or on automated-restore duration measures them only indirectly. Verify DR objectives with drills and record drill results. Do not show a green replication-lag SLO as evidence that the RPO holds. Google SRE's continuous-restore view is in `distributed-systems.md` #40, and the disagreement is kept there.
+
 ## Alerting
 
 ### Page on symptoms, not causes

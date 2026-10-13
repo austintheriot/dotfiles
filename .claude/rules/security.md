@@ -22,6 +22,12 @@ Before pattern-matching, ask the right four questions for any non-trivial change
 
 **Flag**: a change that crosses a trust boundary without naming the boundary or its control. "Accepts a user-supplied URL and fetches it" is a question, not a feature -- where's the SSRF defense?
 
+### The threat model has a shelf life
+
+A threat model is a snapshot. Where AI is in use, the snapshot ages fast: new agent capabilities, new tool integrations, and new attack classes (indirect prompt injection, poisoned tool descriptions, agent credential reach) arrive faster than in other areas. Newman (*Building Resilient Distributed Systems*, 2026, ch. 7) recommends regular threat assessments, more frequent in areas with heavy AI use, on the same reasoning as more frequent AI vendor reviews.
+
+**Flag** (advisory, not diff-level): a change that adds a model call, an agent tool, or an MCP server to a system whose threat model predates the system's AI use, or has no date. A diff does not show the review cadence. Raise it as an insight, not as a finding against the line.
+
 ---
 
 ## OWASP Top 10 (2021) and what each looks like in code

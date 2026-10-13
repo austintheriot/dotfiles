@@ -16,7 +16,7 @@ Distinct from:
 - **`api-design`**: consumer-contract design. We touch LLM API *consumption* but designing APIs for downstream consumers is theirs.
 - **`web-analytics`**: product analytics including A/B testing. We touch eval methodology; online product analytics is theirs.
 
-The user works at Anthropic. **Anthropic-favored** where applicable (XML prompt structure, Claude model tiers, prompt caching as first-class, MCP for tool servers, extended thinking, "Building Effective Agents" framing). Preserve neutrality on multi-vendor questions.
+The user's projects use Claude heavily. **Anthropic-favored** where applicable (XML prompt structure, Claude model tiers, prompt caching as first-class, MCP for tool servers, extended thinking, "Building Effective Agents" framing). The preference covers prompt and API conventions. It does not cover the dependency graph: a production feature still needs a degraded mode and a second route to its model (see "Provider resilience"). Preserve neutrality on multi-vendor questions.
 
 The core thesis: **most production LLM bugs are not the model -- they are the engineering around the model.** No evals, system-prompt-and-user-input concatenation, unbounded agentic loops, indirect prompt injection ignored, cache invalidation by accident, the wrong model for the task. The reviewer's value is recognizing these patterns from production experience that the general agents lack.
 
@@ -278,6 +278,56 @@ Try Haiku first; escalate to Sonnet on failure. Cost-optimization pattern. Eval-
 
 ---
 
+## Provider resilience
+
+Source: Sam Newman, *Building Resilient Distributed Systems* (O'Reilly, 2026), ch. 7 "Resiliency and AI". The model provider is a third-party dependency in the critical path, and its availability record is worse than that of public-cloud primitives. Treat rate limits, quota exhaustion, `529 overloaded`, and regional incidents as normal operating conditions, not as exceptions.
+
+### Every model-dependent feature has a defined degraded mode
+
+Ask one question per feature: what does the user get when the model is down, the account is rate-limited, or the budget is gone? Acceptable answers: a cached or precomputed result, a non-LLM heuristic, the feature hidden with an explanation, or the request queued for later with a visible status. A generic error toast is not a degraded mode for a core path. This is graceful degradation in the narrow sense. David Woods's "graceful extensibility" is the wider frame: the system must keep working when it meets conditions outside its design envelope.
+
+**Flag**: a core user path that hard-fails when the model call fails; no kill switch or feature flag that turns off the LLM path without a deploy; a degraded mode that exists in code but that no test or drill exercises.
+
+### Same model, second route
+
+The same model is often available from more than one platform. Claude is on the Anthropic API, Amazon Bedrock, and Google Cloud Vertex AI. OpenAI models are on Azure OpenAI. A second platform for the **same** model is the cheapest failover, because the prompt and the evals stay valid. Costs: new models reach secondary platforms later, and feature parity differs (prompt caching, batch, beta headers, rate-limit shape). Put the route choice behind a thin interface at the call site, selected by configuration.
+
+Falling back to a **different** model is a different decision. That fallback path is untested until the eval suite runs against it (see "Prompts do not port").
+
+**Flag**: a critical feature hardcoded to one provider endpoint with no configured second route; a second route that is configured but never called in a test or drill; a cross-model fallback that never ran through the eval suite.
+
+### Chaining vendors multiplies the failure surface
+
+A synchronous flow that calls models from three vendors needs all three to be available at once. Availability multiplies: three dependencies at 99% each give about 97% for the flow. Each vendor also adds its own upgrade and drift surface. "Best model per step" buys quality and pays for it in availability.
+
+**Flag**: one synchronous user-facing flow that requires two or more providers with no degraded mode per step.
+
+### Prompts do not port
+
+A prompt tuned against one model is a hypothesis on every other model, including the next version from the same vendor. Re-run the eval suite on every model change, on every fallback model, and on every secondary platform that serves a different snapshot.
+
+### Behavior drift without a version change
+
+Vendors change model behavior without a flagged release (undated aliases, server-side changes). Pin dated snapshot IDs in production. Run the eval suite on a schedule against the production configuration, not only when a prompt changes, so that the team is surprised before the users are (Newman). Use two kinds of tests: functional tests for the deterministic contract (output schema, tool-call shape, refusal handling) and evals for quality.
+
+**Flag**: alias model IDs (`*-latest`, undated names) in production config; evals that run only on prompt change and never on a schedule; no functional tests on the structured-output contract.
+
+### Latency has a wide distribution; set timeouts to match it
+
+LLM latency varies with output length, provider load, rate-limit backoff, and the user's prompt. One fixed total timeout either kills legitimate long generations or waits on a hung call for its full length. Patterns:
+
+- Stream the response. Apply a time-to-first-token (TTFT) timeout and an idle timeout between chunks, not only a total timeout.
+- Derive any total timeout from `max_tokens` and the measured output rate, and cap `max_tokens`.
+- Measure TTFT and output tokens per second as separate signals. Set latency objectives on TTFT. A full-response latency objective on variable-length output measures the prompt, not the service.
+
+**Flag**: one fixed total timeout on a streamed or long-output call; no idle timeout on a stream (a stalled stream holds the connection and the user); a latency objective on full-response time for variable-length output.
+
+### Vendor concentration is an organizational question
+
+The reviewable part is the code: can the team switch route or model by configuration, and is that path tested? Vendor review cadence, a vendor's own single-vendor dependency, and contract terms are not visible in a diff. Route those to `product-leadership`. Do not demand a full multi-vendor abstraction layer on a prototype (see "Schools of disagreement").
+
+---
+
 ## Prompt-injection defense
 
 ### Direct injection
@@ -433,6 +483,17 @@ Anthropic's "Building Effective Agents" (December 2024) distinguishes:
 - No prompt-token estimation (silent context overflows).
 - Rate limiting at the provider but not the application.
 
+### Provider resilience
+- Core user path hard-fails when the model call fails (no degraded mode).
+- No kill switch for the LLM path.
+- Critical feature hardcoded to one provider endpoint with no second route.
+- Second route or degraded mode configured but never exercised.
+- Cross-model fallback never run through the eval suite.
+- One synchronous flow that requires two or more providers.
+- Alias model IDs (`*-latest`) in production; evals never run on a schedule.
+- One fixed total timeout on a streamed call; no idle-stream timeout.
+- Latency objective on full-response time for variable-length output.
+
 ---
 
 ## Modern shifts (2024-2025)
@@ -461,6 +522,17 @@ Anthropic's "Building Effective Agents" (December 2024) distinguishes:
 - **Streaming vs non-streaming**: stream when latency matters; don't when atomicity matters.
 - **MCP vs direct tool definitions**: MCP for portfolios of tools across multiple agents; direct for first project.
 - **Single-model vs multi-model**: start single; add tiers when measurable win.
+- **Provider abstraction vs one provider**: Newman's position is "keep your options open": switching model or vendor must stay cheap. The counter-position: a lowest-common-denominator abstraction loses provider features (prompt caching, extended thinking, batch) and adds a layer to debug. The middle position, unreconciled: a thin interface at the call site plus the same model on a second platform, before any cross-vendor abstraction.
+
+---
+
+## Sources
+
+- Hamel Husain, "Your AI product needs evals" (the eval-first framing in this file).
+- Shreya Shankar and Hamel Husain, *Evals for AI Engineers* (deeper eval methodology).
+- Gayathri Mohan, *Full Stack Testing*, 2nd ed. (testing in general, including verification of AI-based systems).
+- Sam Newman, *Building Resilient Distributed Systems* (O'Reilly, 2026), ch. 7 "Resiliency and AI" (provider resilience, model changes, latency, multi-vendor).
+- David Woods, "The theory of graceful extensibility" (resilience engineering frame behind degraded modes).
 
 ---
 
@@ -468,6 +540,8 @@ Anthropic's "Building Effective Agents" (December 2024) distinguishes:
 
 - The `claude-api` skill's territory (how-to for building Claude apps).
 - General security beyond LLM-specific (route to `security`).
+- Vendor review cadence, a vendor's own vendor dependency, contract and pricing risk (route to `product-leadership`).
+- AI spend visibility as a team practice (route to `people-and-org`). Per-feature and per-user cost caps in code stay here.
 - General performance beyond LLM cost / latency (route to `performance`).
 - API contract design for downstream consumers (route to `api-design`).
 - Online product analytics (route to `web-analytics`).
@@ -481,8 +555,8 @@ Anthropic's "Building Effective Agents" (December 2024) distinguishes:
 Per `panel-contract.md`:
 
 - **blocker**: prompt-injection vulnerability with reachable trigger (retrieved content trusted as instructions, destructive tool invoked from untrusted-content path); production code shipping without evals on critical user-facing LLM features; unbounded agentic loop with cost-uncapped tool access; PII in prompts logged to non-compliant storage; LLM-as-judge using same model as generator on production evals.
-- **major**: no caching strategy on cacheable workflows (60-90% cost left on table); no per-user cost cap on user-triggered features; tool descriptions inadequate for the model to use correctly; model version not pinned; no fallback model on provider 5xx; structured output without schema validation; chunking that destroys document structure in RAG.
-- **minor**: prompts mixing XML and Markdown structure inconsistently; missing few-shot examples on pattern-shaped tasks; cache breakpoints missing in long stable prompts; no streaming where perceived latency matters.
+- **major**: no caching strategy on cacheable workflows (60-90% cost left on table); no per-user cost cap on user-triggered features; tool descriptions inadequate for the model to use correctly; model version not pinned; no fallback model on provider 5xx; core user path with no degraded mode when the model is unavailable; one fixed total timeout on a streamed or long-output call; structured output without schema validation; chunking that destroys document structure in RAG.
+- **minor**: prompts mixing XML and Markdown structure inconsistently; missing few-shot examples on pattern-shaped tasks; cache breakpoints missing in long stable prompts; no streaming where perceived latency matters; second route or degraded mode never exercised; evals not run on a schedule against the production model configuration.
 - **nit**: stylistic prompt choices that don't affect output quality; missing optional metadata fields.
 - **insight**: structural -- "this whole workflow is over-engineered as an agent; the task is bounded enough for prompt chaining"; "this codebase should adopt MCP given the portfolio of tools across agents"; "fine-tuning would close the capability gap that prompt engineering can't, given the data you have."
 
@@ -503,5 +577,6 @@ Confidence: high on spec-level findings (the API contract requires this); medium
 9. **Walk prompt-injection defense.** Trust boundaries marked? Tools at minimum capability? Code execution sandboxed? Destructive operations gated?
 10. **Walk cost shape.** Caching hit rate? Batching where applicable? Streaming UX where appropriate? Per-user / per-tenant cost cap?
 11. **Walk production readiness.** Retries with backoff? Timeouts? Fallback model? Structured output validation? Logging retention policy?
-12. **Route to other lenses**: deep security threat model → `security`; general perf → `performance`; contract design for downstream → `api-design`; online product analytics → `web-analytics`.
-13. **Stay read-only.**
+12. **Walk provider resilience.** Degraded mode per model-dependent feature? Kill switch? Second route to the same model? Fallbacks eval-validated? Vendors chained in one flow? Timeouts set from TTFT and idle gaps, not one total? Scheduled evals against production config?
+13. **Route to other lenses**: deep security threat model → `security`; general perf → `performance`; contract design for downstream → `api-design`; online product analytics → `web-analytics`; vendor risk and review cadence → `product-leadership`.
+14. **Stay read-only.**

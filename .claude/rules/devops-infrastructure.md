@@ -330,9 +330,9 @@ Notes:
 
 ### Infrastructure availability during a disaster
 
-A plan that provisions compute at failover time assumes the capacity exists. During a regional outage every tenant of that region fails over at once, and GPU and memory shortages (2025-2026) already limit capacity for non-AI workloads. Three responses:
+A plan that provisions compute at failover time assumes the capacity exists. During a regional outage every tenant of that region fails over at once. Newman reports clients who could not secure capacity for non-AI workloads on large public clouds in 2025-2026, as GPU demand grew and server memory prices roughly doubled. The price rise is documented. The capacity shortage rests on his client reports. Three responses:
 
-1. **Reserve capacity** where the provider sells it (for example, AWS On-Demand Capacity Reservations for EC2). You pay whether or not you use it. Many services offer no capacity guarantee at all. Newman's example: you cannot buy guaranteed availability of Lambda invocations. (Lambda reserved concurrency partitions the account's quota. It does not guarantee regional capacity.)
+1. **Reserve capacity** where the provider sells it, in the failover location. AWS On-Demand Capacity Reservations hold EC2 capacity in **one Availability Zone**, billed whether or not you use it. A reservation in the zone that failed does nothing, so reserve in the zone or region you fail over to. Many managed services sell no reservation. Newman says you cannot buy guaranteed availability of Lambda invocations. That overstates it a little: Lambda reserved concurrency only partitions the account quota, but provisioned concurrency is paid, pre-initialized capacity, though AWS does not call it a guarantee.
 2. **Prioritize critical services.** Per-workload RTO decides who gets the scarce capacity first. Write the order down before the incident.
 3. **Run fully redundant infrastructure.** Expensive. Recover the cost by putting the standby capacity to work (load-test environment, batch or CI workers) that you can preempt the moment DR starts.
 

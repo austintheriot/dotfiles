@@ -31,14 +31,14 @@ The empirical priority: **evals first.** Hamel Husain's thesis ("Your AI product
 A team without evals is flying blind. Symptoms: prompt changes shipped by vibe; "it seems better"; quality regressions caught only by user complaints; no regression suite for past bugs.
 
 **The eval discipline**:
-- **Golden sets**: hand-curated input → expected-output pairs that capture the production distribution.
+- **Golden sets**: hand-curated input → expected-output pairs that capture the production distribution. Shankar and Husain build eval sets differently: from failure modes found by reading real traces, judged without a reference answer. Both shapes ship. Do not flag the absence of expected outputs on its own.
 - **Regression suites**: every shipped bug becomes a perpetual eval case.
 - **LLM-as-judge** (with limits): cheap, scalable; inherits judge model biases (position, self, length).
 - **Pairwise comparison** with randomized order to mitigate position bias.
 - **Online feedback** (thumbs, edits, abandonment metrics) as ground-truth signal.
 - **Pre-deploy eval gate**: every prompt / model change runs against the eval suite; regression blocks deploy.
 
-**Flag**: prompt changes without eval comparison; LLM-as-judge using the same model as the generator (self-bias); pairwise comparisons without order randomization; eval sets that don't reflect production distribution; no regression suite.
+**Flag**: prompt changes without eval comparison; LLM-as-judge not validated against human labels; pairwise comparisons without order randomization; eval sets that don't reflect production distribution; no regression suite.
 
 ### Prompt structure: role separation is non-negotiable
 
@@ -216,6 +216,22 @@ The eval discipline:
 - **Coverage**: eval set reflects production distribution.
 - **Hold-out**: separate set the team doesn't optimize against (avoids Goodhart drift).
 
+### Error analysis comes before evals
+
+Source: Husain and Shankar (https://hamel.dev/blog/posts/evals-faq/, https://hamel.dev/blog/posts/evals/). Their FAQ calls error analysis "the most important activity in evals".
+
+- **Read traces first.** Read 100 or more real traces. Write free-text notes on each (open coding), then group the notes into a failure taxonomy (axial coding). Write an evaluator only for a failure mode you observed.
+- **No generic metrics as gates.** An off-the-shelf "helpfulness" or "hallucination score" from a library measures nothing specific to the product. The FAQ: "Generic evaluations waste time and create false confidence."
+- **Code assertions before judges.** When code can decide a check (schema, tool name, required field, forbidden string), use an assertion, not an LLM judge. CI suites favor deterministic checks.
+- **Three levels, three cadences.** Assertions on every change. Human review and judge evals on a schedule. A/B tests only after large product changes.
+- **Criteria drift.** People define their criteria while they grade outputs, so a rubric written before anyone looks at data will change. Write the rubric after a first review and expect to revise it (Shankar et al., "Who Validates the Validators?", https://arxiv.org/abs/2404.12272).
+- **Re-run error analysis after a model switch**, a large prompt change, or a new feature. Re-align the judge after a model update.
+- **Saturated evals carry no information.** An eval that passes every case needs harder cases or retirement. Keep high-impact cases in the pre-release run anyway.
+- **RAG and agents: test the parts in order.** For RAG, measure retrieval (Recall@k, MRR) before generation. For agents, measure end-to-end task success first, then step-level checks (tool name, arguments, result, resulting state).
+- **Guardrails are not evaluators.** A slow LLM judge rarely belongs in the request path.
+
+**Flag**: evaluators with no trace of the error analysis that motivated them; library quality scores used as a deploy gate; an LLM judge where a code assertion would decide; synthetic eval data used to estimate production failure rates.
+
 ### LLM-as-judge
 
 A cheaper alternative to human eval at scale. Limitations:
@@ -224,9 +240,13 @@ A cheaper alternative to human eval at scale. Limitations:
 - **Length bias**: prefers longer outputs.
 - **Verbosity bias**: confident-sounding wrong outputs preferred.
 
-**Mitigations**: randomize order in pairwise; use a different model as judge than generator; constrain output length in evals.
+**Mitigations**: randomize order in pairwise; constrain output length in evals; ask for a binary pass/fail plus a written critique, not a Likert score (Husain, https://hamel.dev/blog/posts/llm-judge/).
 
-**Flag**: LLM-as-judge using the same model as the generator; no order randomization in pairwise comparisons; LLM-as-judge as the only signal (no human calibration).
+**Validate the judge against human labels.** One named domain expert labels the data, not a developer standing in for one. Report the judge's true positive rate and true negative rate separately, never raw agreement: on data with 5% failures, a judge that always says "pass" agrees 95% of the time. Split labels into train, dev, and a frozen test set. Plan on 100 to 200 labels per failure mode.
+
+**Same model as judge and generator (unreconciled).** The self-preference bias above is in the research literature, so a different judge model is a cheap hedge. Husain and Shankar say the same model is usually fine, because the judge does a different task, and what matters is alignment with human labels. Do not flag "same model" on its own. Flag the unvalidated judge.
+
+**Flag**: judge with no measured true positive and true negative rates against human labels; raw agreement reported as judge accuracy; Likert-scale judges used as gates; no order randomization in pairwise comparisons; LLM-as-judge as the only signal.
 
 ### Online feedback
 
@@ -280,17 +300,17 @@ Try Haiku first; escalate to Sonnet on failure. Cost-optimization pattern. Eval-
 
 ## Provider resilience
 
-Source: Sam Newman, *Building Resilient Distributed Systems* (O'Reilly, 2026), ch. 7 "Resiliency and AI". The model provider is a third-party dependency in the critical path, and its availability record is worse than that of public-cloud primitives. Treat rate limits, quota exhaustion, `529 overloaded`, and regional incidents as normal operating conditions, not as exceptions.
+Source: Sam Newman, *Building Resilient Distributed Systems* (O'Reilly, 2026), ch. 7 "Resiliency and AI". The model provider is a third-party dependency in the critical path. Newman's assessment is that its availability record is worse than that of public-cloud primitives. He gives no data for this, and neither does this file. Treat rate limits, quota exhaustion, `529 overloaded`, and regional incidents as normal operating conditions, not as exceptions.
 
 ### Every model-dependent feature has a defined degraded mode
 
-Ask one question per feature: what does the user get when the model is down, the account is rate-limited, or the budget is gone? Acceptable answers: a cached or precomputed result, a non-LLM heuristic, the feature hidden with an explanation, or the request queued for later with a visible status. A generic error toast is not a degraded mode for a core path. This is graceful degradation in the narrow sense. David Woods's "graceful extensibility" is the wider frame: the system must keep working when it meets conditions outside its design envelope.
+Ask one question per feature: what does the user get when the model is down, the account is rate-limited, or the budget is gone? Acceptable answers: a cached or precomputed result, a non-LLM heuristic, the feature hidden with an explanation, or the request queued for later with a visible status. A generic error toast is not a degraded mode for a core path. This is graceful degradation: robustness against a failure you can name in advance. It is not what David Woods calls graceful extensibility, which is the capacity to cope with surprises outside the design envelope (see `distributed-systems.md` #45). The kill switch is the lever for that second case.
 
 **Flag**: a core user path that hard-fails when the model call fails; no kill switch or feature flag that turns off the LLM path without a deploy; a degraded mode that exists in code but that no test or drill exercises.
 
 ### Same model, second route
 
-The same model is often available from more than one platform. Claude is on the Anthropic API, Amazon Bedrock, and Google Cloud Vertex AI. OpenAI models are on Azure OpenAI. A second platform for the **same** model is the cheapest failover, because the prompt and the evals stay valid. Costs: new models reach secondary platforms later, and feature parity differs (prompt caching, batch, beta headers, rate-limit shape). Put the route choice behind a thin interface at the call site, selected by configuration.
+The same model is often available from more than one platform. Claude is on the Anthropic API, Amazon Bedrock, Google Cloud's Gemini Enterprise Agent Platform (named Vertex AI until April 2026), and Microsoft Foundry. OpenAI models are on Azure. A second platform for the **same** model is the cheapest failover, because the prompt and the evals stay valid. Costs: new models reach secondary platforms later, retirement dates differ, and feature parity differs. Example (Anthropic's Bedrock page): no Message Batches endpoint, no automatic prompt caching, no Files API, no server tools, no MCP connector. Check the current parity page before you count a platform as a failover route. Put the route choice behind a thin interface at the call site, selected by configuration.
 
 Falling back to a **different** model is a different decision. That fallback path is untested until the eval suite runs against it (see "Prompts do not port").
 
@@ -438,7 +458,8 @@ Anthropic's "Building Effective Agents" (December 2024) distinguishes:
 
 ### Evals
 - Shipping prompt changes without evals.
-- LLM-as-judge using same model as generator.
+- LLM-as-judge not validated against human labels (no true positive / true negative rates).
+- Evaluators written before any error analysis of real traces.
 - Pairwise comparisons without order randomization.
 - Eval sets not reflecting production distribution.
 - Evals pass "in general" but regress on real cases.
@@ -529,10 +550,12 @@ Anthropic's "Building Effective Agents" (December 2024) distinguishes:
 ## Sources
 
 - Hamel Husain, "Your AI product needs evals" (the eval-first framing in this file).
-- Shreya Shankar and Hamel Husain, *Evals for AI Engineers* (deeper eval methodology).
-- Gayathri Mohan, *Full Stack Testing*, 2nd ed. (testing in general, including verification of AI-based systems).
+- Shreya Shankar and Hamel Husain, *Evals for AI Engineers* (O'Reilly, 2026; four parts: foundations, analyze, measure, production). Publisher details are from search snippets, not verified on the publisher page.
+- Shreya Shankar et al., "Who Validates the Validators?" (https://arxiv.org/abs/2404.12272), on criteria drift.
+- Hamel Husain, https://hamel.dev/blog/posts/evals-faq/ and https://hamel.dev/blog/posts/llm-judge/ (error analysis, binary judges, judge validation).
+- Gayathri Mohan, *Full Stack Testing*, 2nd ed. (O'Reilly, 2026), subtitle "A Practical Guide for Delivering High Quality Software in the Age of AI". Newman recommends it for verification of AI-based systems. Its table of contents covers AI tools used *for* testing (Playwright MCP, agentic test authoring), not the testing of LLM features. Cite it for general test practice, not for LLM evals.
 - Sam Newman, *Building Resilient Distributed Systems* (O'Reilly, 2026), ch. 7 "Resiliency and AI" (provider resilience, model changes, latency, multi-vendor).
-- David Woods, "The theory of graceful extensibility" (resilience engineering frame behind degraded modes).
+- David Woods, "The theory of graceful extensibility: basic rules that govern adaptive systems", *Environment Systems and Decisions* 38(4): 433-457 (2018), https://doi.org/10.1007/s10669-018-9708-3. Defines the robustness versus graceful-extensibility distinction used in "Provider resilience".
 
 ---
 

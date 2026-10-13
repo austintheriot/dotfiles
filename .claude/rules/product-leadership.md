@@ -365,7 +365,7 @@ Source: Sam Newman, *Building Resilient Distributed Systems* (O'Reilly, 2026), c
 
 ### Keep your options open
 
-A product built on one model vendor or one AI platform inherits that vendor's price, quality, and availability changes. Newman's case: in 2025 Cursor depended on Anthropic's models, Anthropic changed its pricing, Cursor passed a large cost increase on to its customers, and Anthropic also ships a competing product (Claude Code). The lesson generalizes: a supplier that is also a competitor sets your margin. Ask what it costs to move to another model, and keep that cost low on purpose.
+A product built on one model vendor or one AI platform inherits that vendor's price, quality, and availability changes. Newman's case is Cursor. In June 2025 Cursor moved its Pro plan from request limits to compute limits and added a $200 plan, which raised the effective price for heavy users. Newman attributes the change to Anthropic's pricing. Cursor itself cited frontier-model costs across several vendors, and no public source ties it to one Anthropic price change. The principle stands either way: a supplier that is also a competitor (Anthropic ships Claude Code) sets your margin. Ask what it costs to move to another model, and keep that cost low on purpose.
 
 ### Your vendor's vendors
 

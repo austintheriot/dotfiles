@@ -1,9 +1,11 @@
 ---
 paths:
-  - "**/*.md"
   - "**/README*"
   - "**/CHANGELOG*"
   - "**/CONTRIBUTING*"
+  - "**/docs/**/*.md"
+  - "**/adr/**/*.md"
+  - "**/runbooks/**/*.md"
 ---
 
 # Documentation

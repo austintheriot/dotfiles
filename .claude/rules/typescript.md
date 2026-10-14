@@ -1,20 +1,6 @@
 ---
 paths:
-  - "src/**/*.{ts,tsx}"
-  - "lib/**/*.{ts,tsx}"
-  - "app/**/*.{ts,tsx}"
-  - "packages/**/*.{ts,tsx}"
-  - "services/**/*.{ts,tsx}"
-  - "tests/**/*.{ts,tsx}"
-  - "test/**/*.{ts,tsx}"
-  - "**/*.{test,spec}.{ts,tsx}"
-  - "*.{ts,tsx}"
-excludePaths:
-  - "**/node_modules/**"
-  - "**/dist/**"
-  - "**/build/**"
-  - "**/.next/**"
-  - "**/coverage/**"
+  - "**/*.{ts,tsx,mts,cts}"
 ---
 
 # TypeScript

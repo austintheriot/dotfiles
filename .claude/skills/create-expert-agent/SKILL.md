@@ -125,6 +125,8 @@ Every consuming skill needs the new lens, or the agent will never be dispatched.
 
 Also check for any **skill whose description enumerates agent names** -- `expert-review`'s description lists its panel. Long enumerations in a description are already at their useful limit; add the new names only where the list is short enough to stay readable, and prefer a category word over a growing list.
 
+If the lens is cross-cutting (it applies to most code, not to one domain or platform), add or update its section in `~/.claude/rules/core-practices.md`: the source file, the agent, and three to eight one-line defect shapes. Add the source file to the digest's `sources:` list and update `last-verified`. In refresh mode, check the digest section against the refreshed rules file. That digest is the only part of the research that loads when no agent runs, so a stale digest line misleads every session.
+
 Then update `~/.claude/CLAUDE.md` if the new lens introduces a capability the user would not guess exists. Keep it to the minimum. See below.
 
 ### Step 6 -- Verify

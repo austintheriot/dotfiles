@@ -1,10 +1,6 @@
 ---
 paths:
   - "**/*.{tsx,jsx}"
-excludePaths:
-  - "**/node_modules/**"
-  - "**/dist/**"
-  - "**/build/**"
 ---
 
 # React

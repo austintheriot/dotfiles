@@ -77,6 +77,8 @@ A default draft already absorbs surface Slack-casual norms ("Hey Name!", "no rus
 - **DM / heads-up:** warmest, shortest. "Hey <Name>! The PDF export PR is ready... no pressure: <link>"
 - **Channel proposal:** lead with context, lay out the reasoning, link the ticket, end open. "Let me know what yall think though."
 - **PR description / GitHub issue:** drop the emoji and "haha", keep the lead-with-why, the honest confidence, the concrete links and file paths, the neutral problem framing. Still a peer talking, just in the no-emoji register.
+  - **Say where the current behavior lives.** When you describe how things work today, name the environment: "Currently on prod, if you fill out a PDF form on web and export the note, ...", or "on staging" when it has not shipped. A bare "when you do X, Y happens" leaves the reader unsure whether that is prod, staging, or the branch.
+  - **Then say what this PR changes, with "This PR" as the subject.** "This PR makes it so that the PDF export actually copies your responses into the exported PDF." Not "Now the export...", which reads as current behavior.
 - **PR/review comment:** quote-and-answer, neutral, specific. Push back by reasoning, not asserting.
 
 ## Anti-examples (do NOT do these)

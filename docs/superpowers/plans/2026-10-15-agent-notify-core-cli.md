@@ -29,7 +29,7 @@ The spec covers four subsystems. Each gets its own plan, and each plan ends with
 - `MAX_LINE_BYTES = 65_536` for one request line (see Deviations).
 - `agent-notify hook claude-code` always exits 0, also after a panic. `send` and `quiet` exit 2 on a usage error with one stderr line.
 - The CLI has 300 ms for connect, write and reply together.
-- Fallback only for `NeedsInput`, `TurnFailed`, `Explicit`. Never for `TurnEnded`. macOS: `terminal-notifier -title -subtitle -message -activate org.alacritty`, never `-execute`, never a shell string. Linux: `notify-send` with XML-escaped body.
+- Fallback only for `NeedsInput`, `TurnFailed`, `Explicit`. Never for `TurnEnded`. macOS: `terminal-notifier -title -subtitle -message -activate org.alacritty`, never `-execute`, never a shell string. Linux: `notify-send` with `<`, `>` and `&` replaced by fullwidth look-alikes (spike report, section S2-4: COSMIC parses tags but shows entities literally).
 - Timing constants (core `update.rs`): `INFO_SHOW_MS = 6_000`, `HOVER_GRACE_MS = 300`, `HOVER_RESUME_MS = 2_000`, `FOCUS_DWELL_MS = 1_000`, `SNOOZE_MS = 600_000`, `SOUND_GAP_MS = 3_000`, `SESSION_GONE_MS = 3_000`, `NOT_RAISED_MS = 2_000`, `IDLE_LIMIT_SECONDS = 30`. Quiet default `--max-minutes 120`.
 - Pane options: `@agent_notify_session`, `@agent_notify_prompt`. Every tmux call passes `-S <socket path>` and targets a `%pane_id`.
 - The `config` repo is public. No employer, product or ticket names in code, fixtures or commit messages. The pre-commit leak check scans every staged file.
@@ -111,7 +111,7 @@ Delete: `crates/tmux-tools/tests/support/mod.rs`, `crates/tmux-tools/tests/suppo
 
 ### Task 0: Confirm hook payload fields and `$TMUX_PANE`
 
-A check, not code. Section 5.2 of the spec depends on `$TMUX_PANE` in hook and Bash environments. The decoder in Task 4 depends on the field names. If any expectation below fails, stop and report to the user before Task 1.
+A check, not code. Section 5.2 of the spec depends on `$TMUX_PANE` in hook and Bash environments. The decoder in Task 4 depends on the field names. Spike 1 confirmed every expectation below on Claude Code 2.1.301 (`docs/superpowers/spikes/2026-10-15-agent-notify-spikes.md`, section S1-H). If `claude --version` still prints 2.1.301, skip to Task 1. Otherwise run the steps. If any expectation fails, stop and report to the user before Task 1.
 
 **Files:** none committed. Scratch only.
 
@@ -144,7 +144,7 @@ Expected:
 - The Bash output prints `pane=%<digits>`.
 - Every payload has `session_id`, `cwd`, `hook_event_name`, and a `TMUX_PANE=%<digits>` line follows it.
 - `UserPromptSubmit` and `Stop` payloads have `prompt_id`, and the two values are equal.
-- `SessionStart` has `source`. `Stop` has `last_assistant_message`.
+- `SessionStart` has `source`, and no `prompt_id` and no `session_title`. `Stop` has `last_assistant_message`.
 
 - [ ] **Step 3: Record and clean up**
 
@@ -5942,7 +5942,7 @@ config commit -m "Add the agent-notify tmux adapter and input gathering" -m "Co-
 - Consumes: Tasks 15 and 16; core `paths`, `wire::{Reply, ReplyCode, encode_line}`, `fallback::FallbackNote`.
 - Produces:
   - `client::BUDGET: Duration = 300 ms`; `client::Delivery::{Acked { daemon }, Rejected { code }, NoSocket(&'static str), ConnectFailed(io::ErrorKind), TimedOut, BadReply(String)}` with `acknowledged(&self) -> bool`; `client::deliver(&Path, &str, Duration) -> Delivery`.
-  - `fallback::notify(Platform, &FallbackNote) -> io::Result<()>`, `fallback::guard_leading_dash(&str) -> String`, `fallback::escape_markup(&str) -> String`.
+  - `fallback::notify(Platform, &FallbackNote) -> io::Result<()>`, `fallback::guard_leading_dash(&str) -> String`, `fallback::neutralize_markup(&str) -> String`.
   - `log::init(Option<&Path>, Option<&str>)`.
 
 - [ ] **Step 1: Write the failing unit tests**
@@ -6037,8 +6037,9 @@ mod tests {
     }
 
     #[test]
-    fn markup_is_escaped() {
-        assert_eq!(escape_markup(r#"<b>"a" & 'b'</b>"#), "&lt;b&gt;&quot;a&quot; &amp; &apos;b&apos;&lt;/b&gt;");
+    fn markup_characters_become_look_alikes() {
+        assert_eq!(neutralize_markup(r#"<b>"a" & 'b'</b> a < b"#), "\u{ff1c}b\u{ff1e}\"a\" \u{ff06} 'b'\u{ff1c}/b\u{ff1e} a \u{ff1c} b");
+        assert_eq!(neutralize_markup("plain text"), "plain text");
     }
 }
 ```
@@ -6173,7 +6174,7 @@ pub fn notify(platform: Platform, note: &FallbackNote) -> io::Result<()> {
                 .arg(if note.urgent { "--urgency=critical" } else { "--urgency=normal" })
                 .arg("--")
                 .arg(&note.title)
-                .arg(escape_markup(&format!("{}\n{}", note.subtitle, note.message)));
+                .arg(neutralize_markup(&format!("{}\n{}", note.subtitle, note.message)));
             command
         }
         Platform::Other => return Err(io::Error::other("no fallback notifier on this platform")),
@@ -6193,13 +6194,18 @@ pub fn guard_leading_dash(text: &str) -> String {
     if text.starts_with('-') { format!(" {text}") } else { text.to_string() }
 }
 
-/// Notification servers render a subset of markup in the body.
-pub fn escape_markup(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
+/// Notification servers disagree on body markup. COSMIC parses tags, cuts
+/// the body at a bare `<`, and shows entities literally, so no escaping works
+/// on every server. Fullwidth look-alikes render the same everywhere.
+pub fn neutralize_markup(text: &str) -> String {
+    text.chars()
+        .map(|character| match character {
+            '<' => '\u{ff1c}',
+            '>' => '\u{ff1e}',
+            '&' => '\u{ff06}',
+            other => other,
+        })
+        .collect()
 }
 ```
 

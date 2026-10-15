@@ -88,15 +88,6 @@ Run in the Tart VM `pop-cosmic-spike` (Pop!_OS 24.04 COSMIC, arm64) and in Docke
 | S4-6 | Does a layer-shell window resize, hide and show? | Yes. `set_size_request(380, h)` plus `resize` took the window 110 to 300 to 60 px, then hide, show, and 200 px. The anchors and the layer survive hide and show. The allocated size that GTK reports lags one step. The web view viewport follows. |
 | S4-7 | Does the D-Bus notification path work with zbus? | Yes, zbus 5.19.0 (MIT, default features). `Notify` returned ids 1 and 2, `CloseNotification` closed a popup, and a click sent `ActionInvoked (1, "default")` then `NotificationClosed (1, 2)`. COSMIC sent two `NotificationClosed` signals for one close, (2, 3) then (2, 2), so the presenter must not rely on close signals. Look-alike characters rendered literally. The Overlay layer card covers notification popups at the top right. |
 
-Decisions from S4, used in plan 3:
-
-- D14. `cosmic-protocols` is GPL-3.0-only. It sits behind the default-on `cosmic` feature, with a narrow `[[licenses.exceptions]]` entry. The user decides whether to keep it on. Without it, cards and the tmux switch still work, and Alacritty is not raised on COSMIC.
-- D15. Sound on Linux is `pw-play`, else `paplay`.
-- D16. X11 frontmost uses `xprop`. X11 idle and lock read as unknown. COSMIC lock reads as unknown.
-- D17. COSMIC idle is one 30 s idle notification: 0 while active, 30 while idle, unknown until the first 30 s pass.
-- D18. The D-Bus presenter runs only on a Wayland desktop without layer shell. It ignores `NotificationClosed`.
-- D19. The Linux daemon logs to stderr for journald.
-
 ## Decisions for plans 2 and 3
 
 | Id | Decision | Source |
@@ -114,6 +105,12 @@ Decisions from S4, used in plan 3:
 | D11 | The systemd unit uses `PartOf`, `After` and `WantedBy=graphical-session.target`, as the spec says. | S2-9, S2-10 |
 | D12 | The X11 card accepts a focus flicker on click in v1. | S3-2 |
 | D13 | Rust-to-TypeScript types come from `ts-rs` 12.0.1. `tauri-specta` has no stable 2.x release. | Planning check, not a spike |
+| D14 | `cosmic-protocols` is GPL-3.0-only. It sits behind the default-on `cosmic` feature, with a narrow `[[licenses.exceptions]]` entry. The user decides whether to keep it on. Without it, cards and the tmux switch still work, and Alacritty is not raised on COSMIC. | S4-1 |
+| D15 | Sound on Linux is `pw-play`, else `paplay`. | S4-4 |
+| D16 | X11 frontmost uses `xprop`. X11 idle and lock read as unknown. | S4-3 |
+| D17 | COSMIC idle is one 30 s idle notification: 0 while active, 30 while idle, unknown until the first 30 s pass. The toplevel reader, the raise and the idle reader share one Wayland connection on one thread (this refines D7). | S4-2 |
+| D18 | The D-Bus presenter runs only on a Wayland desktop without layer shell. It ignores `NotificationClosed`. | S4-7 |
+| D19 | The Linux daemon logs to stderr for journald. | Planning check, not a spike |
 
 ## Manual checks left for the user
 

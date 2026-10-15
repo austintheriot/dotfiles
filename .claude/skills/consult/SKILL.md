@@ -103,6 +103,8 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`architectural-design`** -- building architecture (not software): design theory and proportion, historical movements and their arguments, urbanism and its critiques, practice and codes, sustainability frameworks, acoustics, environmental graphics.
 - **`interior-and-spatial`** -- interiors and the inhabited room: spatial planning and anthropometrics, lighting design, room acoustics, colour and materials, furniture and FF&E, biophilia and its evidence base.
 - **`architectural-tooling`** -- CAD and BIM authoring, openBIM and IFC interoperability, parametric design (Rhino, Grasshopper), archviz rendering pipelines, reality capture and scan-to-BIM, drawing standards.
+- **`react-components`** -- the client React model: render purity and StrictMode, effects that should not exist, `useEffectEvent`, state shape, keys and identity, `useSyncExternalStore` and tearing, transitions and `<Activity>`, React 19 Actions hooks, React Compiler, error boundaries, server-state vs client-state libraries.
+- **`react-server`** -- React Server Components and the server boundary: `'use client'` / `'use server'` as module boundaries, Server Functions as public endpoints, serialization and over-sharing, Next.js caching (`'use cache'` keys, revalidation, the two models), SSR / streaming / hydration, and the RSC security floor.
 
 ### NOT exposed (review-only)
 
@@ -201,6 +203,8 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "Is this agent sandbox real, and what can the agent reach" | `agent-sandboxing` |
 | "How many agents should I run, and why did two of them collide or stall" | `agent-orchestration` |
 | "Can this model run on my machine, and is local cheaper than the API" | `local-inference` |
+| "Do I need this useEffect / why does this component reset or loop / how should I shape this React state" | `react-components` |
+| "Is this Server Action safe / why is this page cached or stale / why the hydration mismatch / should this be a Server Component" | `react-server` |
 | "Is there a platform API for this / should I use `<dialog>` / `Intl.*`" | `browser-spec` |
 | "How should I name this event / structure my funnel / track this A/B test" | `web-analytics` |
 

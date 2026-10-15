@@ -18,3 +18,7 @@ Why: a document query breaks when the component renders outside the main documen
 Use a document query only as a last resort, when no ref can reach the node: a node that third-party code creates, or a global element such as `document.body` or `document.activeElement`. Add a comment that names the reason.
 
 When you replace a document query with a ref, write the test first. Render the component inside a shadow root: the old query finds nothing there, so the test fails before the fix.
+
+## Deeper references
+
+For client-model questions (effects, state shape, keys, external stores, React Compiler), read `~/.claude/rules/react-components.md` or dispatch the `react-components` agent. For Server Components, Server Functions, framework caching, and hydration, read `~/.claude/rules/react-server.md` or dispatch `react-server`.

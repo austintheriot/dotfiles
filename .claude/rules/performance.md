@@ -109,11 +109,14 @@ Passing or returning a 10MB struct by value forces a copy. Pass by reference, us
 The dominant concerns in real React / Vue / Svelte applications.
 
 ### React-specific
-- **Component re-renders triggered by parent re-render**: a parent state change re-renders all children unless they're memoized. Wrap in `React.memo` when the cost of comparing props is less than the cost of rendering.
-- **Inline object / array / function props**: `<Child config={{a: 1}} onClick={() => ...}>` creates a fresh reference each render, defeating `React.memo`. Hoist or `useMemo` / `useCallback`.
-- **`useEffect` with wrong dependency array**: missing deps cause stale closures; spurious deps cause infinite re-runs.
-- **Work in render**: heavy computation in the render body instead of `useMemo`. `JSON.parse`, sorting, filtering large arrays.
-- **Unmemoized context values**: `<Context.Provider value={{...}}>` (inline object) re-renders every consumer on every parent render.
+
+**First, check whether React Compiler is on** (`babel-plugin-react-compiler` in `package.json`, `reactCompiler` in the Next.js / Vite / Babel config). Compiler 1.0 has been stable since 2025-10-07. In a compiled file it memoizes JSX, props, inline callbacks, and derived values automatically, so the memoization bullets below do not apply: do not flag a missing `useMemo`, `useCallback`, or `React.memo`, or inline props. Do not recommend removing existing manual memoization without tests either, because removal can change compiled output. The client React model behind these bullets is in `~/.claude/rules/react-components.md` (`react-components` agent).
+
+- **Component re-renders triggered by parent re-render**: a parent state change re-renders all children unless they are memoized. Fix structure first (pass children as JSX, move state down, split context), then `React.memo` when the Profiler shows the re-render is slow and the props are actually stable. A re-render on its own is not a defect.
+- **Inline object / array / function props** (non-compiled code only): `<Child config={{a: 1}} onClick={() => ...}>` creates a fresh reference each render, defeating `React.memo`. Hoist or `useMemo` / `useCallback`.
+- **Effect re-run loops**: an effect re-runs forever when a dependency changes identity every render (an object or function created in render), or when the effect sets state it depends on. An extra stable dependency is harmless. A value that must not re-trigger the effect belongs in `useEffectEvent` (stable since React 19.2), not omitted from the deps.
+- **Work in render**: compute derived values during render by default. Add `useMemo` only after measuring a slow computation (`JSON.parse`, sorting, or filtering a large array) in a production build. `useMemo` does not help the first render. The real anti-pattern is derived data computed in an effect and stored in state, which costs an extra render.
+- **Unmemoized context values**: `<Context value={{...}}>` (inline object) re-renders every consumer on every parent render. Memoize the value (the Compiler does this), split state and dispatch contexts, or move high-frequency state to a store with selectors.
 - **Lists without keys, or keyed by index**: forces React to remount on every reorder.
 - **Suspense boundaries too high or too low**: too high → entire page flickers; too low → waterfall of sequential loads.
 - **Hydration mismatch**: server-rendered vs client-rendered HTML differ; React tears down and re-renders the entire subtree.

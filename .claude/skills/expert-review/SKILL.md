@@ -1,6 +1,6 @@
 ---
 name: expert-review
-description: Deep multi-expert code review. Classifies code regions, spawns the relevant specialist subagents in parallel (typescript-types, rust-async/backend/unsafe/wasm/ffi, distsys-data/distsys-runtime, fp-*, oo-*, otel-*, observability-practice, bug-hunter, code-simplifier, test-coverage, readability, debuggability, documentation, security, performance, accessibility, api-design, concurrency, i18n, ci-pipeline, web-analytics, graphics-programming, audio-programming, webassembly, browser-spec, mobile-native, sync-and-offline, platform-payments, platform-release, desktop-native, native-bridge, input-and-peripherals, app-privacy-compliance, licensing-and-oss, build-systems, crash-and-release-health, llm-app, devops-infrastructure, first-principles), then synthesizes into one severity-and-confidence-ranked report. Always invokes `bug-hunter`, at least one FP agent, and `first-principles` (the wildcard reviewer that asks "is the answer already in scope?"). Two modes: diff (current branch / PR / range) and survey (a path or feature). Burns more tokens than per-language review skills -- use for genuine panel passes. Read-only; does NOT apply fixes or post to GitHub.
+description: Deep multi-expert code review. Classifies code regions, spawns the relevant specialist subagents in parallel (typescript-types, react-components/server, rust-async/backend/unsafe/wasm/ffi, distsys-data/distsys-runtime, fp-*, oo-*, otel-*, observability-practice, bug-hunter, code-simplifier, test-coverage, readability, debuggability, documentation, security, performance, accessibility, api-design, concurrency, i18n, ci-pipeline, web-analytics, graphics-programming, audio-programming, webassembly, browser-spec, mobile-native, sync-and-offline, platform-payments, platform-release, desktop-native, native-bridge, input-and-peripherals, app-privacy-compliance, licensing-and-oss, build-systems, crash-and-release-health, llm-app, devops-infrastructure, first-principles), then synthesizes into one severity-and-confidence-ranked report. Always invokes `bug-hunter`, at least one FP agent, and `first-principles` (the wildcard reviewer that asks "is the answer already in scope?"). Two modes: diff (current branch / PR / range) and survey (a path or feature). Burns more tokens than per-language review skills -- use for genuine panel passes. Read-only; does NOT apply fixes or post to GitHub.
 ---
 
 # Expert Review
@@ -21,6 +21,7 @@ The roster is the set of review-capable agents under `~/.claude/agents/`. Each a
 Current review-capable agents (run `ls ~/.claude/agents/` at session start to pick up new ones):
 
 - **Languages**: `typescript-types`, `rust-async`, `rust-backend`, `rust-unsafe`, `rust-wasm`, `rust-ffi`
+- **React**: `react-components`, `react-server`. Split by environment: `react-components` owns the client model (purity, effects, state, identity, Compiler); `react-server` owns RSC, Server Functions as public endpoints, framework caching, and hydration. A Redux SPA never fires `react-server`.
 - **Distributed systems**: `distsys-data`, `distsys-runtime`
 - **Observability**: `otel-instrumentation`, `otel-pipeline`, `observability-practice`
 - **Functional programming**: `fp-types`, `fp-effects`
@@ -53,6 +54,8 @@ Match a region to a specialist via signals. Keep the table tight; the agent's ow
 | Lens | Trigger signals |
 |---|---|
 | `typescript-types` | `*.ts` / `*.tsx` |
+| `react-components` | `*.tsx` / `*.jsx` defining components or `use*` hooks; React hook calls (`useEffect`, `useState`, `useReducer`, `useRef`, `useSyncExternalStore`, `useTransition`, `useActionState`, `useOptimistic`, `useFormStatus`, `use`, `useEffectEvent`); context providers; store bindings (`useSelector`, Zustand, Jotai, TanStack Query, RTK Query, SWR); `<Activity>` / `<ViewTransition>`; error boundary classes; React Testing Library tests; React Compiler or `eslint-plugin-react-hooks` config. Skip server-only modules (route to `react-server`) |
+| `react-server` | `'use client'` / `'use server'` / `'use cache'` directives; async Server Components; Next.js App Router files (`page`, `layout`, `route`, `error`, `proxy`, `middleware`, `instrumentation`); `cookies()` / `headers()` / `connection()` / `redirect()` / `notFound()`; `revalidatePath` / `revalidateTag` / `updateTag` / `refresh()` / `cacheLife` / `cacheTag` / `unstable_cache` / `React.cache`; `server-only` imports; React Router RSC route exports, TanStack `createServerFn`; `renderToPipeableStream` / `prerender` / `hydrateRoot`; `suppressHydrationWarning`; `NEXT_PUBLIC_` vars; version bumps of `next` / `react` / `react-server-dom-*` (security floor) |
 | `rust-async` | `async fn`, `.await`, `tokio::`, `select!`, `JoinSet`, `Stream`, `Pin`, `Future` |
 | `rust-backend` | `axum::`, `tower::`, `hyper::`, `sqlx::`, handler fns, `IntoResponse` |
 | `rust-unsafe` | `unsafe {`, `unsafe fn`, raw pointers, `MaybeUninit`, `transmute`, manual `Send`/`Sync` |

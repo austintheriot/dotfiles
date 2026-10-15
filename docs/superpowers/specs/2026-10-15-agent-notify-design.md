@@ -1,7 +1,7 @@
 # agent-notify: contextual, clickable notifications for coding agents
 
 Date: 2026-10-15
-Status: revision 2, after an 11-lens expert review. Waiting for user review.
+Status: revision 2, after an 11-lens expert review. Approved 2026-10-15.
 Location: `~/crates/agent-notify-core`, `~/crates/agent-notify` (CLI), `~/tools/agent-notify/` (app). All tracked in `config`.
 
 ## 1. Problem
@@ -372,7 +372,7 @@ enum TmuxSwitch { InAttachedClient, SwitchClient { tty: ClientTty }, AttachNewTe
 - Placement: the display with keyboard focus (AeroSpace's focused monitor, else the main screen), inside its visible frame, 16 px from the top-right, with that display's scale factor. Cards move when displays change.
 - Raise: `aerospace list-windows --app-bundle-id org.alacritty`, then `aerospace focus --window-id`. Without AeroSpace: activate the Alacritty app. Spike 1 tests whether macOS 14+ cooperative activation allows this from a click on a non-activating panel.
 - Frontmost: `aerospace list-windows --focused`. Idle and lock: HID idle time and the screen-lock notification.
-- Signing: ad hoc for v1. A new ad hoc signature can reset system permission grants. v1 needs none with AeroSpace present, so this matters only for the path without AeroSpace. Minimum macOS version: decided in spike 1, after checking the Intel Mac's version.
+- Signing: ad hoc for v1. A new ad hoc signature can reset system permission grants. v1 needs none with AeroSpace present, so this matters only for the path without AeroSpace. Minimum macOS version: 26. Both machines run the latest macOS, and macOS 26 is the last release for Intel Macs.
 
 ### 7.2 Linux
 
@@ -510,7 +510,7 @@ Each spike is time-boxed to two working days. Each criterion names what a failur
    - `$TMUX_PANE` is present in sync hooks, async hooks, and Bash calls. Failure: redesign section 5.2.
    - `sharingType = none` hides the panel from a screen share. Failure: rely on `screen_shared` detection and manual DND.
    - The prefix permission rule rejects `agent-notify send` with a `$(...)` argument, or the risk is documented.
-   - Record the Intel Mac's macOS version and the (tauri, tao, tauri-nspanel) versions.
+   - Record the (tauri, tao, tauri-nspanel) versions.
 2. **v1 macOS:** core, CLI, daemon, plugin, `/monitor-ci` change, tmux.conf additions, launchd. Remove `notify.sh` and its dependents.
 3. **Intel Mac:** build and run on the home machine. Best effort.
 4. **Spike 2, COSMIC.** Layer-shell panel. Toplevel activation of Alacritty from an ordinary client. `ActionInvoked` from a popup click on the real COSMIC server. Failure on the panel: D-Bus fallback. Failure on activation: tmux switch only.
@@ -525,5 +525,4 @@ Each spike is time-boxed to two working days. Each criterion names what a failur
 
 ## 14. Open questions
 
-- Which macOS version runs on the Intel home Mac? This sets the minimum macOS version.
 - Does cosmic-session start `graphical-session.target`? Spike 2 answers it.

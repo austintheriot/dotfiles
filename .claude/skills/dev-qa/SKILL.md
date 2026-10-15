@@ -157,7 +157,7 @@ The confirmer's final verdict is the reported verdict. When confirm was skipped,
 
 ### 8. Writes
 
-QA writes only data it creates, and removes it before it finishes. When the product allows a name, name created data so it is clearly QA's. Ask the user before you confirm any delete, even of data QA created. Cancel every confirmation dialog that changes shared state QA did not create. The project file lists forbidden writes. Those are absolute, under every authorization.
+QA writes only data it creates, and removes it before it finishes. When the product allows a name, name created data so it is clearly QA's. Delete the data QA created without asking. Cancel every confirmation dialog that changes shared state QA did not create. The project file lists forbidden writes. Those are absolute, under every authorization.
 
 ### 9. Report
 
@@ -214,6 +214,5 @@ Stop and re-read the rule it breaks:
 - A hand-rolled Test Steps parser in a repository whose project file maps an extractor.
 - A deployed-build check handed to the local run orchestrator.
 - An unconfirmed verdict presented as confirmed.
-- A delete confirmed without asking the user.
 - Any posted sentence naming a confirmer, an agent, a scenario record, or a run directory.
 - A posted sentence naming the test machine, the rig, the audio setup, the driver, or a rig workaround, when no result or repro depends on it.

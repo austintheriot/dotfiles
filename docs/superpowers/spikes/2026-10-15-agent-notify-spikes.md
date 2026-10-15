@@ -74,6 +74,29 @@ Other globals an ordinary client sees on COSMIC 1.10: `ext_foreign_toplevel_list
 | S3-4 | Hover and click | Pass. |
 | S3-5 | Raise | `xdotool search --class Alacritty windowactivate --sync` works. |
 
+## S4: Linux follow-ups for plan 3
+
+Run in the Tart VM `pop-cosmic-spike` (Pop!_OS 24.04 COSMIC, arm64) and in Docker on the work Mac.
+
+| Id | Question | Result |
+|---|---|---|
+| S4-1 | Does `cargo deny` pass with the Linux dependency set? | No. cargo-deny 0.20.2 on aarch64 and x86_64 Linux targets reports exactly 5 failures. Licenses: `GPL-3.0-only` (`cosmic-protocols` 0.2.0) and `Apache-2.0 WITH LLVM-exception` (`target-lexicon`). Advisories: RUSTSEC-2024-0422 (`gtk-layer-shell`), RUSTSEC-2024-0423 (`gtk-layer-shell-sys`), RUSTSEC-2024-0370 (`proc-macro-error` through the GTK3 macros). No other GTK3 advisory fires. Plan 3 Task 1 adds narrow ignores and one license exception, and puts `cosmic-protocols` behind the default-on `cosmic` feature. |
+| S4-2 | Does COSMIC send idle events? | Yes. `ext_idle_notifier_v1` version 2. A 3 s notification sent `idled` at 3006 ms, `resumed` on mouse move and on key press, and `idled` again 3 s later. `get_input_idle_notification` behaves the same. |
+| S4-3 | Which X11 tool reads the frontmost class? | `xprop`. Pop's xdotool (`1:3.20160805.1-5build1`) has no `getwindowclassname`. `xprop -root _NET_ACTIVE_WINDOW` prints `window id # 0x400004`, or `not found.` with no window manager. `xprop -id <id> WM_CLASS` prints `"Alacritty", "Alacritty"`. `xprop -id 0x0` fails. `xdotool search --class Alacritty` works for the raise. |
+| S4-4 | Which sound player is present? | `pw-play` (pipewire-bin) played `/usr/share/sounds/freedesktop/stereo/message-new-instant.oga`. `paplay` is present. `canberra-gtk-play` is missing. |
+| S4-5 | Can the Linux build be checked in Docker on the Mac? | Yes. `rust:1.94-slim-bookworm` plus `libwebkit2gtk-4.1-dev` (2.50.6), `libgtk-layer-shell-dev` (0.8.0), `libssl-dev`, `pkg-config` and `build-essential` ran `cargo check --locked` of the full Linux set in 39.55 s. The slim image has no curl, so plan 3 adds `curl ca-certificates unzip`. |
+| S4-6 | Does a layer-shell window resize, hide and show? | Yes. `set_size_request(380, h)` plus `resize` took the window 110 to 300 to 60 px, then hide, show, and 200 px. The anchors and the layer survive hide and show. The allocated size that GTK reports lags one step. The web view viewport follows. |
+| S4-7 | Does the D-Bus notification path work with zbus? | Yes, zbus 5.19.0 (MIT, default features). `Notify` returned ids 1 and 2, `CloseNotification` closed a popup, and a click sent `ActionInvoked (1, "default")` then `NotificationClosed (1, 2)`. COSMIC sent two `NotificationClosed` signals for one close, (2, 3) then (2, 2), so the presenter must not rely on close signals. Look-alike characters rendered literally. The Overlay layer card covers notification popups at the top right. |
+
+Decisions from S4, used in plan 3:
+
+- D14. `cosmic-protocols` is GPL-3.0-only. It sits behind the default-on `cosmic` feature, with a narrow `[[licenses.exceptions]]` entry. The user decides whether to keep it on. Without it, cards and the tmux switch still work, and Alacritty is not raised on COSMIC.
+- D15. Sound on Linux is `pw-play`, else `paplay`.
+- D16. X11 frontmost uses `xprop`. X11 idle and lock read as unknown. COSMIC lock reads as unknown.
+- D17. COSMIC idle is one 30 s idle notification: 0 while active, 30 while idle, unknown until the first 30 s pass.
+- D18. The D-Bus presenter runs only on a Wayland desktop without layer shell. It ignores `NotificationClosed`.
+- D19. The Linux daemon logs to stderr for journald.
+
 ## Decisions for plans 2 and 3
 
 | Id | Decision | Source |

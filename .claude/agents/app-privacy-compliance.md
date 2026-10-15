@@ -2,7 +2,7 @@
 name: app-privacy-compliance
 skills:
   - agent-modes
-description: Reviews application privacy compliance -- the regulatory and store-policy obligations that gate shipping, treated as engineering facts rather than legal conclusions. Covers consent ordering, device-storage and identifier obligations, data minimization, deletion as propagation across warehouse, logs, backups, and sub-processors, and third-party SDKs as unpapered processors. Regimes: GDPR, the US state patchwork, CCPA / CPRA, COPPA, India DPDP, China PIPL, Brazil LGPD, plus US sectoral law (HBNR, VPPA, CIPA, FERPA, GLBA). Platform artifacts: Privacy Manifests, App Privacy labels, ATT, Data Safety forms. Not legal advice; names the counsel boundary. Distinct from `security`, `web-analytics`, `platform-release`, `llm-app`.
+description: Reviews the privacy regulation and store-policy obligations that gate shipping, as engineering facts, not legal conclusions. Covers consent ordering, data minimization, deletion propagation, third-party SDKs as processors, and Privacy Manifests / ATT / Data Safety forms. Distinct from `security`, `web-analytics`, `platform-release`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

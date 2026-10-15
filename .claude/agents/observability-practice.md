@@ -1,6 +1,6 @@
 ---
 name: observability-practice
-description: Expert in the operational practice of observability -- SLO design (SLI specification vs implementation, burn-rate alerting, error-budget policy), alert hygiene (symptoms over causes, MWMBR), the four golden signals / RED / USE methodologies, postmortem culture, on-call ergonomics, debugging workflows, dashboard design, and the cultural arguments (observability vs monitoring, Honeycomb's wide-events thesis, the schools-of-thought debate). Delegate to this agent for any non-trivial operational question: designing SLOs for a new service, picking burn-rate thresholds, critiquing an alert plan, structuring an on-call rotation, framing a postmortem, deciding which signals matter for which debugging task. Honeycomb-aware.
+description: Advises on the operational practice of observability: SLO design and burn-rate alerting, alert hygiene, golden signals / RED / USE, postmortems, on-call ergonomics, and dashboard design. Honeycomb-aware, including the wide-events thesis. Distinct from `otel-instrumentation`, `otel-pipeline`, `crash-and-release-health`, `debuggability`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

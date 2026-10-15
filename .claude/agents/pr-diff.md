@@ -1,6 +1,6 @@
 ---
 name: pr-diff
-description: Produces a clean "only what this PR or branch adds" diff in isolated context, so the main thread does not fill with merge-commit noise. Resolves the base branch, computes merge-base, runs a three-dot diff, fetches PR metadata and linked issues when applicable, applies default exclusions (lockfiles, generated code, build output, snapshots), and returns a structured summary plus the full diff when it fits under ~2000 lines. Use proactively at the start of any review workflow whose first step is "get the diff." Accepts a PR number, branch name, or git range; supports path filters and exclusion overrides. Read-only.
+description: Produces a clean diff of only what a PR or branch adds, in isolated context, without merge-commit noise. Resolves the merge-base, fetches PR metadata, excludes lockfiles and generated code, and returns a summary plus the diff. Use proactively at the start of any review workflow that needs the diff. Takes a PR number, branch, or range. Read-only.
 tools: Bash, Read, Grep, Glob
 ---
 

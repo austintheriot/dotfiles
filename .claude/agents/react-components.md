@@ -2,7 +2,7 @@
 name: react-components
 skills:
   - agent-modes
-description: Reviews client-side React against its actual model -- render purity and StrictMode, effects that should not exist ("You Might Not Need an Effect", useEffectEvent), state shape and derived state, keys and identity, refs, useSyncExternalStore and tearing, transitions, Activity, React 19 Actions hooks, React Compiler (what to flag and not flag once it is on), error boundaries, and server-state vs client-state libraries. Catches derived state in effects, mirrored props, fetch races, index keys, unstable selector and snapshot references, useOptimistic reverts, and memoization-dependent correctness. Distinct from `react-server` (RSC, Server Functions, caching, hydration), `performance`, `data-flow`, `typescript-types`. Works in its own context.
+description: Reviews client-side React against its actual model. Covers render purity, effects that should not exist, state shape and derived state, keys and identity, external-store tearing, and React Compiler. Distinct from `react-server` (RSC, Server Functions, caching, hydration), `performance`, `data-flow`, `typescript-types`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

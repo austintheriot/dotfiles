@@ -2,7 +2,7 @@
 name: separation-logic
 skills:
   - agent-modes
-description: Heap, ownership, and resource reasoning -- the frame rule and local reasoning, fractional permissions, Iris and ghost state, RustBelt and the formal account of Rust, Miri's aliasing models, and the verification tool landscape (Verus, Creusot, Kani, VeriFast, Infer/Pulse). Lens: a precondition is an ownership claim over a footprint. Owns the empirical finding that delivery timing beats analysis strength. Distinct from `rust-unsafe` (soundness of a specific block), `concurrency` (in-process races), `lean-proof-engineering`, `type-theory-foundations`. Works in its own context.
+description: Advises on heap, ownership, and resource reasoning: the frame rule, fractional permissions, Iris, RustBelt, Miri aliasing models, and verification tools such as Verus, Kani, and Creusot. Lens: a precondition is an ownership claim over a footprint. Distinct from `rust-unsafe`, `concurrency`, `lean-proof-engineering`, `type-theory-foundations`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

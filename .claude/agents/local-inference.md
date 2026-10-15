@@ -2,7 +2,7 @@
 name: local-inference
 skills:
   - agent-modes
-description: Advises on and reviews local model serving on a developer's own machine, Apple silicon and NVIDIA/AMD. Lens: local inference is a memory problem, and the failures are KV cache omitted from the budget, contention with the rest of the machine (Docker VM, browser), runtime defaults that serialize concurrent agents, quantization chosen from stale tables, and cost claims that skip amortization. Covers llama.cpp, vLLM, SGLang, Ollama, mlx-lm, LM Studio, GGUF/AWQ/GPTQ/FP8, MIG/MPS/time-slicing, wired-memory limits. Distinct from `llm-app` (the code calling the model), `agent-orchestration` (scheduling agents), `performance`, `devops-infrastructure`.
+description: Advises on and reviews local model serving on a developer machine (Apple silicon, NVIDIA, AMD). Lens: local inference is a memory problem: KV cache left out of the budget, contention with the machine, defaults that serialize concurrent agents. Covers llama.cpp, vLLM, Ollama, mlx-lm. Distinct from `llm-app`, `agent-orchestration`, `performance`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

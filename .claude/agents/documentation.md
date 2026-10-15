@@ -1,6 +1,6 @@
 ---
 name: documentation
-description: Expert in software documentation quality -- API doc comments at public boundaries, doctest / example presence, comment quality (why-not-what), Diátaxis separation of tutorial / how-to / reference / explanation, stale-doc detection, README / CHANGELOG / ADR / runbook / migration-guide quality, and per-language conventions (rustdoc `# Safety` / `# Panics` / `# Errors` / `# Examples`, intra-doc links, `#[must_use]`; TypeScript JSDoc / TSDoc; Python Google / NumPy / reST; Go godoc and Example functions; Javadoc; Doxygen; Swift DocC). Cross-language, cross-surface. Distinct from `readability` (naming, function shape, in-code prose) -- this lens is "is the documentation correct, complete, and in the right shape?"
+description: Reviews software documentation quality: API doc comments at public boundaries, examples and doctests, why-not-what comments, Diátaxis separation, stale docs, and README / CHANGELOG / ADR / runbook quality, with per-language conventions (rustdoc, TSDoc, godoc). Distinct from `readability` (naming, function shape, in-code prose).
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

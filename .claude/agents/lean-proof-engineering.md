@@ -2,7 +2,7 @@
 name: lean-proof-engineering
 skills:
   - agent-modes
-description: Lean 4 as a working tool -- tactic discipline (simp loops, decide failures, grind, omega), Mathlib idiom and search, well-founded recursion, axiom and `sorry` hygiene, and the AI-assisted proof workflow. Also uses Lean as a structured reasoning tool on problems in any language (protocols, state machines, event schemas, authorization models) via throwaway scratch models that need not enter the repo, treats adopting Lean as a separate and higher-bar decision, and says no when a model checker or property test is the better tool. Lens: the kernel checks proofs, not statements. Distinct from `type-theory-foundations` (why the theory works), `separation-logic` (heap and ownership reasoning), `fp-types` (design in your own language). Works in its own context.
+description: Advises on Lean 4 as a working tool: tactic discipline, Mathlib idiom, well-founded recursion, and axiom and `sorry` hygiene. Also builds throwaway Lean models to reason about protocols or state machines in any language, and says no when a property test fits better. Distinct from `type-theory-foundations`, `separation-logic`, `fp-types`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: otel-instrumentation
-description: Expert in OpenTelemetry SDK and instrumentation -- span lifecycle, attribute hygiene, semantic conventions, context propagation, exemplars, metric instrument choice, log/trace correlation via bridges, instrumentation library status across languages. Delegate to this agent for any non-trivial instrumentation question: designing a span surface, debugging broken context propagation, choosing between manual and auto-instrumentation, mapping a domain to semantic conventions, deciding what's an attribute vs an event vs a separate span, writing a custom instrumentation library. Spec-literate.
+description: Advises on OpenTelemetry (OTel) SDK instrumentation: span lifecycle and span surface design, attribute hygiene and semantic conventions, context propagation, metric instrument choice, and log/trace correlation. Spec-literate. Distinct from `otel-pipeline` (Collector and sampling), `observability-practice` (SLOs and alerts), `debuggability`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: rust-ffi
-description: Designing and reviewing Rust foreign-function-interface boundaries -- Rust to/from C, C++, Python, JavaScript, Swift, Kotlin. Covers ABI choice, repr layouts, ownership conventions, panic/unwind safety, tooling (bindgen, cbindgen, cxx, uniffi, pyo3), and cross-compilation. Pass the specific question, file, or boundary; the agent works in its own context.
+description: Designs and reviews Rust foreign-function-interface (FFI) boundaries to and from C, C++, Python, JavaScript, Swift, and Kotlin. Covers ABI choice, repr layouts, ownership conventions, panic and unwind safety, binding tools (bindgen, cxx, uniffi, pyo3), and cross-compilation.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

@@ -2,7 +2,7 @@
 name: platform-payments
 skills:
   - agent-modes
-description: Reviews platform payment systems and monetization plumbing -- Apple StoreKit, Google Play Billing, web processors, and the cross-platform entitlement architecture tying them together. Covers StoreKit 2 (verification results, renewal state, durable transaction keys, app account tokens), App Store Server API and Notifications V2, Play Billing (acknowledgment deadlines and auto-refund, purchase tokens, replacement modes), Stripe (subscription and invoice lifecycle, webhook signature verification, replay gaps), merchant-of-record economics, PCI scope, and entitlement architecture (server-authoritative state, grace vs retry, refund reversal, anonymous-purchase merge, restore, webhook idempotency). Distinct from `product-leadership` (pricing strategy), `api-design`, `platform-release`, `distsys-runtime`.
+description: Reviews payment and monetization plumbing: StoreKit 2 and App Store Server Notifications, Google Play Billing, Stripe, and cross-platform entitlements. Covers verification, acknowledgment deadlines, webhook idempotency, refunds, and restore. Distinct from `product-leadership` (pricing strategy), `api-design`, `platform-release`, `distsys-runtime`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

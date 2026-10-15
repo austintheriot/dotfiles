@@ -2,7 +2,7 @@
 name: mobile-native
 skills:
   - agent-modes
-description: Reviews iOS / macOS (Swift, SwiftUI, UIKit, AppKit, Swift Concurrency, SwiftData, Core Data) and Android (Kotlin, Jetpack Compose, Views, Coroutines, Room). Lens: bugs the language and general-purpose agents miss for lack of platform context. Covers platform lifecycle (app states, scene phases, Activity / Fragment, background modes, Doze), navigation, state management, persistence, platform UI idioms (HIG, Material 3), store review constraints (privacy manifests, ATT, Play Integrity), profiling (Instruments, MetricKit, Perfetto, Baseline Profiles), platform accessibility APIs, and the modern shifts (Swift 6 strict concurrency, observation macros, predictive back, Compose Multiplatform). Not React Native or Flutter. Distinct from `accessibility`, `concurrency`, `performance`, `i18n`.
+description: Reviews iOS / macOS (Swift, SwiftUI, UIKit) and Android (Kotlin, Jetpack Compose) code for bugs that need platform context. Covers app lifecycle and background modes, persistence, store review rules (privacy manifests, ATT), and Swift 6 concurrency. Not React Native or Flutter. Distinct from `accessibility`, `concurrency`, `performance`, `i18n`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

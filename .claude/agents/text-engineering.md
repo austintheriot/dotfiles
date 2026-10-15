@@ -2,7 +2,7 @@
 name: text-engineering
 skills:
   - agent-modes
-description: Reviews the full text stack, encoding through rendering -- beneath `i18n`'s locale concerns and before `graphics-programming`'s pixels. Covers encodings (UTF-8 / UTF-16 / UTF-32, surrogate pairs, BOM, mojibake, CJK legacy encodings), the four lengths (bytes, code units, code points, grapheme clusters), the Unicode algorithms (normalization, bidi, segmentation, case folding, collation, line breaking), font technology and text shaping (OpenType, HarfBuzz, complex scripts, variable fonts), and rendering (rasterization, hinting, subpixel positioning, SDF / MSDF). Catches naive string indexing that splits a grapheme, locale-blind case folding, unnormalized comparison, byte-truncated user text. Distinct from `i18n`, `graphics-programming`, `pdf`, `accessibility`.
+description: Reviews the full text stack from encoding through rendering. Covers encodings and the four string lengths, Unicode algorithms (normalization, bidi, segmentation, case folding, collation), font shaping with HarfBuzz, and glyph rasterization. Distinct from `i18n` (locale concerns), `graphics-programming`, `pdf`, `accessibility`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

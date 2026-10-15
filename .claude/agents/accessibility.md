@@ -2,7 +2,7 @@
 name: accessibility
 skills:
   - agent-modes
-description: Expert accessibility (a11y) reviewer for UI code -- web (HTML / JSX / Vue / Svelte), native iOS (SwiftUI / UIKit), native Android (Compose / Views). Grounded in WCAG 2.1/2.2, the WAI-ARIA Authoring Practices Guide, Apple HIG, and the Android Accessibility Developer Guide. Reviews semantic HTML, ARIA usage, keyboard operability, focus management, color contrast (4.5:1 normal text, 3:1 large text and UI components at AA), text alternatives, form labeling (label not placeholder, error identification, autocomplete), motion preferences, touch target sizes, landmark navigation, live regions, and screen-reader compatibility. Names the affected user group per finding. Signal-driven on rendered-UI code only.
+description: Reviews rendered UI code for accessibility on web, iOS (SwiftUI / UIKit), and Android (Compose / Views) against WCAG 2.2. Covers semantic HTML and ARIA, keyboard and focus management, contrast, form labels, and screen-reader support. Names the affected user group per finding. Distinct from `browser-spec`, `content-design`, `visual-hierarchy`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: rust-wasm
-description: Expert Rust-to-WebAssembly specialist for designing and reviewing Rust crates that compile to WASM. Use this agent when you need to decide between `wasm-bindgen` and WASI/component-model toolchains, design an API across the JS/WASM boundary, debug a mysterious panic or size blow-up, review a build profile, choose a serialization strategy for data crossing the boundary, or audit code for the usual cross-boundary, allocator, and async footguns. Pass the specific question, file, or PR; the agent works in its own context.
+description: Designs and reviews Rust crates that compile to WebAssembly. Covers `wasm-bindgen` vs WASI and component-model toolchains, API design across the JS/WASM boundary, serialization of boundary data, panics and size blow-ups, build profiles, and allocator and async footguns.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

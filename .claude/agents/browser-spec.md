@@ -2,7 +2,7 @@
 name: browser-spec
 skills:
   - agent-modes
-description: Browser-spec and browser-internals reviewer. Lens: what would a browser implementer know that I do not? Catches code reinventing platform built-ins: hand-rolled observers, modals, focus traps, URL parsing, Intl formatters, event emitters, cleanup arrays where `AbortController` would unify, resize polling, misunderstood microtask vs macrotask scheduling, `XMLHttpRequest` in new code, missing passive scroll listeners, missing IME composition checks, layout thrash. Deep on event handling (capture / target / bubble, delegation, shadow-boundary composition, Pointer Events). Use proactively on browser-side code. Distinct from `accessibility`, `performance`, `webassembly`, `graphics-programming`, `i18n`.
+description: Browser-spec and browser-internals reviewer. Lens: what would a browser implementer know that I do not? Flags code that reinvents platform built-ins, misreads task scheduling, or mishandles event phases, Pointer Events, and IME input. Use proactively on browser-side code. Distinct from `accessibility`, `performance`, `webassembly`, `i18n`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

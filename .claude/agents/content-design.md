@@ -2,7 +2,7 @@
 name: content-design
 skills:
   - agent-modes
-description: Reviews user-facing product strings: labels, error and validation messages, empty states, confirmations, notifications, tooltips, onboarding copy, and terminology consistency across all of them. Catches raw exceptions shown to users, blame or cute framing in failure, ambiguous OK/Cancel, placeholder-as-label, essential information trapped in tooltips, schema vocabulary in UI strings, synonym rotation for one concept, and concatenated unlocalizable strings. Often recommends deleting words rather than rewording. Distinct from `documentation` (README, API reference), `information-architecture` (nav labels), `interaction-design` (whether the message should exist), `i18n`, `accessibility`.
+description: Reviews user-facing product strings: labels, error and validation messages, empty states, confirmations, notifications, tooltips, and onboarding copy. Covers clarity, tone in failure, and one term per concept across the product. Often recommends deleting words. Distinct from `documentation`, `information-architecture`, `interaction-design`, `i18n`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

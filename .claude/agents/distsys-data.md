@@ -1,6 +1,6 @@
 ---
 name: distsys-data
-description: Expert in distributed data systems -- storage engine choice (B-tree vs LSM), replication topology (single-leader, multi-leader, leaderless), sharding strategy, consistency models, transaction isolation levels, conflict resolution, schema evolution, secondary indexes, hot-spot mitigation, CDC. Delegate to this agent for any non-trivial data-design question: choosing a database, picking an isolation level, designing a sharding strategy, evolving a schema across services, deciding when consensus is required, debugging a replication-lag bug. The agent works in its own context and reports back with concrete answers, not tutorials.
+description: Advises on and reviews distributed data systems. Covers storage engine choice, replication topology, sharding, consistency models and isolation levels, conflict resolution, schema evolution across services, and CDC. Use for choosing a database, picking an isolation level, or debugging replication lag. Distinct from `distsys-runtime`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

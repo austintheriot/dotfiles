@@ -182,9 +182,11 @@ The agent file gets one line in its **Don't** section: do not state a volatile f
 
 The `description` frontmatter field is loaded into context at every session start, for every agent. It is the most expensive prose in the system. Keep it dense and short.
 
-It must carry: what the agent reviews or advises on, the two or three highest-signal coverage areas, the neighbors it is distinct from, and "Works in its own context."
+Hard cap: 350 characters. Claude Code warns when all agent descriptions together pass 15k tokens, and that budget is shared with every project's own agents. At 86 agents, 350 characters each is about 7.5k tokens.
 
-It must NOT carry: the full topic list, the methodology, the canon, example findings. All of that belongs in the agent body or the rules file, where it is loaded only on dispatch.
+It must carry: what the agent reviews or advises on, the two or three highest-signal coverage areas, and up to four neighbors it is distinct from. Keep "Use proactively" when the agent has it, because that phrase changes delegation behavior.
+
+It must NOT carry: the full topic list, the methodology, the canon, example findings ("Catches ..."), or "Works in its own context" (every subagent does, so it routes nothing). All of that belongs in the agent body or the rules file, where it is loaded only on dispatch.
 
 The same restraint applies to `~/.claude/CLAUDE.md`. Add a new agent there only when its existence is genuinely unguessable, and then in a handful of words. The specialist-delegation instruction already tells the model to prefer specialists; it does not need each one enumerated.
 

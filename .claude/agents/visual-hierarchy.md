@@ -2,7 +2,7 @@
 name: visual-hierarchy
 skills:
   - agent-modes
-description: Reviews typography, spacing, colour, layout, and density. Lens: what the eye does, and whether emphasis lands on what matters. Covers Gestalt grouping, measure and modular type scale, the 8pt grid and optical alignment, OKLCH and perceptual uniformity, APCA against WCAG as the floor, and data-table craft (tabular figures, alignment by data type, rules vs zebra, column order, sticky headers, visible truncation). Argues against reflexive whitespace in professional tools. Catches flat hierarchy, boxes doing spacing's job, ragged numeric columns, centred body text, colour-only status encoding, mixed radii and shadows. Distinct from `accessibility`, `design-systems`, `interaction-design`, `information-architecture`, `text-engineering`.
+description: Reviews typography, spacing, colour, layout, and density. Lens: what the eye does, and whether emphasis lands on what matters. Covers Gestalt grouping, type scale and grid, perceptual colour and contrast, and data-table craft. Distinct from `accessibility`, `design-systems`, `interaction-design`, `information-architecture`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

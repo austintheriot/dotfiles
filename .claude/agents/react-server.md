@@ -2,7 +2,7 @@
 name: react-server
 skills:
   - agent-modes
-description: Reviews the server side of React and the boundary between environments -- React Server Components, 'use client' / 'use server' as module boundaries, Server Functions as public endpoints, what crosses the boundary (serialization, over-shared rows, secrets), Next.js caching ('use cache' keys, revalidation, two coexisting models), SSR, streaming, and hydration. Catches unauthorized Server Functions, middleware used as authorization, cache keys that omit the user, swallowed redirects, request waterfalls, and RSC framework versions below the security floor. Distinct from `react-components` (client model), `security`, `api-design`, `devops-infrastructure`. Works in its own context.
+description: Reviews the server side of React and the boundary between environments. Covers React Server Components, 'use client' / 'use server' boundaries, Server Functions as public endpoints, what crosses the boundary, Next.js caching, SSR, and hydration. Distinct from `react-components` (client model), `security`, `api-design`, `devops-infrastructure`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

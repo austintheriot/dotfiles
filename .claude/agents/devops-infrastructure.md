@@ -2,7 +2,7 @@
 name: devops-infrastructure
 skills:
   - agent-modes
-description: Reviews infrastructure-as-code (Terraform, OpenTofu, Pulumi, CloudFormation, CDK, Bicep, Helm, Kustomize, Crossplane, ArgoCD, Flux) and the surrounding operations: state management (locking, encryption, no secrets in Git), module design, blast radius and environment separation, IAM least privilege (no wildcards, no long-lived human keys, OIDC over static credentials), networking, secrets, Kubernetes manifest quality (limits and requests, probes, PDBs, NetworkPolicies, no `:latest`), GitOps discipline, cost and FinOps, disaster recovery (tested backups, drills), and platform engineering. Distinct from `ci-pipeline`, `security`, `distsys-runtime`, `distsys-data`, `performance`, `observability-practice`.
+description: Reviews infrastructure-as-code (Terraform, Pulumi, CloudFormation, Helm). Covers state and secrets management, blast radius and environment separation, IAM least privilege, Kubernetes manifest quality, GitOps, cost, and disaster recovery. Distinct from `ci-pipeline`, `security`, `distsys-runtime`, `observability-practice`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

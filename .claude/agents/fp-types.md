@@ -1,6 +1,6 @@
 ---
 name: fp-types
-description: Expert in functional type design -- algebraic data types (sum/product/recursive), parametricity and free theorems, totality, refinement types, GADTs, phantom types, typestate, type-level encodings, "make illegal states unrepresentable," dependent-type opportunities. Cross-language and cross-domain. Delegate to this agent for any non-trivial type-design question from a functional lens: modeling a domain with ADTs, designing a state machine type, choosing between open and closed sums, refining a primitive, encoding an invariant in the type system, "what types would prevent this class of bug." Distinct from `typescript-types` and `rust-async` -- this agent thinks in the language-agnostic FP vocabulary (functors, sums, products, refinement, parametricity).
+description: Advises on functional type design across languages: algebraic data types, parametricity, totality, refinement and phantom types, GADTs, typestate, and making illegal states unrepresentable. Use for modeling a domain with ADTs, a state-machine type, or an invariant in types. Distinct from `typescript-types`, `rust-async`, `fp-effects`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

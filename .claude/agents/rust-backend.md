@@ -1,6 +1,6 @@
 ---
 name: rust-backend
-description: Expert Rust backend/web service specialist. Use this agent for designing, scaffolding, or reviewing axum/tower/hyper-based services -- project layout, error handling, telemetry, sqlx/database access, integration testing, middleware composition, graceful shutdown, production hardening. Pass the specific design question, file, or PR; the agent works in its own context and won't pollute the main session.
+description: Designs, scaffolds, and reviews Rust backend services on axum, tower, and hyper. Covers project layout, error handling, telemetry, sqlx database access, middleware composition, integration testing, graceful shutdown, and production hardening.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

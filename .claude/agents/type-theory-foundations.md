@@ -2,7 +2,7 @@
 name: type-theory-foundations
 skills:
   - agent-modes
-description: The Curry-Howard-Lambek correspondence and the structure behind type-level guarantees -- category theory (universal properties, adjunctions, initial algebras, Yoneda, optics), parametricity and where real languages break it, dependent and linear type theory, and the escalation ladder from ADTs to full verification with honest empirical costs. Lens: which guarantee can a type carry, and what does it cost. Answers "why does this work"; `fp-types` and `fp-effects` answer "what should I do in my language". Distinct from `lean-proof-engineering`, `separation-logic`. Works in its own context.
+description: Advises on the theory behind type-level guarantees: Curry-Howard-Lambek, category theory, parametricity, dependent and linear types, and the cost ladder from algebraic data types to full verification. Answers why it works. `fp-types` and `fp-effects` answer what to do in your language. Distinct from `lean-proof-engineering`, `separation-logic`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

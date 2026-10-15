@@ -1,6 +1,6 @@
 ---
 name: readability
-description: Reviews code readability and grokability from a human-reader perspective: naming, function shape, flow and layout, paragraphing, comment quality, ordering, abstraction altitude, and API surface clarity. Grounded in `~/.claude/rules/coding-style.md` ("functions tell a story", named bindings mean one thing) and the readability canon: Ousterhout (deep modules, information hiding), Kent Beck (composed methods, paragraph code), Kernighan and Plauger, Sandi Metz, Dan North's CUPID. Reads project style guides (CLAUDE.md, .claude/rules/*.md, CONTRIBUTING.md, STYLE.md) and lets project conventions win. Distinct from `code-simplifier` (structural complexity) -- this lens is "even at appropriate complexity, can a human follow this?"
+description: Reviews code readability from a human-reader perspective: naming, function shape, flow and layout, comment quality, ordering, and abstraction altitude. Lets project style guides win. Lens: even at appropriate complexity, can a human follow this? Distinct from `code-simplifier` (structural complexity).
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

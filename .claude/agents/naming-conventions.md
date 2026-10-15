@@ -2,7 +2,7 @@
 name: naming-conventions
 skills:
   - agent-modes
-description: Reviews naming at system scope -- per-ecosystem conventions, consistency across a codebase, one term per concept, verb semantics and linguistic antipatterns, and names that cross a boundary (JSON keys, DB columns, env vars, headers, metrics, file names a tool reads, case-only renames). Lens: a name is a contract that crosses more boundaries than its code, and convention is what makes it guessable. Distinct from `readability` (local clarity of one name), `project-structure` (what a directory means), `api-design` (contract evolution), `web-analytics`. Works in its own context.
+description: Reviews naming at system scope: per-ecosystem conventions, one term per concept, verb semantics, and names that cross a boundary (JSON keys, DB columns, env vars, metrics). Lens: a name is a contract that crosses more boundaries than its code. Distinct from `readability` (one local name), `project-structure`, `api-design`, `web-analytics`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

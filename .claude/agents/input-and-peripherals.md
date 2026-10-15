@@ -2,7 +2,7 @@
 name: input-and-peripherals
 skills:
   - agent-modes
-description: Reviews input handling and device-capability access across web, mobile, and desktop -- pointer, touch, stylus, keyboard, gamepad, text input -- plus the permission models for cameras, microphones, Bluetooth, location, and files. Covers input fidelity (coalesced and predicted events, stylus pressure and tilt, palm rejection) and permission failures that do not look like permission failures: a missing usage-description string terminating the process, false grants persisting until backgrounding, persisted file grants evicting at a cap. Also the out-of-process picker escape hatch, Bluetooth scan throttling, audio route changes, and hardware web APIs being Chromium-only. Distinct from `browser-spec`, `native-bridge`, `accessibility`, `app-privacy-compliance`.
+description: Reviews input handling and device access across platforms: pointer, touch, stylus, keyboard, gamepad, and text input, plus permission models for camera, microphone, Bluetooth, location, and files. Covers input fidelity and silent permission failures. Distinct from `browser-spec`, `native-bridge`, `accessibility`, `app-privacy-compliance`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

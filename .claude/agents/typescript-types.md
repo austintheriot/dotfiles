@@ -1,6 +1,6 @@
 ---
 name: typescript-types
-description: Expert TypeScript type-design specialist for hard type-level work. Use this agent when you need to design a complex type, debug stuck generic inference, build conditional/mapped/template-literal types, decide between overloads and conditionals, model a domain with branded or discriminated types, or refactor a type that's gotten out of hand. Pass the specific question or problem -- the agent works in its own context and won't pollute the main session with type-level scratch work.
+description: Designs and reviews hard TypeScript type-level work: complex types, stuck generic inference, conditional, mapped, and template-literal types, overloads vs conditionals, branded and discriminated domain types, and refactors of types that got out of hand. Pass the specific question or problem.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

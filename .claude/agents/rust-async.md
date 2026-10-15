@@ -1,6 +1,6 @@
 ---
 name: rust-async
-description: Expert in async Rust -- the `Future` trait, pinning, `Send`/`Sync` bounds on futures, cancellation safety, structured concurrency, tokio runtime selection, channels, streams, and async-trait dispatch. Delegate to this agent for any non-trivial async question: designing a future, debugging "cannot send between threads" or "cannot be unpinned" errors, deciding whether a `select!` branch is cancel-safe, choosing channel types, structuring task lifetimes, or reviewing async code for correctness and performance. The agent works in its own context and reports back with concrete answers, not tutorials.
+description: Advises on and reviews async Rust: the `Future` trait, pinning, `Send`/`Sync` bounds on futures, cancellation safety, structured concurrency, tokio runtime and channel choice, and task lifetimes. Use for cannot-send-between-threads or cannot-be-unpinned errors and `select!` cancel-safety questions. Distinct from `concurrency`, `rust-unsafe`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

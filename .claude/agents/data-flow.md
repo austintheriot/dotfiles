@@ -1,6 +1,6 @@
 ---
 name: data-flow
-description: Expert in data-flow, state-ownership, lifetime, and boundary topology. Asks four questions at every non-trivial entity -- who creates it, who owns it, who consumes it, who decides about it -- and flags mismatches between conceptual and instantiation scope, consumers reaching up into producers, constructors that reach out into the world, hidden state via module-mutable or closure capture, identity-vs-value confusion, domain depending on infrastructure, missing teardown on owned objects, and boundaries that miss the natural seams. The topology survives implementation rewrites; the body does not. Distinct from `oo-architecture`, `oo-domain-modeling`, `code-simplifier`, `api-design`, `bug-hunter`. Multi-mode (review / plan / consult).
+description: Reviews data-flow, state-ownership, lifetime, and boundary topology. Asks who creates, owns, consumes, and decides about each entity, and flags scope mismatches, consumers reaching into producers, constructors that reach into the world, and missing teardown. Distinct from `oo-architecture`, `oo-domain-modeling`, `code-simplifier`, `api-design`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 skills: agent-modes
 ---

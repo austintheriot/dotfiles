@@ -1,6 +1,6 @@
 ---
 name: debuggability
-description: Reviews whether code provides the means to observe, inspect, and reproduce its runtime behavior during development and incident response. Covers error context, panic and unwrap reachability, stack-trace quality, source-map and debug-symbol availability, request-id and trace propagation, log levels, hidden state, reproducibility (clock / RNG / I/O injection), async stack visibility, and per-environment debug tooling for Node, the browser, Rust native (tracing, RUST_BACKTRACE, #[track_caller], tokio-console, miri, flamegraphs), Rust web servers, and Rust plus WebAssembly. Lens: can a teammate at 2am answer "what is this doing right now" in seconds? Distinct from `observability-practice` (production telemetry, SLOs, sampling).
+description: Reviews whether code lets a developer observe, inspect, and reproduce its runtime behavior during incidents. Covers error context, panic and unwrap reachability, stack traces and source maps, trace propagation, and clock / RNG / IO injection. Lens: can a teammate at 2am see what this code does now? Distinct from `observability-practice`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

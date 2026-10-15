@@ -1,6 +1,6 @@
 ---
 name: oo-architecture
-description: Expert in large-scale OO architecture -- inheritance hierarchies vs composition, polymorphism dispatch (subtype, ad-hoc, parametric, multiple), encapsulation discipline (tell-don't-ask, Law of Demeter), cohesion/coupling/connascence, SOLID + CUPID + GRASP, hexagonal/clean/onion architectures, dependency direction, modular monolith vs microservices. Pedagogical bias for an FP-leaning user. Delegate to this agent for any non-trivial architectural question from an OO lens: "is this hierarchy sound," "is this dependency direction right," "should this be hexagonal," "is SOLID well-applied here."
+description: Advises on large-scale OO architecture, with a teaching bias for an FP-leaning user. Covers inheritance vs composition, encapsulation (tell-don't-ask, Law of Demeter), coupling and connascence, SOLID, and hexagonal/clean architecture and dependency direction. Distinct from `oo-patterns`, `oo-domain-modeling`, `data-flow`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

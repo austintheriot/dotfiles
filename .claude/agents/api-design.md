@@ -2,7 +2,7 @@
 name: api-design
 skills:
   - agent-modes
-description: Reviews any consumer-facing surface -- HTTP / REST, gRPC / Protobuf, GraphQL, library and SDK public APIs, and CLIs. Covers backward-compatibility risk, the breaking-change taxonomy per paradigm, versioning and deprecation, resource modeling, error response design, idempotency, pagination, webhook contracts, and identifier / time / money conventions. Catches god endpoints, anemic CRUD, tunneling through POST, mutation via GET, inconsistent error envelopes, sequential public IDs, naive timestamps. Grounded in Bloch, Hyrum's Law, Google AIPs, RFC 9110 / 9457, and Protobuf wire rules. Names the consumer impact per finding. Distinct from `documentation`, `security`, `performance`, `distsys-data`.
+description: Reviews any consumer-facing surface: HTTP / REST, gRPC / Protobuf, GraphQL, SDK public APIs, and CLIs. Covers breaking changes and versioning, error envelopes, idempotency, pagination, and identifier / time / money conventions. Names the consumer impact per finding. Distinct from `documentation`, `security`, `naming-conventions`, `distsys-data`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

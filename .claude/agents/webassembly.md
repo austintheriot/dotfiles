@@ -2,7 +2,7 @@
 name: webassembly
 skills:
   - agent-modes
-description: Reviews WebAssembly at the spec level (linear memory, modules, imports and exports, validation, and the proposal landscape -- SIMD, threads, GC, exceptions, Component Model, WASI, tail calls, stack switching), runtimes (V8, SpiderMonkey, JSC, Wasmtime, Wasmer, WAMR, wazero), the JS-WASM boundary (per-call cost, string marshalling, view detachment on `memory.grow`), Component Model and WIT, WASI's capability model (preopens, P1 vs P2), toolchain (Emscripten, WASI-SDK, wasm-bindgen, cargo-component, wit-bindgen, jco, TinyGo), and the security model. Catches per-call marshalling in hot paths, views held across growth, missing panic hooks, unhandled growth failure, capability grants exceeding need. Distinct from `rust-wasm`, `rust-ffi`, `security`, `performance`.
+description: Reviews WebAssembly at the spec, runtime, and toolchain level. Covers linear memory and the proposal landscape, JS-WASM boundary cost and view detachment on `memory.grow`, the Component Model and WIT, and the WASI capability model. Distinct from `rust-wasm`, `rust-ffi`, `security`, `performance`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

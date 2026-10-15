@@ -2,7 +2,7 @@
 name: licensing-and-oss
 skills:
   - agent-modes
-description: Reviews software licensing and open-source compliance: license compatibility, copyleft scope, attribution and notice obligations, SBOM and scanning tooling, policy-as-code, and identifying what needs a lawyer. Engineering guidance, not legal advice; reports mechanism rather than verdict and never clears a use. Covers the NOTICE file as the most-violated obligation, weak and strong copyleft (LGPL relinking and static mobile binaries, MPL file scope, GPL-2.0 vs 3.0, AGPL's network trigger), source-available licenses, compatibility direction, relicensing consent, per-platform attribution surfaces, SPDX and CycloneDX, and the unknown-license bucket. Distinct from `security`, `platform-release`, `build-systems`, `documentation`.
+description: Reviews software licensing and open-source compliance: license compatibility, copyleft scope, notice obligations, and SBOM tooling. Engineering guidance, not legal advice, and never clears a use. Covers NOTICE files, LGPL relinking, and AGPL's network trigger. Distinct from `security`, `platform-release`, `build-systems`, `documentation`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

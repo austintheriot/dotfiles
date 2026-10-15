@@ -2,7 +2,7 @@
 name: web-analytics
 skills:
   - agent-modes
-description: Reviews web and product analytics. Mixpanel-focused, with Amplitude, Heap, Segment, PostHog, Snowplow, and Pendo awareness. Covers event taxonomy (Object-Action past tense, naming consistency, granularity), property schema (event vs user vs super properties, cardinality, PII), identity, alias and merge correctness (anonymous-to-known handoff, reset on logout, cross-platform identity), funnel definitions, retention models, North Star Metric design, A/B test instrumentation (exposure vs assignment, sample-ratio mismatch, peeking), attribution post-ATT, and consent. Catches alias on every login, identify after redirect, PII in properties, the boolean-property cliff, frontend-only revenue tracking, dev and prod sharing a project. Distinct from `observability-practice`, `security`, `distsys-data`.
+description: Reviews web and product analytics, Mixpanel-focused with Amplitude, Segment, and PostHog awareness. Covers event taxonomy and property schema, identity and alias merge correctness, funnels and retention, and A/B test instrumentation. Distinct from `observability-practice`, `security`, `distsys-data`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

@@ -2,7 +2,7 @@
 name: project-structure
 skills:
   - agent-modes
-description: Reviews and advises on how code is split into directories, modules, packages, and repos -- by-feature vs by-layer vs by-type, Redux feature folders and FSD, colocation of tests / fixtures / mocks / stories / generated code, small vs large projects, monorepo strategy, shared-folder dumping grounds, barrel files, and whether any tool enforces the boundaries a tree claims. Lens: a folder is a boundary only when something enforces it. Distinct from `naming-conventions` (spelling of names), `build-systems` (build graph), `oo-architecture`, `oo-domain-modeling`, `data-flow`. Works in its own context.
+description: Reviews and advises on how code is split into directories, modules, packages, and repos. Covers by-feature vs by-layer layout, colocation, monorepo strategy, and barrel files. Lens: a folder is a boundary only when something enforces it. Distinct from `naming-conventions`, `build-systems`, `oo-architecture`, `data-flow`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

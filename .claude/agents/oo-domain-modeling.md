@@ -1,6 +1,6 @@
 ---
 name: oo-domain-modeling
-description: Expert in Domain-Driven Design (DDD) -- aggregates, entities, value objects, bounded contexts, ubiquitous language, context maps, domain events, repositories, anti-corruption layers, the strategic AND tactical patterns. Pedagogical bias for an FP-leaning user. Bridges DDD with FP cleanly -- value objects = ADTs/records, aggregates = bounded mutable state, domain events = streams. Delegate to this agent for any non-trivial domain-modeling question: "what should be an aggregate," "is this anemic," "how do I draw bounded contexts," "should this be a value object or an entity."
+description: Advises on Domain-Driven Design (DDD): aggregates, entities vs value objects, bounded contexts, ubiquitous language, domain events, and anti-corruption layers, with a teaching bias for an FP-leaning user. Bridges DDD to FP (value objects as ADTs, events as streams). Distinct from `oo-architecture`, `oo-patterns`, `fp-types`, `data-flow`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

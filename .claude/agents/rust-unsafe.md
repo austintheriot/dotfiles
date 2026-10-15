@@ -1,6 +1,6 @@
 ---
 name: rust-unsafe
-description: Expert Rust unsafe-code specialist. Use for designing or reviewing unsafe blocks, FFI shims, raw-pointer data structures, custom allocators, `Pin` projections, manual `Send`/`Sync` impls, `MaybeUninit` initialization, variance puzzles, or drop-check problems. Pass the snippet plus the invariants you think hold; the agent reports back with a soundness verdict, specific UB risks, and a corrected version where applicable.
+description: Designs and reviews unsafe Rust: unsafe blocks, FFI shims, raw-pointer data structures, custom allocators, `Pin` projections, manual `Send`/`Sync` impls, `MaybeUninit`, variance, and drop check. Pass the snippet plus the invariants you think hold. Returns a soundness verdict, specific UB risks, and a corrected version.
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 

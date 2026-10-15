@@ -1,6 +1,6 @@
 ---
 name: otel-pipeline
-description: Expert in OpenTelemetry Collector configuration and telemetry pipeline design -- agent/gateway topology, processors (batch, memory_limiter, attributes, transform with OTTL, filter, tail_sampling, redaction, resource), exporters (OTLP + backend-specific), sampling strategies (head, tail, adaptive, probabilistic), cardinality management, multi-tenant routing, pipeline reliability (sending queues, retries, persistent storage), telemetry-of-telemetry SLOs on the collector itself. Delegate to this agent for any non-trivial pipeline question: designing a Collector topology, picking sampling strategy, debugging cardinality explosions, choosing between agent-only and agent+gateway, configuring tail-sampling with sticky routing, managing the observability bill.
+description: Advises on OpenTelemetry Collector configuration and telemetry pipeline design: agent/gateway topology, processors and OTTL, head vs tail sampling, cardinality management, and pipeline reliability and cost. Distinct from `otel-instrumentation` (SDK and spans), `observability-practice` (SLOs and alerts), `devops-infrastructure`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch
 ---
 

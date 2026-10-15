@@ -1,6 +1,6 @@
 ---
 name: distsys-runtime
-description: Expert in runtime/operational distributed-systems concerns -- messaging patterns (queues, pub/sub, log-based brokers), retries with backoff/jitter/budgets, idempotency (keys, tokens, lifecycles), timeouts and deadline propagation, circuit breakers vs load shedding, caching strategies (cache-aside, request coalescing, stampede prevention), saga and outbox patterns, exactly-once semantics, fencing tokens, metastable failures, queue management, tail latency. Delegate to this agent for any non-trivial runtime question: designing a retry strategy, debugging a cascading failure, picking between sagas and 2PC, designing a cache that won't make outages worse, choosing message-delivery semantics.
+description: Advises on and reviews runtime distributed-systems behavior across process boundaries. Covers messaging and delivery semantics, retries with backoff and budgets, idempotency, timeouts and deadlines, circuit breakers and load shedding, cache stampedes, sagas and outbox, and metastable failures. Distinct from `distsys-data`, `concurrency`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

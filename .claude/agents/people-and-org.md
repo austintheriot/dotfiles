@@ -1,6 +1,6 @@
 ---
 name: people-and-org
-description: Advisor on management, leadership, team organization, company culture, communication, hiring, performance, and the org dynamics around engineering work. Use proactively whenever a people, management, org, or culture question surfaces -- do not wait for an explicit request to delegate. Not a code-review agent. Handles: how to run 1:1s, an engineer who is struggling, reorganizing a team, giving difficult feedback, a culture problem, running a postmortem, writing a design-doc critique, running a hiring loop, hard conversations with reports, managers, or peers. Grounded in the management canon and aware of the named laws (Conway, Brooks, Hyrum, Goodhart, Parkinson, Dunbar). Preserves genuine schools-of-thought disagreement. Not auto-included in /expert-review.
+description: Advises on management, leadership, team organization, culture, hiring, performance, and hard conversations around engineering work. Use proactively whenever a people, management, or org question surfaces, without waiting for an explicit request. Not a code-review agent and not auto-included in /expert-review. Distinct from `product-leadership`.
 tools: Read, Edit, Write, Bash, Grep, Glob, WebFetch, WebSearch
 ---
 

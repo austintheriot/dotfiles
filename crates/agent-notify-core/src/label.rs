@@ -38,9 +38,9 @@ pub fn location_line(window: Option<&WindowLabel>, repo: Option<&RepoInfo>, cwd:
 /// The first sentence of `text`, as a prefix of the trimmed text.
 ///
 /// Ends at `.`, `!` or `?` followed by whitespace or the end (not after a
-/// common abbreviation), at a CJK full stop, or at a line break (`\n`, `\r`
-/// or U+2028). A leading
-/// code fence runs to its closing fence.
+/// common abbreviation), at a CJK full stop, or at `\n`. A leading code fence
+/// runs to its closing fence. The input is [`DisplayText`], which has already
+/// turned `\r`, U+2028 and U+2029 into spaces, so `\n` is the only line break.
 #[must_use]
 pub fn first_sentence(text: &str) -> &str {
     let trimmed = text.trim();
@@ -50,7 +50,7 @@ pub fn first_sentence(text: &str) -> &str {
     for (index, character) in trimmed.char_indices() {
         let end = index + character.len_utf8();
         match character {
-            '\n' | '\r' | '\u{2028}' => return trimmed[..index].trim_end(),
+            '\n' => return trimmed[..index].trim_end(),
             '。' | '！' | '？' => return &trimmed[..end],
             '.' | '!' | '?' => {
                 let at_boundary = trimmed[end..].chars().next().is_none_or(char::is_whitespace);
@@ -133,9 +133,7 @@ mod tests {
             ("Bumped to v1.2.3 today. Next.", "Bumped to v1.2.3 today."),
             ("See https://example.com/a.b/c for details. More.", "See https://example.com/a.b/c for details."),
             ("Summary line\nSecond line.", "Summary line"),
-            ("Summary line\rSecond line.", "Summary line"),
-            ("Summary line\r\nSecond line.", "Summary line"),
-            ("Summary line\u{2028}Second line.", "Summary line"),
+            ("Summary line \nSecond line.", "Summary line"),
             ("- Fixed X\n- Fixed Y", "- Fixed X"),
             ("完了しました。次へ", "完了しました。"),
             ("Is it green? Yes.", "Is it green?"),
@@ -155,6 +153,16 @@ mod tests {
         assert_eq!(turn_ended_body(Some(&DisplayText::new("  "))).as_str(), "Finished");
         assert_eq!(turn_ended_body(Some(&DisplayText::new("Done. More."))).as_str(), "Done.");
         assert_eq!(turn_failed_body(&DisplayText::new("API Error: overloaded")).as_str(), "Stopped: API Error: overloaded");
+        let cleaned_bodies = [
+            ("Summary line\rSecond line.", "Summary line Second line."),
+            ("Summary line\r\nSecond line.", "Summary line"),
+            ("Summary line\u{2028}Second line.", "Summary line Second line."),
+            ("Done.\u{2029}Next.", "Done."),
+            ("Done\u{2029}next.", "Done next."),
+        ];
+        for (raw, expected) in cleaned_bodies {
+            assert_eq!(turn_ended_body(Some(&DisplayText::new(raw))).as_str(), expected, "{raw:?}");
+        }
     }
 
     proptest! {

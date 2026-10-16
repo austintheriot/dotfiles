@@ -13,13 +13,14 @@ pub const DISPLAY_TEXT_MAX_BYTES: usize = 4096;
 pub struct DisplayText(String);
 
 impl DisplayText {
-    /// Removes control, bidi, zero-width, line and paragraph separator, soft
-    /// hyphen, interlinear annotation and tag characters, then cuts to
+    /// Turns `\r`, the line separator and the paragraph separator into a
+    /// space, removes other control, bidi, zero-width, soft hyphen,
+    /// interlinear annotation and tag characters, then cuts to
     /// [`DISPLAY_TEXT_MAX_BYTES`] on a character boundary.
     #[must_use]
     pub fn new(raw: &str) -> Self {
         let mut cleaned = String::with_capacity(raw.len().min(DISPLAY_TEXT_MAX_BYTES));
-        for character in raw.chars().filter(|character| !is_removed(*character)) {
+        for character in raw.chars().filter_map(cleaned_character) {
             if cleaned.len() + character.len_utf8() > DISPLAY_TEXT_MAX_BYTES {
                 break;
             }
@@ -50,6 +51,16 @@ impl From<String> for DisplayText {
 impl From<DisplayText> for String {
     fn from(text: DisplayText) -> Self {
         text.0
+    }
+}
+
+/// A line break other than `\n` becomes a space so the words on each side
+/// stay apart.
+fn cleaned_character(character: char) -> Option<char> {
+    match character {
+        '\r' | '\u{2028}' | '\u{2029}' => Some(' '),
+        removed if is_removed(removed) => None,
+        kept => Some(kept),
     }
 }
 
@@ -92,10 +103,6 @@ mod tests {
     fn removes_every_invisible_or_hiding_class() {
         let cases = [
             ("tab", "a\tb", "ab"),
-            ("carriage return", "a\rb", "ab"),
-            ("carriage return before a newline", "a\r\nb", "a\nb"),
-            ("line separator", "a\u{2028}b", "ab"),
-            ("paragraph separator", "a\u{2029}b", "ab"),
             ("language tag", "a\u{E0001}b", "ab"),
             ("tag characters that spell hidden text", "a\u{E0068}\u{E0069}\u{E007F}b", "ab"),
             ("first tag code point", "a\u{E0000}b", "ab"),
@@ -106,6 +113,19 @@ mod tests {
             ("interlinear annotation terminator", "a\u{FFFB}b", "ab"),
             ("just past the tag block stays", "a\u{E0080}b", "a\u{E0080}b"),
             ("the replacement character stays", "a\u{FFFD}b", "a\u{FFFD}b"),
+        ];
+        for (name, raw, expected) in cases {
+            assert_eq!(DisplayText::new(raw).as_str(), expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn line_breaks_other_than_newline_become_a_space_so_words_stay_apart() {
+        let cases = [
+            ("carriage return", "a\rb", "a b"),
+            ("carriage return before a newline", "a\r\nb", "a \nb"),
+            ("line separator", "a\u{2028}b", "a b"),
+            ("paragraph separator", "a\u{2029}b", "a b"),
         ];
         for (name, raw, expected) in cases {
             assert_eq!(DisplayText::new(raw).as_str(), expected, "{name}");
@@ -144,7 +164,7 @@ mod tests {
         #[test]
         fn output_is_a_bounded_clean_prefix_of_the_cleaned_input(raw in long_strings()) {
             let text = DisplayText::new(&raw);
-            let cleaned: String = raw.chars().filter(|character| !is_removed(*character)).collect();
+            let cleaned: String = raw.chars().filter_map(cleaned_character).collect();
             prop_assert!(text.as_str().len() <= DISPLAY_TEXT_MAX_BYTES);
             prop_assert!(cleaned.starts_with(text.as_str()));
             prop_assert!(!text.as_str().chars().any(is_removed));

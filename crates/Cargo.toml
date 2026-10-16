@@ -11,7 +11,7 @@
 # rather than iterating zero crates.
 [workspace]
 resolver = "3"
-members = ["config-cli", "config-manifest", "deps-core", "dotfiles-path", "dotfiles-test-support", "tmux-core", "tmux-tools"]
+members = ["agent-notify-core", "config-cli", "config-manifest", "deps-core", "dotfiles-path", "dotfiles-test-support", "tmux-core", "tmux-tools"]
 
 # Lint policy lives here rather than in a command line, because a command
 # line binds one invocation: an IDE, a bare `cargo clippy`, and CI would all
@@ -52,3 +52,10 @@ toml = { version = "0.9.8", default-features = false, features = ["parse", "serd
 # already in the lockfile transitively via `toml`, so naming serde directly
 # makes an existing edge explicit rather than adding a crate to the graph.
 serde = { version = "1.0.229", default-features = false, features = ["std", "derive"] }
+# The socket protocol and the Claude hook payload are JSON.
+serde_json = "1.0.154"
+# Property tests for the decision core and the CLI's pure planner.
+proptest = "1.12.0"
+tracing = "0.1.44"
+# fmt only: the CLI writes one log file, and env-filter would add a regex engine for one level setting.
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std"] }

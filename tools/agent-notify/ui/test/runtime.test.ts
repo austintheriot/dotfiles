@@ -35,6 +35,40 @@ test("native hover from the shell reaches the model", async () => {
   runtime.stop();
 });
 
+function withFakeResizeObserver<Result>(body: (resize: () => void) => Promise<Result>): Promise<Result> {
+  const original = globalThis.ResizeObserver;
+  const callbacks: Array<() => void> = [];
+  globalThis.ResizeObserver = class {
+    public constructor(callback: () => void) {
+      callbacks.push(callback);
+    }
+    public observe(): void {}
+    public unobserve(): void {}
+    public disconnect(): void {}
+  } as unknown as typeof ResizeObserver;
+  return body(() => callbacks.forEach((callback) => callback())).finally(() => {
+    globalThis.ResizeObserver = original;
+  });
+}
+
+test("the stack reports its measured height once per change", async () => {
+  await withFakeResizeObserver(async (resize) => {
+    const { services, root, runtime } = await boot(true);
+    let height = 212.4;
+    root.getBoundingClientRect = () => ({ height }) as DOMRect;
+    resize();
+    resize();
+    height = 300;
+    resize();
+    const layouts = services.sent.filter((message) => message.type === "layout");
+    expect(layouts).toEqual([
+      { type: "layout", content_height_px: 212 },
+      { type: "layout", content_height_px: 300 },
+    ]);
+    runtime.stop();
+  });
+});
+
 test("a DOM leave is reported after the delay, through the timer service", async () => {
   const { services, runtime } = await boot(false);
   const hoverMessages = () => services.sent.filter((message) => message.type === "hover");

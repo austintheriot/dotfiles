@@ -1,5 +1,9 @@
 import type { UiServices } from "./services";
 
+/**
+ * Holds the rate-limit state for page errors. `main.ts` creates the one reporter, so `main.ts` is
+ * its only owner: the error listeners fire outside the runtime loop and also report a failed start.
+ */
 export const ERROR_INTERVAL_MS = 1_000;
 
 export function createErrorReporter(services: Pick<UiServices, "send" | "now">): (message: string, stack: string | null) => void {

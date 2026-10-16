@@ -52,7 +52,21 @@ export class ToastStack extends LitElement {
     `;
   }
 
-  override updated() {
+  private resizeObserver: ResizeObserver | null = null;
+
+  override connectedCallback() {
+    super.connectedCallback();
+    this.resizeObserver = new ResizeObserver(() => this.reportHeight());
+    this.resizeObserver.observe(this);
+  }
+
+  override disconnectedCallback() {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    super.disconnectedCallback();
+  }
+
+  private reportHeight() {
     this.dispatch({ type: "layout", heightPx: this.getBoundingClientRect().height });
   }
 }

@@ -10,8 +10,20 @@
 //! rather than the normal one.
 
 use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
 
 use tmux_core::{HeadState, RepositoryFacts};
+
+/// Each `git` spawn in the fallback ends within this time. agent-notify calls
+/// [`inspect`] on the hook path outside tmux, where a wedged `git` must not
+/// hold the hook. The limit is per spawn, not for the whole fallback: on a
+/// machine whose endpoint scanner delays every exec, one `git` call took about
+/// 0.5 s, so the three calls of a healthy fallback did not fit in one second.
+/// A wedged `git` still costs one limit, because the first timeout ends the
+/// fallback.
+const GIT_FALLBACK_LIMIT: Duration = Duration::from_secs(1);
+const CHILD_POLL: Duration = Duration::from_millis(5);
 
 /// Inspects `directory` for the git repository facts a window name needs.
 ///
@@ -22,7 +34,7 @@ use tmux_core::{HeadState, RepositoryFacts};
 /// than answering with a value that might be wrong.
 pub fn inspect(directory: &Path) -> Option<RepositoryFacts> {
     let git_path = find_git_path(directory)?;
-    direct_read(&git_path).or_else(|| fallback_to_git_rev_parse(directory))
+    direct_read(&git_path).or_else(|| fallback_to_git_rev_parse(directory, Path::new("git"), GIT_FALLBACK_LIMIT))
 }
 
 /// Walks from `directory` up to the filesystem root looking for `.git`.
@@ -137,13 +149,11 @@ fn read_head(git_directory: &Path) -> Option<HeadState> {
 /// The parent spec verified zero fallbacks were needed across 21 live
 /// window directories, so this path exists for correctness, not for the
 /// common case. Logs nothing on failure: this runs on every prompt draw,
-/// and a stray line here would corrupt the prompt.
-fn fallback_to_git_rev_parse(directory: &Path) -> Option<RepositoryFacts> {
-    let common_directory_output = std::process::Command::new("git")
-        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
-        .current_dir(directory)
-        .output()
-        .ok()?;
+/// and a stray line here would corrupt the prompt. A `git` still running
+/// after `limit` is killed, and the answer is `None`.
+fn fallback_to_git_rev_parse(directory: &Path, git: &Path, limit: Duration) -> Option<RepositoryFacts> {
+    let git_output = |arguments: &[&str]| output_within(Command::new(git).args(arguments).current_dir(directory), limit);
+    let common_directory_output = git_output(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
     if !common_directory_output.status.success() {
         return None;
     }
@@ -156,21 +166,13 @@ fn fallback_to_git_rev_parse(directory: &Path) -> Option<RepositoryFacts> {
         .to_string_lossy()
         .into_owned();
 
-    let branch_output = std::process::Command::new("git")
-        .args(["symbolic-ref", "--short", "-q", "HEAD"])
-        .current_dir(directory)
-        .output()
-        .ok()?;
+    let branch_output = git_output(&["symbolic-ref", "--short", "-q", "HEAD"])?;
 
     let head = if branch_output.status.success() {
         let branch_name = String::from_utf8(branch_output.stdout).ok()?;
         HeadState::Branch(branch_name.trim().to_string())
     } else {
-        let short_sha_output = std::process::Command::new("git")
-            .args(["rev-parse", "--short", "HEAD"])
-            .current_dir(directory)
-            .output()
-            .ok()?;
+        let short_sha_output = git_output(&["rev-parse", "--short", "HEAD"])?;
         if !short_sha_output.status.success() {
             return None;
         }
@@ -186,9 +188,30 @@ fn fallback_to_git_rev_parse(directory: &Path) -> Option<RepositoryFacts> {
     })
 }
 
+/// Runs `command` and returns its output, or `None` when it fails to start
+/// or is still running after `limit`, in which case it is killed and reaped.
+/// Stdout is read after exit, which suits the few bytes `git rev-parse`
+/// prints.
+fn output_within(command: &mut Command, limit: Duration) -> Option<Output> {
+    let deadline = Instant::now() + limit;
+    let mut child = command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_status)) => return child.wait_with_output().ok(),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(CHILD_POLL),
+            Ok(None) | Err(_) => {
+                let _killed = child.kill();
+                let _reaped = child.wait();
+                return None;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, Instant};
 
     /// Runs git against a fixture, with git's ambient environment cleared.
     ///
@@ -197,7 +220,7 @@ mod tests {
     /// observed one taking that repo's index lock and blocking every
     /// subsequent command. See `.agents/PAPERCUTS.md`.
     fn git_in(directory: &Path, arguments: &[&str]) {
-        let status = std::process::Command::new("git")
+        let status = Command::new("git")
             .args(arguments)
             .current_dir(directory)
             .env_remove("GIT_DIR")
@@ -282,6 +305,31 @@ mod tests {
             }
             other => panic!("expected a detached head, got {other:?}"),
         }
+    }
+
+    /// A `git` that never answers is killed at the limit, so the hook
+    /// path outside tmux cannot hang on it.
+    #[test]
+    fn a_hanging_git_fallback_gives_up_at_its_limit() {
+        let repo = a_repo_with_one_commit();
+        let stubs = tempfile::tempdir().expect("tempdir");
+        let hanging_git = stubs.path().join("git");
+        dotfiles_test_support::stub::write(&hanging_git, "#!/bin/sh\nexec sleep 10\n").expect("a stub");
+
+        let started = Instant::now();
+        let facts = fallback_to_git_rev_parse(repo.path(), &hanging_git, Duration::from_millis(200));
+
+        assert!(facts.is_none(), "a git that never answers yields no facts");
+        assert!(started.elapsed() < Duration::from_secs(2), "took {:?}", started.elapsed());
+    }
+
+    /// The bounded fallback still answers with a real git, so the test above
+    /// does not pass for a fallback that always gives up.
+    #[test]
+    fn the_bounded_fallback_answers_with_a_real_git() {
+        let repo = a_repo_with_one_commit();
+        let facts = fallback_to_git_rev_parse(repo.path(), Path::new("git"), GIT_FALLBACK_LIMIT);
+        assert_eq!(facts.map(|facts| facts.head), Some(HeadState::Branch("main".to_string())));
     }
 
     /// A bare-repo worktree, which is the shape $HOME has, reports facts

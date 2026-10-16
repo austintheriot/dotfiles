@@ -16,3 +16,9 @@ docs = "https://ohmyz.sh/"
 [xclip]
 command = "xclip"
 docs = "https://github.com/astrand/xclip"
+
+# notify-send shows the agent-notify fallback notification when the daemon
+# is not running. Ubuntu and Pop!_OS ship it in libnotify-bin.
+[notify-send]
+command = "notify-send"
+docs = "https://gitlab.gnome.org/GNOME/libnotify"

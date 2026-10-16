@@ -339,6 +339,32 @@ pub fn packages() -> PackageCatalog {
 
     insert(
         &mut catalog,
+        "terminal-notifier",
+        per_manager(vec![(PackageManager::Brew, named("terminal-notifier"))]),
+        // macOS-only fallback notifier for agent-notify; no other manager ships it.
+        PackageAvailability::Unavailable(NoInstallReason::NotPackagedForThisManager),
+    );
+
+    insert(
+        &mut catalog,
+        "notify-send",
+        per_manager(vec![
+            (PackageManager::Apt, named("libnotify-bin")),
+            (PackageManager::Pacman, named("libnotify")),
+            (
+                PackageManager::Brew,
+                PackageAvailability::Unavailable(NoInstallReason::NotPackagedForThisManager),
+            ),
+        ]),
+        // Linux-only fallback notifier for agent-notify; macOS has no such
+        // package and an undetected manager has no install command.
+        PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
+            manager: PackageManager::Unknown,
+        }),
+    );
+
+    insert(
+        &mut catalog,
         "python3",
         per_manager(vec![
             (PackageManager::Apt, named("python3")),
@@ -686,7 +712,7 @@ mod tests {
         // Positive control. Validation below passes vacuously against an
         // empty or partial union, so assert the union really spans all four
         // files first, naming one dependency exclusive to each.
-        assert_eq!(known.len(), 28, "the union must cover every conf file");
+        assert_eq!(known.len(), 30, "the union must cover every conf file");
         assert!(known.contains(&name("git")), "deps.toml entries are present");
         assert!(
             known.contains(&name("zsh-login-shell")),

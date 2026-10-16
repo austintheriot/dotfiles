@@ -52,6 +52,14 @@ Record:
 - **PR number, URL, branch name, draft state, labels**.
 - **Monitor start time** (current ISO-8601 timestamp). Used later to filter AI review comments to "posted after we started watching" -- review opt-in labels are often auto-removed by the workflow after the review runs, so label presence is not a reliable signal on its own.
 
+Silence the per-stop notification for the length of the watch, when `agent-notify` is installed:
+
+```bash
+command -v agent-notify >/dev/null && agent-notify quiet --until next-send --max-minutes 180 || true
+```
+
+A non-zero exit (for example, outside tmux) is not an error. Continue.
+
 ## Step 2: Single status check
 
 Issue these in parallel — independent commands, single tool-call batch.
@@ -187,6 +195,14 @@ Print:
   - "Mark ready for review: `gh pr ready <PR>`"
   - "Investigate failed `<job>` job: `<failure-logs command>`"
   - "Rerun the flaky workflow: `<retry command>`"
+
+Then send one notification with the outcome. This ends the quiet period from Step 1. Use `attention` when the user must act (a red workflow, a manual gate, review comments) and `info` when everything is green:
+
+```bash
+command -v agent-notify >/dev/null && agent-notify send --kind attention --body "PR 123: lint failed, 1 manual gate pending" || true
+```
+
+Send it only at a terminal state, never on an intermediate wake-up.
 
 ## Important
 

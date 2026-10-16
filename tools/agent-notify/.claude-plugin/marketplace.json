@@ -1,0 +1,11 @@
+{
+  "name": "dotfiles-tools",
+  "owner": { "name": "dotfiles" },
+  "plugins": [
+    {
+      "name": "agent-notify",
+      "source": "./claude-plugin",
+      "description": "Contextual desktop notifications for Claude Code sessions in tmux"
+    }
+  ]
+}

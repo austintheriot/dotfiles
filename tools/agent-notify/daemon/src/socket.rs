@@ -3,11 +3,12 @@
 //! plan, Task 11.
 
 use std::fs::{self, DirBuilder, File, Permissions, TryLockError};
+use std::hash::{BuildHasher, RandomState};
 use std::io;
 use std::os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use agent_notify_core::wire::{MAX_LINE_BYTES, MAX_REPLY_BYTES, Query, Reply, ReplyCode, Request, decode_request, encode_line};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -83,8 +84,11 @@ pub fn bind(path: &Path) -> io::Result<BindOutcome> {
 
 /// `unsafe` is denied, so `getuid` is out of reach. A file this process
 /// creates carries its uid. `create_new` refuses a planted file or symlink.
+/// The random suffix matters: a probe a crash left behind would otherwise
+/// block every later bind whose pid repeats it, which happens after a reboot.
 fn process_uid(directory: &Path) -> io::Result<u32> {
-    let probe = directory.join(format!(".agent-notifyd-probe-{}", std::process::id()));
+    let suffix = RandomState::new().hash_one(SystemTime::now());
+    let probe = directory.join(format!(".agent-notifyd-probe-{}-{suffix:016x}", std::process::id()));
     let file = File::options().write(true).create_new(true).mode(PRIVATE_FILE).open(&probe).map_err(|error| {
         io::Error::new(error.kind(), format!("could not create a probe file in the socket directory {}: {error}", directory.display()))
     })?;

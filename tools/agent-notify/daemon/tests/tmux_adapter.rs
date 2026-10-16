@@ -107,6 +107,16 @@ fn a_newline_in_a_tag_fails_the_read_and_never_reads_as_gone() {
 }
 
 #[test]
+fn a_vanished_pane_on_a_live_server_has_no_tag() {
+    let server = tmux_server("an-vanish");
+    let pane = new_window(&server);
+    tag(&server, &pane, "session-a");
+    let vanished = key(&server, &pane);
+    assert!(server.tmux(&["kill-pane", "-t", pane.as_str()]).status.success());
+    assert_eq!(adapter().session_tag(&vanished), Ok(None), "the server is the same, so only the pane is gone");
+}
+
+#[test]
 fn the_session_tag_reads_back() {
     let server = tmux_server("an-tag");
     let pane = first_pane(&server, "main");

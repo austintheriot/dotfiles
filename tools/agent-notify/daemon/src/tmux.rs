@@ -131,17 +131,23 @@ impl Tmux {
         parse_active_pane(&text, server)
     }
 
-    /// The session tag on `pane`.
+    /// The session tag on `pane`. `None` when the pane is untagged or gone:
+    /// tmux 3.4 answers a missing `%pane` target with exit 0 and an empty
+    /// pane id, and the identity on that line says the server is the same.
     ///
     /// # Errors
     ///
-    /// `ServerGone` when the server is gone or restarted, or the pane is gone.
+    /// `ServerGone` when the server is gone or restarted; `Failed` when tmux
+    /// printed no line.
     pub fn session_tag(&self, pane: &PaneKey) -> Result<Option<SessionId>, TmuxError> {
         let format = format!("{IDENTITY}\t#{{pane_id}}\t{SESSION_TAG}");
         let text = self.run(&pane.server.socket_path, &["display-message", "-p", "-t", pane.pane.as_str(), &format])?;
+        if text.lines().next().is_none() {
+            return Err(TmuxError::Failed("tmux printed nothing for the pane".to_string()));
+        }
         match parse_pane_tags(&text, &pane.server)?.into_iter().next() {
             Some((found, tag)) if found == pane.pane => Ok(tag),
-            _ => Err(TmuxError::ServerGone),
+            _ => Ok(None),
         }
     }
 
@@ -239,8 +245,13 @@ fn is_server_gone(stderr: &str, arguments: &[&str]) -> bool {
 }
 
 /// Splits `line` into at most `count` fields (three or more) and parses the
-/// identity in the first two. A line split by a raw newline in a user field
-/// has no identity, which is unreadable output, never a different server.
+/// identity in the first two. An ordinary line split by a raw newline in a
+/// user field has no identity, which is unreadable output, not a different
+/// server. A crafted value can still forge one: `set-option` with a newline
+/// then a pid, a start time and a pane id adds a line with any identity,
+/// which reads as `ServerGone` or as a fake pane. That risk is accepted,
+/// because only a process that can reach the socket can set the value, and
+/// such a process can already run `kill-server`.
 fn identified_fields<'line>(line: &'line str, socket: &SocketPath, count: usize) -> Result<(ServerId, Vec<&'line str>), TmuxError> {
     let fields: Vec<&str> = line.splitn(count.max(3), SEPARATOR).collect();
     let pid = fields.first().and_then(|value| value.parse().ok());

@@ -277,6 +277,17 @@ fn bind_leaves_only_the_lock_and_the_socket() {
 }
 
 #[test]
+fn a_leftover_probe_with_this_pid_does_not_block_bind() {
+    let directory = scratch();
+    let run = existing_directory(&directory, 0o700);
+    let leftover = format!(".agent-notifyd-probe-{}", std::process::id());
+    std::fs::write(run.join(&leftover), "").expect("writes");
+    let outcome = bind(&run.join(SOCKET_FILE)).expect("binds past a probe a crash left behind");
+    assert!(matches!(outcome, BindOutcome::Bound(_)));
+    assert_eq!(entries(&run), BTreeSet::from([leftover, LOCK_FILE.to_string(), SOCKET_FILE.to_string()]), "only this bind's own probe is removed");
+}
+
+#[test]
 fn an_existing_lock_file_open_to_others_is_made_private() {
     let directory = scratch();
     let run = existing_directory(&directory, 0o755);

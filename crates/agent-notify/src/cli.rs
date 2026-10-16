@@ -1,7 +1,10 @@
 //! Command-line arguments.
 
+use std::path::PathBuf;
+
 use agent_notify_core::wire::{Kind, QuietUntil};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::error::ErrorKind;
+use clap::{Arg, ArgAction, ArgGroup, ArgMatches, Args, FromArgMatches, Parser, Subcommand, ValueEnum};
 
 /// The agent-notify command line.
 #[derive(Debug, Parser)]
@@ -42,6 +45,98 @@ pub enum Command {
         #[arg(long)]
         off: bool,
     },
+    /// Report a tmux pane focus change. tmux's pane-focus hooks call this.
+    FocusChanged {
+        /// The tmux server socket, `#{socket_path}`.
+        #[arg(long)]
+        socket: PathBuf,
+        /// The tmux server pid, `#{pid}`.
+        #[arg(long)]
+        pid: u32,
+        /// The tmux server start time, `#{start_time}`.
+        #[arg(long)]
+        start_time: i64,
+        /// The pane, `#{pane_id}`.
+        #[arg(long)]
+        pane: String,
+        /// `--in` or `--out`.
+        #[command(flatten)]
+        direction: FocusDirection,
+    },
+    /// Hold every card back, or let them through again.
+    Dnd {
+        /// on, off or status.
+        #[command(subcommand)]
+        action: DndAction,
+    },
+    /// Go to the newest card that needs you.
+    Jump,
+    /// Print the daemon's state.
+    Status {
+        /// The full report as JSON.
+        #[arg(long, conflicts_with = "tmux")]
+        json: bool,
+        /// A short segment for the tmux status line. Prints nothing when no daemon is installed.
+        #[arg(long)]
+        tmux: bool,
+    },
+    /// Check the installation and print what to fix.
+    Doctor,
+}
+
+/// Which way focus moved. Parsed from `--in` and `--out`, exactly one of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusDirection {
+    /// The pane gained focus.
+    In,
+    /// The pane lost focus.
+    Out,
+}
+
+const FOCUS_IN: &str = "in";
+const FOCUS_OUT: &str = "out";
+
+impl FromArgMatches for FocusDirection {
+    fn from_arg_matches(matches: &ArgMatches) -> Result<Self, clap::Error> {
+        match (matches.get_flag(FOCUS_IN), matches.get_flag(FOCUS_OUT)) {
+            (true, false) => Ok(FocusDirection::In),
+            (false, true) => Ok(FocusDirection::Out),
+            _ => Err(clap::Error::raw(ErrorKind::MissingRequiredArgument, "focus-changed needs exactly one of --in and --out\n")),
+        }
+    }
+
+    fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), clap::Error> {
+        *self = FocusDirection::from_arg_matches(matches)?;
+        Ok(())
+    }
+}
+
+impl Args for FocusDirection {
+    fn augment_args(command: clap::Command) -> clap::Command {
+        command
+            .arg(Arg::new(FOCUS_IN).long(FOCUS_IN).action(ArgAction::SetTrue).help("The pane gained focus"))
+            .arg(Arg::new(FOCUS_OUT).long(FOCUS_OUT).action(ArgAction::SetTrue).help("The pane lost focus"))
+            .group(ArgGroup::new("direction").args([FOCUS_IN, FOCUS_OUT]).required(true).multiple(false))
+    }
+
+    fn augment_args_for_update(command: clap::Command) -> clap::Command {
+        FocusDirection::augment_args(command)
+    }
+}
+
+/// A do-not-disturb action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Subcommand)]
+pub enum DndAction {
+    /// Hold every card back.
+    On {
+        /// End on its own after this many minutes.
+        #[arg(long, value_parser = clap::value_parser!(u16).range(1..=1440))]
+        for_minutes: Option<u16>,
+    },
+    /// Let cards through again.
+    Off,
+    /// Print whether do-not-disturb is on.
+    Status,
 }
 
 /// The agent behind a hook.
@@ -101,6 +196,12 @@ impl Command {
     pub fn is_hook(&self) -> bool {
         matches!(self, Command::Hook { .. })
     }
+
+    /// True for the commands whose request carries an origin, so the CLI
+    /// reads the tmux pane and the git repository first.
+    pub fn reads_origin(&self) -> bool {
+        matches!(self, Command::Hook { .. } | Command::Send { .. } | Command::Quiet { .. })
+    }
 }
 
 #[cfg(test)]
@@ -130,6 +231,43 @@ mod tests {
             &["quiet", "--until", "next-send", "--max-minutes", "0"],
             &["hook", "codex"],
         ] {
+            let error = parse(arguments).expect_err("a usage error");
+            assert_eq!(error.exit_code(), 2, "{arguments:?}");
+        }
+    }
+
+    const FOCUS: [&str; 9] = ["focus-changed", "--socket", "/tmp/tmux-501/default", "--pid", "77", "--start-time", "1700000000", "--pane", "%3"];
+
+    fn focus_direction(flags: &[&str]) -> Result<FocusDirection, clap::Error> {
+        let arguments: Vec<&str> = FOCUS.iter().chain(flags).copied().collect();
+        parse(&arguments).map(|cli| match cli.command {
+            Command::FocusChanged { direction, .. } => direction,
+            other => panic!("a focus-changed command, got {other:?}"),
+        })
+    }
+
+    #[test]
+    fn focus_changed_takes_exactly_one_direction() {
+        assert_eq!(focus_direction(&["--in"]).expect("--in parses"), FocusDirection::In);
+        assert_eq!(focus_direction(&["--out"]).expect("--out parses"), FocusDirection::Out);
+        for flags in [&[][..], &["--in", "--out"]] {
+            let error = focus_direction(flags).expect_err("a usage error");
+            assert_eq!(error.exit_code(), 2, "{flags:?}");
+        }
+    }
+
+    #[test]
+    fn the_new_command_lines_parse() {
+        assert!(parse(&["dnd", "on"]).is_ok_and(|cli| matches!(cli.command, Command::Dnd { action: DndAction::On { for_minutes: None } })));
+        assert!(parse(&["dnd", "on", "--for-minutes", "30"]).is_ok_and(|cli| matches!(cli.command, Command::Dnd { action: DndAction::On { for_minutes: Some(30) } })));
+        assert!(parse(&["dnd", "off"]).is_ok());
+        assert!(parse(&["dnd", "status"]).is_ok());
+        assert!(parse(&["jump"]).is_ok());
+        assert!(parse(&["status"]).is_ok_and(|cli| matches!(cli.command, Command::Status { json: false, tmux: false })));
+        assert!(parse(&["status", "--json"]).is_ok());
+        assert!(parse(&["status", "--tmux"]).is_ok());
+        assert!(parse(&["doctor"]).is_ok());
+        for arguments in [&["dnd", "on", "--for-minutes", "0"][..], &["dnd", "on", "--for-minutes", "1441"], &["status", "--json", "--tmux"], &["dnd"]] {
             let error = parse(arguments).expect_err("a usage error");
             assert_eq!(error.exit_code(), 2, "{arguments:?}");
         }

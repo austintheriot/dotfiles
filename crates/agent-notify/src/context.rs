@@ -74,6 +74,10 @@ impl EnvSnapshot {
 
 /// Reads everything the planner needs.
 pub fn gather(command: &Command, env: &EnvSnapshot, now: EpochMs, random: [u8; 10]) -> Inputs {
+    if !command.reads_origin() {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        return Inputs { now, event_id: EventId::from_parts(now, random), cwd, pane: PaneLookup::NotInTmux, repo: None, stdin: None };
+    }
     let stdin = command.is_hook().then(read_stdin);
     let pane = lookup_pane(env);
     let cwd = std::env::current_dir().unwrap_or_default();

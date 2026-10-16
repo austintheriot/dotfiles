@@ -141,6 +141,8 @@ pub enum ReplyMode {
     Ack,
     Reject,
     Never,
+    /// Answers with this line, without its newline.
+    Reply(String),
 }
 
 const ACCEPT_DEADLINE: Duration = Duration::from_secs(10);
@@ -163,8 +165,9 @@ pub fn listen(path: &Path, mode: ReplyMode) -> JoinHandle<Option<String>> {
                 std::thread::sleep(SILENT_HOLD);
                 return None;
             }
-            ReplyMode::Ack => r#"{"ok":true,"daemon":"test"}"#,
-            ReplyMode::Reject => r#"{"ok":false,"code":"unknown_kind","accepts":[1,1]}"#,
+            ReplyMode::Ack => r#"{"ok":true,"daemon":"test"}"#.to_string(),
+            ReplyMode::Reject => r#"{"ok":false,"code":"unknown_kind","accepts":[1,1]}"#.to_string(),
+            ReplyMode::Reply(line) => line,
         };
         let mut line = String::new();
         BufReader::new(&stream).read_line(&mut line).ok()?;

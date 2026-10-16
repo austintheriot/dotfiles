@@ -2,13 +2,15 @@
 //! this module returns an [`Invocation`], and the shell runs it.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use agent_notify_core::fallback::{FallbackNote, fallback_note};
 use agent_notify_core::hook::{ClaudeHookInput, HookDecision, TagWrite, decide_hook};
-use agent_notify_core::wire::{AgentEvent, AgentKind, Kind, Origin, RepoInfo, Request, WIRE_VERSION, WindowLabel};
-use agent_notify_core::{DisplayText, EpochMs, EventId, PaneKey, PromptId, SessionId};
+use agent_notify_core::wire::{AgentEvent, AgentKind, Control, DndCommand, Kind, Origin, Query, RepoInfo, Request, WIRE_VERSION, WindowLabel};
+use agent_notify_core::{DisplayText, EpochMs, EventId, PaneId, PaneKey, PromptId, ServerId, SessionId, SocketPath};
 
-use crate::cli::{Command, HookAgent};
+use crate::cli::{Command, DndAction, FocusDirection, HookAgent};
+use crate::client::{BUDGET, QUERY_BUDGET};
 
 /// Everything the planner reads.
 #[derive(Debug, Clone)]
@@ -71,6 +73,47 @@ pub struct Invocation {
     pub log: Option<NothingSent>,
     /// A problem with the input that did not stop the send, for the log at warn.
     pub warning: Option<String>,
+    /// What to do with the answer.
+    pub output: Output,
+}
+
+/// What the shell does with the daemon's answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Output {
+    /// Show the fallback notification when the daemon does not acknowledge.
+    FallbackOnFailure,
+    /// Print nothing, whatever the daemon does. tmux shows any output of a hook command.
+    Silent,
+    /// Print the line on success. Exit 1 with a message when the daemon does not answer.
+    Confirm(Option<&'static str>),
+    /// Print the status report.
+    Status(StatusFormat),
+    /// Print whether do-not-disturb is on.
+    DndStatus,
+}
+
+impl Output {
+    /// How long the CLI waits for the daemon.
+    pub fn budget(self) -> Duration {
+        if self.is_query() { QUERY_BUDGET } else { BUDGET }
+    }
+
+    /// True when the answer is a read of daemon state. `status --tmux` runs
+    /// about once a second and `cli.log` never rotates, so a query logs at debug.
+    pub fn is_query(self) -> bool {
+        matches!(self, Output::Status(_) | Output::DndStatus)
+    }
+}
+
+/// How `status` prints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusFormat {
+    /// For a person.
+    Text,
+    /// The report as JSON.
+    Json,
+    /// A tmux status-line segment.
+    Tmux,
 }
 
 /// Why an invocation sent nothing.
@@ -96,18 +139,37 @@ pub enum Exit {
 impl Invocation {
     fn nothing(reason: &'static str, session_id: Option<SessionId>, detail: Option<String>) -> Self {
         let log = Some(NothingSent { reason, session_id, detail });
-        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Success, stderr: None, log, warning: None }
+        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Success, stderr: None, log, warning: None, output: Output::FallbackOnFailure }
     }
 
     fn usage(message: &'static str) -> Self {
         let log = Some(NothingSent { reason: message, session_id: None, detail: None });
-        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Usage, stderr: Some(message.to_string()), log, warning: None }
+        Invocation {
+            tags: Vec::new(),
+            request: None,
+            fallback: None,
+            exit: Exit::Usage,
+            stderr: Some(message.to_string()),
+            log,
+            warning: None,
+            output: Output::FallbackOnFailure,
+        }
     }
 
     fn agent(inputs: &Inputs, origin: Origin, event: AgentEvent, tags: Vec<TagWrite>) -> Self {
         let fallback = fallback_note(&origin, &event);
         let request = Request::Agent { v: WIRE_VERSION, event_id: inputs.event_id.clone(), sent_at_ms: inputs.now, origin, event };
-        Invocation { tags, request: Some(request), fallback, exit: Exit::Success, stderr: None, log: None, warning: None }
+        Invocation { tags, request: Some(request), fallback, exit: Exit::Success, stderr: None, log: None, warning: None, output: Output::FallbackOnFailure }
+    }
+
+    fn control(inputs: &Inputs, control: Control, output: Output) -> Self {
+        let request = Request::Control { v: WIRE_VERSION, event_id: inputs.event_id.clone(), sent_at_ms: inputs.now, control };
+        Invocation { tags: Vec::new(), request: Some(request), fallback: None, exit: Exit::Success, stderr: None, log: None, warning: None, output }
+    }
+
+    fn query(inputs: &Inputs, query: Query, output: Output) -> Self {
+        let request = Request::Query { v: WIRE_VERSION, event_id: inputs.event_id.clone(), query };
+        Invocation { tags: Vec::new(), request: Some(request), fallback: None, exit: Exit::Success, stderr: None, log: None, warning: None, output }
     }
 }
 
@@ -118,6 +180,41 @@ pub fn plan_invocation(command: &Command, inputs: &Inputs) -> Invocation {
         Command::Hook { agent: HookAgent::ClaudeCode { .. } } => plan_hook(inputs),
         Command::Send { kind, body } => plan_send(Kind::from(*kind), body, inputs),
         Command::Quiet { until, max_minutes, off } => plan_quiet(until.map(Into::into), *max_minutes, *off, inputs),
+        Command::FocusChanged { socket, pid, start_time, pane, direction } => plan_focus_changed(socket, *pid, *start_time, pane, *direction, inputs),
+        Command::Dnd { action } => plan_dnd(*action, inputs),
+        Command::Jump => Invocation::control(inputs, Control::Jump, Output::Confirm(None)),
+        Command::Status { json, tmux } => {
+            let format = match (json, tmux) {
+                (true, _) => StatusFormat::Json,
+                (false, true) => StatusFormat::Tmux,
+                (false, false) => StatusFormat::Text,
+            };
+            Invocation::query(inputs, Query::Status, Output::Status(format))
+        }
+        Command::Doctor => Invocation::nothing("doctor gathers its own facts in main", None, None),
+    }
+}
+
+fn plan_focus_changed(socket: &Path, pid: u32, start_time: i64, pane: &str, direction: FocusDirection, inputs: &Inputs) -> Invocation {
+    let (Ok(socket_path), Ok(pane)) = (SocketPath::parse(socket), PaneId::parse(pane)) else {
+        return Invocation { output: Output::Silent, ..Invocation::usage("focus-changed needs an absolute --socket and a %pane id") };
+    };
+    let pane = PaneKey { server: ServerId { socket_path, pid, start_time }, pane };
+    let focused = matches!(direction, FocusDirection::In);
+    Invocation::control(inputs, Control::FocusChanged { pane, focused }, Output::Silent)
+}
+
+fn plan_dnd(action: DndAction, inputs: &Inputs) -> Invocation {
+    match action {
+        DndAction::On { for_minutes } => Invocation::control(
+            inputs,
+            Control::Dnd { command: DndCommand::On { for_minutes } },
+            Output::Confirm(Some("do-not-disturb is on")),
+        ),
+        DndAction::Off => {
+            Invocation::control(inputs, Control::Dnd { command: DndCommand::Off }, Output::Confirm(Some("do-not-disturb is off")))
+        }
+        DndAction::Status => Invocation::query(inputs, Query::Status, Output::DndStatus),
     }
 }
 
@@ -451,6 +548,112 @@ mod tests {
         let request = invocation.request.expect("a request");
         let line = encode_line(&request).expect("encodes");
         assert!(line.len() <= MAX_LINE_BYTES, "a maximal request is {} bytes", line.len());
+    }
+
+    fn bare_inputs() -> Inputs {
+        Inputs {
+            now: EpochMs(5),
+            event_id: EventId::from_parts(EpochMs(5), [0; 10]),
+            cwd: PathBuf::from("/"),
+            pane: PaneLookup::NotInTmux,
+            repo: None,
+            stdin: None,
+        }
+    }
+
+    fn focus_changed(pane: &str, socket: &str, direction: FocusDirection) -> Command {
+        Command::FocusChanged { socket: PathBuf::from(socket), pid: 77, start_time: 1_700_000_000, pane: pane.to_string(), direction }
+    }
+
+    #[test]
+    fn focus_changed_builds_a_silent_control_with_the_server_identity() {
+        let invocation = plan_invocation(&focus_changed("%3", "/tmp/tmux-501/default", FocusDirection::In), &bare_inputs());
+        assert_eq!(invocation.output, Output::Silent);
+        let Some(Request::Control { control: Control::FocusChanged { pane, focused }, .. }) = &invocation.request else {
+            panic!("a focus control: {invocation:?}");
+        };
+        assert!(*focused);
+        assert_eq!(pane.pane.as_str(), "%3");
+        assert_eq!(pane.server.socket_path.as_path(), Path::new("/tmp/tmux-501/default"));
+        assert_eq!((pane.server.pid, pane.server.start_time), (77, 1_700_000_000));
+        assert!(invocation.fallback.is_none());
+    }
+
+    #[test]
+    fn focus_out_sends_focused_false() {
+        let invocation = plan_invocation(&focus_changed("%3", "/tmp/s", FocusDirection::Out), &bare_inputs());
+        assert!(matches!(invocation.request, Some(Request::Control { control: Control::FocusChanged { focused: false, .. }, .. })));
+    }
+
+    #[test]
+    fn focus_changed_rejects_a_bad_pane_or_relative_socket() {
+        for command in [focus_changed("3", "/tmp/s", FocusDirection::In), focus_changed("%3", "relative/s", FocusDirection::Out)] {
+            let invocation = plan_invocation(&command, &bare_inputs());
+            assert_eq!(invocation.exit, Exit::Usage, "{command:?}");
+            assert!(invocation.request.is_none());
+            assert_eq!(invocation.output, Output::Silent);
+        }
+    }
+
+    #[test]
+    fn dnd_and_jump_build_confirmed_controls() {
+        let on = plan_invocation(&Command::Dnd { action: DndAction::On { for_minutes: Some(30) } }, &bare_inputs());
+        assert!(matches!(
+            on.request,
+            Some(Request::Control { control: Control::Dnd { command: DndCommand::On { for_minutes: Some(30) } }, .. })
+        ));
+        assert_eq!(on.output, Output::Confirm(Some("do-not-disturb is on")));
+        let off = plan_invocation(&Command::Dnd { action: DndAction::Off }, &bare_inputs());
+        assert!(matches!(off.request, Some(Request::Control { control: Control::Dnd { command: DndCommand::Off }, .. })));
+        assert_eq!(off.output, Output::Confirm(Some("do-not-disturb is off")));
+        let jump = plan_invocation(&Command::Jump, &bare_inputs());
+        assert!(matches!(jump.request, Some(Request::Control { control: Control::Jump, .. })));
+        assert_eq!(jump.output, Output::Confirm(None));
+    }
+
+    #[test]
+    fn status_and_dnd_status_are_queries() {
+        let cases = [
+            (Command::Status { json: false, tmux: true }, Output::Status(StatusFormat::Tmux)),
+            (Command::Status { json: true, tmux: false }, Output::Status(StatusFormat::Json)),
+            (Command::Status { json: false, tmux: false }, Output::Status(StatusFormat::Text)),
+            (Command::Dnd { action: DndAction::Status }, Output::DndStatus),
+        ];
+        for (command, output) in cases {
+            let invocation = plan_invocation(&command, &bare_inputs());
+            assert!(matches!(invocation.request, Some(Request::Query { query: Query::Status, .. })), "{command:?}");
+            assert_eq!(invocation.output, output, "{command:?}");
+        }
+    }
+
+    #[test]
+    fn queries_get_the_longer_budget_and_everything_else_the_hook_budget() {
+        for output in [Output::Status(StatusFormat::Tmux), Output::Status(StatusFormat::Json), Output::Status(StatusFormat::Text), Output::DndStatus] {
+            assert_eq!(output.budget(), QUERY_BUDGET, "{output:?}");
+        }
+        for output in [Output::FallbackOnFailure, Output::Silent, Output::Confirm(None), Output::Confirm(Some("x"))] {
+            assert_eq!(output.budget(), BUDGET, "{output:?}");
+        }
+        assert!(QUERY_BUDGET > BUDGET);
+    }
+
+    #[test]
+    fn agent_commands_keep_the_fallback_output() {
+        let command = Command::Send { kind: KindArg::Info, body: "Report ready".into() };
+        assert_eq!(plan_invocation(&command, &inputs(PaneLookup::NotInTmux, None)).output, Output::FallbackOnFailure);
+        assert_eq!(plan_invocation(&hook(), &inputs(PaneLookup::NotInTmux, Some(&payload("Stop", "")))).output, Output::FallbackOnFailure);
+    }
+
+    #[test]
+    fn only_agent_commands_read_the_origin() {
+        assert!(!Command::Jump.reads_origin());
+        assert!(!Command::Doctor.reads_origin());
+        assert!(!Command::Status { json: false, tmux: true }.reads_origin());
+        assert!(!Command::Dnd { action: DndAction::Off }.reads_origin());
+        assert!(!focus_changed("%1", "/tmp/s", FocusDirection::In).reads_origin());
+        assert!(Command::Send { kind: KindArg::Info, body: "x".to_string() }.reads_origin());
+        assert!(hook().reads_origin());
+        assert!(Command::Quiet { until: None, max_minutes: 120, off: true }.reads_origin());
     }
 
     proptest! {

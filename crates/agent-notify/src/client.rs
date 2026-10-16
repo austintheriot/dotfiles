@@ -11,6 +11,9 @@ use socket2::{Domain, SockAddr, Socket, Type};
 
 /// Connect, write and reply together. A hook must not hold up the agent.
 pub const BUDGET: Duration = Duration::from_millis(300);
+/// The budget for a read of daemon state. Nothing waits on it but the user,
+/// and the daemon answers a query within its own 1 s.
+pub const QUERY_BUDGET: Duration = Duration::from_secs(1);
 const MAX_REPLY_BYTES: u64 = 64 * 1024;
 
 /// What happened to one request.
@@ -67,7 +70,8 @@ impl Delivery {
     }
 }
 
-fn reply_code_name(code: ReplyCode) -> &'static str {
+/// The wire spelling of a refusal code, such as `unsupported_version`.
+pub fn reply_code_name(code: ReplyCode) -> &'static str {
     match code {
         ReplyCode::BadRequest => "bad_request",
         ReplyCode::UnsupportedVersion => "unsupported_version",
@@ -127,9 +131,12 @@ fn classify(error: &io::Error) -> Delivery {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_notify_core::status::{DaemonFacts, Decision, DndStatus, MAX_DECISIONS, SessionStatus, StatusReport, ToolStatus};
+    use agent_notify_core::{EpochMs, EventId, SessionId};
     use socket2::{Domain, SockAddr, Socket, Type};
     use std::io::{BufRead, BufReader};
     use std::os::unix::net::UnixListener;
+    use std::path::PathBuf;
 
     fn socket_dir() -> tempfile::TempDir {
         tempfile::Builder::new().prefix("an-client-").tempdir_in("/tmp").expect("a directory")
@@ -229,6 +236,51 @@ mod tests {
         if cfg!(target_os = "linux") {
             assert!(matches!(delivery, Delivery::TimedOut), "{delivery:?}");
         }
+    }
+
+    const REPORT_SESSIONS: usize = 40;
+
+    fn busy_status_report() -> StatusReport {
+        let tools = ["tmux", "aerospace", "afplay", "open", "ioreg"]
+            .iter()
+            .map(|name| ToolStatus { name: (*name).to_string(), path: Some(PathBuf::from(format!("/opt/homebrew/Cellar/{name}/10.20.30/bin/{name}"))) })
+            .collect();
+        let sessions = (0..REPORT_SESSIONS)
+            .map(|number| SessionStatus {
+                session: SessionId::parse(&format!("0f8e2c1a-5b7d-4e3f-9a6b-{number:012}")).expect("a session id"),
+                pane: Some(format!("%{}", 1000 + number)),
+                location: format!("{} · {}", 100 + number, "a-long-repository-name/feature-branch-with-a-long-descriptive-name"),
+                turn: "needs_you".to_string(),
+                quiet: "until next-prompt, at most 119 min 59 s more".to_string(),
+                card: Some("attention showing".to_string()),
+            })
+            .collect();
+        let decisions = (0..MAX_DECISIONS)
+            .map(|number| Decision {
+                at_ms: EpochMs(1_800_000_000_000),
+                event_id: EventId::from_parts(EpochMs(1_800_000_000_000), [u8::try_from(number).expect("under 256"); 10]),
+                kind: "focus_changed".to_string(),
+                outcome: "suppressed: do_not_disturb".to_string(),
+            })
+            .collect();
+        StatusReport {
+            daemon: DaemonFacts { stamp: "a".repeat(64), started_ms: EpochMs(1_800_000_000_000), tools },
+            now_ms: EpochMs(1_800_000_000_000),
+            dnd: DndStatus { on: true, until_ms: Some(EpochMs(1_800_000_000_000)) },
+            sessions,
+            decisions,
+        }
+    }
+
+    #[test]
+    fn a_busy_status_report_fits_in_one_reply() {
+        let report = busy_status_report();
+        assert_eq!(report.decisions.len(), MAX_DECISIONS);
+        let reply = Reply { data: Some(serde_json::to_value(&report).expect("a report encodes")), ..Reply::accepted(&report.daemon.stamp) };
+        let line = format!("{}\n", serde_json::to_string(&reply).expect("a reply encodes"));
+        let size = u64::try_from(line.len()).expect("a small line");
+        println!("a status reply with {REPORT_SESSIONS} sessions and {MAX_DECISIONS} decisions is {size} bytes, cap {MAX_REPLY_BYTES}");
+        assert!(size < MAX_REPLY_BYTES, "{size} bytes");
     }
 
     #[test]

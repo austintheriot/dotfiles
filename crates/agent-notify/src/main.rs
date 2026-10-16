@@ -10,12 +10,14 @@ mod context;
 mod fallback;
 mod invocation;
 mod log;
+mod render;
 mod tmux;
 
 use std::ffi::OsString;
 use std::io::{self, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::process::ExitCode;
+use std::time::Duration;
 
 use agent_notify_core::paths::{Platform, SocketLocation, log_directory, socket_location};
 use agent_notify_core::SessionId;
@@ -27,7 +29,7 @@ use clap::error::ErrorKind;
 use crate::cli::{Cli, Command};
 use crate::client::Delivery;
 use crate::context::EnvSnapshot;
-use crate::invocation::{Exit, Inputs, Invocation, PaneLookup};
+use crate::invocation::{Exit, Inputs, Invocation, Output, PaneLookup};
 
 fn main() -> ExitCode {
     let arguments: Vec<OsString> = std::env::args_os().collect();
@@ -75,6 +77,10 @@ fn run(arguments: &[OsString], env: &EnvSnapshot, is_hook: bool) -> ExitCode {
             return exit_code(Exit::Usage);
         }
     };
+    if matches!(cli.command, Command::Doctor) {
+        let _ = writeln!(io::stderr(), "agent-notify: doctor is not built yet");
+        return ExitCode::from(1);
+    }
     let inputs = context::gather(&cli.command, env, context::clock(), context::random_bytes());
     if env.trace {
         tracing::trace!(event_id = %inputs.event_id, stdin = ?inputs.stdin, "raw hook input");
@@ -152,8 +158,13 @@ fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &En
         tracing::warn!(event_id, reason = %reason, "tmux pane unreadable");
     }
     let Some(request) = &invocation.request else { return exit_code(invocation.exit) };
-    let attempt = attempt(request, |line| send(line, env));
+    let output = invocation.output;
+    let attempt = attempt(request, |line| send(line, env, output.budget()));
     match &attempt {
+        Ok(delivery) if output.is_query() => {
+            tracing::debug!(event_id, delivered = delivery.acknowledged(), reason = %delivery.reason(), daemon = delivery.daemon(), "sent");
+            tracing::debug!(event_id, request = ?request, "sent request");
+        }
         Ok(delivery) => {
             tracing::info!(
                 event_id,
@@ -169,10 +180,35 @@ fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &En
         }
         Err(error) => tracing::error!(event_id, event = fields.event, session_id = fields.session_id, pane = fields.pane, error = %error, "request did not encode"),
     }
-    if needs_fallback(&attempt) {
-        fall_back(command, invocation, event_id, &fields);
+    match output {
+        Output::FallbackOnFailure => {
+            if needs_fallback(&attempt) {
+                fall_back(command, invocation, event_id, &fields);
+            }
+            exit_code(invocation.exit)
+        }
+        Output::Silent => exit_code(invocation.exit),
+        Output::Confirm(message) => confirm(&attempt, message),
+        Output::Status(_) | Output::DndStatus => {
+            let _ = writeln!(io::stderr(), "agent-notify: status is not built yet");
+            ExitCode::from(1)
+        }
     }
-    exit_code(invocation.exit)
+}
+
+fn confirm(attempt: &Result<Delivery, serde_json::Error>, message: Option<&str>) -> ExitCode {
+    let problem = match attempt {
+        Ok(delivery) if delivery.acknowledged() => {
+            if let Some(message) = message {
+                let _ = writeln!(io::stdout(), "{message}");
+            }
+            return ExitCode::SUCCESS;
+        }
+        Ok(delivery) => render::delivery_problem(delivery),
+        Err(error) => format!("the request did not encode: {error}"),
+    };
+    let _ = writeln!(io::stderr(), "agent-notify: {problem}; run `agent-notify doctor`");
+    ExitCode::from(1)
 }
 
 fn attempt(request: &Request, send: impl FnOnce(&str) -> Delivery) -> Result<Delivery, serde_json::Error> {
@@ -183,9 +219,9 @@ fn needs_fallback(attempt: &Result<Delivery, serde_json::Error>) -> bool {
     !attempt.as_ref().is_ok_and(Delivery::acknowledged)
 }
 
-fn send(line: &str, env: &EnvSnapshot) -> Delivery {
+fn send(line: &str, env: &EnvSnapshot, budget: Duration) -> Delivery {
     match socket_location(&env.path_inputs()) {
-        SocketLocation::At(path) => client::deliver(&path, line, client::BUDGET),
+        SocketLocation::At(path) => client::deliver(&path, line, budget),
         SocketLocation::Unavailable(reason) => Delivery::NoSocket(reason),
     }
 }

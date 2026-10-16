@@ -319,3 +319,98 @@ fn stamp_answers_without_a_subcommand() {
     assert!(output.status.success());
     assert!(!output.stdout.is_empty());
 }
+
+const FOCUS_IN: [&str; 10] = ["focus-changed", "--socket", "/tmp/tmux-501/default", "--pid", "77", "--start-time", "1700000000", "--pane", "%3", "--in"];
+
+#[test]
+fn focus_changed_sends_a_control_and_prints_nothing() {
+    let sandbox = Sandbox::new();
+    let received = listen(&sandbox.socket, ReplyMode::Ack);
+    let output = sandbox.run(&mut sandbox.command(&FOCUS_IN), "");
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stdout.is_empty() && output.stderr.is_empty(), "{output:?}");
+    let line = received.join().expect("listener thread").expect("a request line");
+    let request: serde_json::Value = serde_json::from_str(&line).expect("JSON");
+    assert_eq!(request["control"]["type"], "focus_changed");
+    assert_eq!(request["control"]["pane"]["pane"], "%3");
+    assert_eq!(request["control"]["pane"]["server"]["socket_path"], "/tmp/tmux-501/default");
+    assert_eq!(request["control"]["focused"], true);
+}
+
+#[test]
+fn focus_changed_without_a_daemon_is_silent_and_succeeds() {
+    let sandbox = Sandbox::new();
+    let output = sandbox.run(&mut sandbox.command(&FOCUS_IN), "");
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stdout.is_empty() && output.stderr.is_empty(), "{output:?}");
+    assert!(sandbox.fallback_calls().is_empty());
+}
+
+#[test]
+fn focus_changed_does_not_read_the_current_pane() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("tmux", "#!/bin/sh\nexec sleep 30\n");
+    let output = sandbox.run(sandbox.command(&FOCUS_IN).env("TMUX", "/tmp/an-wedged/sock,1,0").env("TMUX_PANE", "%1"), "");
+    assert!(output.status.success(), "{output:?}");
+    let log = sandbox.log_text();
+    assert!(log.contains(" sent"), "a positive control: the command ran to the send in {log}");
+    assert!(!log.contains("tmux pane unreadable"), "{log}");
+}
+
+#[test]
+fn dnd_on_without_a_daemon_fails_and_names_doctor() {
+    let sandbox = Sandbox::new();
+    let output = sandbox.run(&mut sandbox.command(&["dnd", "on"]), "");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("agent-notify doctor"), "{output:?}");
+    assert!(sandbox.fallback_calls().is_empty());
+}
+
+#[test]
+fn dnd_on_with_a_daemon_confirms() {
+    let sandbox = Sandbox::new();
+    let received = listen(&sandbox.socket, ReplyMode::Ack);
+    let output = sandbox.run(&mut sandbox.command(&["dnd", "on", "--for-minutes", "30"]), "");
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "do-not-disturb is on");
+    let line = received.join().expect("listener thread").expect("a request line");
+    assert!(line.contains("\"for_minutes\":30"), "{line}");
+}
+
+#[test]
+fn a_rejected_jump_fails_and_names_the_reason_and_doctor() {
+    let sandbox = Sandbox::new();
+    let _listener = listen(&sandbox.socket, ReplyMode::Reject);
+    let output = sandbox.run(&mut sandbox.command(&["jump"]), "");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("refused") && stderr.contains("unknown_kind") && stderr.contains("agent-notify doctor"), "{stderr}");
+    assert!(output.stdout.is_empty(), "{output:?}");
+    assert!(sandbox.fallback_calls().is_empty());
+}
+
+/// Task 6 replaces the "not built yet" exit, and must add a stdout assertion here.
+fn status_tmux_log(level: &str) -> String {
+    let sandbox = Sandbox::new();
+    let received = listen(&sandbox.socket, ReplyMode::Reply(r#"{"ok":true,"daemon":"test","data":{}}"#.to_string()));
+    let _output = sandbox.run(sandbox.command(&["status", "--tmux"]).env("AGENT_NOTIFY_LOG", level), "");
+    let line = received.join().expect("listener thread").expect("a request line");
+    assert!(line.contains(r#""query":"status""#), "{line}");
+    sandbox.log_text()
+}
+
+#[test]
+fn an_answered_status_tmux_writes_nothing_at_info() {
+    let info_log = status_tmux_log("info");
+    assert_eq!(info_log.lines().count(), 0, "{info_log}");
+    let debug_log = status_tmux_log("debug");
+    assert!(debug_log.contains(" sent") && debug_log.contains("delivered=true"), "a positive control: the query was logged at debug in {debug_log}");
+}
+
+#[test]
+fn doctor_is_not_built_yet() {
+    let sandbox = Sandbox::new();
+    let output = sandbox.run(&mut sandbox.command(&["doctor"]), "");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("not built yet"), "{output:?}");
+}

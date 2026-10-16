@@ -22,7 +22,6 @@ pub struct Rect {
 /// The panel frame for content `content_height_px` tall (CSS pixels equal
 /// points) in the screen's `visible` frame, which excludes the menu bar.
 #[must_use]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in Task 16"))]
 pub fn panel_frame(visible: Rect, content_height_px: u32) -> Rect {
     let width = PANEL_WIDTH.min(visible.width - 2.0 * MARGIN).max(1.0);
     let height = f64::from(content_height_px).min(visible.height - 2.0 * MARGIN).max(1.0);

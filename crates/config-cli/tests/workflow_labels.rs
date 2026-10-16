@@ -228,8 +228,8 @@ fn the_matrix_includes_a_linux_runner() {
     );
 }
 
-/// macOS reaches notify.test.sh, which drives .claude/hooks/notify.sh, and
-/// the Darwin-gated Alacritty app-bundle check in deps-manifest.test.sh.
+/// macOS reaches the Darwin-gated Alacritty app-bundle check in
+/// deps-manifest.test.sh.
 /// Deleting this entry once left a whole-file grep green.
 #[test]
 fn the_matrix_includes_a_macos_runner() {

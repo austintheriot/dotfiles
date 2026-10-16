@@ -8,8 +8,8 @@ name: Test suite (linux + macOS)
 #
 # Both platforms are required, because each covers assertions the other
 # cannot:
-#   - macOS reaches notify.test.sh, which drives .claude/hooks/notify.sh, and
-#     the Darwin-gated Alacritty app-bundle check in deps-manifest.test.sh.
+#   - macOS reaches the Darwin-gated Alacritty app-bundle check in
+#     deps-manifest.test.sh.
 #   - Linux is where the container harness (container.test.sh,
 #     run-in-docker.sh) is exercised; GitHub's macOS runners ship no Docker
 #     daemon.

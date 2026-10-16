@@ -30,10 +30,5 @@ on the older build.
 
 ## Claude Code notifications
 
-Not wired up here. The mac hook drives aerospace and osascript, both of which
-are macOS-only, so `~/.claude/hooks/notify.sh` only ever fires on a mac.
-
-If picking this back up: WSLg gives this box a live `DISPLAY` and
-`WAYLAND_DISPLAY`, so `notify-send` (apt package `libnotify-bin`) can fire a
-native notification, or `powershell.exe` can be called through WSL interop for
-a Windows toast.
+Not wired up yet. tools/agent-notify runs on macOS only until its Linux plan
+lands. The CLI's fallback (notify-send) works on Pop!_OS COSMIC today.

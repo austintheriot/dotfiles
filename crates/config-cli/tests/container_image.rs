@@ -552,44 +552,6 @@ fn the_runtime_stage_installs_the_pinned_toolchain_at_build_time() {
     );
 }
 
-/// The notify tests reach the platform only through injected stubs, so the
-/// image needs no exclusion for them.
-///
-/// # Why this replaced an exclusion assertion
-///
-/// The shell harness globbed `tests/*.test.sh`, so a suite that could not pass
-/// on Linux had to be DELETED from the image to keep the runner's suite count
-/// honest, and this test asserted that `RUN rm -f .../notify.test.sh` was
-/// present. The 2026-09-11 harness deletion removed both the glob and the
-/// `rm`, so asserting the exclusion would now pin a line that must not exist.
-///
-/// `notify.rs` addresses aerospace and osascript through `AEROSPACE_BIN` and
-/// `OSASCRIPT_BIN` and points both at stubs it writes itself, so it runs on
-/// Linux like any other test. THAT is the property worth holding: the moment
-/// a notify test shells out to a real macOS binary, it becomes a false
-/// negative in this image, and this test goes red instead.
-#[test]
-fn the_notify_tests_reach_the_platform_only_through_stubs() {
-    let source = read(&repo_root().join("crates/config-cli/tests/notify.rs"));
-    assert!(
-        source.contains("AEROSPACE_BIN") && source.contains("OSASCRIPT_BIN"),
-        "positive control: notify.rs no longer names the two indirection \
-         variables, so this test is reading the wrong file"
-    );
-
-    let direct: Vec<&str> = source
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.starts_with("//"))
-        .filter(|line| line.contains("Command::new(\"osascript\")") || line.contains("Command::new(\"aerospace\")"))
-        .collect();
-    assert!(
-        direct.is_empty(),
-        "notify.rs invokes a real macOS binary by name, so it cannot pass in \
-         the Linux container and becomes a false negative there: {direct:?}"
-    );
-}
-
 // --- the runner never mutates the real HOME -------------------------------
 
 /// The runner does not bind-mount `$HOME` read-write.

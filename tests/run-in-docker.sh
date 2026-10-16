@@ -27,9 +27,9 @@
 # checked-out branch). The working-tree overlay is skipped when it names
 # anything else, so the container tests that ref as committed.
 #
-# This does not replace a host run on macOS. The notify tests are macOS-only
-# (aerospace and osascript) and skip inside the image, so a green container
-# run does not cover them. The python unit tests and the clippy leg are absent
+# This does not replace a host run on macOS. The Alacritty app-bundle check is
+# Darwin-gated and skips inside the image, so a green container run does not
+# cover it. The python unit tests and the clippy leg are absent
 # too; both keep their own gates (test-suite.yml on the runner, and
 # tests/rust-checks.sh against the pushed ref).
 

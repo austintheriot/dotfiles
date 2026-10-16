@@ -79,13 +79,14 @@ const EXCLUDES: &str = "SC1091,SC2016";
 /// Measured, not guessed: 24 tracked `*.sh` paths minus the 5 zsh exclusions
 /// is 19. It was 24 against 29 tracked paths until 2026-09-11, when deleting
 /// the shell harness removed five: `tests/lib.sh`, `tests/run-all.sh`, and
-/// three `*.test.sh` suites whose subject was the harness itself.
+/// three `*.test.sh` suites whose subject was the harness itself. It dropped
+/// to 18 on 2026-10-16, when agent-notify replaced `.claude/hooks/notify.sh`.
 ///
 /// An earlier value of 25 was above what a broken discovery step could reach
 /// and below what a whole-repo walk would reach, so it failed loudly only
 /// after discovery was fixed. Keep this at the real count minus the
 /// exclusions, never above it.
-const MINIMUM_LINTED: usize = 19;
+const MINIMUM_LINTED: usize = 18;
 
 /// True when this run is a place the lint has to gate rather than an ad-hoc
 /// host run.

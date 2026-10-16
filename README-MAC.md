@@ -66,17 +66,12 @@ defaults write com.apple.spaces spans-displays -bool true && killall SystemUISer
 
 ## Claude Code notifications
 
-Claude Code fires an OS-level notification when it finishes a turn, but only
-when the active tmux pane in the frontmost Alacritty window is *not* the one
-running Claude.
+`agent-notifyd` (`tools/agent-notify`) shows a card at the top right when a
+Claude Code session finishes or needs you, and a click switches tmux to that
+session's pane and raises Alacritty. The `agent-notify` plugin's hooks send
+the events; agents can also call `agent-notify send` themselves.
 
-Wired up via the `Stop` hook in `~/.claude/settings.json`, which calls
-`~/.claude/hooks/notify.sh`. The script uses `aerospace list-windows --focused`
-plus `tmux display -p '#{pane_active}#{window_active}'` to decide whether to
-suppress the notification, then fires it via `osascript -e 'display
-notification ...'` (notifications appear under "Script Editor").
-
-`terminal-notifier` was tried first but its notifications were silently
-dropped on this machine despite Settings showing them as enabled — a known
-issue with its bundle on recent macOS. osascript Just Works and needs no
-permission setup.
+Install or update it with `config build --tools`. It runs as the launch
+agent `dev.dotfiles.agent-notifyd`. `agent-notify doctor` checks the setup,
+`agent-notify dnd on` silences it, and Meta-n jumps to the newest card's
+pane. Logs are in `~/Library/Logs/agent-notify/`.

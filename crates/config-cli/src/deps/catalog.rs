@@ -347,6 +347,30 @@ pub fn packages() -> PackageCatalog {
 
     insert(
         &mut catalog,
+        "cargo-deny",
+        per_manager(vec![
+            (PackageManager::Brew, named("cargo-deny")),
+            // Listed in deps-mac.toml only until the agent-notify install runs on Linux.
+            (
+                PackageManager::Apt,
+                PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
+                    manager: PackageManager::Apt,
+                }),
+            ),
+            (
+                PackageManager::Pacman,
+                PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
+                    manager: PackageManager::Pacman,
+                }),
+            ),
+        ]),
+        PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
+            manager: PackageManager::Unknown,
+        }),
+    );
+
+    insert(
+        &mut catalog,
         "notify-send",
         per_manager(vec![
             (PackageManager::Apt, named("libnotify-bin")),
@@ -714,7 +738,7 @@ mod tests {
         // Positive control. Validation below passes vacuously against an
         // empty or partial union, so assert the union really spans all four
         // files first, naming one dependency exclusive to each.
-        assert_eq!(known.len(), 30, "the union must cover every conf file");
+        assert_eq!(known.len(), 31, "the union must cover every conf file");
         assert!(known.contains(&name("git")), "deps.toml entries are present");
         assert!(
             known.contains(&name("zsh-login-shell")),

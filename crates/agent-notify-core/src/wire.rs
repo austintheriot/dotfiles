@@ -1,8 +1,13 @@
 //! The request and reply that cross the Unix socket, one JSON object per line.
 //!
-//! Evolution: an added optional field keeps `v`. An unknown variant decodes to
-//! `Unknown` and the daemon replies `unknown_kind`. A removed or renamed field
-//! or variant, or a changed meaning, increments `v`.
+//! Evolution: an added optional field keeps `v`, and unknown fields are
+//! ignored. An unknown value of an enum that has an `Unknown` variant decodes
+//! to `Unknown`, and the daemon replies `unknown_kind` for an unknown request
+//! or event type. The closed enums (`Kind`, `QuietUntil`, `DndCommand`,
+//! `RepoHead`) have no `Unknown` variant: an unknown value there fails the
+//! decode of the whole request, the daemon replies `ok:false`, and the CLI
+//! falls back. A removed or renamed field or variant, or a changed meaning,
+//! increments `v`.
 
 use std::path::PathBuf;
 

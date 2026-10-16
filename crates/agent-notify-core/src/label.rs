@@ -38,7 +38,8 @@ pub fn location_line(window: Option<&WindowLabel>, repo: Option<&RepoInfo>, cwd:
 /// The first sentence of `text`, as a prefix of the trimmed text.
 ///
 /// Ends at `.`, `!` or `?` followed by whitespace or the end (not after a
-/// common abbreviation), at a CJK full stop, or at a line break. A leading
+/// common abbreviation), at a CJK full stop, or at a line break (`\n`, `\r`
+/// or U+2028). A leading
 /// code fence runs to its closing fence.
 #[must_use]
 pub fn first_sentence(text: &str) -> &str {
@@ -49,7 +50,7 @@ pub fn first_sentence(text: &str) -> &str {
     for (index, character) in trimmed.char_indices() {
         let end = index + character.len_utf8();
         match character {
-            '\n' => return trimmed[..index].trim_end(),
+            '\n' | '\r' | '\u{2028}' => return trimmed[..index].trim_end(),
             '。' | '！' | '？' => return &trimmed[..end],
             '.' | '!' | '?' => {
                 let at_boundary = trimmed[end..].chars().next().is_none_or(char::is_whitespace);
@@ -132,6 +133,9 @@ mod tests {
             ("Bumped to v1.2.3 today. Next.", "Bumped to v1.2.3 today."),
             ("See https://example.com/a.b/c for details. More.", "See https://example.com/a.b/c for details."),
             ("Summary line\nSecond line.", "Summary line"),
+            ("Summary line\rSecond line.", "Summary line"),
+            ("Summary line\r\nSecond line.", "Summary line"),
+            ("Summary line\u{2028}Second line.", "Summary line"),
             ("- Fixed X\n- Fixed Y", "- Fixed X"),
             ("完了しました。次へ", "完了しました。"),
             ("Is it green? Yes.", "Is it green?"),

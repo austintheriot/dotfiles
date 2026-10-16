@@ -160,7 +160,9 @@ pub enum Effect {
     },
     /// Save do-not-disturb to disk.
     PersistDnd(Dnd),
-    /// An event made no new card, and why. Goes to the log and `status`.
+    /// An agent event put no new card on screen, and why. Under
+    /// [`SuppressReason::Dnd`] the new card is stored but held off screen.
+    /// For every other reason no new card exists. Goes to the log and `status`.
     Suppressed {
         /// The event.
         event_id: EventId,
@@ -198,22 +200,30 @@ pub enum PaneState {
     Failed,
 }
 
-/// Why an event made no new card.
+/// Why an agent event put no new card on screen. These are the reasons
+/// [`update`] emits. A snoozed card has no reason of its own: a new offer
+/// replaces it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SuppressReason {
-    /// The agent already sent its own notification this turn.
+    /// `TurnEnded`: the agent already called `send` this turn. No card.
     ExplicitSent,
-    /// The session is quiet.
+    /// `TurnEnded` while the session is quiet. No card.
     Quiet,
-    /// An attention card outranks the new info card.
+    /// The session's visible attention card outranks the new info card. The
+    /// new card is dropped and the attention card stays.
     Outranked,
-    /// The user is looking at the pane.
+    /// The focus facts at arrival say the user is looking at the pane. No card.
     Focused,
-    /// Do-not-disturb holds the card off screen.
+    /// Do-not-disturb is on. The new card is stored but held off screen.
     Dnd,
-    /// The event belongs to an older or already-ended turn.
+    /// The event belongs to a turn that already ended, to another prompt
+    /// (`TurnEnded`), or to an unseen prompt sent at or before the current
+    /// turn's start. No card, and the turn does not change.
     Stale,
-    /// The event never makes a card.
+    /// The event kind never makes a card: a session start or end, a turn
+    /// start, quiet on or off, a resolved input, or an event other than
+    /// `send` without a session. A turn start, and a resolved elicitation,
+    /// also clear the session's card.
     NoCardForEvent,
 }
 

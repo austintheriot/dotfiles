@@ -13,7 +13,8 @@ pub const DISPLAY_TEXT_MAX_BYTES: usize = 4096;
 pub struct DisplayText(String);
 
 impl DisplayText {
-    /// Removes control, bidi and zero-width characters, then cuts to
+    /// Removes control, bidi, zero-width, line and paragraph separator, soft
+    /// hyphen, interlinear annotation and tag characters, then cuts to
     /// [`DISPLAY_TEXT_MAX_BYTES`] on a character boundary.
     #[must_use]
     pub fn new(raw: &str) -> Self {
@@ -53,16 +54,21 @@ impl From<DisplayText> for String {
 }
 
 /// `\n` survives because a card body's first sentence ends at a line break.
+/// Tag characters (U+E0000 to U+E007F) can spell text no one sees.
 fn is_removed(character: char) -> bool {
     (character.is_control() && character != '\n')
         || matches!(
             character,
-            '\u{061C}'
+            '\u{00AD}'
+                | '\u{061C}'
+                | '\u{180E}'
                 | '\u{200B}'..='\u{200F}'
-                | '\u{202A}'..='\u{202E}'
+                | '\u{2028}'..='\u{202E}'
                 | '\u{2060}'..='\u{2064}'
                 | '\u{2066}'..='\u{2069}'
                 | '\u{FEFF}'
+                | '\u{FFF9}'..='\u{FFFB}'
+                | '\u{E0000}'..='\u{E007F}'
         )
 }
 
@@ -80,6 +86,30 @@ mod tests {
     #[test]
     fn removes_terminal_control_characters() {
         assert_eq!(DisplayText::new("a\u{1b}[31mred\u{7}\u{9b}").as_str(), "a[31mred");
+    }
+
+    #[test]
+    fn removes_every_invisible_or_hiding_class() {
+        let cases = [
+            ("tab", "a\tb", "ab"),
+            ("carriage return", "a\rb", "ab"),
+            ("carriage return before a newline", "a\r\nb", "a\nb"),
+            ("line separator", "a\u{2028}b", "ab"),
+            ("paragraph separator", "a\u{2029}b", "ab"),
+            ("language tag", "a\u{E0001}b", "ab"),
+            ("tag characters that spell hidden text", "a\u{E0068}\u{E0069}\u{E007F}b", "ab"),
+            ("first tag code point", "a\u{E0000}b", "ab"),
+            ("soft hyphen", "a\u{00AD}b", "ab"),
+            ("mongolian vowel separator", "a\u{180E}b", "ab"),
+            ("interlinear annotation anchor", "a\u{FFF9}b", "ab"),
+            ("interlinear annotation separator", "a\u{FFFA}b", "ab"),
+            ("interlinear annotation terminator", "a\u{FFFB}b", "ab"),
+            ("just past the tag block stays", "a\u{E0080}b", "a\u{E0080}b"),
+            ("the replacement character stays", "a\u{FFFD}b", "a\u{FFFD}b"),
+        ];
+        for (name, raw, expected) in cases {
+            assert_eq!(DisplayText::new(raw).as_str(), expected, "{name}");
+        }
     }
 
     #[test]

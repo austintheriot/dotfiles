@@ -33,7 +33,8 @@ pub struct AttachRequest {
     pub tmux: PathBuf,
     /// The tmux server socket.
     pub socket: PathBuf,
-    /// The tmux session to attach.
+    /// The tmux session id to attach, for example `$3`. Pass it as `-t`
+    /// as it is: the `=` prefix matches names only.
     pub session: String,
 }
 

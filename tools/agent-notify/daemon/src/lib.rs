@@ -5,8 +5,10 @@
 pub mod aerospace;
 pub mod child;
 pub mod environment;
+pub mod focus_run;
 pub mod presence;
 pub mod services;
+pub mod tmux;
 pub mod tools;
 
 #[cfg(test)]

@@ -109,6 +109,37 @@ fn a_non_ascii_window_name_survives_a_c_locale() {
     assert_eq!(origin.window.map(|window| window.name.as_str().to_string()), Some("café".to_string()));
 }
 
+/// The daemon keys every record by the socket path the CLI sends and reads
+/// tmux with `#{socket_path}`, so the two must match byte for byte with no
+/// canonicalization on either side.
+#[test]
+fn the_socket_path_from_tmux_env_is_byte_equal_to_the_servers_socket_path() {
+    let pane = Pane::new("an-sockpath");
+    let directory = tempfile::tempdir().expect("a directory");
+    let recorded = directory.path().join("tmux-env");
+    let script = format!("printf %s \"$TMUX\" > '{}.tmp' && mv '{0}.tmp' '{0}'; exec sleep 600", recorded.display());
+    let window = pane.server.stdout(&["new-window", "-d", "-t", "main", "-P", "-F", "#{pane_id}", "/bin/sh", "-c", &script]);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !recorded.exists() {
+        assert!(std::time::Instant::now() < deadline, "the pane never wrote $TMUX");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let tmux_value = std::fs::read_to_string(&recorded).expect("the recorded $TMUX");
+    let sandbox = Sandbox::new();
+    let received = listen(&sandbox.socket, ReplyMode::Ack);
+    let mut command = sandbox.command(&["send", "--kind", "info", "--body", "Report ready"]);
+    command.env("TMUX", &tmux_value).env("TMUX_PANE", &window);
+    let output = sandbox.run(&mut command, "");
+    assert!(output.status.success(), "{output:?}");
+    let line = received.join().expect("listener thread").expect("a request line");
+    let Ok(Request::Agent { origin, .. }) = decode_request(line.trim_end()) else {
+        panic!("expected an agent request: {line}");
+    };
+    let sent = origin.pane.expect("the pane facts").server.socket_path;
+    let reported = pane.server.stdout(&["display-message", "-p", "#{socket_path}"]);
+    assert_eq!(sent.as_path().as_os_str().as_encoded_bytes(), reported.as_bytes(), "$TMUX was {tmux_value:?}");
+}
+
 #[test]
 fn send_carries_the_pane_tags_and_the_window() {
     let pane = Pane::new("an-send");

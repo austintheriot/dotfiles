@@ -21,7 +21,8 @@ pub struct WorldPane {
     pub pane: PaneId,
     /// `@agent_notify_session`.
     pub session_tag: Option<SessionId>,
-    /// The tmux session that holds the pane.
+    /// `#{session_id}` of the session that holds the pane, for example `$3`.
+    /// tmux escapes a printed name but never an id, so the id is the target.
     pub tmux_session: String,
 }
 
@@ -30,7 +31,7 @@ pub struct WorldPane {
 pub struct WorldClient {
     /// `#{client_tty}`.
     pub tty: String,
-    /// `#{client_session}`.
+    /// `#{session_id}` of the client's attached session, for example `$3`.
     pub tmux_session: String,
     /// `#{client_activity}`.
     pub activity: i64,
@@ -65,7 +66,7 @@ pub enum TmuxSwitch {
     },
     /// No client: start the terminal attached to the session.
     AttachNewTerminal {
-        /// The tmux session.
+        /// The tmux session id, for example `$3`, written `-t '$3'` with no `=`.
         tmux_session: String,
     },
 }

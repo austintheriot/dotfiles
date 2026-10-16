@@ -66,7 +66,8 @@ impl DndStore {
         }
     }
 
-    /// Writes `dnd` to a temporary file, then renames it over the old one.
+    /// Writes `dnd` to a temporary file, syncs it to disk, then renames it
+    /// over the old one. A failed write or rename removes the temporary file.
     ///
     /// # Errors
     ///
@@ -76,9 +77,22 @@ impl DndStore {
             fs::create_dir_all(directory)?;
         }
         let temporary = self.path.with_extension("json.tmp");
-        fs::write(&temporary, dnd_to_text(dnd))?;
-        fs::rename(&temporary, &self.path)
+        let written = write_synced(&temporary, dnd_to_text(dnd).as_bytes()).and_then(|()| fs::rename(&temporary, &self.path));
+        if written.is_err()
+            && let Err(error) = fs::remove_file(&temporary)
+            && error.kind() != io::ErrorKind::NotFound
+        {
+            tracing::warn!(%error, path = %temporary.display(), "the temporary DND file was not removed");
+        }
+        written
     }
+}
+
+// Without the sync, APFS can apply the rename before the data after a power loss, which leaves an empty file.
+fn write_synced(path: &std::path::Path, bytes: &[u8]) -> io::Result<()> {
+    let mut file = fs::File::create(path)?;
+    io::Write::write_all(&mut file, bytes)?;
+    file.sync_all()
 }
 
 #[cfg(test)]
@@ -120,6 +134,17 @@ mod tests {
         assert_eq!(store.load(), dnd);
         let names: Vec<String> =
             fs::read_dir(directory.path().join("state")).expect("lists").flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).collect();
+        assert_eq!(names, vec!["dnd.json".to_string()]);
+    }
+
+    #[test]
+    fn a_failed_rename_leaves_no_temp_file() {
+        let directory = tempfile::tempdir().expect("a directory");
+        let blocking = directory.path().join("dnd.json");
+        fs::create_dir(&blocking).expect("a directory where the file goes");
+        fs::write(blocking.join("keep"), "x").expect("writes");
+        assert!(DndStore::new(blocking).save(&Dnd::On { until: None }).is_err(), "a rename over a directory fails");
+        let names: Vec<String> = fs::read_dir(directory.path()).expect("lists").flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).collect();
         assert_eq!(names, vec!["dnd.json".to_string()]);
     }
 }

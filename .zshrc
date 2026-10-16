@@ -22,15 +22,19 @@
 
 # Lines configured by zsh-newuser-install
 HISTFILE=~/.histfile
-HISTSIZE=10000      # Number of commands to keep in memory during session
-SAVEHIST=10000      # Number of commands to save to history file
+HISTSIZE=100000     # Number of commands to keep in memory during session
+SAVEHIST=100000     # Number of commands to save to history file
 setopt beep extendedglob nomatch notify
 unsetopt autocd
 
 # History search and sharing options
-setopt HIST_IGNORE_ALL_DUPS  # Don't record duplicate commands in history
+# HIST_IGNORE_ALL_DUPS is deliberately off: it erases the earlier copy of a rerun command,
+# so Up-arrow loses commands from their original place in the sequence.
+setopt HIST_IGNORE_DUPS      # Skip only an immediate repeat of the previous command
 setopt HIST_FIND_NO_DUPS     # Don't show duplicates when searching history
-setopt SHARE_HISTORY         # Share command history between all tmux panes/sessions
+# INC_APPEND_HISTORY instead of SHARE_HISTORY: write each command at once, but keep Up-arrow
+# and Ctrl+R per pane. A new pane (or `fc -RI`) loads every pane's commands.
+setopt INC_APPEND_HISTORY
 
 # Enables zsh to send the correct word-navigation command for Alt+Left/Right arrow keys
 bindkey '\e[1;3D' backward-word  # Alt+Left

@@ -68,7 +68,15 @@ impl Server {
             socket_dir.path().display()
         );
 
+        std::fs::write(socket_dir.path().join(HERMETIC_CONFIG_NAME), HERMETIC_CONFIG).expect("the fixture's tmux config is written");
+
         Server { socket, socket_dir }
+    }
+
+    /// The config file every server this fixture starts loads instead of
+    /// the developer's own.
+    fn config_path(&self) -> PathBuf {
+        self.socket_dir.path().join(HERMETIC_CONFIG_NAME)
     }
 
     /// The socket name, for handing to the binary under test through
@@ -137,9 +145,17 @@ impl Server {
     /// assertion is about to read. Fixed once in `8591f242` for the shell
     /// suite; a conversion that spawns shells here brings the race back,
     /// and it presents as flakiness rather than as a failure.
+    ///
+    /// The session starts the server with the fixture's own config, never
+    /// the developer's: that config runs a plugin manager, installs global
+    /// hooks and sets the window base index, so suites depended on the
+    /// machine they ran on.
     pub fn new_session(&self, name: &str, directory: &Path) {
         let directory = directory.to_str().expect("a utf-8 directory");
+        let config = self.config_path();
         let pane = self.stdout(&[
+            "-f",
+            config.to_str().expect("a utf-8 config path"),
             "new-session",
             "-d",
             "-s",
@@ -320,6 +336,13 @@ pub fn shared_socket_path(socket: &str) -> PathBuf {
     let uid = String::from_utf8(uid.stdout).expect("utf-8");
     PathBuf::from(format!("/tmp/tmux-{}/{socket}", uid.trim()))
 }
+
+/// The fixture config's file name inside the socket directory.
+const HERMETIC_CONFIG_NAME: &str = "fixture.tmux.conf";
+
+/// The only settings a fixture server has beyond tmux's defaults. Suites
+/// target windows as `<session>:1`, so the base indexes stay at 1.
+const HERMETIC_CONFIG: &str = "set -g base-index 1\nset -g pane-base-index 1\n";
 
 /// The command a test window runs instead of an interactive shell.
 ///

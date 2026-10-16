@@ -149,3 +149,28 @@ fn hook_isolation_installs_a_no_op_rather_than_an_empty_string() {
 
     server.shutdown();
 }
+
+/// A server the fixture starts loads none of the developer's tmux config,
+/// and still numbers windows and panes from 1.
+///
+/// The developer's config installs global hooks and runs a plugin manager,
+/// which made the suites depend on the machine. The suites' targets
+/// (`probe:1`) are written against base index 1, so the fixture pins that
+/// one setting itself.
+#[test]
+fn a_started_server_loads_no_user_config_and_counts_from_one() {
+    let server = Server::new("hermetic");
+    server.new_session("probe", server.socket_dir());
+
+    let global_hooks = server.stdout(&["show-hooks", "-g"]);
+    assert!(
+        !global_hooks.contains("run-shell"),
+        "a fixture server must not carry the user's global hooks: {global_hooks:?}"
+    );
+    let plugins = server.stdout(&["show-options", "-g", "@plugin"]);
+    assert!(plugins.is_empty(), "a fixture server must not load plugins: {plugins:?}");
+    assert_eq!(server.stdout(&["display-message", "-p", "-t", "probe:", "#{window_index}"]), "1");
+    assert_eq!(server.stdout(&["display-message", "-p", "-t", "probe:", "#{pane_index}"]), "1");
+
+    server.shutdown();
+}

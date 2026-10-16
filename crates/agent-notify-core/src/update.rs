@@ -4,12 +4,10 @@
 //! every update and pushes the result.
 
 use crate::label::{location_line, turn_ended_body, turn_failed_body};
-use crate::state::{Card, CardCause, CardNote, CardPhase, DaemonState, Dnd, FocusedPane, OneoffCard, QuietMode, SessionRecord, Turn};
+use crate::state::{Card, CardCause, CardNote, CardPhase, DaemonState, Dnd, FocusedPane, InfoLifetime, OneoffCard, QuietMode, SessionRecord, Turn};
 use crate::wire::{AgentEvent, Control, DndCommand, InputReason, Kind, Origin, QuietUntil, Request};
 use crate::{CardId, DisplayText, EpochMs, EventId, PaneId, PaneKey, PromptId, ServerId, SessionId};
 
-/// How long an info card shows before it folds.
-pub const INFO_SHOW_MS: i64 = 6_000;
 /// Extra time before a fold, for a hover message still in transit.
 pub const HOVER_GRACE_MS: i64 = 300;
 /// The least time left on an info card after the pointer leaves the stack.
@@ -334,7 +332,7 @@ fn agent_event(state: &mut DaemonState, arrival: Arrival, focus: &FocusSnapshot,
         effects.push(Effect::Suppressed { event_id, reason: SuppressReason::NoCardForEvent });
         return;
     }
-    let dnd = state.dnd_active(now);
+    let context = OfferContext { now, dnd: state.dnd_active(now), info_lifetime: state.info_lifetime };
     let record = state.sessions.entry(session).or_insert_with(|| SessionRecord::new(&origin));
     let stepped = step(record, origin.prompt.as_ref(), event, sent_at, now);
     if !stepped.is_stale() {
@@ -345,7 +343,7 @@ fn agent_event(state: &mut DaemonState, arrival: Arrival, focus: &FocusSnapshot,
             if is_suppressed_by_focus(focus, record.pane.as_ref()) {
                 effects.push(Effect::Suppressed { event_id, reason: SuppressReason::Focused });
             } else {
-                offer_card(&mut record.card, offer, event_id, now, dnd, &mut state.last_sound_at, effects);
+                offer_card(&mut record.card, offer, event_id, context, &mut state.last_sound_at, effects);
             }
         }
         Step::Clear => {
@@ -378,9 +376,9 @@ fn oneoff_event(state: &mut DaemonState, event_id: EventId, origin: &Origin, eve
         effects.push(Effect::Suppressed { event_id, reason: SuppressReason::Focused });
         return;
     }
-    let dnd = state.dnd_active(now);
+    let context = OfferContext { now, dnd: state.dnd_active(now), info_lifetime: state.info_lifetime };
     let mut slot = None;
-    offer_card(&mut slot, CardOffer { kind, cause: CardCause::Explicit, body }, event_id, now, dnd, &mut state.last_sound_at, effects);
+    offer_card(&mut slot, CardOffer { kind, cause: CardCause::Explicit, body }, event_id, context, &mut state.last_sound_at, effects);
     if let Some(card) = slot {
         state.oneoff_cards.push(OneoffCard {
             location: location_line(origin.window.as_ref(), origin.repo.as_ref(), &origin.cwd),
@@ -586,7 +584,15 @@ fn current_prompt(turn: &Turn, prompt: Option<&PromptId>) -> Option<PromptId> {
     prompt.cloned().or_else(|| turn.prompt().cloned())
 }
 
-fn offer_card(slot: &mut Option<Card>, offer: CardOffer, event_id: EventId, now: EpochMs, dnd: bool, last_sound_at: &mut Option<EpochMs>, effects: &mut Vec<Effect>) {
+#[derive(Clone, Copy)]
+struct OfferContext {
+    now: EpochMs,
+    dnd: bool,
+    info_lifetime: InfoLifetime,
+}
+
+fn offer_card(slot: &mut Option<Card>, offer: CardOffer, event_id: EventId, context: OfferContext, last_sound_at: &mut Option<EpochMs>, effects: &mut Vec<Effect>) {
+    let OfferContext { now, dnd, info_lifetime } = context;
     let incoming = Card {
         id: CardId::for_event(&event_id),
         kind: offer.kind,
@@ -594,7 +600,7 @@ fn offer_card(slot: &mut Option<Card>, offer: CardOffer, event_id: EventId, now:
         body: offer.body,
         event_id: event_id.clone(),
         created: now,
-        phase: CardPhase::Showing { fade_at: (offer.kind == Kind::Info).then(|| now.plus_ms(INFO_SHOW_MS)) },
+        phase: CardPhase::Showing { fade_at: if offer.kind == Kind::Info { info_lifetime.fade_at(now) } else { None } },
         note: None,
     };
     match merge(slot.take(), incoming) {
@@ -1386,19 +1392,42 @@ mod tests {
         card(state, name).map(|shown| shown.phase.clone())
     }
 
+    const SHOW_MS: i64 = 6_000;
+
+    fn folding_after_show_ms() -> DaemonState {
+        DaemonState { info_lifetime: InfoLifetime::FoldAfter { show_ms: SHOW_MS }, ..DaemonState::default() }
+    }
+
     #[test]
-    fn an_info_card_folds_after_its_show_time_plus_grace() {
+    fn by_default_an_info_card_stays_until_the_user_handles_it() {
         let mut state = DaemonState::default();
         send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
-        tick(&mut state, INFO_SHOW_MS + HOVER_GRACE_MS - 1);
+        tick(&mut state, 3_600_000);
+        assert_eq!(phase(&state, "a"), Some(CardPhase::Showing { fade_at: None }));
+    }
+
+    #[test]
+    fn a_click_on_an_info_card_asks_for_the_focus_plan() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), turn_ended("Done."));
+        let id = card_id_of(&state, "a");
+        let effects = update(&mut state, DaemonInput::Ui(UiIntent::Clicked { card_id: id.clone() }), EpochMs(1));
+        assert_eq!(effects, vec![Effect::RunFocusPlan { card: id, target: FocusTarget::Session { session: session("a"), pane: pane(1) } }]);
+    }
+
+    #[test]
+    fn an_info_card_folds_after_its_show_time_plus_grace() {
+        let mut state = folding_after_show_ms();
+        send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
+        tick(&mut state, SHOW_MS + HOVER_GRACE_MS - 1);
         assert!(matches!(phase(&state, "a"), Some(CardPhase::Showing { .. })));
-        tick(&mut state, INFO_SHOW_MS + HOVER_GRACE_MS);
+        tick(&mut state, SHOW_MS + HOVER_GRACE_MS);
         assert_eq!(phase(&state, "a"), Some(CardPhase::Folded));
     }
 
     #[test]
     fn hover_holds_the_fold_and_leaving_gives_time_back() {
-        let mut state = DaemonState::default();
+        let mut state = folding_after_show_ms();
         send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
         update(&mut state, DaemonInput::Ui(UiIntent::HoverChanged { hovered: true }), EpochMs(1_000));
         assert!(state.frozen_view.is_some());
@@ -1585,7 +1614,7 @@ mod tests {
             body: text("CI green"),
             event_id: event_id(2),
             created: EpochMs(2),
-            phase: CardPhase::Showing { fade_at: Some(EpochMs(2 + INFO_SHOW_MS)) },
+            phase: CardPhase::Showing { fade_at: Some(EpochMs(2 + SHOW_MS)) },
             note: None,
         };
         assert_eq!(merge(Some(snoozed), incoming.clone()), Merged::Replaced { card: incoming, replaced_attention: false });

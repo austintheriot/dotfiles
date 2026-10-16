@@ -408,8 +408,8 @@ Style B, approved from mockups.
 
 ### 8.3 Finished row
 
-- An info card shows for 6 s. Hover pauses the timer. The core owns the deadline. The UI reports hover, and a 300 ms grace period covers the hover message in transit.
-- After 6 s the card folds into one persistent row at the bottom of the stack: "Finished: 2, 4, 6". A click on a window number runs that session's focus plan. An entry leaves the row when its pane gets focus or a new turn starts.
+- By default an info card stays until the user clicks it, closes it, focuses its pane, or its session sends a newer card. At most three info cards show. Older ones go to the finished row. The core also supports a fold timer (`InfoLifetime::FoldAfter`). With that timer on, hover pauses it, and a 300 ms grace period covers the hover message in transit. Changed 2026-10-16 at the user's request, after the smoke test.
+- A folded card goes into one persistent row at the bottom of the stack: "Finished: 2, 4, 6". A click on a window number runs that session's focus plan. An entry leaves the row when its pane gets focus or a new turn starts.
 
 ### 8.4 Motion and sound
 

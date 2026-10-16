@@ -203,7 +203,7 @@ pub enum AgentEvent {
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum Kind {
-    /// Finished work. Fades after a few seconds.
+    /// Finished work. Stays until handled unless the daemon sets a fold time.
     Info,
     /// The user must act. Stays until handled.
     Attention,

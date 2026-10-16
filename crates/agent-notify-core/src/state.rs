@@ -29,6 +29,8 @@ pub struct DaemonState {
     pub last_sound_at: Option<EpochMs>,
     /// Increases with every update.
     pub revision: u64,
+    /// When info cards leave the screen on their own.
+    pub info_lifetime: InfoLifetime,
 }
 
 impl DaemonState {
@@ -157,7 +159,7 @@ pub enum CardCause {
 pub enum CardPhase {
     /// On screen. Info cards fold at `fade_at`.
     Showing {
-        /// When an info card folds. `None` for attention cards.
+        /// When an info card folds. `None` when it never folds.
         fade_at: Option<EpochMs>,
     },
     /// In the finished row.
@@ -250,6 +252,31 @@ impl QuietMode {
     #[must_use]
     pub fn ends_on(self, event: QuietUntil) -> bool {
         matches!(self, QuietMode::Until { until, .. } if until == event)
+    }
+}
+
+/// When an info card leaves the screen without a click.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InfoLifetime {
+    /// It stays until a click, the close button, pane focus, or a newer
+    /// card from its session.
+    #[default]
+    UntilHandled,
+    /// It folds into the finished row after `show_ms`. Hover pauses the timer.
+    FoldAfter {
+        /// How long it shows.
+        show_ms: i64,
+    },
+}
+
+impl InfoLifetime {
+    /// When an info card offered at `now` folds, or `None` if it never does.
+    #[must_use]
+    pub fn fade_at(self, now: EpochMs) -> Option<EpochMs> {
+        match self {
+            Self::UntilHandled => None,
+            Self::FoldAfter { show_ms } => Some(now.plus_ms(show_ms)),
+        }
     }
 }
 

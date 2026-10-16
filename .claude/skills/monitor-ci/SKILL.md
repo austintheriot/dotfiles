@@ -55,10 +55,10 @@ Record:
 Silence the per-stop notification for the length of the watch, when `agent-notify` is installed:
 
 ```bash
-command -v agent-notify >/dev/null && agent-notify quiet --until next-send --max-minutes 180 || true
+agent-notify quiet --until next-send --max-minutes 180
 ```
 
-A non-zero exit (for example, outside tmux) is not an error. Continue.
+A non-zero exit is not an error. That includes exit 127 when `agent-notify` is not installed, and a failure outside tmux. Ignore it and continue.
 
 ## Step 2: Single status check
 
@@ -199,10 +199,10 @@ Print:
 Then send one notification with the outcome. This ends the quiet period from Step 1. Use `attention` when the user must act (a red workflow, a manual gate, review comments) and `info` when everything is green:
 
 ```bash
-command -v agent-notify >/dev/null && agent-notify send --kind attention --body "PR 123: lint failed, 1 manual gate pending" || true
+agent-notify send --kind attention --body "PR 123: lint failed, 1 manual gate pending"
 ```
 
-Send it only at a terminal state, never on an intermediate wake-up.
+Send it only at a terminal state, never on an intermediate wake-up. A non-zero exit, including exit 127, is not an error. Ignore it.
 
 ## Important
 

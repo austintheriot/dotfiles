@@ -11,6 +11,7 @@ export type Runtime = {
 export async function start(root: ToastStack, services: UiServices): Promise<Runtime> {
   let model = initialModel(services.now());
   let cancelLeave: Unsubscribe | null = null;
+  let cancelTick: Unsubscribe | null = null;
   let stopped = false;
   const subscriptions: Unsubscribe[] = [];
 
@@ -44,10 +45,16 @@ export async function start(root: ToastStack, services: UiServices): Promise<Run
     cmds.forEach(run);
   };
 
+  const scheduleTick = (): void => {
+    cancelTick?.();
+    cancelTick = services.setTimer(tick, TICK_MS);
+  };
+
   const tick = (): void => {
+    cancelTick = null;
     if (stopped) return;
     dispatch({ type: "tick", now: services.now() });
-    subscriptions.push(services.setTimer(tick, TICK_MS));
+    scheduleTick();
   };
 
   root.dispatch = dispatch;
@@ -55,7 +62,7 @@ export async function start(root: ToastStack, services: UiServices): Promise<Run
   subscriptions.push(await services.onViewModel((view) => dispatch({ type: "view_model", view })));
   subscriptions.push(await services.onHover((hovered) => dispatch({ type: "native_hover", hovered })));
   dispatch({ type: "booted", bootstrap: await services.bootstrap() });
-  subscriptions.push(services.setTimer(tick, TICK_MS));
+  scheduleTick();
 
   return {
     dispatch,
@@ -63,6 +70,8 @@ export async function start(root: ToastStack, services: UiServices): Promise<Run
     stop: () => {
       stopped = true;
       cancelLeave?.();
+      cancelTick?.();
+      cancelTick = null;
       subscriptions.forEach((unsubscribe) => unsubscribe());
     },
   };

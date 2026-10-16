@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import "../src/components/toast-stack";
 import type { ToastStack } from "../src/components/toast-stack";
-import { LEAVE_MS } from "../src/model";
+import { LEAVE_MS, TICK_MS } from "../src/model";
 import { start } from "../src/runtime";
 import { revisionNine, revisionTen } from "./fixtures/view-models";
 import { recordingServices } from "./recording-services";
@@ -26,6 +26,15 @@ test("a stale push does not replace the view", async () => {
   services.pushViewModel(revisionNine);
   expect(runtime.current().view?.revision).toBe(10);
   runtime.stop();
+});
+
+test("the runtime holds one tick subscription however many ticks pass", async () => {
+  const { services, runtime } = await boot(true);
+  for (let i = 0; i < 200; i++) services.advance(TICK_MS);
+  expect(services.liveTimers()).toBe(1);
+  runtime.stop();
+  expect(services.timerCancels()).toBe(1);
+  expect(services.liveTimers()).toBe(0);
 });
 
 test("native hover from the shell reaches the model", async () => {

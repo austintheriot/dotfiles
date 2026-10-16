@@ -8,6 +8,8 @@ export type RecordingServices = UiServices & {
   pushViewModel(view: PanelViewModel): void;
   pushHover(hovered: boolean): void;
   advance(milliseconds: number): void;
+  liveTimers(): number;
+  timerCancels(): number;
 };
 
 export function recordingServices(bootstrap: UiBootstrap, startMs = 1_760_500_000_000): RecordingServices {
@@ -16,6 +18,7 @@ export function recordingServices(bootstrap: UiBootstrap, startMs = 1_760_500_00
   const hoverListeners: Array<(hovered: boolean) => void> = [];
   const timers: Array<{ at: number; callback: () => void; live: boolean }> = [];
   let clock = startMs;
+  let cancels = 0;
   return {
     sent,
     bootstrap: async () => bootstrap,
@@ -35,9 +38,12 @@ export function recordingServices(bootstrap: UiBootstrap, startMs = 1_760_500_00
       const timer = { at: clock + delayMs, callback, live: true };
       timers.push(timer);
       return () => {
+        cancels += 1;
         timer.live = false;
       };
     },
+    liveTimers: () => timers.filter((entry) => entry.live).length,
+    timerCancels: () => cancels,
     pushViewModel: (view) => viewListeners.forEach((listener) => listener(view)),
     pushHover: (hovered) => hoverListeners.forEach((listener) => listener(hovered)),
     advance: (milliseconds) => {

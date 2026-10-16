@@ -1,10 +1,9 @@
 //! Daemon state. Owned by one actor in the daemon and changed only by
 //! [`update`](crate::update::update).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use crate::view::PanelViewModel;
 use crate::wire::{InputReason, Kind, Origin, QuietUntil, RepoInfo, WindowLabel};
 use crate::{CardId, DisplayText, EpochMs, EventId, PaneKey, PromptId, SessionId};
 
@@ -21,8 +20,10 @@ pub struct DaemonState {
     pub focus: Option<FocusedPane>,
     /// True while the pointer is over the stack.
     pub stack_hovered: bool,
-    /// The view shown when the pointer entered the stack.
-    pub frozen_view: Option<PanelViewModel>,
+    /// The cards on screen when the pointer entered the stack. Cards that
+    /// arrive later wait until it leaves, so nothing moves under the pointer.
+    /// Closes, focus and DND still take effect at once.
+    pub frozen_cards: Option<BTreeSet<CardId>>,
     /// True while the screen is shared. Hides card bodies.
     pub screen_shared: bool,
     /// The last time a sound played.

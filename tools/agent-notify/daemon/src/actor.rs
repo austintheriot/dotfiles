@@ -401,6 +401,15 @@ impl Shown {
     }
 }
 
+fn log_input(input: &DaemonInput) {
+    match input {
+        DaemonInput::Ui(intent) => tracing::debug!(?intent, "ui intent"),
+        DaemonInput::Received { focus, .. } => tracing::debug!(?focus, "focus snapshot"),
+        DaemonInput::FocusOutcome { card, outcome } => tracing::debug!(%card, ?outcome, "focus outcome"),
+        DaemonInput::Tick | DaemonInput::PaneSnapshot(_) => {}
+    }
+}
+
 // The snapshot pace uses the monotonic clock: a wall clock that steps back would stop snapshots until it caught up.
 async fn run_actor(services: Arc<Services>, mut inbox: mpsc::UnboundedReceiver<ActorMessage>, jobs: std::sync::mpsc::Sender<Job>, config: DaemonConfig, dnd: Dnd) {
     let mut state = DaemonState { dnd, ..DaemonState::default() };
@@ -411,6 +420,7 @@ async fn run_actor(services: Arc<Services>, mut inbox: mpsc::UnboundedReceiver<A
         let now = (services.clock)();
         match message {
             ActorMessage::Input(input) => {
+                log_input(&input);
                 let received = match &input {
                     DaemonInput::Received { request, .. } => Some(request.clone()),
                     _ => None,
@@ -432,6 +442,13 @@ async fn run_actor(services: Arc<Services>, mut inbox: mpsc::UnboundedReceiver<A
                 }
                 let model = view(&state, now);
                 if shown.as_ref().is_none_or(|previous| previous.differs(&model)) {
+                    tracing::debug!(
+                        revision = model.revision,
+                        cards = ?model.cards.iter().map(|card| &card.card_id).collect::<Vec<_>>(),
+                        finished = model.finished_row.len(),
+                        dnd = model.dnd,
+                        "panel push"
+                    );
                     services.presenter.present(&model);
                     shown = Some(Shown::of(&model));
                 }

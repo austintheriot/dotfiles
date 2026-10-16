@@ -403,7 +403,7 @@ Style B, approved from mockups.
 ### 8.2 Stack
 
 - Newest card on top. Attention cards never collapse. At most 3 info cards show.
-- While the pointer is over the stack, the layout freezes. New and replaced cards wait until the pointer leaves.
+- While the pointer is over the stack, new cards wait until the pointer leaves. A close, pane focus and DND take effect at once. A card that its session replaces leaves at once, and the replacement waits. Changed 2026-10-16 after smoke-test defect F1.
 - The panel resizes to its content through `LayoutChanged`, so empty panel area does not catch clicks meant for windows under it.
 
 ### 8.3 Finished row

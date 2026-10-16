@@ -1,5 +1,7 @@
 //! The panel view model: a pure function of [`DaemonState`](crate::state::DaemonState).
 
+use std::collections::BTreeSet;
+
 use serde::Serialize;
 
 use crate::label::location_line;
@@ -57,9 +59,6 @@ pub const MAX_VISIBLE_INFO_CARDS: usize = 3;
 /// Builds the panel view model from `state`.
 #[must_use]
 pub fn view(state: &DaemonState, now: EpochMs) -> PanelViewModel {
-    if let Some(frozen) = &state.frozen_view {
-        return PanelViewModel { revision: state.revision, ..frozen.clone() };
-    }
     let dnd = state.dnd_active(now);
     if dnd {
         return PanelViewModel { revision: state.revision, cards: Vec::new(), finished_row: Vec::new(), dnd };
@@ -67,7 +66,7 @@ pub fn view(state: &DaemonState, now: EpochMs) -> PanelViewModel {
     let mut showing = Vec::new();
     let mut folded = Vec::new();
     for placed in placed_cards(state) {
-        if hidden_by_focus(state.focus.as_ref(), &placed) {
+        if hidden_by_focus(state.focus.as_ref(), &placed) || waits_for_hover_end(state.frozen_cards.as_ref(), &placed) {
             continue;
         }
         match placed.card.phase {
@@ -120,6 +119,19 @@ fn placed_cards(state: &DaemonState) -> Vec<Placed<'_>> {
         card: &oneoff.card,
     });
     sessions.chain(oneoffs).collect()
+}
+
+/// The ids of every card in the view at `now`, shown or in the finished row.
+#[must_use]
+pub fn on_screen(state: &DaemonState, now: EpochMs) -> BTreeSet<CardId> {
+    let model = view(state, now);
+    let shown = model.cards.into_iter().map(|card| card.card_id);
+    let folded = model.finished_row.into_iter().map(|entry| entry.card_id);
+    shown.chain(folded).collect()
+}
+
+fn waits_for_hover_end(frozen: Option<&BTreeSet<CardId>>, placed: &Placed<'_>) -> bool {
+    frozen.is_some_and(|frozen| !frozen.contains(&placed.card.id))
 }
 
 /// Focusing a pane hides its card at once. A card that arrived while the pane
@@ -324,10 +336,10 @@ mod tests {
     }
 
     #[test]
-    fn a_frozen_view_is_returned_with_the_current_revision() {
+    fn cards_that_arrive_during_hover_wait_and_the_revision_stays_current() {
         let mut state = DaemonState::default();
         needs(&mut state, 1, "a");
-        state.frozen_view = Some(view(&state, EpochMs(1)));
+        state.frozen_cards = Some(on_screen(&state, EpochMs(1)));
         info(&mut state, 2, "b");
         let model = view(&state, EpochMs(3));
         assert_eq!(model.cards.len(), 1, "new cards wait while the pointer is over the stack");

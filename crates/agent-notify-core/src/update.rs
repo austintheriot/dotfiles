@@ -398,7 +398,7 @@ fn control_event(state: &mut DaemonState, control: Control, now: EpochMs, effect
         }
         Control::Dnd { command: DndCommand::On { for_minutes } } => {
             state.dnd = Dnd::On { until: for_minutes.map(|minutes| now.plus_ms(i64::from(minutes) * 60_000)) };
-            state.frozen_view = None;
+            state.frozen_cards = None;
             effects.push(Effect::PersistDnd(state.dnd));
         }
         Control::Dnd { command: DndCommand::Off } => {
@@ -419,7 +419,7 @@ fn control_event(state: &mut DaemonState, control: Control, now: EpochMs, effect
 /// stale with the DND flag, as it does when DND turns on.
 fn end_dnd(state: &mut DaemonState) {
     state.dnd = Dnd::Off;
-    state.frozen_view = None;
+    state.frozen_cards = None;
     for card in cards_mut(state) {
         if card.kind == Kind::Info && matches!(card.phase, CardPhase::Showing { .. }) {
             card.phase = CardPhase::Folded;
@@ -667,13 +667,13 @@ fn ui_intent(state: &mut DaemonState, intent: UiIntent, now: EpochMs, effects: &
         UiIntent::Closed { card_id } => close(state, &card_id, now),
         UiIntent::HoverChanged { hovered: true } => {
             if !state.stack_hovered {
-                state.frozen_view = Some(crate::view::view(state, now));
+                state.frozen_cards = Some(crate::view::on_screen(state, now));
                 state.stack_hovered = true;
             }
         }
         UiIntent::HoverChanged { hovered: false } => {
             state.stack_hovered = false;
-            state.frozen_view = None;
+            state.frozen_cards = None;
             let resume_at = now.plus_ms(HOVER_RESUME_MS);
             for card in cards_mut(state) {
                 if let CardPhase::Showing { fade_at: Some(fade_at) } = &mut card.phase {
@@ -1430,11 +1430,11 @@ mod tests {
         let mut state = folding_after_show_ms();
         send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
         update(&mut state, DaemonInput::Ui(UiIntent::HoverChanged { hovered: true }), EpochMs(1_000));
-        assert!(state.frozen_view.is_some());
+        assert!(state.frozen_cards.is_some());
         tick(&mut state, 60_000);
         assert!(matches!(phase(&state, "a"), Some(CardPhase::Showing { .. })));
         update(&mut state, DaemonInput::Ui(UiIntent::HoverChanged { hovered: false }), EpochMs(60_000));
-        assert!(state.frozen_view.is_none());
+        assert!(state.frozen_cards.is_none());
         tick(&mut state, 60_000 + HOVER_RESUME_MS + HOVER_GRACE_MS - 1);
         assert!(matches!(phase(&state, "a"), Some(CardPhase::Showing { .. })));
         tick(&mut state, 60_000 + HOVER_RESUME_MS + HOVER_GRACE_MS);
@@ -1519,15 +1519,69 @@ mod tests {
     }
 
     #[test]
-    fn turning_dnd_on_drops_the_frozen_view() {
+    fn turning_dnd_on_drops_the_freeze() {
         let mut state = DaemonState::default();
         send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
         update(&mut state, DaemonInput::Ui(UiIntent::HoverChanged { hovered: true }), EpochMs(1));
-        assert!(state.frozen_view.is_some());
+        assert!(state.frozen_cards.is_some());
         update(&mut state, control(2, Control::Dnd { command: DndCommand::On { for_minutes: None } }), EpochMs(2));
-        assert!(state.frozen_view.is_none());
+        assert!(state.frozen_cards.is_none());
         let model = crate::view::view(&state, EpochMs(3));
         assert!(model.dnd && model.cards.is_empty());
+    }
+
+    fn hover_now(state: &mut DaemonState, now: i64) {
+        update(state, DaemonInput::Ui(UiIntent::HoverChanged { hovered: true }), EpochMs(now));
+    }
+
+    fn shown_ids(state: &DaemonState, now: i64) -> Vec<CardId> {
+        crate::view::view(state, EpochMs(now)).cards.into_iter().map(|shown| shown.card_id).collect()
+    }
+
+    #[test]
+    fn a_card_closed_during_hover_leaves_the_view_at_once() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
+        send(&mut state, 1, "b", None, explicit(Kind::Info, "y"));
+        let closed = card_id_of(&state, "a");
+        hover_now(&mut state, 2);
+        update(&mut state, DaemonInput::Ui(UiIntent::Closed { card_id: closed }), EpochMs(3));
+        assert_eq!(shown_ids(&state, 4), vec![card_id_of(&state, "b")]);
+    }
+
+    #[test]
+    fn a_card_whose_pane_gets_focus_during_hover_leaves_the_view_at_once() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), needs_permission());
+        hover_now(&mut state, 1);
+        update(&mut state, control(2, Control::FocusChanged { pane: pane(1), focused: true }), EpochMs(2));
+        assert!(shown_ids(&state, 3).is_empty());
+    }
+
+    #[test]
+    fn a_card_that_arrives_during_hover_waits_until_the_pointer_leaves() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
+        let first = card_id_of(&state, "a");
+        hover_now(&mut state, 1);
+        send(&mut state, 2, "b", None, explicit(Kind::Info, "y"));
+        assert_eq!(shown_ids(&state, 3), vec![first.clone()]);
+        update(&mut state, DaemonInput::Ui(UiIntent::HoverChanged { hovered: false }), EpochMs(4));
+        assert_eq!(shown_ids(&state, 5), vec![card_id_of(&state, "b"), first]);
+    }
+
+    #[test]
+    fn an_arrival_during_hover_does_not_push_a_shown_card_into_the_finished_row() {
+        let mut state = DaemonState::default();
+        for (number, name) in ["a", "b", "c"].into_iter().enumerate() {
+            send(&mut state, i64::try_from(number).expect("small"), name, None, explicit(Kind::Info, "x"));
+        }
+        let before = shown_ids(&state, 3);
+        hover_now(&mut state, 4);
+        send(&mut state, 5, "d", None, explicit(Kind::Info, "y"));
+        let model = crate::view::view(&state, EpochMs(6));
+        assert_eq!(model.cards.into_iter().map(|shown| shown.card_id).collect::<Vec<_>>(), before);
+        assert!(model.finished_row.is_empty());
     }
 
     #[test]
@@ -1842,25 +1896,25 @@ mod card_life_tests {
     }
 
     #[test]
-    fn turning_dnd_off_drops_the_frozen_view() {
+    fn turning_dnd_off_drops_the_freeze() {
         let mut state = DaemonState::default();
         send(&mut state, 0, "a", None, info("x"));
         dnd(&mut state, DndCommand::On { for_minutes: None }, 1);
         hover(&mut state, 2);
-        assert!(state.frozen_view.is_some());
+        assert!(state.frozen_cards.is_some());
         dnd(&mut state, DndCommand::Off, 3);
-        assert!(state.frozen_view.is_none());
+        assert!(state.frozen_cards.is_none());
     }
 
     #[test]
-    fn a_timed_dnd_end_drops_the_frozen_view() {
+    fn a_timed_dnd_end_drops_the_freeze() {
         let mut state = DaemonState::default();
         send(&mut state, 0, "a", None, info("x"));
         dnd(&mut state, DndCommand::On { for_minutes: Some(1) }, 1);
         hover(&mut state, 2);
-        assert!(state.frozen_view.is_some());
+        assert!(state.frozen_cards.is_some());
         update(&mut state, DaemonInput::Tick, EpochMs(1 + 60_000));
-        assert!(state.frozen_view.is_none());
+        assert!(state.frozen_cards.is_none());
     }
 
     #[test]

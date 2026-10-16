@@ -13,10 +13,11 @@ use agent_notify_core::update::UiIntent;
 use agent_notify_core::wire::Kind;
 use agent_notify_daemon::actor::DaemonConfig;
 use agent_notify_daemon::dnd_store::DndStore;
+use agent_notify_daemon::services::NoPresenter;
 use serde_json::json;
 use support::{
-    DaemonSetup, RecordingRaiser, SlowPresence, agent_line, control_line, eventually, first_pane, new_window, one_daemon_at_a_time, pane_option, query_line, send_line, spawn_daemon,
-    spawn_daemon_in, spawn_daemon_setup, status_sessions, status_until, tag, tmux_stub,
+    DaemonSetup, PanickingPresenter, RecordingRaiser, SlowPresence, agent_line, control_line, eventually, first_pane, new_window, one_daemon_at_a_time, pane_option, query_line,
+    send_line, spawn_daemon, spawn_daemon_in, spawn_daemon_setup, spawn_headless_daemon, status_sessions, status_until, tag, tmux_stub,
 };
 
 #[tokio::test(flavor = "multi_thread")]
@@ -105,6 +106,24 @@ async fn stopping_frees_the_socket_for_the_next_daemon() {
     let socket = world.socket.clone();
     world.daemon.stop().await;
     assert!(!socket.exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_actor_that_ends_early_is_reported() {
+    let _serial = one_daemon_at_a_time().await;
+    let (daemon, _scratch) = spawn_headless_daemon(Arc::new(PanickingPresenter));
+    let ended = tokio::time::timeout(Duration::from_secs(2), daemon.actor_ended()).await;
+    assert!(ended.is_ok(), "the actor panicked on its first view, but no early end was reported");
+    daemon.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stopped_actor_is_not_reported_as_ended_early() {
+    let _serial = one_daemon_at_a_time().await;
+    let (daemon, _scratch) = spawn_headless_daemon(Arc::new(NoPresenter));
+    let ended = daemon.actor_ended();
+    daemon.stop().await;
+    assert!(tokio::time::timeout(Duration::from_millis(300), ended).await.is_err(), "a clean stop was reported as an early end");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -279,7 +298,7 @@ async fn stop_returns_while_a_worker_job_still_runs() {
     let stopping = Instant::now();
     world.daemon.stop().await;
     let waited = stopping.elapsed();
-    assert!(waited < Duration::from_millis(4_500), "stop waited {waited:?} for a hung job");
-    assert!(waited >= Duration::from_millis(2_500), "stop gave the job its 3 s: {waited:?}");
+    assert!(waited < Duration::from_millis(5_500), "stop waited {waited:?} for a hung job");
+    assert!(waited >= Duration::from_millis(3_500), "stop gave the job its own 4 s: {waited:?}");
     assert!(!world.socket.exists(), "the socket is gone even though the worker is still busy");
 }

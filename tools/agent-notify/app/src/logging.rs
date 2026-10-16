@@ -1,7 +1,7 @@
 //! Daily log files, seven kept, in a private directory.
 
 use std::fs::DirBuilder;
-use std::io;
+use std::io::{self, Write};
 use std::os::unix::fs::DirBuilderExt;
 use std::panic::Location;
 use std::path::Path;
@@ -12,7 +12,6 @@ use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
 /// The level from `$AGENT_NOTIFY_LOG`. Unknown values read as `info`.
 #[must_use]
-#[cfg_attr(not(test), expect(dead_code, reason = "wired in Task 16"))]
 pub fn level_from(value: Option<&str>) -> LevelFilter {
     match value.map(str::to_ascii_lowercase).as_deref() {
         Some("error") => LevelFilter::ERROR,
@@ -31,7 +30,6 @@ pub fn level_from(value: Option<&str>) -> LevelFilter {
 /// # Errors
 ///
 /// When the directory cannot be created or the appender cannot open a file.
-#[expect(dead_code, reason = "wired in Task 16")]
 pub fn init(directory: &Path, level: LevelFilter) -> io::Result<WorkerGuard> {
     prepare_directory(directory)?;
     let appender = RollingFileAppender::builder()
@@ -55,14 +53,14 @@ fn prepare_directory(directory: &Path) -> io::Result<()> {
 /// Replaces the panic hook with one that logs and prints the location only.
 /// The payload can hold model text from a request, so it is logged only at
 /// `debug`, escaped. The default hook is not chained: it prints the payload
-/// to stderr, which launchd writes to a log file.
-#[expect(dead_code, reason = "wired in Task 16")]
+/// to stderr, which launchd writes to a log file. A failed stderr write is
+/// ignored: `eprintln!` would panic inside the hook.
 pub fn install_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
         let location = info.location().map_or_else(|| "unknown".to_owned(), ToString::to_string);
         tracing::error!(%location, "agent-notifyd panicked");
         tracing::debug!(payload = ?info.payload_as_str(), "panic payload");
-        eprintln!("{}", panic_line(info.location()));
+        let _ = writeln!(io::stderr(), "{}", panic_line(info.location()));
     }));
 }
 

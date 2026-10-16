@@ -2,7 +2,6 @@
 //! Objective-C class definitions, which need `unsafe`.
 
 #![allow(unsafe_code)] // tauri_panel! defines Objective-C classes; see spike S1.
-#![expect(dead_code, reason = "wired in Task 16")]
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -118,8 +117,9 @@ impl ToastPresenter for PanelPresenter {
 }
 
 /// Records the page's content height and resizes the panel. The caller must
-/// run this on the main thread: Tauri commands run on the async runtime, so
-/// hop with `run_on_main_thread` first.
+/// run this on the main thread. A sync Tauri command (one declared without
+/// `async`) already runs there; an `async` command must hop with
+/// `run_on_main_thread` first.
 pub fn resize(app: &AppHandle, content_height_px: u32) {
     CONTENT_HEIGHT.store(content_height_px, Ordering::Relaxed);
     place(app, content_height_px);

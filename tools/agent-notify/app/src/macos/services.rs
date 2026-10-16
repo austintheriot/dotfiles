@@ -52,7 +52,6 @@ pub struct MacFrontmost {
 
 impl MacFrontmost {
     /// A reader that hops to `app`'s main thread.
-    #[expect(dead_code, reason = "wired in Task 16")]
     pub fn new(app: AppHandle) -> Self {
         MacFrontmost { app }
     }
@@ -69,7 +68,6 @@ impl FrontmostReader for MacFrontmost {
 }
 
 /// The Glass system sound through `afplay`.
-#[expect(dead_code, reason = "wired in Task 16")]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AfplaySound;
 
@@ -81,7 +79,6 @@ impl SoundPlayer for AfplaySound {
     }
 }
 
-#[expect(dead_code, reason = "wired in Task 16")]
 fn play_bounded() {
     match run_bounded(Command::new(AFPLAY).arg(SOUND), AFPLAY_LIMIT) {
         Ok(finished) if finished.status.success() => {}
@@ -99,7 +96,6 @@ pub struct MacRaiser {
 
 impl MacRaiser {
     /// A raiser for `app`, with AeroSpace at `aerospace` when found.
-    #[expect(dead_code, reason = "wired in Task 16")]
     pub fn new(app: AppHandle, aerospace: Option<PathBuf>) -> Self {
         MacRaiser { app, aerospace: aerospace.map(Aerospace::new) }
     }

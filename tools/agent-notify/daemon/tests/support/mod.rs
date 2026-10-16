@@ -282,6 +282,36 @@ pub fn spawn_daemon_with(label: &str, scratch: tempfile::TempDir, setup: DaemonS
     DaemonWorld { daemon, socket, presenter, raiser: setup.raiser, server: tmux_server(label), dnd_path, scratch }
 }
 
+/// A presenter that panics, which ends the actor task.
+#[derive(Debug, Default)]
+pub struct PanickingPresenter;
+
+impl ToastPresenter for PanickingPresenter {
+    fn present(&self, _view: &PanelViewModel) {
+        panic!("the test presenter panics on purpose");
+    }
+}
+
+/// Starts a daemon without tmux that shows views through `presenter`. Keep
+/// the scratch directory alive while the daemon runs.
+pub fn spawn_headless_daemon(presenter: Arc<dyn ToastPresenter>) -> (Daemon, tempfile::TempDir) {
+    let scratch = scratch_directory();
+    let setup = DaemonSetup::default();
+    let services = Arc::new(Services {
+        tmux: None,
+        raiser: setup.raiser,
+        presenter,
+        frontmost: Arc::new(UnknownFrontmost),
+        presence: setup.presence,
+        sound: Arc::new(Silent),
+        dnd_store: DndStore::new(scratch.path().join("state/dnd.json")),
+        clock: setup.clock,
+        facts: DaemonFacts { stamp: "stamp-test".to_string(), started_ms: EpochMs(1_760_499_000_000), tools: Vec::new() },
+    });
+    let BindOutcome::Bound(listener) = bind(&scratch.path().join("run/agent-notify.sock")).expect("binds") else { panic!("nothing else runs here") };
+    (Daemon::start(services, listener, setup.config), scratch)
+}
+
 /// Sends one line and returns the reply as JSON, or `Null` when the
 /// daemon closed with no reply.
 pub async fn send_line(socket: &Path, line: String) -> serde_json::Value {

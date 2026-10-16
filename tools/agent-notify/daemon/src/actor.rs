@@ -25,7 +25,7 @@ use agent_notify_core::update::{DaemonInput, Effect, FocusSnapshot, FocusTarget,
 use agent_notify_core::view::{CardView, FinishedEntry, PanelViewModel, view};
 use agent_notify_core::wire::{Query, Request};
 use agent_notify_core::{CardId, PaneId, PaneKey, ServerId, SessionId, SocketPath};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
@@ -34,10 +34,39 @@ use crate::services::Services;
 use crate::socket::{Intake, Listener, PendingQuery, ServeOptions, serve};
 use crate::tmux::TmuxError;
 
-/// How long [`Daemon::stop`] waits, in all, for queued requests, the actor
-/// and the effects worker. Every worker job is bounded at 1 s per child
-/// process.
+/// How long [`Daemon::stop`] waits, in all, for the queued requests and the
+/// actor.
 const STOP_LIMIT: Duration = Duration::from_secs(3);
+
+/// How long [`Daemon::stop`] then waits for the effects worker. Opening the
+/// terminal is bounded at 3 s and every other child process at 1 s, so the
+/// worker gets more than the 3 s that one terminal open can take. With
+/// [`STOP_LIMIT`] the total stays well under launchd's 20 s exit timeout.
+const WORKER_STOP_LIMIT: Duration = Duration::from_secs(4);
+
+/// Where the actor task is in its life, for [`Daemon::actor_ended`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActorLife {
+    Running,
+    Stopping,
+    EndedEarly,
+}
+
+/// Marks the actor as ended early when its task ends while still running.
+/// It is dropped on every end of the task, a panic included.
+struct EndAlarm(Arc<watch::Sender<ActorLife>>);
+
+impl Drop for EndAlarm {
+    fn drop(&mut self) {
+        self.0.send_if_modified(|state| {
+            let early = *state == ActorLife::Running;
+            if early {
+                *state = ActorLife::EndedEarly;
+            }
+            early
+        });
+    }
+}
 
 /// Timing and queue sizes.
 #[derive(Debug, Clone, Copy)]
@@ -88,6 +117,7 @@ pub struct Daemon {
     forwarding_queries: JoinHandle<()>,
     pipeline: JoinHandle<()>,
     acting: JoinHandle<()>,
+    life: Arc<watch::Sender<ActorLife>>,
     worker: Option<Worker>,
 }
 
@@ -108,6 +138,8 @@ impl Daemon {
         let worker = start_worker(Arc::clone(&services), job_receiver, actor_sender.clone());
         let stamp = services.facts.stamp.clone();
         let intake = Intake { requests: request_sender, queries: query_sender };
+        let life = Arc::new(watch::Sender::new(ActorLife::Running));
+        let alarm = EndAlarm(Arc::clone(&life));
         Daemon {
             serving: tokio::spawn(async move {
                 if let Err(error) = serve(listener, stamp, intake, config.serve).await {
@@ -117,8 +149,12 @@ impl Daemon {
             ticking: tokio::spawn(run_ticks(actor_sender.clone(), config.tick)),
             forwarding_queries: tokio::spawn(run_queries(query_receiver, actor_sender.clone())),
             pipeline: tokio::spawn(run_requests(Arc::clone(&services), request_receiver, actor_sender.clone())),
-            acting: tokio::spawn(run_actor(services, actor_receiver, job_sender, config, dnd)),
+            acting: tokio::spawn(async move {
+                let _alarm = alarm;
+                run_actor(services, actor_receiver, job_sender, config, dnd).await;
+            }),
             actor: actor_sender,
+            life,
             worker,
         }
     }
@@ -139,7 +175,19 @@ impl Daemon {
         self.handle().view_model().await
     }
 
-    /// Stops the daemon without losing acknowledged work, within 3 s in all.
+    /// Resolves when the actor task ends while the daemon runs: a panic, or
+    /// any end that [`Daemon::stop`] did not start. It never resolves after
+    /// `stop` begins. The future owns what it needs, so it can outlive `self`.
+    pub fn actor_ended(&self) -> impl Future<Output = ()> + Send + 'static {
+        let mut life = self.life.subscribe();
+        async move {
+            if life.wait_for(|state| *state == ActorLife::EndedEarly).await.is_err() {
+                std::future::pending::<()>().await;
+            }
+        }
+    }
+
+    /// Stops the daemon without losing acknowledged work, within 7 s in all.
     ///
     /// 1. The socket stops, which removes the socket file and closes both
     ///    intake queues. The timer stops.
@@ -149,9 +197,11 @@ impl Daemon {
     ///    ends. That drops the job queue.
     /// 4. The effects worker finishes its queued jobs.
     ///
-    /// A step still busy at the limit is logged and left behind: a task is
-    /// aborted, the worker thread ends on its own.
+    /// Steps 2 and 3 share [`STOP_LIMIT`]; step 4 then gets
+    /// [`WORKER_STOP_LIMIT`]. A step still busy at its limit is logged and
+    /// left behind: a task is aborted, the worker thread ends on its own.
     pub async fn stop(self) {
+        self.life.send_replace(ActorLife::Stopping);
         let deadline = Instant::now() + STOP_LIMIT;
         abort_and_wait(self.serving).await;
         abort_and_wait(self.ticking).await;
@@ -163,8 +213,8 @@ impl Daemon {
         drop(self.actor);
         finish_by(self.acting, deadline, "the actor").await;
         let Some(worker) = self.worker else { return };
-        if tokio::time::timeout_at(deadline, worker.finished).await.is_err() {
-            tracing::error!(limit_ms = STOP_LIMIT.as_millis(), "the effects worker did not stop in time; left running");
+        if tokio::time::timeout(WORKER_STOP_LIMIT, worker.finished).await.is_err() {
+            tracing::error!(limit_ms = WORKER_STOP_LIMIT.as_millis(), "the effects worker did not stop in time; left running");
             return;
         }
         if let Ok(Err(_)) = tokio::task::spawn_blocking(move || worker.thread.join()).await {

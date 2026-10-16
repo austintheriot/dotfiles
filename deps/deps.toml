@@ -220,6 +220,12 @@ docs = "https://gcc.gnu.org/"
 command = "rustup"
 docs = "https://www.rust-lang.org/tools/install"
 
+# The agent-notify install runs `cargo deny check` before it builds the
+# daemon. Install with `cargo install --locked cargo-deny`.
+[cargo-deny]
+command = "cargo-deny"
+docs = "https://github.com/EmbarkStudios/cargo-deny"
+
 # `file_non_empty` rather than `file`: nvm.sh is sourced, and an empty file
 # sources cleanly while providing no `nvm`, so existence alone is not the
 # question being asked.

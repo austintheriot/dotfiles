@@ -17,9 +17,13 @@
 # one cargo invocation below, so a library-only crate's compile errors are
 # caught here rather than only inside a dependent's build.
 #
-# usage: config build
+# usage: config build [--tools | --tools-only] [--no-launchd]
 #
-# Takes no options.
+#   --tools        Also run tools/*/scripts/install.ts with bun, after the
+#                  crates. Each one builds and installs a desktop tool.
+#   --tools-only   Run only the tool installs.
+#   --no-launchd   Passed to each install script: install files, but do not
+#                  load or restart a launch agent.
 #
 # Environment:
 #   DOTFILES_ROOT      Repo root. Default $HOME.
@@ -31,6 +35,18 @@ set -eu
 
 . "$(dirname "$(readlink -f "$0")")/usage.sh"
 usage_if_requested "${1:-}"
+
+build_crates=yes
+build_tools=no
+tool_args=''
+for argument in "$@"; do
+    case $argument in
+        --tools) build_tools=yes ;;
+        --tools-only) build_tools=yes; build_crates=no ;;
+        --no-launchd) tool_args='--no-launchd' ;;
+        *) printf 'config-build: unknown option %s\n' "$argument" >&2; exit 2 ;;
+    esac
+done
 
 ROOT=${DOTFILES_ROOT:-$HOME}
 WORKSPACE_DIR="$ROOT/crates"
@@ -62,39 +78,49 @@ else
     quiet='--quiet'
 fi
 
-stamps=$("$ROOT/.scripts/config/config-stamp")
+if [ "$build_crates" = yes ]; then
+    stamps=$("$ROOT/.scripts/config/config-stamp")
 
-mkdir -p "$BIN_DIR"
+    mkdir -p "$BIN_DIR"
 
-# The `|| exit 1` after the loop matters: the pipeline runs its body in a
-# subshell, so a `cargo build` failure or an internal `exit` inside it would
-# otherwise not stop this script. Verified elsewhere in this repo (see
-# tests/pre-push) that an `exit 1` inside a piped `while` does make the
-# pipeline itself return non-zero, which the `||` here catches.
-printf '%s\n' "$stamps" | while IFS=' ' read -r member stamp; do
-    [ -n "$member" ] || continue
+    # The `|| exit 1` after the loop matters: the pipeline runs its body in a
+    # subshell, so a `cargo build` failure or an internal `exit` inside it would
+    # otherwise not stop this script. Verified elsewhere in this repo (see
+    # tests/pre-push) that an `exit 1` inside a piped `while` does make the
+    # pipeline itself return non-zero, which the `||` here catches.
+    printf '%s\n' "$stamps" | while IFS=' ' read -r member stamp; do
+        [ -n "$member" ] || continue
 
-    # option_env! reads this at compile time, so changing it rebuilds the
-    # binary. Every member is built here, library-only ones included, so a
-    # library's compile errors surface at `config build` rather than only
-    # inside whichever binary depends on it.
-    CONFIG_MANIFEST_STAMP="$stamp" \
-        cargo build --release --locked $quiet \
-            --manifest-path "$WORKSPACE_DIR/Cargo.toml" -p "$member" \
-        || exit 1
+        # option_env! reads this at compile time, so changing it rebuilds the
+        # binary. Every member is built here, library-only ones included, so a
+        # library's compile errors surface at `config build` rather than only
+        # inside whichever binary depends on it.
+        CONFIG_MANIFEST_STAMP="$stamp" \
+            cargo build --release --locked $quiet \
+                --manifest-path "$WORKSPACE_DIR/Cargo.toml" -p "$member" \
+            || exit 1
 
-    if [ ! -f "$WORKSPACE_DIR/$member/src/main.rs" ]; then
-        printf 'config-build: %s is a library, nothing to install\n' "$member"
-        continue
-    fi
+        if [ ! -f "$WORKSPACE_DIR/$member/src/main.rs" ]; then
+            printf 'config-build: %s is a library, nothing to install\n' "$member"
+            continue
+        fi
 
-    cp "$CARGO_TARGET_DIR/release/$member" "$BIN_DIR/$member"
+        cp "$CARGO_TARGET_DIR/release/$member" "$BIN_DIR/$member"
 
-    # Paying any first-run cost here rather than in a hook, and reporting the
-    # stamp the installed binary actually carries rather than the one just
-    # asked for, so a build that failed to pick the variable up is visible
-    # here.
-    built=$("$BIN_DIR/$member" --stamp)
+        # Paying any first-run cost here rather than in a hook, and reporting the
+        # stamp the installed binary actually carries rather than the one just
+        # asked for, so a build that failed to pick the variable up is visible
+        # here.
+        built=$("$BIN_DIR/$member" --stamp)
 
-    printf 'config-build: installed %s (stamp %s)\n' "$BIN_DIR/$member" "$built"
-done || exit 1
+        printf 'config-build: installed %s (stamp %s)\n' "$BIN_DIR/$member" "$built"
+    done || exit 1
+fi
+
+if [ "$build_tools" = yes ]; then
+    for script in "$ROOT"/tools/*/scripts/install.ts; do
+        [ -f "$script" ] || continue
+        # Unquoted on purpose, as with $quiet above.
+        bun "$script" $tool_args || exit 1
+    done
+fi

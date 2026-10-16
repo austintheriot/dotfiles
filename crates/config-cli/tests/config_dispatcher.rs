@@ -1368,6 +1368,28 @@ fn run_build() -> Output {
         .expect("config-build runs")
 }
 
+/// `--tools` runs each tool's install script after the crate build, and
+/// passes `--no-launchd` through so a CI or doctor run never touches launchd.
+#[test]
+fn build_with_tools_runs_each_install_script() {
+    let root = tempfile::tempdir().expect("a temp root");
+    let script_dir = root.path().join("tools/sample/scripts");
+    fs::create_dir_all(&script_dir).expect("the script directory");
+    let marker = root.path().join("ran");
+    fs::write(
+        script_dir.join("install.ts"),
+        format!("await Bun.write({:?}, process.argv.slice(2).join(' '));\n", marker.to_str().expect("utf-8")),
+    )
+    .expect("the stub script");
+    let output = Command::new(config_dir().join("config-build"))
+        .args(["--tools-only", "--no-launchd"])
+        .env("DOTFILES_ROOT", root.path())
+        .output()
+        .expect("config-build runs");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert_eq!(fs::read_to_string(&marker).expect("the script ran"), "--no-launchd");
+}
+
 /// Runs `config-doctor` from the repository root.
 ///
 /// **The working directory is load-bearing, which the shell suite never had

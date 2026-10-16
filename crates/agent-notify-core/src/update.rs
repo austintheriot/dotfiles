@@ -232,11 +232,12 @@ pub enum Merged {
 }
 
 /// One card per session: the higher kind wins, and on a tie the newer card.
-/// An expiring card always gives way.
+/// An expiring or snoozed card always gives way, so a hidden card never
+/// outranks a visible one.
 #[must_use]
 pub fn merge(existing: Option<Card>, incoming: Card) -> Merged {
     match existing {
-        Some(current) if current.kind > incoming.kind && !matches!(current.phase, CardPhase::Expiring { .. }) => Merged::Kept(current),
+        Some(current) if current.kind > incoming.kind && !matches!(current.phase, CardPhase::Expiring { .. } | CardPhase::Snoozed { .. }) => Merged::Kept(current),
         Some(current) => Merged::Replaced { replaced_attention: current.kind == Kind::Attention, card: incoming },
         None => Merged::Replaced { card: incoming, replaced_attention: false },
     }
@@ -1314,15 +1315,58 @@ mod tests {
     }
 
     #[test]
-    fn a_snoozed_card_does_not_come_back_after_a_new_prompt_starts() {
+    fn an_explicit_send_during_a_snooze_replaces_the_hidden_card() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), needs_permission());
+        let attention = card_id_of(&state, "a");
+        update(&mut state, DaemonInput::Ui(UiIntent::Closed { card_id: attention.clone() }), EpochMs(1));
+        let effects = send(&mut state, 2, "a", Some("p2"), explicit(Kind::Info, "x"));
+        assert!(reasons(&effects).is_empty());
+        let shown = card(&state, "a").expect("a card");
+        assert_eq!((shown.id.clone(), shown.cause), (CardId::for_event(&event_id(2)), CardCause::Explicit));
+        assert!(matches!(shown.phase, CardPhase::Showing { .. }));
+        tick(&mut state, 1 + SNOOZE_MS);
+        assert_ne!(card(&state, "a").map(|shown| shown.id.clone()), Some(attention));
+    }
+
+    #[test]
+    fn a_snoozed_card_does_not_come_back_after_a_focused_new_prompt_needs_input() {
         let mut state = DaemonState::default();
         send(&mut state, 0, "a", Some("p1"), needs_permission());
         let attention = card_id_of(&state, "a");
         update(&mut state, DaemonInput::Ui(UiIntent::Closed { card_id: attention }), EpochMs(1));
-        send(&mut state, 2, "a", Some("p2"), explicit(Kind::Info, "x"));
-        assert!(matches!(phase(&state, "a"), Some(CardPhase::Snoozed { .. })), "the snoozed attention card outranks the info card");
+        let input = with_focus(agent_input(2, origin(Some("a"), Some("p2")), needs_permission()), present_at(1));
+        let effects = update(&mut state, input, EpochMs(2));
+        assert_eq!(reasons(&effects), vec![SuppressReason::Focused]);
+        assert!(matches!(state.sessions[&session("a")].turn, Turn::NeedsYou { .. }));
+        assert!(matches!(phase(&state, "a"), Some(CardPhase::Snoozed { .. })));
         tick(&mut state, 1 + SNOOZE_MS);
         assert!(card(&state, "a").is_none());
+    }
+
+    #[test]
+    fn merge_replaces_a_snoozed_attention_card_with_a_new_info_card() {
+        let snoozed = Card {
+            id: CardId::for_event(&event_id(1)),
+            kind: Kind::Attention,
+            cause: CardCause::NeedsInput(InputReason::Permission),
+            body: text("Allow Bash?"),
+            event_id: event_id(1),
+            created: EpochMs(1),
+            phase: CardPhase::Snoozed { until: EpochMs(1 + SNOOZE_MS), prompt: Some(prompt("p1")) },
+            note: None,
+        };
+        let incoming = Card {
+            id: CardId::for_event(&event_id(2)),
+            kind: Kind::Info,
+            cause: CardCause::Explicit,
+            body: text("CI green"),
+            event_id: event_id(2),
+            created: EpochMs(2),
+            phase: CardPhase::Showing { fade_at: Some(EpochMs(2 + INFO_SHOW_MS)) },
+            note: None,
+        };
+        assert_eq!(merge(Some(snoozed), incoming.clone()), Merged::Replaced { card: incoming, replaced_attention: true });
     }
 
     #[test]

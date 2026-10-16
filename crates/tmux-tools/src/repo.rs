@@ -31,10 +31,15 @@ const CHILD_POLL: Duration = Duration::from_millis(5);
 /// since this runs on every prompt draw. Returns `None` when `directory` is
 /// not inside a git repository. Falls back to `git rev-parse` when a direct
 /// read fails or yields a shape this function does not recognize, rather
-/// than answering with a value that might be wrong.
+/// than answering with a value that might be wrong. Each `git` spawn in the
+/// fallback is bounded by [`GIT_FALLBACK_LIMIT`].
 pub fn inspect(directory: &Path) -> Option<RepositoryFacts> {
+    inspect_within(directory, GIT_FALLBACK_LIMIT)
+}
+
+fn inspect_within(directory: &Path, git_limit: Duration) -> Option<RepositoryFacts> {
     let git_path = find_git_path(directory)?;
-    direct_read(&git_path).or_else(|| fallback_to_git_rev_parse(directory, Path::new("git"), GIT_FALLBACK_LIMIT))
+    direct_read(&git_path).or_else(|| fallback_to_git_rev_parse(directory, Path::new("git"), git_limit))
 }
 
 /// Walks from `directory` up to the filesystem root looking for `.git`.
@@ -213,6 +218,12 @@ mod tests {
     use super::*;
     use std::time::{Duration, Instant};
 
+    /// Tests that need a real `git` to answer use a wide limit. Under a
+    /// parallel test run here, one `git` exec took over a second, so the
+    /// production limit would make them flaky. The hanging-git test pins
+    /// the bound itself.
+    const HEALTHY_GIT_LIMIT: Duration = Duration::from_secs(30);
+
     /// Runs git against a fixture, with git's ambient environment cleared.
     ///
     /// Without the removals, an exported `GIT_DIR` from the calling shell
@@ -293,7 +304,7 @@ mod tests {
         let repo = a_repo_with_one_commit();
         git_in(repo.path(), &["checkout", "-q", "--detach"]);
 
-        let facts = inspect(repo.path()).expect("a detached repository is inspectable");
+        let facts = inspect_within(repo.path(), HEALTHY_GIT_LIMIT).expect("a detached repository is inspectable");
 
         match facts.head {
             HeadState::Detached { short_sha } => {
@@ -328,7 +339,7 @@ mod tests {
     #[test]
     fn the_bounded_fallback_answers_with_a_real_git() {
         let repo = a_repo_with_one_commit();
-        let facts = fallback_to_git_rev_parse(repo.path(), Path::new("git"), GIT_FALLBACK_LIMIT);
+        let facts = fallback_to_git_rev_parse(repo.path(), Path::new("git"), HEALTHY_GIT_LIMIT);
         assert_eq!(facts.map(|facts| facts.head), Some(HeadState::Branch("main".to_string())));
     }
 

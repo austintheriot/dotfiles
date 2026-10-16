@@ -379,6 +379,12 @@ impl DecodeError {
     }
 }
 
+/// The part of a request every wire version shares, read before the rest.
+#[derive(Deserialize)]
+struct Envelope {
+    v: Option<u16>,
+}
+
 /// Decodes and checks one request line.
 ///
 /// # Errors
@@ -389,14 +395,18 @@ pub fn decode_request(line: &str) -> Result<Request, DecodeError> {
     if line.len() > MAX_LINE_BYTES {
         return Err(DecodeError::LineTooLong { bytes: line.len() });
     }
-    let request: Request = serde_json::from_str(line)
+    let envelope: Envelope = serde_json::from_str(line)
         .map_err(|error| DecodeError::Malformed { message: error.to_string() })?;
-    let version = match &request {
-        Request::Agent { v, .. } | Request::Control { v, .. } | Request::Query { v, .. } => *v,
-        Request::Unknown => return Err(DecodeError::UnknownKind),
-    };
+    let version = envelope.v.ok_or_else(|| DecodeError::Malformed {
+        message: "missing field `v`".to_string(),
+    })?;
     if !(OLDEST_ACCEPTED_VERSION..=WIRE_VERSION).contains(&version) {
         return Err(DecodeError::UnsupportedVersion { version });
+    }
+    let request: Request = serde_json::from_str(line)
+        .map_err(|error| DecodeError::Malformed { message: error.to_string() })?;
+    if request == Request::Unknown {
+        return Err(DecodeError::UnknownKind);
     }
     match &request {
         Request::Agent { event: AgentEvent::Unknown, .. }
@@ -410,7 +420,7 @@ pub fn decode_request(line: &str) -> Result<Request, DecodeError> {
 ///
 /// # Errors
 ///
-/// Returns the serializer's error. The types in this module do not produce one.
+/// Returns the serializer's error. `Origin::cwd` fails to serialize when the path is not valid UTF-8.
 pub fn encode_line<Value: Serialize>(value: &Value) -> Result<String, serde_json::Error> {
     let mut line = serde_json::to_string(value)?;
     line.push('\n');

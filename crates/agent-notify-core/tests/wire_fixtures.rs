@@ -121,3 +121,23 @@ fn unknown_values_of_closed_enums_reject_the_request() {
         first_request_with(|value| value["origin"]["repo"]["head"]["type"] = serde_json::json!("tag"));
     assert!(decode_request(&unknown_head).is_err());
 }
+
+#[test]
+fn a_newer_version_is_reported_even_when_the_rest_does_not_parse() {
+    let removed_field = first_request_with(|value| {
+        value["v"] = serde_json::json!(2);
+        value["origin"].as_object_mut().expect("an object").remove("cwd");
+    });
+    assert_eq!(decode_request(&removed_field), Err(DecodeError::UnsupportedVersion { version: 2 }));
+    let new_type = first_request_with(|value| {
+        value["v"] = serde_json::json!(2);
+        value["type"] = serde_json::json!("teleport");
+    });
+    assert_eq!(decode_request(&new_type), Err(DecodeError::UnsupportedVersion { version: 2 }));
+}
+
+#[test]
+fn a_non_numeric_version_is_malformed() {
+    let line = first_request_with(|value| value["v"] = serde_json::json!("1"));
+    assert!(matches!(decode_request(&line), Err(DecodeError::Malformed { .. })));
+}

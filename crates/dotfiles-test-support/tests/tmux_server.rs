@@ -174,3 +174,19 @@ fn a_started_server_loads_no_user_config_and_counts_from_one() {
 
     server.shutdown();
 }
+
+/// A server addressed by an explicit socket path reports that path, keeps
+/// the directory's space, and still loads the fixture config and shuts down
+/// clean.
+#[test]
+fn an_explicit_socket_path_is_reported_whole_and_the_fixture_config_still_applies() {
+    let server = Server::at_socket_in_directory_prefixed("explicit", "tt spaced ");
+    server.new_session("probe", server.socket_dir());
+
+    let reported = server.socket_path();
+    assert_eq!(reported, server.socket_dir().join(server.socket()));
+    assert!(reported.to_string_lossy().contains("tt spaced "), "{}", reported.display());
+    assert_eq!(server.stdout(&["display-message", "-p", "-t", "probe:", "#{window_index}"]), "1");
+
+    server.shutdown();
+}

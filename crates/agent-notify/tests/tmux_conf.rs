@@ -2,7 +2,6 @@
 //! the hooks, the binding and the status formats.
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
 use dotfiles_test_support::repo;
@@ -92,45 +91,6 @@ fn sourcing_twice_does_not_duplicate_the_segment() {
     assert_eq!(current.matches("@agent_notify_marker").count(), 1, "{current}");
 }
 
-struct SpacedServer {
-    directory: tempfile::TempDir,
-    socket: PathBuf,
-}
-
-impl SpacedServer {
-    fn start() -> Self {
-        let directory = tempfile::Builder::new().prefix("an conf ").tempdir_in("/tmp").expect("a directory with a space in its name");
-        let socket = directory.path().join("tmux socket");
-        let server = SpacedServer { directory, socket };
-        let started = Command::new("tmux")
-            .arg("-S")
-            .arg(&server.socket)
-            .args(["-f", "/dev/null", "new-session", "-d", "-s", "main", "sleep", "86400"])
-            .output()
-            .expect("tmux runs");
-        assert!(started.status.success(), "{}", String::from_utf8_lossy(&started.stderr));
-        server
-    }
-
-    fn tmux(&self, arguments: &[&str]) -> Output {
-        Command::new("tmux").arg("-S").arg(&self.socket).args(arguments).output().expect("tmux runs")
-    }
-
-    fn stdout(&self, arguments: &[&str]) -> String {
-        String::from_utf8_lossy(&self.tmux(arguments).stdout).trim_end_matches('\n').to_string()
-    }
-
-    fn home(&self) -> &Path {
-        self.directory.path()
-    }
-}
-
-impl Drop for SpacedServer {
-    fn drop(&mut self) {
-        self.tmux(&["kill-server"]);
-    }
-}
-
 fn wait_for_lines(path: &Path) -> Vec<String> {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
@@ -144,21 +104,24 @@ fn wait_for_lines(path: &Path) -> Vec<String> {
 
 #[test]
 fn the_focus_hook_hands_a_socket_path_with_a_space_over_as_one_argument() {
-    let server = SpacedServer::start();
+    let server = Server::at_socket_in_directory_prefixed("an-conf-space", "an conf ");
+    let session_directory = tempfile::tempdir().expect("a temp dir");
+    server.new_session("main", session_directory.path());
     let conf = conf();
     let sourced = server.tmux(&["source-file", conf.to_str().expect("utf-8")]);
     assert!(sourced.status.success(), "{}", String::from_utf8_lossy(&sourced.stderr));
 
-    let argv = server.home().join("argv");
-    let partial = server.home().join("argv.partial");
+    let home = server.socket_dir();
+    let argv = home.join("argv");
+    let partial = home.join("argv.partial");
     let script = format!(
         "#!/bin/sh\nfor argument in \"$@\"; do printf '%s\\n' \"$argument\"; done > '{partial}'\nmv '{partial}' '{argv}'\n",
         partial = partial.display(),
         argv = argv.display()
     );
-    stub::write(&server.home().join(".local/bin/agent-notify"), &script).expect("a stub");
-    let home = server.home().to_str().expect("utf-8").to_string();
-    assert!(server.tmux(&["set-environment", "-g", "HOME", &home]).status.success());
+    stub::write(&home.join(".local/bin/agent-notify"), &script).expect("a stub");
+    let home_text = home.to_str().expect("utf-8");
+    assert!(server.tmux(&["set-environment", "-g", "HOME", home_text]).status.success());
 
     let hook = server.stdout(&["show-options", "-gv", "pane-focus-in[42]"]);
     assert!(hook.contains("run-shell -b"), "the hook must not block tmux: {hook}");
@@ -167,7 +130,8 @@ fn the_focus_hook_hands_a_socket_path_with_a_space_over_as_one_argument() {
     assert!(fired.status.success(), "{}", String::from_utf8_lossy(&fired.stderr));
 
     let lines = wait_for_lines(&argv);
-    let socket = server.socket.to_str().expect("utf-8");
+    let socket_path = server.socket_dir().join(server.socket());
+    let socket = socket_path.to_str().expect("utf-8");
     let pid = server.stdout(&["display-message", "-p", "#{pid}"]);
     let start_time = server.stdout(&["display-message", "-p", "#{start_time}"]);
     let expected = ["focus-changed", "--socket", socket, "--pid", &pid, "--start-time", &start_time, "--pane", &pane, "--in"];

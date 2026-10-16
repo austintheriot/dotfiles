@@ -33,6 +33,7 @@ use std::time::{Duration, Instant};
 pub struct Server {
     socket: String,
     socket_dir: tempfile::TempDir,
+    explicit_socket: Option<PathBuf>,
 }
 
 impl Server {
@@ -50,18 +51,43 @@ impl Server {
     /// no way to recover from, and both are silent in tmux itself.
     #[must_use]
     pub fn new(label: &str) -> Self {
+        Server::start_in("tt-", label, false)
+    }
+
+    /// Like [`Server::new`], but every call addresses the server by an
+    /// explicit socket path (`-S`) inside a directory whose name starts with
+    /// `directory_prefix`.
+    ///
+    /// For the tests whose subject is how a socket path travels through a
+    /// shell, which need a directory name with a space in it. The path is
+    /// `<directory>/<socket>`, so the byte cap applies to that path.
+    ///
+    /// # Panics
+    ///
+    /// Panics under the same conditions as [`Server::new`].
+    #[must_use]
+    pub fn at_socket_in_directory_prefixed(label: &str, directory_prefix: &str) -> Self {
+        Server::start_in(directory_prefix, label, true)
+    }
+
+    fn start_in(directory_prefix: &str, label: &str, explicit: bool) -> Self {
         let socket = format!("tt-{label}-{}", std::process::id());
         // Directly under /tmp, never the ambient temp directory: a socket
         // under /var/folders/.../T/ measured 111 bytes and tmux failed with
         // "File name too long".
         let socket_dir = tempfile::Builder::new()
-            .prefix("tt-")
+            .prefix(directory_prefix)
             .tempdir_in("/tmp")
             .expect("a socket directory under /tmp");
 
         // tmux creates <TMUX_TMPDIR>/tmux-<uid>/<socket>, so the byte count
         // the kernel sees is longer than the directory alone.
-        let path_length = socket_dir.path().join(format!("tmux-0/{socket}")).as_os_str().len();
+        let explicit_socket = explicit.then(|| socket_dir.path().join(&socket));
+        let path_length = explicit_socket
+            .clone()
+            .unwrap_or_else(|| socket_dir.path().join(format!("tmux-0/{socket}")))
+            .as_os_str()
+            .len();
         assert!(
             path_length <= 104,
             "the socket path is {path_length} bytes, over the 104-byte cap: {}",
@@ -70,7 +96,16 @@ impl Server {
 
         std::fs::write(socket_dir.path().join(HERMETIC_CONFIG_NAME), HERMETIC_CONFIG).expect("the fixture's tmux config is written");
 
-        Server { socket, socket_dir }
+        Server { socket, socket_dir, explicit_socket }
+    }
+
+    /// The arguments that address this server: `-S <path>` when the socket
+    /// path is explicit, `-L <name>` otherwise.
+    fn address(&self) -> [std::ffi::OsString; 2] {
+        match &self.explicit_socket {
+            Some(path) => ["-S".into(), path.into()],
+            None => ["-L".into(), (&self.socket).into()],
+        }
     }
 
     /// The config file every server this fixture starts loads instead of
@@ -107,7 +142,7 @@ impl Server {
         Command::new("tmux")
             .env("TMUX_TMPDIR", self.socket_dir.path())
             .env("HOME", home)
-            .args(["-L", &self.socket])
+            .args(self.address())
             .args(arguments)
             .output()
             .expect("tmux runs")
@@ -121,7 +156,7 @@ impl Server {
     pub fn tmux(&self, arguments: &[&str]) -> Output {
         Command::new("tmux")
             .env("TMUX_TMPDIR", self.socket_dir.path())
-            .args(["-L", &self.socket])
+            .args(self.address())
             .args(arguments)
             .output()
             .expect("tmux runs")

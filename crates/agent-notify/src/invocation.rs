@@ -108,6 +108,21 @@ impl Output {
     pub fn is_query(self) -> bool {
         matches!(self, Output::Status(_) | Output::DndStatus)
     }
+
+    /// The level `cli.log` records a send at. A silent control comes from a
+    /// tmux hook that fires on every pane switch, so it logs at debug too.
+    pub fn send_log(self) -> SendLog {
+        if self.is_query() || self == Output::Silent { SendLog::Debug } else { SendLog::Info }
+    }
+}
+
+/// The level of the "sent" line in `cli.log`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendLog {
+    /// Debug: a query or a silent control.
+    Debug,
+    /// Info: a hook event or a command a person ran.
+    Info,
 }
 
 /// How `status` prints.
@@ -654,6 +669,23 @@ mod tests {
             assert_eq!(output.budget(), BUDGET, "{output:?}");
         }
         assert!(QUERY_BUDGET > BUDGET);
+    }
+
+    #[test]
+    fn queries_and_silent_controls_log_their_sends_at_debug() {
+        let table = [
+            (Output::Status(StatusFormat::Tmux), SendLog::Debug),
+            (Output::DndStatus, SendLog::Debug),
+            (Output::Silent, SendLog::Debug),
+            (Output::FallbackOnFailure, SendLog::Info),
+            (Output::Confirm(None), SendLog::Info),
+            (Output::Confirm(Some("x")), SendLog::Info),
+        ];
+        for (output, expected) in table {
+            assert_eq!(output.send_log(), expected, "{output:?}");
+        }
+        let focus = plan_invocation(&focus_changed("%3", "/tmp/s", FocusDirection::In), &bare_inputs());
+        assert_eq!(focus.output.send_log(), SendLog::Debug);
     }
 
     #[test]

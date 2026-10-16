@@ -30,7 +30,7 @@ use clap::error::ErrorKind;
 use crate::cli::{Cli, Command};
 use crate::client::Delivery;
 use crate::context::EnvSnapshot;
-use crate::invocation::{Exit, Inputs, Invocation, Output, PaneLookup};
+use crate::invocation::{Exit, Inputs, Invocation, Output, PaneLookup, SendLog};
 
 fn main() -> ExitCode {
     let arguments: Vec<OsString> = std::env::args_os().collect();
@@ -170,7 +170,7 @@ fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &En
     let output = invocation.output;
     let attempt = attempt(request, |line| send(line, env, output.budget()));
     match &attempt {
-        Ok(delivery) if output.is_query() => {
+        Ok(delivery) if output.send_log() == SendLog::Debug => {
             tracing::debug!(event_id, delivered = delivery.acknowledged(), reason = %delivery.reason(), daemon = delivery.daemon(), "sent");
             tracing::debug!(event_id, request = ?request, "sent request");
         }

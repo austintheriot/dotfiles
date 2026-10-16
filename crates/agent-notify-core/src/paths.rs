@@ -101,3 +101,66 @@ fn absolute(path: Option<&Path>) -> Option<&Path> {
     path.filter(|path| path.is_absolute())
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn inputs(platform: Platform) -> PathInputs<'static> {
+        PathInputs {
+            platform,
+            home: Some(Path::new("/Users/dev")),
+            xdg_runtime_dir: Some(Path::new("/run/user/1000")),
+            xdg_state_home: None,
+            socket_override: None,
+            log_dir_override: None,
+        }
+    }
+
+    #[test]
+    fn macos_socket_lives_in_application_support() {
+        assert_eq!(
+            socket_location(&inputs(Platform::MacOs)),
+            SocketLocation::At(PathBuf::from("/Users/dev/Library/Application Support/agent-notify/agent-notify.sock"))
+        );
+    }
+
+    #[test]
+    fn linux_socket_lives_in_the_runtime_dir_and_fails_closed_without_it() {
+        assert_eq!(
+            socket_location(&inputs(Platform::Linux)),
+            SocketLocation::At(PathBuf::from("/run/user/1000/agent-notify/agent-notify.sock"))
+        );
+        let missing = PathInputs { xdg_runtime_dir: None, ..inputs(Platform::Linux) };
+        assert!(matches!(socket_location(&missing), SocketLocation::Unavailable(_)));
+        let relative = PathInputs { xdg_runtime_dir: Some(Path::new("run")), ..inputs(Platform::Linux) };
+        assert!(matches!(socket_location(&relative), SocketLocation::Unavailable(_)));
+    }
+
+    #[test]
+    fn the_override_wins_when_absolute() {
+        let overridden = PathInputs { socket_override: Some(Path::new("/tmp/test.sock")), ..inputs(Platform::Linux) };
+        assert_eq!(socket_location(&overridden), SocketLocation::At(PathBuf::from("/tmp/test.sock")));
+        let relative = PathInputs { socket_override: Some(Path::new("test.sock")), ..inputs(Platform::MacOs) };
+        assert!(matches!(socket_location(&relative), SocketLocation::Unavailable(_)));
+    }
+
+    #[test]
+    fn an_overlong_socket_path_is_unavailable() {
+        let long_home = format!("/Users/{}", "d".repeat(80));
+        let long = PathInputs { home: Some(Path::new(&long_home)), ..inputs(Platform::MacOs) };
+        assert!(matches!(socket_location(&long), SocketLocation::Unavailable(_)));
+    }
+
+    #[test]
+    fn log_directories() {
+        assert_eq!(log_directory(&inputs(Platform::MacOs)), Some(PathBuf::from("/Users/dev/Library/Logs/agent-notify")));
+        assert_eq!(log_directory(&inputs(Platform::Linux)), Some(PathBuf::from("/Users/dev/.local/state/agent-notify")));
+        let state = PathInputs { xdg_state_home: Some(Path::new("/state")), ..inputs(Platform::Linux) };
+        assert_eq!(log_directory(&state), Some(PathBuf::from("/state/agent-notify")));
+        let overridden = PathInputs { log_dir_override: Some(Path::new("/tmp/logs")), ..inputs(Platform::MacOs) };
+        assert_eq!(log_directory(&overridden), Some(PathBuf::from("/tmp/logs")));
+        let homeless = PathInputs { home: None, ..inputs(Platform::MacOs) };
+        assert_eq!(log_directory(&homeless), None);
+    }
+}

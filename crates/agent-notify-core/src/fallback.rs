@@ -38,3 +38,53 @@ pub fn fallback_note(origin: &Origin, event: &AgentEvent) -> Option<FallbackNote
     })
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::DisplayText;
+    use crate::wire::{AgentKind, InputReason, WindowLabel};
+    use std::path::PathBuf;
+
+    fn origin() -> Origin {
+        Origin {
+            agent: AgentKind::ClaudeCode,
+            session: None,
+            prompt: None,
+            pane: None,
+            window: Some(WindowLabel { index: 4, name: DisplayText::new("code/x") }),
+            repo: None,
+            session_title: None,
+            cwd: PathBuf::from("/home/dev/code"),
+        }
+    }
+
+    #[test]
+    fn attention_events_and_explicit_sends_get_a_note() {
+        let needs = AgentEvent::NeedsInput { reason: InputReason::Permission, message: DisplayText::new("Allow Bash?") };
+        let note = fallback_note(&origin(), &needs).expect("a note");
+        assert_eq!(note.title, "4 · code/x");
+        assert_eq!(note.subtitle, OFFLINE_SUBTITLE);
+        assert_eq!(note.message, "Allow Bash?");
+        assert!(note.urgent);
+
+        let failed = AgentEvent::TurnFailed { error: DisplayText::new("overloaded") };
+        assert_eq!(fallback_note(&origin(), &failed).map(|note| note.message), Some("Stopped: overloaded".to_string()));
+
+        let info = AgentEvent::Explicit { kind: Kind::Info, body: DisplayText::new("Report ready") };
+        assert_eq!(fallback_note(&origin(), &info).map(|note| note.urgent), Some(false));
+    }
+
+    #[test]
+    fn turn_ended_and_bookkeeping_events_get_no_note() {
+        for event in [
+            AgentEvent::TurnEnded { last_message: Some(DisplayText::new("Done.")) },
+            AgentEvent::TurnStarted,
+            AgentEvent::QuietOff,
+            AgentEvent::SessionEnded,
+            AgentEvent::InputResolved,
+        ] {
+            assert_eq!(fallback_note(&origin(), &event), None, "{event:?}");
+        }
+    }
+}

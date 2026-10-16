@@ -58,6 +58,9 @@ pub struct SessionRecord {
     pub title: Option<DisplayText>,
     /// The current turn.
     pub turn: Turn,
+    /// True once the agent called `send` in the current turn, in any turn
+    /// state. A new prompt's turn resets it.
+    pub explicit_sent: bool,
     /// Whether the `Stop` backup is silenced.
     pub quiet: QuietMode,
     /// At most one card per session.
@@ -75,6 +78,7 @@ impl SessionRecord {
             cwd: origin.cwd.clone(),
             title: origin.session_title.clone(),
             turn: Turn::Idle,
+            explicit_sent: false,
             quiet: QuietMode::Armed,
             card: None,
         }
@@ -186,8 +190,6 @@ pub enum Turn {
     Working {
         /// The turn.
         prompt: Option<PromptId>,
-        /// True once the agent called `send` in this turn.
-        explicit_sent: bool,
     },
     /// The turn ended.
     Finished {
@@ -214,7 +216,7 @@ impl Turn {
     pub fn prompt(&self) -> Option<&PromptId> {
         match self {
             Turn::Idle => None,
-            Turn::Working { prompt, .. }
+            Turn::Working { prompt }
             | Turn::Finished { prompt }
             | Turn::NeedsYou { prompt, .. }
             | Turn::Failed { prompt } => prompt.as_ref(),

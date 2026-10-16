@@ -384,31 +384,26 @@ enum Step {
 fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent, now: EpochMs) -> Step {
     match event {
         AgentEvent::TurnStarted => {
-            record.turn = Turn::Working { prompt: prompt.cloned(), explicit_sent: false };
-            if record.quiet.ends_on(QuietUntil::NextPrompt) {
-                record.quiet = QuietMode::Armed;
-            }
+            begin_turn(record);
+            record.turn = Turn::Working { prompt: prompt.cloned() };
             Step::Clear
         }
         AgentEvent::Explicit { kind, body } => {
-            if let Turn::Working { explicit_sent, .. } = &mut record.turn {
-                *explicit_sent = true;
-            }
+            record.explicit_sent = true;
             if record.quiet.ends_on(QuietUntil::NextSend) {
                 record.quiet = QuietMode::Armed;
             }
             Step::Offer(CardOffer { kind, cause: CardCause::Explicit, body })
         }
         AgentEvent::TurnEnded { last_message } => {
-            if is_stale(&record.turn, prompt) {
+            if turn_match(&record.turn, prompt) != TurnMatch::Current {
                 return Step::Nothing(SuppressReason::Stale);
             }
-            let explicit_sent = matches!(record.turn, Turn::Working { explicit_sent: true, .. });
             record.turn = Turn::Finished { prompt: current_prompt(&record.turn, prompt) };
             if record.card.as_ref().is_some_and(|card| matches!(card.cause, CardCause::NeedsInput(_))) {
                 record.card = None;
             }
-            if explicit_sent {
+            if record.explicit_sent {
                 Step::Nothing(SuppressReason::ExplicitSent)
             } else if record.quiet != QuietMode::Armed {
                 Step::Nothing(SuppressReason::Quiet)
@@ -417,14 +412,14 @@ fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent
             }
         }
         AgentEvent::TurnFailed { error } => {
-            if is_stale(&record.turn, prompt) {
+            if !enter_turn_of(record, prompt) {
                 return Step::Nothing(SuppressReason::Stale);
             }
             record.turn = Turn::Failed { prompt: current_prompt(&record.turn, prompt) };
             Step::Offer(CardOffer { kind: Kind::Attention, cause: CardCause::TurnFailed, body: turn_failed_body(&error) })
         }
         AgentEvent::NeedsInput { reason, message } => {
-            if is_stale(&record.turn, prompt) {
+            if !enter_turn_of(record, prompt) {
                 return Step::Nothing(SuppressReason::Stale);
             }
             record.turn = Turn::NeedsYou { prompt: current_prompt(&record.turn, prompt), reason };
@@ -432,7 +427,7 @@ fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent
         }
         AgentEvent::InputResolved => {
             if let Turn::NeedsYou { prompt: waiting, .. } = &record.turn {
-                record.turn = Turn::Working { prompt: waiting.clone(), explicit_sent: false };
+                record.turn = Turn::Working { prompt: waiting.clone() };
             }
             let elicitation = record.card.as_ref().is_some_and(|card| card.cause == CardCause::NeedsInput(InputReason::Elicitation));
             if elicitation { Step::Clear } else { Step::Nothing(SuppressReason::NoCardForEvent) }
@@ -449,14 +444,43 @@ fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent
     }
 }
 
-/// An event is stale when it names another turn than the record's, or
-/// repeats the end of a turn that already ended.
-fn is_stale(turn: &Turn, prompt: Option<&PromptId>) -> bool {
-    let Some(event_prompt) = prompt else { return false };
-    match turn.prompt() {
-        Some(current) if current != event_prompt => true,
-        Some(_) => matches!(turn, Turn::Finished { .. } | Turn::Failed { .. }),
-        None => false,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TurnMatch {
+    /// Also when the event or the record has no prompt.
+    Current,
+    Ended,
+    Other,
+}
+
+fn turn_match(turn: &Turn, prompt: Option<&PromptId>) -> TurnMatch {
+    let (Some(event_prompt), Some(current)) = (prompt, turn.prompt()) else { return TurnMatch::Current };
+    if current != event_prompt {
+        TurnMatch::Other
+    } else if matches!(turn, Turn::Finished { .. } | Turn::Failed { .. }) {
+        TurnMatch::Ended
+    } else {
+        TurnMatch::Current
+    }
+}
+
+fn begin_turn(record: &mut SessionRecord) {
+    record.explicit_sent = false;
+    if record.quiet.ends_on(QuietUntil::NextPrompt) {
+        record.quiet = QuietMode::Armed;
+    }
+}
+
+/// For mid-turn events. A prompt the record has not seen means its
+/// `TurnStarted` was lost, so the event starts that turn. Returns false when
+/// the event repeats a turn that already ended.
+fn enter_turn_of(record: &mut SessionRecord, prompt: Option<&PromptId>) -> bool {
+    match turn_match(&record.turn, prompt) {
+        TurnMatch::Current => true,
+        TurnMatch::Ended => false,
+        TurnMatch::Other => {
+            begin_turn(record);
+            true
+        }
     }
 }
 
@@ -510,7 +534,7 @@ fn pane_state(turn: &Turn) -> PaneState {
 mod tests {
     use super::*;
     use crate::state::{CardCause, QuietMode, Turn};
-    use crate::test_support::{agent_input, card, event_id, origin, pane, reasons, send, session};
+    use crate::test_support::{agent_input, card, event_id, origin, pane, prompt, reasons, send, session};
     use crate::wire::{AgentEvent, InputReason, Kind, QuietUntil, SessionSource};
     use crate::DisplayText;
 
@@ -609,15 +633,87 @@ mod tests {
     }
 
     #[test]
-    fn events_for_an_older_prompt_are_stale() {
+    fn a_turn_end_for_another_prompt_is_stale() {
         let mut state = DaemonState::default();
         send(&mut state, 1, "a", Some("p1"), AgentEvent::TurnStarted);
         send(&mut state, 2, "a", Some("p2"), AgentEvent::TurnStarted);
-        for (number, event) in [(3, turn_ended("old")), (4, needs_permission()), (5, AgentEvent::TurnFailed { error: text("x") })] {
-            let effects = send(&mut state, number, "a", Some("p1"), event);
-            assert_eq!(reasons(&effects), vec![SuppressReason::Stale]);
-        }
+        let effects = send(&mut state, 3, "a", Some("p1"), turn_ended("old"));
+        assert_eq!(reasons(&effects), vec![SuppressReason::Stale]);
         assert!(card(&state, "a").is_none());
+    }
+
+    #[test]
+    fn needs_input_for_an_unseen_prompt_starts_that_turn() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", Some("p1"), AgentEvent::TurnStarted);
+        let effects = send(&mut state, 2, "a", Some("p2"), needs_permission());
+        assert!(reasons(&effects).is_empty());
+        assert_eq!(card(&state, "a").map(|shown| shown.kind), Some(Kind::Attention));
+        let expected = Turn::NeedsYou { prompt: Some(prompt("p2")), reason: InputReason::Permission };
+        assert_eq!(state.sessions[&session("a")].turn, expected);
+    }
+
+    #[test]
+    fn turn_failed_for_an_unseen_prompt_starts_that_turn() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", Some("p1"), AgentEvent::TurnStarted);
+        send(&mut state, 2, "a", Some("p2"), AgentEvent::TurnFailed { error: text("overloaded") });
+        assert_eq!(card(&state, "a").map(|shown| shown.cause), Some(CardCause::TurnFailed));
+        assert_eq!(state.sessions[&session("a")].turn, Turn::Failed { prompt: Some(prompt("p2")) });
+    }
+
+    #[test]
+    fn an_explicit_send_before_a_permission_prompt_still_silences_the_turn_end() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", Some("p1"), AgentEvent::TurnStarted);
+        send(&mut state, 2, "a", None, explicit(Kind::Info, "CI green"));
+        send(&mut state, 3, "a", Some("p1"), needs_permission());
+        let effects = send(&mut state, 4, "a", Some("p1"), turn_ended("Done."));
+        assert_eq!(reasons(&effects), vec![SuppressReason::ExplicitSent]);
+        assert!(card(&state, "a").is_none(), "the permission card clears and no backup card shows");
+    }
+
+    #[test]
+    fn an_explicit_send_while_waiting_for_the_user_silences_the_turn_end() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", Some("p1"), AgentEvent::TurnStarted);
+        send(&mut state, 2, "a", Some("p1"), needs_permission());
+        send(&mut state, 3, "a", None, explicit(Kind::Info, "CI green"));
+        send(&mut state, 4, "a", Some("p1"), AgentEvent::InputResolved);
+        let effects = send(&mut state, 5, "a", Some("p1"), turn_ended("Done."));
+        assert_eq!(reasons(&effects), vec![SuppressReason::ExplicitSent]);
+        assert!(card(&state, "a").is_none());
+    }
+
+    #[test]
+    fn an_explicit_send_before_any_turn_start_still_counts() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", None, explicit(Kind::Info, "CI green"));
+        let effects = send(&mut state, 2, "a", Some("p1"), turn_ended("Done."));
+        assert_eq!(reasons(&effects), vec![SuppressReason::ExplicitSent]);
+    }
+
+    #[test]
+    fn a_new_turn_start_resets_the_explicit_flag() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", Some("p1"), AgentEvent::TurnStarted);
+        send(&mut state, 2, "a", None, explicit(Kind::Info, "CI green"));
+        send(&mut state, 3, "a", Some("p1"), turn_ended("Done."));
+        send(&mut state, 4, "a", Some("p2"), AgentEvent::TurnStarted);
+        let effects = send(&mut state, 5, "a", Some("p2"), turn_ended("Done again."));
+        assert!(reasons(&effects).is_empty());
+        assert_eq!(card(&state, "a").map(|shown| shown.cause), Some(CardCause::TurnEnded));
+    }
+
+    #[test]
+    fn adopting_an_unseen_prompt_resets_the_explicit_flag() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", Some("p1"), AgentEvent::TurnStarted);
+        send(&mut state, 2, "a", None, explicit(Kind::Info, "CI green"));
+        send(&mut state, 3, "a", Some("p2"), needs_permission());
+        let effects = send(&mut state, 4, "a", Some("p2"), turn_ended("Done."));
+        assert!(reasons(&effects).is_empty());
+        assert_eq!(card(&state, "a").map(|shown| shown.cause), Some(CardCause::TurnEnded));
     }
 
     #[test]
@@ -658,7 +754,9 @@ mod tests {
         send(&mut state, 1, "a", Some("p1"), AgentEvent::TurnFailed { error: text("x") });
         send(&mut state, 2, "a", Some("p2"), AgentEvent::TurnStarted);
         assert!(card(&state, "a").is_none());
-        assert!(matches!(state.sessions[&session("a")].turn, Turn::Working { explicit_sent: false, .. }));
+        let record = &state.sessions[&session("a")];
+        assert_eq!(record.turn, Turn::Working { prompt: Some(prompt("p2")) });
+        assert!(!record.explicit_sent);
     }
 
     #[test]

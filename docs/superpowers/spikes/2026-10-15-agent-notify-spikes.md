@@ -116,3 +116,34 @@ Run in the Tart VM `pop-cosmic-spike` (Pop!_OS 24.04 COSMIC, arm64) and in Docke
 
 1. **Fullscreen (S1-4).** Put any app in native fullscreen, run the spike binary, and show a card. The spike binary lives only in a session scratch directory, so this check moves into plan 2's manual smoke test.
 2. **Intel run (S1-13).** Build and run plan 2's daemon on the home Intel Mac.
+
+## Plan 2 smoke test
+
+Run on 2026-10-16 on the work Mac, daemon stamp `a3cb4f259a905c01` (commit 448fbfae plus the Task 19 commits). Ids are the Task 20 check numbers. The card panel is invisible to `screencapture`, so the user confirmed every visual result. Daemon results come from `agent-notify status` and `agent-notifyd.2026-10-16.log`. Test cards came from `agent-notify send` in a Claude Code session in window 18.
+
+| Id | Result | Evidence |
+|---|---|---|
+| 1 | Pass | `launchctl print`: `state = running`, one pid, runs 4, last exit code 0. |
+| 2 | Pass | `agent-notify doctor` exit 0. All 13 lines read `ok`. |
+| 3 | Pass | `status` and `installed-stamp` both read `a3cb4f259a905c01`. |
+| 4 | Not run | Login Items pane not checked in this pass. |
+| 5 | Not run | kickstart, `kill -9` and second-copy checks not run in this pass. The ledger records one clean kickstart restart at reinstall. |
+| 6 | Pass | Info card names the window and repo. Fix A (scroll bars) confirmed: no scroll bars. |
+| 7 | Pass | Attention card is amber, and Glass plays once. |
+| 8 | Pass | Click on an attention card switches tmux to the session's pane. Fix C: a click on an info card also jumps to the right pane. The card leaves only on mouse-leave (F1). |
+| 9 | Not run | Detached-client `open -n` path not run in this pass. |
+| 10 | Fail | The close button fades in fast. A click on it does not remove the card until the pointer leaves the panel (2 to 3 s in the test). Cause: F1. |
+| 11 | Pass, brief text wrong | Meta-n jumps to the newest attention card. By design, `jump_target` in `update.rs` skips info cards. The brief's "newest card's pane" is wrong, not the code. |
+| 12 | Pass | A send at 12:16:42 with the session's pane focused logged `suppressed: focused`. |
+| 13 | Pass | Without hover, `dnd on` hid the card and `dnd off` showed it again (user confirmed). `dnd status` reports the state. |
+| 13b | Fail | Hover the stack, then run `dnd on` and `dnd off`: the card stays on screen throughout. Both dnd events logged `handled`. Cause: F1. `view()` returns the frozen view before it checks dnd (`view.rs:60-62`). |
+| 14 | Pass | While locked, the plain `ioreg -n Root -d1` record with `"kCGSSessionOnConsoleKey"=Yes` contains `"CGSSessionScreenIsLocked"=Yes`. That is the shape `parse_screen_locked` reads. After unlock, the key is absent, so the parser returns `Some(false)`. A send at 12:41:56 with the pane focused and the screen locked got `card`, and the card was on screen at unlock. The brief's `ioreg -a \| plutil` command prints XML (`<key>CGSSessionScreenIsLocked</key><true/>`), not the text form the daemon parses. |
+| 15 | Not run | Fullscreen. |
+| 16 | Not run | Intel Mac. |
+| 17 | Not run | Screen share. |
+
+### Fix tasks
+
+- **F1: hover freeze holds user actions.** On hover, `ui_intent` stores `frozen_view` (`update.rs:668-672`), and `view()` returns it until mouse-leave. `close()` (`update.rs:713`) and the click path change state but not the frozen view. The actor sees no change and pushes nothing (`actor.rs:433-437`). The freeze also hides a `dnd on`. The freeze must hold back only timer and arrival changes. A close, a click and dnd must take effect at once. Red test in core: hover on, close a card, and assert that `view()` no longer contains the card. Add the same test for `dnd on`. Fails checks 10 and 13b.
+- **F2: no log of UI intents or panel pushes.** The daemon logs neither the clicks, closes and hover changes it receives nor what it pushes to the panel. That is why F1 left no trace in the log. Add a debug line in `DaemonHandle::send_ui` (`actor.rs:272`) and one at the present step (`actor.rs:435`). The presence snapshot (frontmost, lock, idle) behind each decision is not logged either, so check 14 cannot separate "screen locked" from "frontmost changed" as the cause.
+- **Brief corrections:** check 11 text (Meta-n targets attention cards only). Check 14 command (use `ioreg -n Root -d1 \| grep IOConsoleUsers`, without `-a`).

@@ -3,7 +3,9 @@
 //!
 //! A tmux server that restarts on the same socket path reuses pane ids from
 //! `%0`, so every read prints `#{pid}` and `#{start_time}` on each line, and
-//! a line from a different server makes the whole read `ServerGone`. Writes
+//! a line from a different server makes the whole read `ServerGone`. A line
+//! with no readable identity makes it `Failed`: tmux prints a newline in a
+//! user field raw, which splits a line, and that must not end sessions. Writes
 //! check identity first; the gap between the check and the write is one tmux
 //! round trip.
 //!
@@ -89,7 +91,7 @@ impl Tmux {
     pub fn server_id(&self, socket: &SocketPath) -> Result<ServerId, TmuxError> {
         let text = self.run(socket, &["list-sessions", "-F", IDENTITY])?;
         let first = text.lines().next().ok_or(TmuxError::ServerGone)?;
-        identity_of(first, socket)
+        identified_fields(first, socket, 3).map(|(identity, _)| identity)
     }
 
     /// Every pane with its tag and tmux session id, and every client.
@@ -147,6 +149,9 @@ impl Tmux {
     /// to it as `switch` says. `AttachNewTerminal` only selects: the caller
     /// starts the terminal.
     ///
+    /// No identity check: `server` gives only the socket. The caller must
+    /// check identity just before, as `run_focus` does with [`Tmux::session_tag`].
+    ///
     /// # Errors
     ///
     /// The first tmux error.
@@ -202,7 +207,7 @@ impl Tmux {
             return Ok(String::from_utf8_lossy(&finished.stdout).into_owned());
         }
         let stderr = String::from_utf8_lossy(&finished.stderr).trim().to_string();
-        if is_server_gone(&stderr) { Err(TmuxError::ServerGone) } else { Err(TmuxError::Failed(stderr)) }
+        if is_server_gone(&stderr, arguments) { Err(TmuxError::ServerGone) } else { Err(TmuxError::Failed(stderr)) }
     }
 }
 
@@ -217,27 +222,38 @@ fn option_arguments(scope: &str, target: &str, option: &str, state: PaneState) -
     }
 }
 
-fn is_server_gone(stderr: &str) -> bool {
-    ["no server running", "error connecting", "No such file or directory", "can't find pane", "can't find window"]
-        .iter()
-        .any(|needle| stderr.contains(needle))
+/// Only these connect errors mean nothing answers on the socket. Any other
+/// errno, such as a permission or sandbox refusal, can hide a live server.
+const GONE_CONNECT_ERRORS: [&str; 2] = ["(No such file or directory)", "(Connection refused)"];
+const MISSING_TARGET_PREFIXES: [&str; 3] = ["can't find pane: ", "can't find window: ", "can't find session: "];
+
+/// Gone is a fact tmux states: no server, or a missing target that this
+/// call named with `-t`. Everything else is `Failed`, which ends no session.
+fn is_server_gone(stderr: &str, arguments: &[&str]) -> bool {
+    let targets: Vec<&str> = arguments.windows(2).filter(|pair| pair[0] == "-t").map(|pair| pair[1]).collect();
+    stderr.lines().any(|line| {
+        line.starts_with("no server running on ")
+            || (line.starts_with("error connecting to ") && GONE_CONNECT_ERRORS.iter().any(|errno| line.ends_with(errno)))
+            || MISSING_TARGET_PREFIXES.iter().any(|prefix| line.strip_prefix(prefix).is_some_and(|target| targets.contains(&target)))
+    })
 }
 
-fn identity_of(line: &str, socket: &SocketPath) -> Result<ServerId, TmuxError> {
-    let mut fields = line.splitn(3, SEPARATOR);
-    let pid = fields.next().and_then(|value| value.parse().ok());
-    let start_time = fields.next().and_then(|value| value.parse().ok());
+/// Splits `line` into at most `count` fields (three or more) and parses the
+/// identity in the first two. A line split by a raw newline in a user field
+/// has no identity, which is unreadable output, never a different server.
+fn identified_fields<'line>(line: &'line str, socket: &SocketPath, count: usize) -> Result<(ServerId, Vec<&'line str>), TmuxError> {
+    let fields: Vec<&str> = line.splitn(count.max(3), SEPARATOR).collect();
+    let pid = fields.first().and_then(|value| value.parse().ok());
+    let start_time = fields.get(1).and_then(|value| value.parse().ok());
     match (pid, start_time) {
-        (Some(pid), Some(start_time)) => Ok(ServerId { socket_path: socket.clone(), pid, start_time }),
-        _ => Err(TmuxError::Failed(format!("unreadable identity {line:?}"))),
+        (Some(pid), Some(start_time)) => Ok((ServerId { socket_path: socket.clone(), pid, start_time }, fields)),
+        _ => Err(TmuxError::Failed(format!("unreadable tmux line {line:?}"))),
     }
 }
 
 fn checked_fields<'line>(line: &'line str, server: &ServerId, count: usize) -> Result<Vec<&'line str>, TmuxError> {
-    let fields: Vec<&str> = line.splitn(count, SEPARATOR).collect();
-    let same = fields.first().and_then(|pid| pid.parse::<u32>().ok()) == Some(server.pid)
-        && fields.get(1).and_then(|start| start.parse::<i64>().ok()) == Some(server.start_time);
-    if !same {
+    let (found, fields) = identified_fields(line, &server.socket_path, count)?;
+    if found != *server {
         return Err(TmuxError::ServerGone);
     }
     if fields.len() < count {
@@ -255,7 +271,8 @@ fn tag_of(text: &str) -> Option<SessionId> {
 ///
 /// # Errors
 ///
-/// `ServerGone` when any line comes from a different server.
+/// `ServerGone` when any line comes from a different server; `Failed` when
+/// a line has no readable identity.
 pub fn parse_world(panes: &str, clients: &str, server: &ServerId) -> Result<FocusWorld, TmuxError> {
     let panes = panes
         .lines()
@@ -281,7 +298,8 @@ pub fn parse_world(panes: &str, clients: &str, server: &ServerId) -> Result<Focu
 ///
 /// # Errors
 ///
-/// `ServerGone` when any line comes from a different server.
+/// `ServerGone` when any line comes from a different server; `Failed` when
+/// a line has no readable identity.
 pub fn parse_pane_tags(text: &str, server: &ServerId) -> Result<Vec<(PaneId, Option<SessionId>)>, TmuxError> {
     let rows = text
         .lines()
@@ -302,7 +320,7 @@ pub fn parse_pane_tags(text: &str, server: &ServerId) -> Result<Vec<(PaneId, Opt
 /// unreadable identity.
 pub fn parse_pane_snapshot(text: &str, socket: &SocketPath) -> Result<PaneSnapshot, TmuxError> {
     let first = text.lines().next().ok_or(TmuxError::ServerGone)?;
-    let server = identity_of(first, socket)?;
+    let (server, _) = identified_fields(first, socket, 3)?;
     let panes = parse_pane_tags(text, &server)?.into_iter().map(|(pane, session)| PaneTag { pane, session }).collect();
     Ok(PaneSnapshot { server, panes })
 }
@@ -312,7 +330,8 @@ pub fn parse_pane_snapshot(text: &str, socket: &SocketPath) -> Result<PaneSnapsh
 ///
 /// # Errors
 ///
-/// `ServerGone` when any line comes from a different server.
+/// `ServerGone` when any line comes from a different server; `Failed` when
+/// a line has no readable identity.
 pub fn parse_active_pane(text: &str, server: &ServerId) -> Result<Option<PaneKey>, TmuxError> {
     let rows = text
         .lines()
@@ -393,6 +412,28 @@ mod tests {
         assert!(matches!(parse_world(&panes, "", &server()), Err(TmuxError::ServerGone)));
         let restarted = line(&["77", "1700000999", "%1", "session-a"]);
         assert!(matches!(parse_pane_tags(&restarted, &server()), Err(TmuxError::ServerGone)));
+        let clients = [line(&["77", "1700000000", "100", "/dev/ttys001", "%1"]), line(&["77", "1700000999", "300", "/dev/ttys002", "%4"])].concat();
+        assert!(matches!(parse_active_pane(&clients, &server()), Err(TmuxError::ServerGone)));
+    }
+
+    #[test]
+    fn a_different_valid_identity_mid_read_is_server_gone() {
+        let panes = [line(&["77", "1700000000", "%1", "$0", "session-a"]), line(&["77", "1700000999", "%2", "$0", ""])].concat();
+        assert!(matches!(parse_world(&panes, "", &server()), Err(TmuxError::ServerGone)));
+    }
+
+    #[test]
+    fn an_unreadable_identity_on_any_line_is_failed() {
+        let split_by_newline = format!("{}b\tc\n", line(&["77", "1700000000", "%1", "$0", "a"]));
+        assert!(matches!(parse_world(&split_by_newline, "", &server()), Err(TmuxError::Failed(_))), "mid-read garbage");
+        let tags = format!("{}b\n", line(&["77", "1700000000", "%1", "a"]));
+        assert!(matches!(parse_pane_tags(&tags, &server()), Err(TmuxError::Failed(_))), "mid-read garbage");
+        let snapshot = format!("{}b\tc\n", line(&["91", "1700000123", "%0", "a"]));
+        assert!(matches!(parse_pane_snapshot(&snapshot, &socket()), Err(TmuxError::Failed(_))), "mid-read garbage");
+        assert!(matches!(parse_world("garbage\n", "", &server()), Err(TmuxError::Failed(_))), "first-line garbage");
+        assert!(matches!(parse_pane_tags(&line(&["77", "x", "%1", ""]), &server()), Err(TmuxError::Failed(_))), "first-line garbage");
+        let windows = format!("{}b\n", line(&["77", "1700000000", "@3", "%1", "working"]));
+        assert!(matches!(parse_window_panes(&windows, &server()), Err(TmuxError::Failed(_))), "mid-read garbage");
     }
 
     #[test]
@@ -464,10 +505,28 @@ mod tests {
 
     #[test]
     fn server_gone_comes_only_from_tmux_saying_so() {
-        assert!(is_server_gone("no server running on /tmp/tmux-501/default"));
-        assert!(is_server_gone("error connecting to /tmp/tmux-501/default (Connection refused)"));
-        assert!(is_server_gone("can't find pane: %9"));
-        assert!(!is_server_gone("unknown option: @x"));
+        let asked: &[&str] = &["set-option", "-p", "-t", "%9", "@x", "y", ";", "set-option", "-w", "-t", "@3", "@y", "z"];
+        let rows: [(&str, bool); 15] = [
+            ("no server running on /tmp/tmux-501/default", true),
+            ("error connecting to /tmp/tmux-501/default (No such file or directory)", true),
+            ("error connecting to /tmp/tmux-501/default (Connection refused)", true),
+            ("can't find pane: %9", true),
+            ("can't find window: @3", true),
+            ("error connecting to /tmp/tmux-501/default (Permission denied)", false),
+            ("error connecting to /tmp/tmux-501/default (Operation not permitted)", false),
+            ("error connecting to /tmp/tmux-501/default (File name too long)", false),
+            ("error connecting to /tmp/x (No such file or directory) and more", false),
+            ("unknown option: @x No such file or directory", false),
+            ("can't find pane: %10", false),
+            ("can't find window: @4", false),
+            ("can't find client: /dev/ttys001", false),
+            ("unknown option: @x", false),
+            ("", false),
+        ];
+        for (stderr, gone) in rows {
+            assert_eq!(is_server_gone(stderr, asked), gone, "{stderr:?}");
+        }
+        assert!(is_server_gone("can't find session: $2", &["display-message", "-t", "$2"]));
         assert_eq!(timed_out(), TmuxError::Failed("tmux did not answer in 1 s".to_string()));
     }
 

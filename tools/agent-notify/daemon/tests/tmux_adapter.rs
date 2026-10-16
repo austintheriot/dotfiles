@@ -60,7 +60,7 @@ fn a_restarted_server_reads_as_gone() {
     assert!(matches!(tmux.set_pane_state(&stale, PaneState::Working), Err(TmuxError::ServerGone)));
     assert_eq!(pane_option(&server, &new_pane, PANE_STATE_OPTION), "", "nothing was written to the new pane");
     assert!(matches!(tmux.focus_world(&old), Err(TmuxError::ServerGone)));
-    assert!(matches!(tmux.active_pane(&old), Ok(None) | Err(TmuxError::ServerGone)));
+    assert_eq!(tmux.active_pane(&old), Ok(None), "no client prints no line, so there is no identity to check");
     assert!(matches!(tmux.session_tag(&stale), Err(TmuxError::ServerGone)));
 }
 
@@ -92,6 +92,18 @@ fn a_missing_server_is_gone_not_failed() {
     assert!(matches!(tmux.focus_world(&id), Err(TmuxError::ServerGone)));
     assert!(matches!(tmux.pane_snapshot(&id.socket_path), Err(TmuxError::ServerGone)));
     assert!(matches!(tmux.server_id(&id.socket_path), Err(TmuxError::ServerGone)));
+}
+
+#[test]
+fn a_newline_in_a_tag_fails_the_read_and_never_reads_as_gone() {
+    let server = tmux_server("an-newline");
+    let pane = first_pane(&server, "main");
+    tag(&server, &pane, "a\nb\tc");
+    let tmux = adapter();
+    let snapshot = tmux.pane_snapshot(&socket(&server));
+    assert!(matches!(snapshot, Err(TmuxError::Failed(_))), "{snapshot:?}");
+    let world = tmux.focus_world(&server_id(&server));
+    assert!(matches!(world, Err(TmuxError::Failed(_))), "{world:?}");
 }
 
 #[test]

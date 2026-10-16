@@ -290,7 +290,7 @@ pub fn update(state: &mut DaemonState, input: DaemonInput, now: EpochMs) -> Vec<
         DaemonInput::Received { request, focus } => receive(state, request, &focus, now, &mut effects),
         DaemonInput::Ui(intent) => ui_intent(state, intent, now, &mut effects),
         DaemonInput::Tick => tick(state, now, &mut effects),
-        DaemonInput::PaneSnapshot(snapshot) => reap(state, &snapshot),
+        DaemonInput::PaneSnapshot(snapshot) => reap(state, &snapshot, &mut effects),
         DaemonInput::FocusOutcome { card, outcome } => focus_outcome(state, &card, outcome, now),
     }
     effects
@@ -777,8 +777,10 @@ fn still_waiting(turn: Option<&Turn>, snoozed_prompt: Option<&PromptId>) -> bool
 }
 
 /// Drops records whose pane is gone, whose pane now names another session, or
-/// whose server was replaced by a new one on the same socket.
-fn reap(state: &mut DaemonState, snapshot: &PaneSnapshot) {
+/// whose server was replaced by a new one on the same socket. Then writes the
+/// pane state of every record kept on the snapshot's server again, so a write
+/// that tmux lost heals within one snapshot.
+fn reap(state: &mut DaemonState, snapshot: &PaneSnapshot, effects: &mut Vec<Effect>) {
     state.sessions.retain(|session, record| {
         let Some(pane) = &record.pane else { return true };
         if pane.server.socket_path != snapshot.server.socket_path {
@@ -789,6 +791,11 @@ fn reap(state: &mut DaemonState, snapshot: &PaneSnapshot) {
         }
         snapshot.panes.iter().any(|tag| tag.pane == pane.pane && tag.session.as_ref() == Some(session))
     });
+    let rewrites = state.sessions.values().filter_map(|record| {
+        let pane = record.pane.as_ref().filter(|pane| pane.server == snapshot.server)?;
+        Some(Effect::SetPaneState { pane: pane.clone(), state: pane_state(&record.turn) })
+    });
+    effects.extend(rewrites);
 }
 
 fn focus_outcome(state: &mut DaemonState, card_id: &CardId, outcome: FocusOutcome, now: EpochMs) {
@@ -1652,6 +1659,19 @@ mod tests {
     }
 
     #[test]
+    fn a_pane_snapshot_rewrites_the_state_of_every_pane_it_keeps() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "kept", Some("p1"), AgentEvent::TurnStarted);
+        send(&mut state, 1, "kept", Some("p1"), needs_permission());
+        let mut elsewhere = origin(Some("elsewhere"), None);
+        elsewhere.pane = Some(PaneKey { server: ServerId { socket_path: crate::SocketPath::parse(std::path::Path::new("/tmp/other")).expect("absolute"), ..server() }, pane: PaneId::parse("%1").expect("pane") });
+        update(&mut state, agent_input(2, elsewhere, AgentEvent::TurnStarted), EpochMs(2));
+        let snapshot = PaneSnapshot { server: server(), panes: vec![PaneTag { pane: PaneId::parse("%1").expect("pane"), session: Some(session("kept")) }] };
+        let effects = update(&mut state, DaemonInput::PaneSnapshot(snapshot), EpochMs(3));
+        assert_eq!(effects, vec![Effect::SetPaneState { pane: pane(1), state: PaneState::NeedsYou }]);
+    }
+
+    #[test]
     fn a_new_server_on_the_same_socket_drops_the_old_servers_sessions() {
         let mut state = DaemonState::default();
         send(&mut state, 0, "a", None, AgentEvent::TurnStarted);
@@ -1901,6 +1921,74 @@ mod card_life_tests {
         let query = Request::Query { v: WIRE_VERSION, event_id: event_id(1), query: Query::Status };
         assert!(!may_offer_card(&query));
         assert!(!may_offer_card(&Request::Unknown));
+    }
+
+    const SESSION_CHOICES: [Option<&str>; 3] = [Some("a"), Some("b"), None];
+    const PROMPT_CHOICES: [Option<&str>; 3] = [Some("p1"), Some("p2"), None];
+
+    /// One generated input: an agent event, DND on or off, or a tick.
+    fn generated_input(choice: (usize, usize, usize, u32), number: i64) -> DaemonInput {
+        let (action, session_choice, prompt_choice, pane_number) = choice;
+        let events = every_event();
+        match events.get(action) {
+            Some(event) => {
+                let mut from = origin(SESSION_CHOICES[session_choice], PROMPT_CHOICES[prompt_choice]);
+                from.pane = Some(pane(pane_number));
+                agent_input(number, from, event.clone())
+            }
+            None if action == events.len() => dnd_input(number, DndCommand::On { for_minutes: None }),
+            None if action == events.len() + 1 => dnd_input(number, DndCommand::Off),
+            None => DaemonInput::Tick,
+        }
+    }
+
+    fn dnd_input(number: i64, command: DndCommand) -> DaemonInput {
+        let request = Request::Control { v: WIRE_VERSION, event_id: event_id(number), sent_at_ms: EpochMs(number), control: Control::Dnd { command } };
+        DaemonInput::Received { request, focus: FocusSnapshot::unknown() }
+    }
+
+    fn looking_at(pane: PaneKey) -> FocusSnapshot {
+        FocusSnapshot { frontmost: Frontmost::Terminal, active_pane: Some(pane), idle_seconds: Some(0), screen_locked: Some(false), screen_shared: None }
+    }
+
+    fn input_choice() -> impl proptest::strategy::Strategy<Value = (usize, usize, usize, u32)> {
+        (0..every_event().len() + 3, 0..SESSION_CHOICES.len(), 0..PROMPT_CHOICES.len(), 1u32..3)
+    }
+
+    proptest::proptest! {
+        /// The shell reads focus facts only when `may_offer_card` says so. For
+        /// every other request the facts must change nothing, from any state.
+        #[test]
+        fn focus_facts_matter_only_for_requests_that_may_offer_a_card(
+            history in proptest::collection::vec((input_choice(), 1i64..20_000), 0..30),
+            last in input_choice(),
+        ) {
+            let mut state = DaemonState::default();
+            let mut now = 0;
+            for (step, (choice, gap)) in history.into_iter().enumerate() {
+                now += gap;
+                let number = i64::try_from(step).expect("a short history") + 1;
+                let input = match generated_input(choice, number) {
+                    DaemonInput::Received { request: Request::Agent { v, event_id, origin, event, .. }, focus } => {
+                        DaemonInput::Received { request: Request::Agent { v, event_id, sent_at_ms: EpochMs(now), origin, event }, focus }
+                    }
+                    other => other,
+                };
+                update(&mut state, input, EpochMs(now));
+            }
+            let DaemonInput::Received { request, .. } = generated_input(last, 1_000) else { return Ok(()) };
+            let pane_looked_at = pane(last.3);
+            let mut without_facts = state.clone();
+            let mut with_facts = state;
+            let unknown = update(&mut without_facts, DaemonInput::Received { request: request.clone(), focus: FocusSnapshot::unknown() }, EpochMs(now + 1));
+            let focused = update(&mut with_facts, DaemonInput::Received { request: request.clone(), focus: looking_at(pane_looked_at) }, EpochMs(now + 1));
+            if !may_offer_card(&request) {
+                proptest::prop_assert_eq!(&unknown, &focused);
+                proptest::prop_assert_eq!(&without_facts, &with_facts);
+                proptest::prop_assert!(!has_card_from(&without_facts, 1_000));
+                proptest::prop_assert!(!unknown.contains(&Effect::PlaySound));
+            }
+        }
     }
 
     #[test]

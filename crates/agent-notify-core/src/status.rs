@@ -51,8 +51,9 @@ pub struct Decision {
     pub event_id: EventId,
     /// The event or control kind, for example `turn_ended`.
     pub kind: String,
-    /// `card` when the event left a card, `no_card` when its kind never makes
-    /// one, `suppressed: <reason>`, or `handled` for a control.
+    /// `card` when the event left a card on screen, `suppressed: dnd` when it
+    /// left a card that DND holds off screen, `no_card` when its kind never
+    /// makes one, `suppressed: <reason>` for no card, or `handled` for a control.
     pub outcome: String,
 }
 
@@ -439,6 +440,31 @@ mod tests {
                 assert_eq!(outcome == "card", has_card_from(&state, 1), "{event:?} from {session_name:?}: {outcome}");
             }
         }
+    }
+
+    #[test]
+    fn a_decision_names_a_merged_or_held_card_by_where_the_card_went() {
+        let needs_input = || AgentEvent::NeedsInput { reason: InputReason::Permission, message: DisplayText::new("Allow?") };
+        let with_card = || {
+            let mut state = DaemonState::default();
+            send(&mut state, 0, "a", Some("p1"), needs_input());
+            state
+        };
+        let dnd_on = |mut state: DaemonState| {
+            state.dnd = Dnd::On { until: None };
+            state
+        };
+        for event in every_event() {
+            for (label, mut state) in [("an existing card", with_card()), ("dnd", dnd_on(DaemonState::default())), ("dnd over an existing card", dnd_on(with_card()))] {
+                let outcome = outcome_of(&mut state, 1, Some("a"), event.clone());
+                let held = state.dnd_active(EpochMs(1));
+                let has_card = has_card_from(&state, 1);
+                assert_eq!(outcome == "card", has_card && !held, "{event:?} with {label}: {outcome}");
+                assert_eq!(outcome == "suppressed: dnd", has_card && held, "{event:?} with {label}: {outcome}");
+            }
+        }
+        assert_eq!(outcome_of(&mut with_card(), 1, Some("a"), needs_input()), "card");
+        assert_eq!(outcome_of(&mut dnd_on(DaemonState::default()), 1, Some("a"), needs_input()), "suppressed: dnd");
     }
 
     #[test]

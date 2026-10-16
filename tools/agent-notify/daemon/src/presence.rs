@@ -79,7 +79,9 @@ pub fn frontmost_from_bundle(bundle: Option<&str>) -> Frontmost {
     }
 }
 
-/// Reads presence with two `ioreg` runs, about 20 ms together.
+/// Reads presence with two sequential `ioreg` runs: about 20 ms together,
+/// 2 s in the worst case (each run is bounded by [`CHILD_LIMIT`]). The call
+/// blocks its thread, so callers must not run it on an async worker thread.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct IoregPresence;
 
@@ -160,8 +162,10 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn the_real_ioreg_reports_an_idle_time() {
-        assert!(IoregPresence.presence().idle_seconds.is_some());
+    fn the_real_ioreg_reports_both_facts() {
+        let presence = IoregPresence.presence();
+        assert!(presence.idle_seconds.is_some(), "no idle time from the real ioreg");
+        assert!(presence.screen_locked.is_some(), "no screen lock state from the real ioreg");
     }
 
     #[test]

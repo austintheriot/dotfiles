@@ -1,7 +1,7 @@
 //! Decides what one CLI invocation does. Pure: the shell gathers [`Inputs`],
 //! this module returns an [`Invocation`], and the shell runs it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use agent_notify_core::fallback::{FallbackNote, fallback_note};
 use agent_notify_core::hook::{ClaudeHookInput, HookDecision, TagWrite, decide_hook};
@@ -69,6 +69,8 @@ pub struct Invocation {
     pub stderr: Option<String>,
     /// Why nothing was sent, for the log.
     pub log: Option<String>,
+    /// A problem with the input that did not stop the send, for the log at warn.
+    pub warning: Option<String>,
 }
 
 /// The exit status.
@@ -82,17 +84,17 @@ pub enum Exit {
 
 impl Invocation {
     fn nothing(reason: String) -> Self {
-        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Success, stderr: None, log: Some(reason) }
+        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Success, stderr: None, log: Some(reason), warning: None }
     }
 
     fn usage(message: &str) -> Self {
-        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Usage, stderr: Some(message.to_string()), log: Some(message.to_string()) }
+        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Usage, stderr: Some(message.to_string()), log: Some(message.to_string()), warning: None }
     }
 
     fn agent(inputs: &Inputs, origin: Origin, event: AgentEvent, tags: Vec<TagWrite>) -> Self {
         let fallback = fallback_note(&origin, &event);
         let request = Request::Agent { v: WIRE_VERSION, event_id: inputs.event_id.clone(), sent_at_ms: inputs.now, origin, event };
-        Invocation { tags, request: Some(request), fallback, exit: Exit::Success, stderr: None, log: None }
+        Invocation { tags, request: Some(request), fallback, exit: Exit::Success, stderr: None, log: None, warning: None }
     }
 }
 
@@ -118,9 +120,10 @@ fn plan_hook(inputs: &Inputs) -> Invocation {
     match decide_hook(&payload, pane.and_then(|facts| facts.session_tag.as_ref())) {
         HookDecision::Ignore { reason } => Invocation::nothing(reason),
         HookDecision::Send { tags, event } => {
-            let origin = origin(inputs, Some(payload.session_id.clone()), payload.prompt_id.clone(), payload.session_title.clone(), payload.cwd.clone());
+            let origin = origin(inputs, Some(payload.session_id.clone()), payload.prompt(), payload.session_title.clone(), payload.cwd.clone());
             let tags = if pane.is_some() { tags } else { Vec::new() };
-            Invocation::agent(inputs, origin, event, tags)
+            let warning = payload.has_invalid_prompt_id().then(|| "hook payload field prompt_id has an invalid format; sent without a prompt".to_string());
+            Invocation { warning, ..Invocation::agent(inputs, origin, event, tags) }
         }
     }
 }
@@ -169,8 +172,14 @@ fn origin(inputs: &Inputs, session: Option<SessionId>, prompt: Option<PromptId>,
         window: pane.map(|facts| facts.window.clone()),
         repo: inputs.repo.clone(),
         session_title,
-        cwd,
+        cwd: lossy(&cwd),
     }
+}
+
+/// The wire field is a JSON string, so a non-UTF-8 directory would make the
+/// request fail to encode and lose every event but the fallback ones.
+fn lossy(cwd: &Path) -> PathBuf {
+    PathBuf::from(cwd.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
@@ -181,7 +190,6 @@ mod tests {
     use agent_notify_core::wire::{AgentEvent, MAX_LINE_BYTES, QuietUntil, encode_line};
     use agent_notify_core::{DisplayText, PaneId, ServerId, SocketPath};
     use proptest::prelude::*;
-    use std::path::Path;
 
     fn pane_key() -> PaneKey {
         PaneKey {
@@ -265,6 +273,36 @@ mod tests {
     }
 
     #[test]
+    fn an_invalid_prompt_id_still_sends_the_permission_prompt_without_a_prompt() {
+        let stdin = r#"{"session_id":"session-a","prompt_id":"a:b.c","cwd":"/home/dev/code","hook_event_name":"Notification","notification_type":"permission_prompt","message":"Allow Bash?"}"#;
+        let invocation = plan_invocation(&hook(), &inputs(found(None, None), Some(stdin)));
+        let (origin, event) = agent_parts(&invocation);
+        assert!(matches!(event, AgentEvent::NeedsInput { .. }), "{event:?}");
+        assert_eq!(origin.prompt, None);
+        assert_eq!(invocation.fallback.as_ref().map(|note| note.message.as_str()), Some("Allow Bash?"));
+        let warning = invocation.warning.as_deref().expect("a warning for the log");
+        assert!(warning.contains("prompt_id"), "{warning:?}");
+        assert!(!warning.contains("a:b.c"), "the warning must not carry the value: {warning:?}");
+    }
+
+    #[test]
+    fn a_valid_prompt_id_gives_no_warning() {
+        let invocation = plan_invocation(&hook(), &inputs(found(None, None), Some(&payload("Stop", ""))));
+        assert_eq!(invocation.warning, None);
+        assert_eq!(agent_parts(&invocation).0.prompt.as_ref().map(PromptId::as_str), Some("prompt-1"));
+    }
+
+    #[test]
+    fn a_same_session_start_keeps_the_prompt_tag() {
+        let compact = payload("SessionStart", r#","source":"compact""#);
+        let invocation = plan_invocation(&hook(), &inputs(found(Some("session-a"), Some("prompt-1")), Some(&compact)));
+        assert!(invocation.tags.is_empty(), "{:?}", invocation.tags);
+        assert!(invocation.request.is_some());
+        let other = plan_invocation(&hook(), &inputs(found(Some("session-b"), Some("prompt-1")), Some(&compact)));
+        assert_eq!(other.tags, vec![TagWrite::BindSession(SessionId::parse("session-a").expect("id"))]);
+    }
+
+    #[test]
     fn bad_hook_input_sends_nothing_and_exits_zero() {
         for stdin in [None, Some(""), Some("not json"), Some(r#"{"hook_event_name":"Stop"}"#)] {
             let invocation = plan_invocation(&hook(), &inputs(PaneLookup::NotInTmux, stdin));
@@ -299,6 +337,18 @@ mod tests {
         assert_eq!(origin.prompt.as_ref().map(PromptId::as_str), Some("prompt-9"));
         assert_eq!(*event, AgentEvent::Explicit { kind: Kind::Attention, body: DisplayText::new("CI is red") });
         assert!(invocation.fallback.is_some_and(|note| note.urgent));
+    }
+
+    #[test]
+    fn a_non_utf8_cwd_still_gives_a_request_that_encodes() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let mut odd = inputs(PaneLookup::NotInTmux, None);
+        odd.cwd = PathBuf::from(OsStr::from_bytes(b"/home/dev/caf\xe9"));
+        let command = Command::Send { kind: KindArg::Info, body: "Report ready".into() };
+        let request = plan_invocation(&command, &odd).request.expect("a request");
+        let line = encode_line(&request).expect("a lossy cwd encodes");
+        assert!(line.contains("/home/dev/caf\u{FFFD}"), "{line}");
     }
 
     #[test]

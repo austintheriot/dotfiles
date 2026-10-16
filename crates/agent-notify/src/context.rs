@@ -3,7 +3,7 @@
 
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use agent_notify_core::paths::{PathInputs, Platform};
@@ -79,9 +79,18 @@ pub fn gather(command: &Command, env: &EnvSnapshot, now: EpochMs, random: [u8; 1
     let cwd = std::env::current_dir().unwrap_or_default();
     let repo = match pane {
         PaneLookup::Found(_) => None,
-        PaneLookup::NotInTmux | PaneLookup::Unreadable { .. } => tmux_tools::repo::inspect(&cwd).map(repo_info),
+        PaneLookup::NotInTmux | PaneLookup::Unreadable { .. } => tmux_tools::repo::inspect(&repo_directory(stdin.as_deref(), &cwd)).map(repo_info),
     };
     Inputs { now, event_id: EventId::from_parts(now, random), cwd, pane, repo, stdin }
+}
+
+/// The directory whose git facts go on the card: the hook payload's `cwd`
+/// when it has one, so the repository and the cwd line name one directory.
+fn repo_directory(stdin: Option<&str>, process_cwd: &Path) -> PathBuf {
+    stdin
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+        .and_then(|payload| payload.get("cwd").and_then(serde_json::Value::as_str).filter(|cwd| !cwd.is_empty()).map(PathBuf::from))
+        .unwrap_or_else(|| process_cwd.to_path_buf())
 }
 
 /// The wall clock, read once per invocation.
@@ -134,4 +143,22 @@ fn repo_info(facts: RepositoryFacts) -> RepoInfo {
         HeadState::Detached { short_sha } => RepoHead::Detached { short_sha: DisplayText::new(&short_sha) },
     };
     RepoInfo { main_repo_name: DisplayText::new(&facts.main_repo_name), head }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn git_facts_come_from_the_payload_cwd_when_it_has_one() {
+        let stdin = r#"{"session_id":"session-a","cwd":"/home/dev/other","hook_event_name":"Stop"}"#;
+        assert_eq!(repo_directory(Some(stdin), Path::new("/home/dev/code")), PathBuf::from("/home/dev/other"));
+    }
+
+    #[test]
+    fn git_facts_come_from_the_process_cwd_otherwise() {
+        for stdin in [None, Some(""), Some("not json"), Some(r#"{"hook_event_name":"Stop"}"#), Some(r#"{"cwd":""}"#), Some(r#"{"cwd":7}"#)] {
+            assert_eq!(repo_directory(stdin, Path::new("/home/dev/code")), PathBuf::from("/home/dev/code"), "{stdin:?}");
+        }
+    }
 }

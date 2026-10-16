@@ -18,9 +18,11 @@ pub const PROMPT_TAG_OPTION: &str = "@agent_notify_prompt";
 pub struct ClaudeHookInput {
     /// The session.
     pub session_id: SessionId,
-    /// The turn. Absent before the first prompt.
+    /// The turn, as sent. Absent before the first prompt. Kept as text so a
+    /// format change upstream drops only the prompt, not the whole event.
+    /// Read it through [`ClaudeHookInput::prompt`].
     #[serde(default)]
-    pub prompt_id: Option<PromptId>,
+    pub prompt_id: Option<String>,
     /// The session's working directory.
     pub cwd: PathBuf,
     /// Which hook fired.
@@ -43,6 +45,20 @@ pub struct ClaudeHookInput {
     /// `Notification`.
     #[serde(default)]
     pub message: Option<DisplayText>,
+}
+
+impl ClaudeHookInput {
+    /// The turn's prompt id. `None` when absent or not a valid [`PromptId`].
+    #[must_use]
+    pub fn prompt(&self) -> Option<PromptId> {
+        self.prompt_id.as_deref().and_then(|raw| PromptId::parse(raw).ok())
+    }
+
+    /// True when the payload has a `prompt_id` that is not a valid [`PromptId`].
+    #[must_use]
+    pub fn has_invalid_prompt_id(&self) -> bool {
+        self.prompt_id.is_some() && self.prompt().is_none()
+    }
 }
 
 /// A change to the pane tags, applied before the request is sent.
@@ -76,33 +92,26 @@ pub enum HookDecision {
 /// Decides the tag writes and event for one hook payload.
 ///
 /// `pane_session_tag` is the pane's current session tag, so a late
-/// `SessionEnd` from an old session does not erase a new session's tag.
+/// `SessionEnd` from an old session does not erase a new session's tag, and
+/// a `SessionStart` for the session already tagged (a compact or a resume
+/// inside a turn) does not clear the prompt tag.
 #[must_use]
 pub fn decide_hook(input: &ClaudeHookInput, pane_session_tag: Option<&SessionId>) -> HookDecision {
     let send = |tags: Vec<TagWrite>, event: AgentEvent| HookDecision::Send { tags, event };
+    let tagged_here = pane_session_tag == Some(&input.session_id);
     match input.hook_event_name.as_str() {
-        "SessionStart" => send(
-            vec![TagWrite::BindSession(input.session_id.clone())],
-            AgentEvent::SessionStarted { source: input.source.unwrap_or(SessionSource::Unknown) },
-        ),
-        "UserPromptSubmit" => send(
-            input.prompt_id.iter().cloned().map(TagWrite::BindPrompt).collect(),
-            AgentEvent::TurnStarted,
-        ),
+        "SessionStart" => {
+            let tags = if tagged_here { Vec::new() } else { vec![TagWrite::BindSession(input.session_id.clone())] };
+            send(tags, AgentEvent::SessionStarted { source: input.source.unwrap_or(SessionSource::Unknown) })
+        }
+        "UserPromptSubmit" => send(input.prompt().into_iter().map(TagWrite::BindPrompt).collect(), AgentEvent::TurnStarted),
         "Stop" => send(
             Vec::new(),
             AgentEvent::TurnEnded { last_message: input.last_assistant_message.clone() },
         ),
         "StopFailure" => send(Vec::new(), AgentEvent::TurnFailed { error: failure_text(input) }),
         "Notification" => notification(input),
-        "SessionEnd" => {
-            let tags = if pane_session_tag == Some(&input.session_id) {
-                vec![TagWrite::UnbindSession]
-            } else {
-                Vec::new()
-            };
-            send(tags, AgentEvent::SessionEnded)
-        }
+        "SessionEnd" => send(if tagged_here { vec![TagWrite::UnbindSession] } else { Vec::new() }, AgentEvent::SessionEnded),
         other => HookDecision::Ignore { reason: format!("hook event {other:?} is not mapped") },
     }
 }
@@ -172,6 +181,24 @@ mod tests {
         let (tags, event) = sent(decide_hook(&input("SessionStart", serde_json::json!({"source": "clear"})), None));
         assert_eq!(tags, vec![TagWrite::BindSession(session("session-a"))]);
         assert_eq!(event, AgentEvent::SessionStarted { source: SessionSource::Clear });
+    }
+
+    #[test]
+    fn session_start_for_the_session_already_tagged_writes_no_tag() {
+        let (tags, event) = sent(decide_hook(&input("SessionStart", serde_json::json!({"source": "compact"})), Some(&session("session-a"))));
+        assert!(tags.is_empty(), "a compact must not clear the prompt tag: {tags:?}");
+        assert_eq!(event, AgentEvent::SessionStarted { source: SessionSource::Compact });
+        let (other, _) = sent(decide_hook(&input("SessionStart", serde_json::json!({"source": "resume"})), Some(&session("session-b"))));
+        assert_eq!(other, vec![TagWrite::BindSession(session("session-a"))]);
+    }
+
+    #[test]
+    fn an_invalid_prompt_id_decodes_as_no_prompt() {
+        let parsed = input("UserPromptSubmit", serde_json::json!({"prompt_id": "a:b.c"}));
+        assert_eq!(parsed.prompt(), None);
+        let (tags, event) = sent(decide_hook(&parsed, None));
+        assert!(tags.is_empty(), "no prompt tag for an invalid id: {tags:?}");
+        assert_eq!(event, AgentEvent::TurnStarted);
     }
 
     #[test]

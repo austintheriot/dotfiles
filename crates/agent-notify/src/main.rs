@@ -83,6 +83,9 @@ fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &En
     if let Some(reason) = &invocation.log {
         tracing::info!(event_id, reason = %reason, "nothing sent");
     }
+    if let Some(warning) = &invocation.warning {
+        tracing::warn!(event_id, warning = %warning, "hook input problem");
+    }
     if let Some(message) = &invocation.stderr {
         let _ = writeln!(io::stderr(), "agent-notify: {message}");
     }

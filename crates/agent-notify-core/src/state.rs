@@ -149,7 +149,7 @@ pub enum CardCause {
 }
 
 /// Where a card is in its life.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CardPhase {
     /// On screen. Info cards fold at `fade_at`.
     Showing {
@@ -158,10 +158,13 @@ pub enum CardPhase {
     },
     /// In the finished row.
     Folded,
-    /// Hidden by the close button until `until`.
+    /// Hidden by the close button until `until`. It shows again only while
+    /// the session still waits on the user or still failed in `prompt`.
     Snoozed {
         /// When it shows again.
         until: EpochMs,
+        /// The session's prompt when the card was snoozed.
+        prompt: Option<PromptId>,
     },
     /// Showing a note, removed at `remove_at`.
     Expiring {

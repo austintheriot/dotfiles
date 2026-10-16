@@ -4,7 +4,7 @@
 //! every update and pushes the result.
 
 use crate::label::{location_line, turn_ended_body, turn_failed_body};
-use crate::state::{Card, CardCause, CardPhase, DaemonState, Dnd, FocusedPane, OneoffCard, QuietMode, SessionRecord, Turn};
+use crate::state::{Card, CardCause, CardNote, CardPhase, DaemonState, Dnd, FocusedPane, OneoffCard, QuietMode, SessionRecord, Turn};
 use crate::wire::{AgentEvent, Control, DndCommand, InputReason, Kind, Origin, QuietUntil, Request};
 use crate::{CardId, DisplayText, EpochMs, EventId, PaneId, PaneKey, PromptId, ServerId, SessionId};
 
@@ -258,7 +258,10 @@ pub fn update(state: &mut DaemonState, input: DaemonInput, now: EpochMs) -> Vec<
     let mut effects = Vec::new();
     match input {
         DaemonInput::Received { request, focus } => receive(state, request, &focus, now, &mut effects),
-        DaemonInput::Ui(_) | DaemonInput::Tick | DaemonInput::PaneSnapshot(_) | DaemonInput::FocusOutcome { .. } => {}
+        DaemonInput::Ui(intent) => ui_intent(state, intent, now, &mut effects),
+        DaemonInput::Tick => tick(state, now, &mut effects),
+        DaemonInput::PaneSnapshot(snapshot) => reap(state, &snapshot),
+        DaemonInput::FocusOutcome { card, outcome } => focus_outcome(state, &card, outcome, now),
     }
     effects
 }
@@ -346,6 +349,7 @@ fn control_event(state: &mut DaemonState, control: Control, now: EpochMs, effect
         }
         Control::Dnd { command: DndCommand::On { for_minutes } } => {
             state.dnd = Dnd::On { until: for_minutes.map(|minutes| now.plus_ms(i64::from(minutes) * 60_000)) };
+            state.frozen_view = None;
             effects.push(Effect::PersistDnd(state.dnd));
         }
         Control::Dnd { command: DndCommand::Off } => {
@@ -360,9 +364,7 @@ fn control_event(state: &mut DaemonState, control: Control, now: EpochMs, effect
 /// return to the desk is not a burst of stale toasts.
 fn end_dnd(state: &mut DaemonState) {
     state.dnd = Dnd::Off;
-    let sessions = state.sessions.values_mut().filter_map(|record| record.card.as_mut());
-    let oneoffs = state.oneoff_cards.iter_mut().map(|oneoff| &mut oneoff.card);
-    for card in sessions.chain(oneoffs) {
+    for card in cards_mut(state) {
         if card.kind == Kind::Info && matches!(card.phase, CardPhase::Showing { .. }) {
             card.phase = CardPhase::Folded;
         }
@@ -389,6 +391,10 @@ fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent
             Step::Clear
         }
         AgentEvent::Explicit { kind, body } => {
+            if turn_match(&record.turn, prompt) == TurnMatch::Other {
+                begin_turn(record);
+                record.turn = Turn::Working { prompt: prompt.cloned() };
+            }
             record.explicit_sent = true;
             if record.quiet.ends_on(QuietUntil::NextSend) {
                 record.quiet = QuietMode::Armed;
@@ -403,6 +409,7 @@ fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent
             if record.card.as_ref().is_some_and(|card| matches!(card.cause, CardCause::NeedsInput(_))) {
                 record.card = None;
             }
+            expire_quiet(record, now);
             if record.explicit_sent {
                 Step::Nothing(SuppressReason::ExplicitSent)
             } else if record.quiet != QuietMode::Armed {
@@ -527,6 +534,172 @@ fn pane_state(turn: &Turn) -> PaneState {
         Turn::Finished { .. } => PaneState::Finished,
         Turn::NeedsYou { .. } => PaneState::NeedsYou,
         Turn::Failed { .. } => PaneState::Failed,
+    }
+}
+
+fn expire_quiet(record: &mut SessionRecord, now: EpochMs) {
+    if let QuietMode::Until { deadline, .. } = record.quiet
+        && now >= deadline
+    {
+        record.quiet = QuietMode::Armed;
+    }
+}
+
+fn cards_mut(state: &mut DaemonState) -> impl Iterator<Item = &mut Card> {
+    let sessions = state.sessions.values_mut().filter_map(|record| record.card.as_mut());
+    let oneoffs = state.oneoff_cards.iter_mut().map(|oneoff| &mut oneoff.card);
+    sessions.chain(oneoffs)
+}
+
+fn remove_card(state: &mut DaemonState, card_id: &CardId) {
+    for record in state.sessions.values_mut() {
+        if record.card.as_ref().is_some_and(|card| &card.id == card_id) {
+            record.card = None;
+        }
+    }
+    state.oneoff_cards.retain(|oneoff| &oneoff.card.id != card_id);
+}
+
+fn ui_intent(state: &mut DaemonState, intent: UiIntent, now: EpochMs, effects: &mut Vec<Effect>) {
+    match intent {
+        UiIntent::Clicked { card_id } => {
+            if let Some(target) = click_target(state, &card_id) {
+                effects.push(Effect::RunFocusPlan { card: card_id, target });
+            }
+        }
+        UiIntent::Closed { card_id } => close(state, &card_id, now),
+        UiIntent::HoverChanged { hovered: true } => {
+            if !state.stack_hovered {
+                state.frozen_view = Some(crate::view::view(state, now));
+                state.stack_hovered = true;
+            }
+        }
+        UiIntent::HoverChanged { hovered: false } => {
+            state.stack_hovered = false;
+            state.frozen_view = None;
+            let resume_at = now.plus_ms(HOVER_RESUME_MS);
+            for card in cards_mut(state) {
+                if let CardPhase::Showing { fade_at: Some(fade_at) } = &mut card.phase {
+                    *fade_at = (*fade_at).max(resume_at);
+                }
+            }
+        }
+    }
+}
+
+fn click_target(state: &DaemonState, card_id: &CardId) -> Option<FocusTarget> {
+    for (session, record) in &state.sessions {
+        if record.card.as_ref().is_some_and(|card| &card.id == card_id) {
+            return Some(match &record.pane {
+                Some(pane) => FocusTarget::Session { session: session.clone(), pane: pane.clone() },
+                None => FocusTarget::RaiseOnly,
+            });
+        }
+    }
+    state.oneoff_cards.iter().any(|oneoff| &oneoff.card.id == card_id).then_some(FocusTarget::RaiseOnly)
+}
+
+fn close(state: &mut DaemonState, card_id: &CardId, now: EpochMs) {
+    for record in state.sessions.values_mut() {
+        let Some(kind) = record.card.as_ref().filter(|card| &card.id == card_id).map(|card| card.kind) else {
+            continue;
+        };
+        match kind {
+            Kind::Info => record.card = None,
+            Kind::Attention => {
+                let prompt = record.turn.prompt().cloned();
+                if let Some(card) = &mut record.card {
+                    card.phase = CardPhase::Snoozed { until: now.plus_ms(SNOOZE_MS), prompt };
+                }
+            }
+        }
+        return;
+    }
+    state.oneoff_cards.retain(|oneoff| &oneoff.card.id != card_id);
+}
+
+fn tick(state: &mut DaemonState, now: EpochMs, effects: &mut Vec<Effect>) {
+    if let Dnd::On { until: Some(until) } = state.dnd
+        && now >= until
+    {
+        end_dnd(state);
+        effects.push(Effect::PersistDnd(Dnd::Off));
+    }
+    let dwelled = state.focus.as_ref().filter(|focus| now.since(focus.since) >= FOCUS_DWELL_MS).cloned();
+    let hovered = state.stack_hovered;
+    for record in state.sessions.values_mut() {
+        expire_quiet(record, now);
+        let dwell_clears = dwelled.as_ref().is_some_and(|focus| {
+            record.pane.as_ref() == Some(&focus.pane) && record.card.as_ref().is_some_and(|card| card.created <= focus.since)
+        });
+        if dwell_clears {
+            record.card = None;
+        }
+        let keep = record.card.as_mut().is_none_or(|card| advance(card, now, hovered, Some(&record.turn)));
+        if !keep {
+            record.card = None;
+        }
+    }
+    state.oneoff_cards.retain_mut(|oneoff| advance(&mut oneoff.card, now, hovered, None));
+}
+
+/// Moves a card along its timers. Returns false when the card must go.
+/// `turn` is the owning session's turn, `None` for a one-off card.
+fn advance(card: &mut Card, now: EpochMs, hovered: bool, turn: Option<&Turn>) -> bool {
+    match &card.phase {
+        CardPhase::Showing { fade_at: Some(fade_at) } if !hovered && now.since(*fade_at) >= HOVER_GRACE_MS => {
+            card.phase = CardPhase::Folded;
+        }
+        CardPhase::Snoozed { until, prompt } if now >= *until => {
+            if !still_waiting(turn, prompt.as_ref()) {
+                return false;
+            }
+            card.phase = CardPhase::Showing { fade_at: None };
+        }
+        CardPhase::Expiring { remove_at } if now >= *remove_at => return false,
+        _ => {}
+    }
+    true
+}
+
+/// A snoozed card is still worth showing only while its session waits on the
+/// user, or still failed, in the turn the card was snoozed in.
+fn still_waiting(turn: Option<&Turn>, snoozed_prompt: Option<&PromptId>) -> bool {
+    turn.is_some_and(|turn| matches!(turn, Turn::NeedsYou { .. } | Turn::Failed { .. }) && turn.prompt() == snoozed_prompt)
+}
+
+/// Drops records whose pane is gone, whose pane now names another session, or
+/// whose server was replaced by a new one on the same socket.
+fn reap(state: &mut DaemonState, snapshot: &PaneSnapshot) {
+    state.sessions.retain(|session, record| {
+        let Some(pane) = &record.pane else { return true };
+        if pane.server.socket_path != snapshot.server.socket_path {
+            return true;
+        }
+        if pane.server != snapshot.server {
+            return false;
+        }
+        snapshot.panes.iter().any(|tag| tag.pane == pane.pane && tag.session.as_ref() == Some(session))
+    });
+}
+
+fn focus_outcome(state: &mut DaemonState, card_id: &CardId, outcome: FocusOutcome, now: EpochMs) {
+    if outcome == FocusOutcome::Done {
+        remove_card(state, card_id);
+        return;
+    }
+    let Some(card) = cards_mut(state).find(|card| &card.id == card_id) else { return };
+    match outcome {
+        FocusOutcome::Done => {}
+        FocusOutcome::SessionGone => {
+            card.note = Some(CardNote::SessionEnded);
+            card.phase = CardPhase::Expiring { remove_at: now.plus_ms(SESSION_GONE_MS) };
+        }
+        FocusOutcome::TmuxFailed(reason) => card.note = Some(CardNote::SwitchFailed(reason)),
+        FocusOutcome::RaiseFailed => {
+            card.note = Some(CardNote::NotRaised);
+            card.phase = CardPhase::Expiring { remove_at: now.plus_ms(NOT_RAISED_MS) };
+        }
     }
 }
 
@@ -950,8 +1123,8 @@ mod tests {
         send(&mut state, 3, "b", Some("p1"), needs_permission());
         let off = update(&mut state, control(4, Control::Dnd { command: DndCommand::Off }), EpochMs(4));
         assert_eq!(off, vec![Effect::PersistDnd(Dnd::Off)]);
-        assert_eq!(card(&state, "a").map(|shown| shown.phase), Some(CardPhase::Folded));
-        assert!(matches!(card(&state, "b").map(|shown| shown.phase), Some(CardPhase::Showing { .. })));
+        assert_eq!(card(&state, "a").map(|shown| shown.phase.clone()), Some(CardPhase::Folded));
+        assert!(matches!(card(&state, "b").map(|shown| shown.phase.clone()), Some(CardPhase::Showing { .. })));
     }
 
     #[test]
@@ -971,5 +1144,260 @@ mod tests {
         assert!(state.focus.is_some(), "focus-out of another pane changes nothing");
         update(&mut state, control(7, Control::FocusChanged { pane: pane(1), focused: false }), EpochMs(7));
         assert!(state.focus.is_none());
+    }
+
+    use crate::state::CardNote;
+    use crate::update::{FocusOutcome, PaneSnapshot, PaneTag, UiIntent};
+    use crate::test_support::server;
+    use crate::{PaneId, ServerId};
+
+    fn card_id_of(state: &DaemonState, name: &str) -> CardId {
+        card(state, name).map(|shown| shown.id.clone()).expect("a card")
+    }
+
+    fn tick(state: &mut DaemonState, now: i64) -> Vec<Effect> {
+        update(state, DaemonInput::Tick, EpochMs(now))
+    }
+
+    fn phase(state: &DaemonState, name: &str) -> Option<CardPhase> {
+        card(state, name).map(|shown| shown.phase.clone())
+    }
+
+    #[test]
+    fn an_info_card_folds_after_its_show_time_plus_grace() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
+        tick(&mut state, INFO_SHOW_MS + HOVER_GRACE_MS - 1);
+        assert!(matches!(phase(&state, "a"), Some(CardPhase::Showing { .. })));
+        tick(&mut state, INFO_SHOW_MS + HOVER_GRACE_MS);
+        assert_eq!(phase(&state, "a"), Some(CardPhase::Folded));
+    }
+
+    #[test]
+    fn hover_holds_the_fold_and_leaving_gives_time_back() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
+        update(&mut state, DaemonInput::Ui(UiIntent::HoverChanged { hovered: true }), EpochMs(1_000));
+        assert!(state.frozen_view.is_some());
+        tick(&mut state, 60_000);
+        assert!(matches!(phase(&state, "a"), Some(CardPhase::Showing { .. })));
+        update(&mut state, DaemonInput::Ui(UiIntent::HoverChanged { hovered: false }), EpochMs(60_000));
+        assert!(state.frozen_view.is_none());
+        tick(&mut state, 60_000 + HOVER_RESUME_MS + HOVER_GRACE_MS - 1);
+        assert!(matches!(phase(&state, "a"), Some(CardPhase::Showing { .. })));
+        tick(&mut state, 60_000 + HOVER_RESUME_MS + HOVER_GRACE_MS);
+        assert_eq!(phase(&state, "a"), Some(CardPhase::Folded));
+    }
+
+    #[test]
+    fn attention_cards_never_fold() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), needs_permission());
+        tick(&mut state, 3_600_000);
+        assert!(matches!(phase(&state, "a"), Some(CardPhase::Showing { fade_at: None })));
+    }
+
+    #[test]
+    fn a_focus_dwell_clears_a_card_that_was_there_before_the_focus() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), needs_permission());
+        update(&mut state, control(10, Control::FocusChanged { pane: pane(1), focused: true }), EpochMs(10));
+        tick(&mut state, 10 + FOCUS_DWELL_MS - 1);
+        assert!(card(&state, "a").is_some());
+        tick(&mut state, 10 + FOCUS_DWELL_MS);
+        assert!(card(&state, "a").is_none());
+    }
+
+    #[test]
+    fn leaving_before_the_dwell_keeps_the_card() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), needs_permission());
+        update(&mut state, control(10, Control::FocusChanged { pane: pane(1), focused: true }), EpochMs(10));
+        update(&mut state, control(500, Control::FocusChanged { pane: pane(1), focused: false }), EpochMs(500));
+        tick(&mut state, 5_000);
+        assert!(card(&state, "a").is_some());
+    }
+
+    #[test]
+    fn a_card_that_arrives_during_focus_is_not_cleared_by_that_focus() {
+        let mut state = DaemonState::default();
+        update(&mut state, control(0, Control::FocusChanged { pane: pane(1), focused: true }), EpochMs(0));
+        send(&mut state, 100, "a", Some("p1"), needs_permission());
+        tick(&mut state, 10_000);
+        assert!(card(&state, "a").is_some());
+    }
+
+    #[test]
+    fn quiet_ends_at_its_deadline() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", None, AgentEvent::Quiet { until: QuietUntil::NextSend, max_minutes: 2 });
+        tick(&mut state, 2 * 60_000 - 1);
+        assert_ne!(state.sessions[&session("a")].quiet, QuietMode::Armed);
+        tick(&mut state, 2 * 60_000);
+        assert_eq!(state.sessions[&session("a")].quiet, QuietMode::Armed);
+    }
+
+    #[test]
+    fn a_turn_end_after_the_quiet_deadline_shows_the_backup_card_without_a_tick() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), AgentEvent::TurnStarted);
+        send(&mut state, 1, "a", None, AgentEvent::Quiet { until: QuietUntil::NextSend, max_minutes: 1 });
+        let effects = send(&mut state, 1 + 60_000, "a", Some("p1"), turn_ended("Done."));
+        assert!(reasons(&effects).is_empty());
+        assert_eq!(card(&state, "a").map(|shown| shown.cause), Some(CardCause::TurnEnded));
+        assert_eq!(state.sessions[&session("a")].quiet, QuietMode::Armed);
+    }
+
+    #[test]
+    fn a_turn_end_before_the_quiet_deadline_stays_quiet() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), AgentEvent::TurnStarted);
+        send(&mut state, 1, "a", None, AgentEvent::Quiet { until: QuietUntil::NextSend, max_minutes: 1 });
+        let effects = send(&mut state, 60_000, "a", Some("p1"), turn_ended("Done."));
+        assert_eq!(reasons(&effects), vec![SuppressReason::Quiet]);
+    }
+
+    #[test]
+    fn timed_dnd_ends_on_a_tick() {
+        let mut state = DaemonState::default();
+        update(&mut state, control(0, Control::Dnd { command: DndCommand::On { for_minutes: Some(1) } }), EpochMs(0));
+        let effects = tick(&mut state, 60_000);
+        assert_eq!(state.dnd, Dnd::Off);
+        assert_eq!(effects, vec![Effect::PersistDnd(Dnd::Off)]);
+    }
+
+    #[test]
+    fn turning_dnd_on_drops_the_frozen_view() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
+        update(&mut state, DaemonInput::Ui(UiIntent::HoverChanged { hovered: true }), EpochMs(1));
+        assert!(state.frozen_view.is_some());
+        update(&mut state, control(2, Control::Dnd { command: DndCommand::On { for_minutes: None } }), EpochMs(2));
+        assert!(state.frozen_view.is_none());
+        let model = crate::view::view(&state, EpochMs(3));
+        assert!(model.dnd && model.cards.is_empty());
+    }
+
+    #[test]
+    fn a_click_asks_for_the_focus_plan() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), needs_permission());
+        let id = card_id_of(&state, "a");
+        let effects = update(&mut state, DaemonInput::Ui(UiIntent::Clicked { card_id: id.clone() }), EpochMs(1));
+        assert_eq!(effects, vec![Effect::RunFocusPlan { card: id, target: FocusTarget::Session { session: session("a"), pane: pane(1) } }]);
+    }
+
+    #[test]
+    fn intents_for_unknown_cards_do_nothing() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), needs_permission());
+        let before = state.clone();
+        let stale = CardId::for_event(&event_id(999));
+        assert!(update(&mut state, DaemonInput::Ui(UiIntent::Clicked { card_id: stale.clone() }), EpochMs(1)).is_empty());
+        update(&mut state, DaemonInput::Ui(UiIntent::Closed { card_id: stale }), EpochMs(1));
+        assert_eq!(state.sessions, before.sessions);
+    }
+
+    #[test]
+    fn closing_info_removes_it_and_closing_attention_snoozes_it() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", None, explicit(Kind::Info, "x"));
+        send(&mut state, 1, "b", Some("p1"), needs_permission());
+        let info = card_id_of(&state, "a");
+        let attention = card_id_of(&state, "b");
+        update(&mut state, DaemonInput::Ui(UiIntent::Closed { card_id: info }), EpochMs(2));
+        update(&mut state, DaemonInput::Ui(UiIntent::Closed { card_id: attention }), EpochMs(2));
+        assert!(card(&state, "a").is_none());
+        assert_eq!(phase(&state, "b"), Some(CardPhase::Snoozed { until: EpochMs(2 + SNOOZE_MS), prompt: Some(prompt("p1")) }));
+        tick(&mut state, 2 + SNOOZE_MS);
+        assert_eq!(phase(&state, "b"), Some(CardPhase::Showing { fade_at: None }));
+    }
+
+    #[test]
+    fn a_snoozed_card_does_not_come_back_after_a_new_prompt_starts() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), needs_permission());
+        let attention = card_id_of(&state, "a");
+        update(&mut state, DaemonInput::Ui(UiIntent::Closed { card_id: attention }), EpochMs(1));
+        send(&mut state, 2, "a", Some("p2"), explicit(Kind::Info, "x"));
+        assert!(matches!(phase(&state, "a"), Some(CardPhase::Snoozed { .. })), "the snoozed attention card outranks the info card");
+        tick(&mut state, 1 + SNOOZE_MS);
+        assert!(card(&state, "a").is_none());
+    }
+
+    #[test]
+    fn a_snoozed_card_does_not_come_back_after_its_prompt_is_answered() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", Some("p1"), needs_permission());
+        let attention = card_id_of(&state, "a");
+        update(&mut state, DaemonInput::Ui(UiIntent::Closed { card_id: attention }), EpochMs(1));
+        send(&mut state, 2, "a", Some("p1"), AgentEvent::InputResolved);
+        tick(&mut state, 1 + SNOOZE_MS);
+        assert!(card(&state, "a").is_none());
+    }
+
+    #[test]
+    fn an_explicit_send_for_an_unseen_prompt_adopts_it_and_silences_its_turn_end() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", Some("p1"), AgentEvent::TurnStarted);
+        send(&mut state, 2, "a", Some("p2"), explicit(Kind::Info, "CI green"));
+        assert_eq!(state.sessions[&session("a")].turn, Turn::Working { prompt: Some(prompt("p2")) });
+        send(&mut state, 3, "a", Some("p2"), needs_permission());
+        let effects = send(&mut state, 4, "a", Some("p2"), turn_ended("Done."));
+        assert_eq!(reasons(&effects), vec![SuppressReason::ExplicitSent]);
+        assert!(card(&state, "a").is_none_or(|shown| shown.cause != CardCause::TurnEnded));
+    }
+
+    #[test]
+    fn focus_outcomes() {
+        let mut state = DaemonState::default();
+        for (number, name) in [(0, "done"), (1, "gone"), (2, "tmux"), (3, "raise")] {
+            send(&mut state, number, name, Some("p1"), needs_permission());
+        }
+        let outcome = |state: &mut DaemonState, name: &str, outcome: FocusOutcome| {
+            let card_id = card_id_of(state, name);
+            update(state, DaemonInput::FocusOutcome { card: card_id, outcome }, EpochMs(10));
+        };
+        outcome(&mut state, "done", FocusOutcome::Done);
+        outcome(&mut state, "gone", FocusOutcome::SessionGone);
+        outcome(&mut state, "tmux", FocusOutcome::TmuxFailed(DisplayText::new("no client")));
+        outcome(&mut state, "raise", FocusOutcome::RaiseFailed);
+        assert!(card(&state, "done").is_none());
+        assert_eq!(card(&state, "gone").map(|shown| (shown.note.clone(), shown.phase.clone())), Some((Some(CardNote::SessionEnded), CardPhase::Expiring { remove_at: EpochMs(10 + SESSION_GONE_MS) })));
+        assert_eq!(card(&state, "tmux").and_then(|shown| shown.note.clone()), Some(CardNote::SwitchFailed(DisplayText::new("no client"))));
+        assert_eq!(phase(&state, "raise"), Some(CardPhase::Expiring { remove_at: EpochMs(10 + NOT_RAISED_MS) }));
+        tick(&mut state, 10 + SESSION_GONE_MS);
+        assert!(card(&state, "gone").is_none() && card(&state, "raise").is_none());
+    }
+
+    #[test]
+    fn a_pane_snapshot_drops_dead_and_retagged_sessions() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "kept", None, AgentEvent::TurnStarted);
+        let mut other = origin(Some("moved"), None);
+        other.pane = Some(pane(2));
+        update(&mut state, agent_input(1, other, AgentEvent::TurnStarted), EpochMs(1));
+        let mut gone = origin(Some("gone"), None);
+        gone.pane = Some(pane(3));
+        update(&mut state, agent_input(2, gone, AgentEvent::TurnStarted), EpochMs(2));
+        let snapshot = PaneSnapshot {
+            server: server(),
+            panes: vec![
+                PaneTag { pane: PaneId::parse("%1").expect("pane"), session: Some(session("kept")) },
+                PaneTag { pane: PaneId::parse("%2").expect("pane"), session: Some(session("someone-else")) },
+            ],
+        };
+        update(&mut state, DaemonInput::PaneSnapshot(snapshot), EpochMs(3));
+        let names: Vec<&str> = state.sessions.keys().map(SessionId::as_str).collect();
+        assert_eq!(names, vec!["kept"]);
+    }
+
+    #[test]
+    fn a_new_server_on_the_same_socket_drops_the_old_servers_sessions() {
+        let mut state = DaemonState::default();
+        send(&mut state, 0, "a", None, AgentEvent::TurnStarted);
+        let restarted = ServerId { pid: 200, ..server() };
+        update(&mut state, DaemonInput::PaneSnapshot(PaneSnapshot { server: restarted, panes: Vec::new() }), EpochMs(1));
+        assert!(state.sessions.is_empty());
     }
 }

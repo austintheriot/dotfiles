@@ -206,7 +206,7 @@ mod tests {
             shown.phase = CardPhase::Folded;
         }
         if let Some(record) = state.sessions.get_mut(&session("b")) && let Some(shown) = &mut record.card {
-            shown.phase = CardPhase::Snoozed { until: EpochMs(1_000_000) };
+            shown.phase = CardPhase::Snoozed { until: EpochMs(1_000_000), prompt: None };
         }
         let model = view(&state, EpochMs(3));
         assert!(model.cards.is_empty());

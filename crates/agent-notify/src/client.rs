@@ -20,6 +20,9 @@ pub enum Delivery {
     Acked {
         /// The daemon's build stamp.
         daemon: Option<String>,
+        /// The answer to a query.
+        #[cfg_attr(not(test), expect(dead_code, reason = "read by status in Task 6"))]
+        data: Option<serde_json::Value>,
     },
     /// The daemon refused it.
     Rejected {
@@ -45,7 +48,7 @@ impl Delivery {
     /// The build stamp of the daemon that acknowledged, for the log.
     pub fn daemon(&self) -> Option<&str> {
         match self {
-            Delivery::Acked { daemon } => daemon.as_deref(),
+            Delivery::Acked { daemon, .. } => daemon.as_deref(),
             _ => None,
         }
     }
@@ -97,7 +100,7 @@ pub fn deliver(path: &Path, line: &str, budget: Duration) -> Delivery {
     match BufReader::new((&stream).take(MAX_REPLY_BYTES)).read_line(&mut reply) {
         Ok(0) => Delivery::BadReply("the daemon closed the connection without a reply".to_string()),
         Ok(_) => match serde_json::from_str::<Reply>(&reply) {
-            Ok(reply) if reply.ok => Delivery::Acked { daemon: reply.daemon },
+            Ok(reply) if reply.ok => Delivery::Acked { daemon: reply.daemon, data: reply.data },
             Ok(reply) => Delivery::Rejected { code: reply.code },
             Err(error) => Delivery::BadReply(error.to_string()),
         },
@@ -152,13 +155,25 @@ mod tests {
         let directory = socket_dir();
         let path = directory.path().join("s.sock");
         serve(&path, Some(r#"{"ok":true,"daemon":"stamp"}"#));
-        assert!(matches!(deliver(&path, "{}\n", BUDGET), Delivery::Acked { daemon: Some(daemon) } if daemon == "stamp"));
+        assert!(matches!(deliver(&path, "{}\n", BUDGET), Delivery::Acked { daemon: Some(daemon), .. } if daemon == "stamp"));
+    }
+
+    #[test]
+    fn a_query_reply_carries_its_data() {
+        let directory = socket_dir();
+        let path = directory.path().join("s.sock");
+        serve(&path, Some(r#"{"ok":true,"daemon":"stamp","data":{"answer":42}}"#));
+        let delivery = deliver(&path, "{}\n", BUDGET);
+        assert!(
+            matches!(&delivery, Delivery::Acked { data: Some(data), .. } if data["answer"] == 42),
+            "{delivery:?}"
+        );
     }
 
     #[test]
     fn only_an_acknowledgement_names_the_daemon() {
-        assert_eq!(Delivery::Acked { daemon: Some("stamp".to_string()) }.daemon(), Some("stamp"));
-        assert_eq!(Delivery::Acked { daemon: None }.daemon(), None);
+        assert_eq!(Delivery::Acked { daemon: Some("stamp".to_string()), data: None }.daemon(), Some("stamp"));
+        assert_eq!(Delivery::Acked { daemon: None, data: None }.daemon(), None);
         assert_eq!(Delivery::TimedOut.daemon(), None);
     }
 
@@ -227,8 +242,8 @@ mod tests {
     #[test]
     fn every_outcome_has_a_short_reason() {
         let cases = [
-            (Delivery::Acked { daemon: Some("stamp".to_string()) }, "acked"),
-            (Delivery::Acked { daemon: None }, "acked"),
+            (Delivery::Acked { daemon: Some("stamp".to_string()), data: None }, "acked"),
+            (Delivery::Acked { daemon: None, data: None }, "acked"),
             (Delivery::Rejected { code: Some(ReplyCode::UnsupportedVersion) }, "rejected: unsupported_version"),
             (Delivery::Rejected { code: Some(ReplyCode::BadRequest) }, "rejected: bad_request"),
             (Delivery::Rejected { code: Some(ReplyCode::UnknownKind) }, "rejected: unknown_kind"),

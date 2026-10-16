@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn only_an_acknowledgement_skips_the_fallback() {
         let request = request_in(PathBuf::from("/tmp"));
-        assert!(!needs_fallback(&attempt(&request, |_line| Delivery::Acked { daemon: None })));
+        assert!(!needs_fallback(&attempt(&request, |_line| Delivery::Acked { daemon: None, data: None })));
         assert!(needs_fallback(&attempt(&request, |_line| Delivery::TimedOut)));
         assert!(needs_fallback(&attempt(&request, |_line| Delivery::Rejected { code: None })));
     }

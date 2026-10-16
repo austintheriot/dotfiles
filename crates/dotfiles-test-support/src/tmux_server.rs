@@ -321,67 +321,6 @@ pub fn shared_socket_path(socket: &str) -> PathBuf {
     PathBuf::from(format!("/tmp/tmux-{}/{socket}", uid.trim()))
 }
 
-/// The checkout under test, for the tests that assert against a tracked
-/// shell shim.
-///
-/// `DOTFILES_ROOT` then `HOME`, accepting either only when
-/// `crates/Cargo.toml` is under it, and falling back to the manifest walk-up
-/// for the `rust-checks.sh` snapshot where neither variable points at the
-/// archived tree. This mirrors `dotfiles_test_support::repo::root`, which
-/// this crate cannot depend on without changing `crates/Cargo.lock`.
-///
-/// Not `CARGO_MANIFEST_DIR` alone: that is a compile-time constant, so a
-/// binary built in one tree and run against another reads the wrong root,
-/// which is how tests passed on the host and failed under the gate.
-///
-/// # Panics
-///
-/// Panics when no candidate holds `crates/Cargo.toml` and the manifest
-/// directory has no grandparent.
-#[must_use]
-pub fn repo_root() -> PathBuf {
-    for variable in ["DOTFILES_ROOT", "HOME"] {
-        if let Some(value) = std::env::var_os(variable) {
-            let candidate = PathBuf::from(value);
-            if candidate.join("crates/Cargo.toml").is_file() {
-                return candidate;
-            }
-        }
-    }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("the repo root is two levels above this crate")
-        .to_path_buf()
-}
-
-/// Records that a check could not run here, and why.
-///
-/// The same wire format `dotfiles_test_support::skip` writes, reimplemented
-/// because tmux-tools cannot depend on that crate without changing
-/// `crates/Cargo.lock`. A skip is green on purpose: it says a check could
-/// not execute here, not that it would have failed.
-///
-/// It must not be free. A gate that says nothing when it skips is
-/// indistinguishable from a gate that is not installed, so the line goes to
-/// the log `tests/rust-checks.sh` names and the gate reports the count.
-/// A no-op when no gate is listening, so a bare `cargo test` needs no setup.
-pub fn skip(reason: &str) {
-    let Some(log) = std::env::var_os("DOTFILES_SKIP_LOG") else {
-        return;
-    };
-    let escaped = reason.replace('\\', "\\\\").replace('"', "\\\"");
-    let line = format!("{{\"reason\":\"{escaped}\"}}\n");
-    if let Ok(mut handle) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log)
-    {
-        use std::io::Write;
-        let _ = handle.write_all(line.as_bytes());
-    }
-}
-
 /// The command a test window runs instead of an interactive shell.
 ///
 /// A process that sits there gives a window with a real working directory

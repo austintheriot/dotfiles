@@ -17,7 +17,8 @@ use dotfiles_test_support::tmux_server as support;
 use std::path::Path;
 use std::process::Command;
 
-use support::{Server, repo_root};
+use dotfiles_test_support::repo;
+use support::Server;
 
 /// Runs `tmux-tools close` against `pane` on `server`.
 fn close(server: &Server, pane: &str) -> std::process::Output {
@@ -184,7 +185,7 @@ fn a_bystander_session_keeps_its_panes() {
 /// does, from zsh, with `$TMUX` cleared.
 #[test]
 fn the_shim_refuses_to_run_outside_tmux() {
-    let shim = repo_root().join(".scripts/tmux-close.sh");
+    let shim = repo::root().join(".scripts/tmux-close.sh");
     assert!(shim.is_file(), "the shim is tracked at {}", shim.display());
 
     let run = Command::new("zsh")

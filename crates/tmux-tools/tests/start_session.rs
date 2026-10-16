@@ -27,11 +27,12 @@ use dotfiles_test_support::tmux_server as support;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use support::{Server, repo_root};
+use dotfiles_test_support::repo;
+use support::Server;
 
 /// The tracked script under test.
 fn script_path() -> PathBuf {
-    repo_root().join(".scripts/tmux-start.sh")
+    repo::root().join(".scripts/tmux-start.sh")
 }
 
 /// A `tmux` on `PATH` that redirects every call to the throwaway server.

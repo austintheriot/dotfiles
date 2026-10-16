@@ -18,7 +18,8 @@
 
 use dotfiles_test_support::tmux_server as support;
 
-use support::{Server, repo_root};
+use dotfiles_test_support::repo;
+use support::Server;
 
 /// The name the hook gives a worktree window: the session name is a prefix
 /// of it, which is the whole precondition for the bug.
@@ -34,7 +35,7 @@ const SESSION: &str = "code";
 #[test]
 fn a_window_named_after_the_session_does_not_capture_the_target() {
     let server = Server::new("setup-target");
-    let home = repo_root();
+    let home = repo::root();
     server.new_session(SESSION, &home);
     server.tmux(&[
         "rename-window",
@@ -92,7 +93,7 @@ fn a_window_named_after_the_session_does_not_capture_the_target() {
 /// `se`.
 #[test]
 fn the_setup_script_targets_the_session_not_a_window() {
-    let script = repo_root().join(".scripts/tmux-setup.sh");
+    let script = repo::root().join(".scripts/tmux-setup.sh");
     let text = std::fs::read_to_string(&script)
         .unwrap_or_else(|error| panic!("{} is readable: {error}", script.display()));
 

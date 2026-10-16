@@ -19,11 +19,12 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use support::{Server, repo_root};
+use dotfiles_test_support::repo;
+use support::Server;
 
 /// The tracked `tmux.conf`.
 fn config_path() -> PathBuf {
-    repo_root().join(".config/tmux/tmux.conf")
+    repo::root().join(".config/tmux/tmux.conf")
 }
 
 /// Starts a server against the real config.
@@ -114,7 +115,7 @@ fn home_with_noop_tpm() -> tempfile::TempDir {
     fs::set_permissions(&tpm, fs::Permissions::from_mode(0o755)).expect("executable");
     fs::create_dir_all(home.path().join(".config")).expect("creatable");
     symlink(
-        repo_root().join(".config/tmux"),
+        repo::root().join(".config/tmux"),
         home.path().join(".config/tmux"),
     )
     .expect("the tracked tmux directory is linkable");
@@ -127,7 +128,7 @@ fn home_with_noop_tpm() -> tempfile::TempDir {
 /// The variant files are selected by that script's answer, so asking it is
 /// what makes a disagreement between the script and this test visible.
 fn platform() -> String {
-    let script = repo_root().join(".scripts/platform.sh");
+    let script = repo::root().join(".scripts/platform.sh");
     let run = Command::new("sh")
         .arg("-c")
         .arg(format!(
@@ -142,7 +143,7 @@ fn platform() -> String {
 
 /// The variant file `.scripts/platform.sh` would select for `path`.
 fn platform_variant(path: &Path) -> PathBuf {
-    let script = repo_root().join(".scripts/platform.sh");
+    let script = repo::root().join(".scripts/platform.sh");
     let run = Command::new("sh")
         .arg("-c")
         .arg(format!(
@@ -230,7 +231,7 @@ fn the_platform_variant_is_the_one_in_effect() {
     // platform must be here too. This is what catches one going missing.
     let this_platform = platform();
     let other_platform = if this_platform == "mac" { "linux" } else { "mac" };
-    let other_variant = repo_root().join(format!(".config/tmux/tmux-{other_platform}.conf"));
+    let other_variant = repo::root().join(format!(".config/tmux/tmux-{other_platform}.conf"));
     assert!(
         other_variant.is_file(),
         "the {other_platform} variant must also ship here, at {}",

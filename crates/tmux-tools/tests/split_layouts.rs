@@ -20,11 +20,12 @@ use dotfiles_test_support::tmux_server as support;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use support::{Server, repo_root};
+use dotfiles_test_support::repo;
+use support::Server;
 
 /// The tracked shim under test.
 fn script_path() -> PathBuf {
-    repo_root().join(".scripts/tmux-split.sh")
+    repo::root().join(".scripts/tmux-split.sh")
 }
 
 /// A throwaway server plus a fixture directory for its windows.

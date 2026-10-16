@@ -7,7 +7,7 @@
 //! about to read. That was fixed once in `8591f242` and it presents as
 //! flakiness rather than as a failure, so the property is enforced by the
 //! fixture (`support::Server::new_window`) and asserted in
-//! `support_fixture.rs` rather than left to each test to remember.
+//! `tests/tmux_server.rs` in `dotfiles-test-support` rather than left to each test to remember.
 
 use dotfiles_test_support::tmux_server as support;
 
@@ -644,7 +644,7 @@ fn repeated_runs_are_stable() {
 /// naming the wrapper without tripping this.
 #[test]
 fn precmd_calls_the_binary_rather_than_the_wrapper() {
-    let zshrc = support::repo_root().join(".zshrc");
+    let zshrc = dotfiles_test_support::repo::root().join(".zshrc");
     let source = std::fs::read_to_string(&zshrc).expect("the .zshrc is readable");
 
     let body: String = source

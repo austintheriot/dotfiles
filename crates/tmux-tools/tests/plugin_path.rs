@@ -36,11 +36,12 @@ use dotfiles_test_support::tmux_server as support;
 
 use std::path::{Path, PathBuf};
 
-use support::{Server, repo_root};
+use dotfiles_test_support::repo;
+use support::Server;
 
 /// The tracked `tmux.conf`.
 fn config_path() -> PathBuf {
-    repo_root().join(".config/tmux/tmux.conf")
+    repo::root().join(".config/tmux/tmux.conf")
 }
 
 /// The plugin repositories `tmux.conf` declares, as `owner/name` strings.
@@ -174,7 +175,7 @@ fn every_declared_plugin_is_installed() {
 
     if !manager_directory.join("tpm").is_dir() {
         for repository in &declared {
-            support::skip(&format!(
+            dotfiles_test_support::skip(&format!(
                 "no tpm at {}: the declared plugin {repository} is installed",
                 manager_directory.display()
             ));

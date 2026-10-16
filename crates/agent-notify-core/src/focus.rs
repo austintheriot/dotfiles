@@ -57,7 +57,8 @@ pub enum FocusPlan {
 pub enum TmuxSwitch {
     /// A client already shows the pane's session: select window and pane.
     InAttachedClient,
-    /// Switch the most recently active client.
+    /// Switch the most recently active client. On a tie in activity, the
+    /// client with the lowest tty, so the list order tmux printed does not matter.
     SwitchClient {
         /// The client.
         tty: String,
@@ -86,7 +87,7 @@ pub fn plan_focus(target: &FocusTarget, world: Option<&FocusWorld>) -> FocusPlan
     let switch = if shown {
         TmuxSwitch::InAttachedClient
     } else {
-        match world.clients.iter().max_by_key(|client| client.activity) {
+        match world.clients.iter().max_by_key(|client| (client.activity, std::cmp::Reverse(&client.tty))) {
             Some(client) => TmuxSwitch::SwitchClient { tty: client.tty.clone() },
             None => TmuxSwitch::AttachNewTerminal { tmux_session: chosen.tmux_session.clone() },
         }
@@ -124,6 +125,17 @@ mod tests {
             clients: vec![client("/dev/ttys001", "code", 10), client("/dev/ttys002", "code", 20)],
         };
         assert_eq!(plan_focus(&target(5), Some(&world)), FocusPlan::Focus { pane: pane(5).pane, switch: TmuxSwitch::SwitchClient { tty: "/dev/ttys002".to_string() } });
+    }
+
+    #[test]
+    fn a_tie_in_client_activity_picks_the_same_client_in_any_list_order() {
+        let first = client("/dev/ttys001", "code", 20);
+        let second = client("/dev/ttys002", "code", 20);
+        let expected = FocusPlan::Focus { pane: pane(5).pane, switch: TmuxSwitch::SwitchClient { tty: "/dev/ttys001".to_string() } };
+        for clients in [vec![first.clone(), second.clone()], vec![second, first]] {
+            let world = FocusWorld { panes: vec![world_pane(5, Some("a"), "work")], clients };
+            assert_eq!(plan_focus(&target(5), Some(&world)), expected);
+        }
     }
 
     #[test]

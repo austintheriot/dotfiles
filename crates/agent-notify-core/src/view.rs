@@ -251,6 +251,75 @@ mod tests {
         assert_eq!(view(&state, EpochMs(2)).cards[0].note.as_deref(), Some("Switched to 4, window not raised"));
     }
 
+    fn set_card(state: &mut DaemonState, name: &str, change: impl FnOnce(&mut Card)) {
+        if let Some(record) = state.sessions.get_mut(&session(name)) && let Some(shown) = &mut record.card {
+            change(shown);
+        }
+    }
+
+    #[test]
+    fn an_expiring_card_shows_with_its_note() {
+        let mut state = DaemonState::default();
+        needs(&mut state, 1, "a");
+        set_card(&mut state, "a", |shown| {
+            shown.phase = CardPhase::Expiring { remove_at: EpochMs(5_000) };
+            shown.note = Some(CardNote::SessionEnded);
+        });
+        let model = view(&state, EpochMs(2));
+        assert_eq!(model.cards.len(), 1);
+        assert_eq!(model.cards[0].note.as_deref(), Some("Session ended"));
+        assert!(model.finished_row.is_empty());
+    }
+
+    #[test]
+    fn every_note_has_its_text() {
+        let cases = [
+            (CardNote::SessionEnded, Some(4), "Session ended"),
+            (CardNote::SessionEnded, None, "Session ended"),
+            (CardNote::NotRaised, Some(4), "Switched to 4, window not raised"),
+            (CardNote::NotRaised, None, "Switched, window not raised"),
+            (CardNote::SwitchFailed(DisplayText::new("no client")), Some(4), "Switch failed: no client"),
+            (CardNote::SwitchFailed(DisplayText::new("no client")), None, "Switch failed: no client"),
+        ];
+        for (note, window_index, expected) in cases {
+            assert_eq!(note_text(&note, window_index), expected, "{note:?} {window_index:?}");
+        }
+    }
+
+    #[test]
+    fn a_session_card_outside_tmux_notes_without_a_window_index() {
+        let mut state = DaemonState::default();
+        needs(&mut state, 1, "a");
+        if let Some(record) = state.sessions.get_mut(&session("a")) {
+            record.window = None;
+        }
+        set_card(&mut state, "a", |shown| shown.note = Some(CardNote::NotRaised));
+        assert_eq!(view(&state, EpochMs(2)).cards[0].note.as_deref(), Some("Switched, window not raised"));
+    }
+
+    #[test]
+    fn a_folded_oneoff_card_is_labelled_by_its_location() {
+        let mut state = DaemonState::default();
+        let mut outside = crate::test_support::origin(None, None);
+        outside.window = None;
+        let input = crate::test_support::agent_input(1, outside, AgentEvent::Explicit { kind: Kind::Info, body: DisplayText::new("done") });
+        crate::update::update(&mut state, input, EpochMs(1));
+        state.oneoff_cards[0].card.phase = CardPhase::Folded;
+        let model = view(&state, EpochMs(2));
+        assert_eq!(model.finished_row.iter().map(|entry| entry.label.as_str()).collect::<Vec<_>>(), vec!["code"]);
+    }
+
+    #[test]
+    fn a_folded_session_card_outside_tmux_is_labelled_by_its_location() {
+        let mut state = DaemonState::default();
+        info(&mut state, 1, "a");
+        if let Some(record) = state.sessions.get_mut(&session("a")) {
+            record.window = None;
+        }
+        set_card(&mut state, "a", |shown| shown.phase = CardPhase::Folded);
+        assert_eq!(view(&state, EpochMs(2)).finished_row[0].label, "code");
+    }
+
     #[test]
     fn a_frozen_view_is_returned_with_the_current_revision() {
         let mut state = DaemonState::default();

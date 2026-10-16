@@ -3,9 +3,10 @@
 //! reach a new daemon.
 
 use agent_notify_core::wire::{
-    AgentEvent, DecodeError, MAX_LINE_BYTES, Reply, Request, SessionSource, decode_request,
-    encode_line,
+    AgentEvent, DecodeError, Kind, MAX_LINE_BYTES, Reply, ReplyCode, Request, SessionSource,
+    decode_request, encode_line,
 };
+use serde_json::json;
 
 const REQUESTS: &str = include_str!("fixtures/wire-v1.jsonl");
 const REPLIES: &str = include_str!("fixtures/reply-v1.jsonl");
@@ -107,19 +108,93 @@ fn unknown_values_of_open_enums_decode_to_unknown() {
     assert_eq!(source, SessionSource::Unknown);
 }
 
+fn request_line(number: usize) -> serde_json::Value {
+    as_value(REQUESTS.lines().nth(number - 1).expect("a fixture line"))
+}
+
+fn with(mut value: serde_json::Value, change: impl Fn(&mut serde_json::Value)) -> String {
+    change(&mut value);
+    value.to_string()
+}
+
+/// A closed enum takes `known` and refuses `unknown` with `bad_request`, so
+/// the CLI falls back. The known value is the positive control: without it a
+/// request broken some other way would also pass.
+fn assert_closed(name: &str, request: &serde_json::Value, set: impl Fn(&mut serde_json::Value, &str), known: &str, unknown: &str) {
+    let accepted = with(request.clone(), |value| set(value, known));
+    assert!(decode_request(&accepted).is_ok(), "{name}: {known:?} must decode");
+    let refused = with(request.clone(), |value| set(value, unknown));
+    let error = decode_request(&refused).expect_err(name);
+    assert!(matches!(error, DecodeError::Malformed { .. }), "{name}: {error:?}");
+    assert_eq!(error.reply_code(), ReplyCode::BadRequest, "{name}");
+}
+
 #[test]
-fn unknown_values_of_closed_enums_reject_the_request() {
-    let unknown_kind = first_request_with(|value| {
-        value["event"] = serde_json::json!({"type": "explicit", "kind": "urgent", "body": "x"});
-    });
-    assert!(decode_request(&unknown_kind).is_err());
-    let unknown_quiet = first_request_with(|value| {
-        value["event"] = serde_json::json!({"type": "quiet", "until": "never", "max_minutes": 5});
-    });
-    assert!(decode_request(&unknown_quiet).is_err());
-    let unknown_head =
-        first_request_with(|value| value["origin"]["repo"]["head"]["type"] = serde_json::json!("tag"));
-    assert!(decode_request(&unknown_head).is_err());
+fn an_unknown_kind_value_is_a_bad_request() {
+    let explicit = |value: &mut serde_json::Value, kind: &str| value["event"] = json!({"type": "explicit", "kind": kind, "body": "x"});
+    assert_closed("Kind", &request_line(1), explicit, "attention", "urgent");
+}
+
+#[test]
+fn an_unknown_quiet_until_value_is_a_bad_request() {
+    let quiet = |value: &mut serde_json::Value, until: &str| value["event"] = json!({"type": "quiet", "until": until, "max_minutes": 5});
+    assert_closed("QuietUntil", &request_line(1), quiet, "next_prompt", "never");
+}
+
+#[test]
+fn an_unknown_dnd_command_is_a_bad_request() {
+    let dnd = |value: &mut serde_json::Value, command: &str| value["control"]["command"] = json!({"type": command});
+    assert_closed("DndCommand", &request_line(17), dnd, "off", "sideways");
+}
+
+#[test]
+fn an_unknown_repo_head_is_a_bad_request() {
+    let head = |value: &mut serde_json::Value, head: &str| value["origin"]["repo"]["head"] = json!({"type": head, "name": "v1", "short_sha": "a1b2c3d"});
+    let line = request_line(1);
+    assert!(line["origin"]["repo"]["main_repo_name"].is_string(), "the fixture must carry a full repo");
+    assert_closed("RepoHead", &line, head, "detached", "tag");
+}
+
+#[test]
+fn attention_outranks_info() {
+    assert!(Kind::Attention > Kind::Info);
+    let mut kinds = vec![Kind::Attention, Kind::Info, Kind::Attention];
+    kinds.sort();
+    assert_eq!(kinds, vec![Kind::Info, Kind::Attention, Kind::Attention]);
+}
+
+#[test]
+fn a_version_that_is_not_a_u16_is_malformed() {
+    for version in [json!(65_536), json!(-1), json!(1.5)] {
+        let line = first_request_with(|value| value["v"] = version.clone());
+        let error = decode_request(&line).expect_err("an out-of-range v");
+        assert!(matches!(error, DecodeError::Malformed { .. }), "{version}: {error:?}");
+        assert_eq!(error.reply_code(), ReplyCode::BadRequest, "{version}");
+    }
+}
+
+/// A valid request padded with an ignored field to exactly `bytes` bytes.
+fn request_of_length(bytes: usize) -> String {
+    let unpadded = first_request_with(|value| value["pad"] = json!("")).len();
+    let line = first_request_with(|value| value["pad"] = json!("x".repeat(bytes - unpadded)));
+    assert_eq!(line.len(), bytes);
+    line
+}
+
+#[test]
+fn a_line_of_exactly_the_limit_decodes_and_one_byte_more_is_too_long() {
+    assert!(decode_request(&request_of_length(MAX_LINE_BYTES)).is_ok());
+    let over = decode_request(&request_of_length(MAX_LINE_BYTES + 1)).expect_err("one byte over");
+    assert_eq!(over, DecodeError::LineTooLong { bytes: MAX_LINE_BYTES + 1 });
+    assert_eq!(over.reply_code(), ReplyCode::LineTooLong);
+}
+
+#[test]
+fn the_limit_counts_the_line_without_its_newline() {
+    let at_limit = request_of_length(MAX_LINE_BYTES);
+    assert_eq!(decode_request(&format!("{at_limit}\n")), Err(DecodeError::LineTooLong { bytes: MAX_LINE_BYTES + 1 }), "the reader strips the newline before decoding");
+    let encoded = encode_line(&decode_request(&at_limit).expect("decodes")).expect("encodes");
+    assert!(decode_request(encoded.trim_end_matches('\n')).is_ok());
 }
 
 #[test]

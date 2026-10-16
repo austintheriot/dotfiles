@@ -19,7 +19,9 @@ use crate::{DisplayText, EpochMs, EventId, PaneKey, PromptId, SessionId};
 pub const WIRE_VERSION: u16 = 1;
 /// The oldest version this build accepts.
 pub const OLDEST_ACCEPTED_VERSION: u16 = 1;
-/// The longest request line the daemon reads, in bytes.
+/// The longest request line the daemon reads, in bytes. The trailing newline
+/// does not count: the reader strips it and passes the rest to
+/// [`decode_request`], which measures what it is given.
 pub const MAX_LINE_BYTES: usize = 65_536;
 
 /// One request from the CLI to the daemon.

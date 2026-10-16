@@ -218,7 +218,9 @@ pub enum SuppressReason {
     Dnd,
     /// The event belongs to a turn that already ended, to another prompt
     /// (`TurnEnded`), or to an unseen prompt sent at or before the current
-    /// turn's start. No card, and the turn does not change.
+    /// turn's start. No card, and the turn does not change. An `Explicit` from
+    /// such an unseen prompt is the exception: it shows its card and ends
+    /// next-send quiet, but leaves the turn alone, and gets no reason.
     Stale,
     /// The event kind never makes a card: a session start or end, a turn
     /// start, quiet on or off, a resolved input, or an event other than
@@ -319,9 +321,12 @@ fn agent_event(state: &mut DaemonState, arrival: Arrival, focus: &FocusSnapshot,
     }
     let dnd = state.dnd_active(now);
     let record = state.sessions.entry(session).or_insert_with(|| SessionRecord::new(&origin));
-    record.absorb(&origin);
-    match step(record, origin.prompt.as_ref(), event, sent_at, now) {
-        Step::Offer(offer) => {
+    let stepped = step(record, origin.prompt.as_ref(), event, sent_at, now);
+    if !stepped.is_stale() {
+        record.absorb(&origin);
+    }
+    match stepped {
+        Step::Offer(offer) | Step::StaleOffer(offer) => {
             if is_suppressed_by_focus(focus, record.pane.as_ref()) {
                 effects.push(Effect::Suppressed { event_id, reason: SuppressReason::Focused });
             } else {
@@ -405,8 +410,17 @@ struct CardOffer {
 
 enum Step {
     Offer(CardOffer),
+    /// A card from an event sent before the current turn started. The turn
+    /// and the record's location stay as they are.
+    StaleOffer(CardOffer),
     Clear,
     Nothing(SuppressReason),
+}
+
+impl Step {
+    fn is_stale(&self) -> bool {
+        matches!(self, Step::StaleOffer(_) | Step::Nothing(SuppressReason::Stale))
+    }
 }
 
 fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent, sent_at: EpochMs, now: EpochMs) -> Step {
@@ -417,19 +431,24 @@ fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent
             Step::Clear
         }
         AgentEvent::Explicit { kind, body } => {
-            match turn_match(&record.turn, prompt) {
-                TurnMatch::Other if sent_before_turn_start(record, sent_at) => return Step::Nothing(SuppressReason::Stale),
+            let offer = CardOffer { kind, cause: CardCause::Explicit, body };
+            let late = match turn_match(&record.turn, prompt) {
+                TurnMatch::Other if sent_before_turn_start(record, sent_at) => true,
                 TurnMatch::Other => {
                     begin_turn(record, sent_at);
                     record.turn = Turn::Working { prompt: prompt.cloned() };
+                    false
                 }
-                TurnMatch::Current | TurnMatch::Ended => {}
-            }
-            record.explicit_sent = true;
+                TurnMatch::Current | TurnMatch::Ended => false,
+            };
             if record.quiet.ends_on(QuietUntil::NextSend) {
                 record.quiet = QuietMode::Armed;
             }
-            Step::Offer(CardOffer { kind, cause: CardCause::Explicit, body })
+            if late {
+                return Step::StaleOffer(offer);
+            }
+            record.explicit_sent = true;
+            Step::Offer(offer)
         }
         AgentEvent::TurnEnded { last_message } => {
             if turn_match(&record.turn, prompt) != TurnMatch::Current {
@@ -510,6 +529,12 @@ fn begin_turn(record: &mut SessionRecord, sent_at: EpochMs) {
 
 /// Async hooks reach the daemon in connect order, not hook order, so an event
 /// for an older prompt can arrive after a newer turn started.
+///
+/// `sent_at` comes from the wall clock of each CLI process. If that clock goes
+/// back between two hook processes (an NTP step, a manual change), a real
+/// event for a new prompt can compare as sent before the turn start and be
+/// dropped as stale instead of adopted. That risk is accepted: the window is
+/// one clock step, and a monotonic clock is not shared across processes.
 fn sent_before_turn_start(record: &SessionRecord, sent_at: EpochMs) -> bool {
     record.turn_started_at.is_some_and(|started| sent_at <= started)
 }
@@ -917,10 +942,67 @@ mod tests {
     fn an_explicit_send_from_before_the_current_turn_does_not_take_it_over() {
         let mut state = DaemonState::default();
         send(&mut state, 200, "a", Some("p2"), AgentEvent::TurnStarted);
-        let effects = send_sent_at(&mut state, 250, 100, "a", Some("p1"), explicit(Kind::Info, "old"));
-        assert_eq!(reasons(&effects), vec![SuppressReason::Stale]);
-        assert!(!state.sessions[&session("a")].explicit_sent);
+        send_sent_at(&mut state, 250, 100, "a", Some("p1"), explicit(Kind::Info, "old"));
+        assert!(!state.sessions[&session("a")].explicit_sent, "the late send belongs to p1, so p2's backup card still shows");
         assert_eq!(state.sessions[&session("a")].turn, Turn::Working { prompt: Some(prompt("p2")) });
+        let effects = send(&mut state, 300, "a", Some("p2"), turn_ended("Done."));
+        assert!(reasons(&effects).is_empty());
+        assert_eq!(card(&state, "a").map(|shown| shown.cause), Some(CardCause::TurnEnded));
+    }
+
+    #[test]
+    fn a_stale_explicit_send_still_ends_next_send_quiet_and_shows_its_card() {
+        let mut state = DaemonState::default();
+        send(&mut state, 50, "a", None, AgentEvent::Quiet { until: QuietUntil::NextSend, max_minutes: 120 });
+        send(&mut state, 200, "a", Some("p2"), AgentEvent::TurnStarted);
+        let effects = send_sent_at(&mut state, 250, 100, "a", Some("p1"), explicit(Kind::Info, "CI green"));
+        assert!(reasons(&effects).is_empty(), "the card is offered, so nothing is suppressed");
+        let record = &state.sessions[&session("a")];
+        assert_eq!(record.quiet, QuietMode::Armed);
+        assert_eq!(record.turn, Turn::Working { prompt: Some(prompt("p2")) });
+        assert_eq!(record.turn_started_at, Some(EpochMs(200)));
+        let shown = card(&state, "a").expect("the late send's card");
+        assert_eq!((shown.id.clone(), shown.cause, shown.body.as_str()), (CardId::for_event(&event_id(250)), CardCause::Explicit, "CI green"));
+    }
+
+    fn located(prompt_name: Option<&str>, pane_number: u32, window_name: &str, title: &str, cwd: &str) -> Origin {
+        let mut located = origin(Some("a"), prompt_name);
+        located.pane = Some(pane(pane_number));
+        located.window = Some(crate::wire::WindowLabel { index: 7, name: text(window_name) });
+        located.session_title = Some(text(title));
+        located.cwd = std::path::PathBuf::from(cwd);
+        located
+    }
+
+    #[test]
+    fn a_stale_event_does_not_overwrite_the_records_location_or_title() {
+        let stale_events = [needs_permission(), AgentEvent::TurnFailed { error: text("x") }, explicit(Kind::Info, "late"), turn_ended("old")];
+        for stale in stale_events {
+            let mut state = DaemonState::default();
+            let fresh = located(Some("p2"), 1, "new-window", "New title", "/new");
+            update(&mut state, crate::test_support::agent_input_sent_at(200, 200, fresh, AgentEvent::TurnStarted), EpochMs(200));
+            let late = located(Some("p1"), 2, "old-window", "Old title", "/old");
+            update(&mut state, crate::test_support::agent_input_sent_at(250, 100, late, stale.clone()), EpochMs(250));
+            let record = &state.sessions[&session("a")];
+            assert_eq!(record.pane, Some(pane(1)), "{stale:?}");
+            assert_eq!(record.window.as_ref().map(|window| window.name.as_str()), Some("new-window"), "{stale:?}");
+            assert_eq!(record.title, Some(text("New title")), "{stale:?}");
+            assert_eq!(record.cwd, std::path::PathBuf::from("/new"), "{stale:?}");
+        }
+    }
+
+    #[test]
+    fn a_fresh_event_takes_the_newer_location() {
+        let mut state = DaemonState::default();
+        let first = located(Some("p1"), 1, "old-window", "Old title", "/old");
+        update(&mut state, agent_input(100, first, AgentEvent::TurnStarted), EpochMs(100));
+        let moved = located(Some("p1"), 2, "new-window", "New title", "/new");
+        update(&mut state, agent_input(200, moved, needs_permission()), EpochMs(200));
+        let record = &state.sessions[&session("a")];
+        assert_eq!(record.pane, Some(pane(2)));
+        assert_eq!(record.window.as_ref().map(|window| window.name.as_str()), Some("new-window"));
+        assert_eq!(record.title, Some(text("New title")));
+        assert_eq!(record.cwd, std::path::PathBuf::from("/new"));
     }
 
     #[test]

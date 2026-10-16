@@ -4,7 +4,10 @@
 //! turn, a mid-turn event with an unseen prompt adopts that prompt as a new
 //! turn when it was sent after the current turn started, and an event is
 //! stale for another prompt (`TurnEnded`), for a turn that already ended, or
-//! for an unseen prompt sent at or before the current turn's start.
+//! for an unseen prompt sent at or before the current turn's start. A stale
+//! `Explicit` still ends next-send quiet and shows its card, but leaves the
+//! turn and the explicit flag alone. `Op::Late` delivers an agent event after
+//! the time it was sent, so the late-delivery path is generated.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -41,14 +44,31 @@ enum Op {
     Click,
     Outcome(FocusOutcome),
     Tick { advance_ms: i64 },
+    /// An agent event sent `delay_ms` before the time it arrives.
+    Late { delay_ms: i64, event: Box<Op> },
 }
 
 impl Op {
     fn is_agent_event(&self) -> bool {
         matches!(
-            self,
+            self.delivered(),
             Op::Start(_) | Op::Explicit(..) | Op::End(_) | Op::Fail(_) | Op::Needs(..) | Op::Resolved | Op::Quiet(_) | Op::QuietOff | Op::SessionEnded
         )
+    }
+
+    /// The op without its late-delivery wrapper.
+    fn delivered(&self) -> &Op {
+        match self {
+            Op::Late { event, .. } => event,
+            other => other,
+        }
+    }
+
+    fn delay_ms(&self) -> i64 {
+        match self {
+            Op::Late { delay_ms, .. } => *delay_ms,
+            _ => 0,
+        }
     }
 }
 
@@ -89,8 +109,12 @@ fn shell_op() -> impl Strategy<Value = Op> {
     ]
 }
 
+fn late_op() -> impl Strategy<Value = Op> {
+    (prop_oneof![Just(1_i64), Just(400), Just(FOCUS_DWELL_MS)], agent_op()).prop_map(|(delay_ms, event)| Op::Late { delay_ms, event: Box::new(event) })
+}
+
 fn op() -> impl Strategy<Value = Op> {
-    prop_oneof![3 => agent_op(), 2 => shell_op()]
+    prop_oneof![3 => agent_op(), 1 => late_op(), 2 => shell_op()]
 }
 
 fn ops() -> impl Strategy<Value = Vec<Op>> {
@@ -131,7 +155,7 @@ fn pane_key(number: u32) -> PaneKey {
 
 fn agent_event(op: &Op) -> Option<(Option<u8>, AgentEvent)> {
     let text = DisplayText::new;
-    Some(match op {
+    Some(match op.delivered() {
         Op::Start(prompt) => (*prompt, AgentEvent::TurnStarted),
         Op::Explicit(kind, prompt) => (*prompt, AgentEvent::Explicit { kind: *kind, body: text("x") }),
         Op::End(prompt) => (*prompt, AgentEvent::TurnEnded { last_message: Some(text("Done.")) }),
@@ -208,7 +232,7 @@ impl World {
                 session_title: None,
                 cwd: PathBuf::from("/x"),
             };
-            let request = Request::Agent { v: WIRE_VERSION, event_id: event, sent_at_ms: EpochMs(self.now), origin, event: agent_event };
+            let request = Request::Agent { v: WIRE_VERSION, event_id: event, sent_at_ms: EpochMs(self.now - op.delay_ms()), origin, event: agent_event };
             return DaemonInput::Received { request, focus: FocusSnapshot::unknown() };
         }
         match op {
@@ -324,21 +348,27 @@ impl ModelRecord {
         self.turn_match(prompt, now) == TurnMatch::Current && !self.explicit_sent && after_expiry.quiet.is_none()
     }
 
-    /// The test world sends every request at the time it arrives, so
-    /// `sent_at` is `now`. Events between two ticks share one sent time.
+    /// The test world sends a request at the time it arrives, so `sent_at` is
+    /// `now`, unless the op is `Op::Late`. Events between two ticks share one
+    /// sent time.
     fn apply_agent_event(&mut self, op: &Op, now: i64) {
-        let sent_at = now;
-        match op {
+        let sent_at = now - op.delay_ms();
+        match op.delivered() {
             Op::Start(prompt) => self.begin_turn(*prompt, sent_at),
             Op::Explicit(_, prompt) => {
-                match self.turn_match(*prompt, sent_at) {
-                    TurnMatch::Older => return,
-                    TurnMatch::Other => self.begin_turn(*prompt, sent_at),
-                    TurnMatch::Current | TurnMatch::Ended => {}
-                }
-                self.explicit_sent = true;
+                let late = match self.turn_match(*prompt, sent_at) {
+                    TurnMatch::Older => true,
+                    TurnMatch::Other => {
+                        self.begin_turn(*prompt, sent_at);
+                        false
+                    }
+                    TurnMatch::Current | TurnMatch::Ended => false,
+                };
                 if matches!(self.quiet, Some((QuietUntil::NextSend, _))) {
                     self.quiet = None;
+                }
+                if !late {
+                    self.explicit_sent = true;
                 }
             }
             Op::End(prompt) if self.turn_match(*prompt, sent_at) == TurnMatch::Current => {
@@ -368,14 +398,14 @@ impl Model {
     }
 
     fn apply(&mut self, op: &Op, now: i64) {
-        match op {
+        match op.delivered() {
             Op::SessionEnded | Op::Snapshot { tagged: false } => self.record = None,
             Op::Tick { .. } => {
                 if let Some(record) = &mut self.record {
                     record.expire_quiet(now);
                 }
             }
-            agent if agent.is_agent_event() => self.record.get_or_insert_with(ModelRecord::fresh).apply_agent_event(agent, now),
+            agent if agent.is_agent_event() => self.record.get_or_insert_with(ModelRecord::fresh).apply_agent_event(op, now),
             _ => {}
         }
     }
@@ -399,7 +429,7 @@ fn attention_exit_allowed(before: &DaemonState, card: &Card, op: &Op, applied: &
     if after.card().is_some_and(|shown| shown.id == applied.card_id) {
         return true;
     }
-    match op {
+    match op.delivered() {
         Op::SessionEnded | Op::Snapshot { tagged: false } => after.record().is_none(),
         Op::Start(_) | Op::Outcome(FocusOutcome::Done) => true,
         Op::End(_) => matches!(card.cause, CardCause::NeedsInput(_)) && !applied.suppressed(SuppressReason::Stale),
@@ -472,7 +502,9 @@ proptest! {
 
     /// The card was made in the record's current turn, or in a turn with no
     /// known prompt, unless it is an attention card that outranked an info
-    /// `send` whose prompt adopted a new turn.
+    /// `send` whose prompt adopted a new turn. A stale `Explicit` makes its
+    /// card under the current turn, because spec 6.2's `Explicit` row drops no
+    /// send: the card is the agent's own message.
     #[test]
     fn a_card_belongs_to_the_current_turn_unless_it_outranked_an_adopting_send(ops in ops()) {
         let mut world = World::new();
@@ -484,7 +516,7 @@ proptest! {
             let applied = world.apply(op);
             let Some(record) = world.record() else { continue };
             let current = record.turn.prompt().cloned();
-            if matches!(op, Op::Explicit(..)) && applied.suppressed(SuppressReason::Outranked) && current != prompt_before
+            if matches!(op.delivered(), Op::Explicit(..)) && applied.suppressed(SuppressReason::Outranked) && current != prompt_before
                 && let Some(kept) = card_before
             {
                 outranked_an_adoption.insert(kept);
@@ -504,7 +536,7 @@ proptest! {
         let mut world = World::new();
         let mut model = Model::default();
         for op in &ops {
-            let expectation = match op {
+            let expectation = match op.delivered() {
                 Op::End(prompt) => {
                     let pending_attention = world.card().is_some_and(|card| outranks_an_info_card(card) && !matches!(card.cause, CardCause::NeedsInput(_)));
                     Some(model.record_or_fresh().turn_end_offers_info(*prompt, world.now) && !pending_attention)

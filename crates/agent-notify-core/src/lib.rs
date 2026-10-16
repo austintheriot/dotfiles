@@ -10,6 +10,7 @@ pub mod ids;
 pub mod paths;
 pub mod state;
 pub mod text;
+pub mod tmux_text;
 pub mod update;
 pub mod view;
 pub mod wire;

@@ -8,6 +8,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use agent_notify_core::hook::{PROMPT_TAG_OPTION, SESSION_TAG_OPTION, TagWrite};
+use agent_notify_core::tmux_text::unescape_tmux_format;
 use agent_notify_core::wire::WindowLabel;
 use agent_notify_core::{DisplayText, PaneId, PaneKey, PromptId, ServerId, SessionId, SocketPath};
 
@@ -48,7 +49,7 @@ pub fn parse_pane_line(line: &str, socket_path: SocketPath, pane: PaneId) -> Res
     let index = next("window_index")?.parse::<u32>().map_err(|error| format!("window_index: {error}"))?;
     let session_tag = SessionId::parse(next("session tag")?).ok();
     let prompt_tag = PromptId::parse(next("prompt tag")?).ok();
-    let name = DisplayText::new(next("window_name")?);
+    let name = DisplayText::new(&unescape_tmux_format(next("window_name")?));
     Ok(PaneFacts {
         key: PaneKey { server: ServerId { socket_path, pid, start_time }, pane },
         window: WindowLabel { index, name },
@@ -73,25 +74,29 @@ pub fn read_pane(socket: &SocketPath, pane: &PaneId) -> io::Result<String> {
 /// Returns the first tmux failure.
 pub fn apply_tag(socket: &SocketPath, pane: &PaneId, tag: &TagWrite) -> io::Result<()> {
     let target = pane.as_str();
-    let unset_prompt = ["set-option", "-p", "-q", "-u", "-t", target, PROMPT_TAG_OPTION];
+    let unset_prompt = ["set-option", "-p", "-q", "-u", "-t", target, "--", PROMPT_TAG_OPTION];
     match tag {
         TagWrite::BindSession(session) => {
-            run_tmux(socket, &["set-option", "-p", "-t", target, SESSION_TAG_OPTION, session.as_str()])?;
+            run_tmux(socket, &["set-option", "-p", "-t", target, "--", SESSION_TAG_OPTION, session.as_str()])?;
             run_tmux(socket, &unset_prompt)?;
         }
         TagWrite::BindPrompt(prompt) => {
-            run_tmux(socket, &["set-option", "-p", "-t", target, PROMPT_TAG_OPTION, prompt.as_str()])?;
+            run_tmux(socket, &["set-option", "-p", "-t", target, "--", PROMPT_TAG_OPTION, prompt.as_str()])?;
         }
         TagWrite::UnbindSession => {
-            run_tmux(socket, &["set-option", "-p", "-q", "-u", "-t", target, SESSION_TAG_OPTION])?;
+            run_tmux(socket, &["set-option", "-p", "-q", "-u", "-t", target, "--", SESSION_TAG_OPTION])?;
             run_tmux(socket, &unset_prompt)?;
         }
     }
     Ok(())
 }
 
+/// `-u`: without a UTF-8 locale, tmux prints non-ASCII text as underscores.
+/// tmux also assumes UTF-8 when `$TMUX` is set, so this only guards a caller
+/// whose environment lacks both.
 fn run_tmux(socket: &SocketPath, arguments: &[&str]) -> io::Result<String> {
     let mut child = Command::new("tmux")
+        .arg("-u")
         .arg("-S")
         .arg(socket.as_path())
         .args(arguments)
@@ -152,6 +157,12 @@ mod tests {
         let facts = parse_pane_line(&line(&["1", "2", "3", "", "", &name]), socket(), pane()).expect("parses");
         assert_eq!(facts.window.name.as_str(), "ab\nc", "the separator is a control character, so DisplayText drops it");
         assert_eq!(facts.window.index, 3);
+    }
+
+    #[test]
+    fn a_tmux_escaped_window_name_is_unescaped() {
+        let facts = parse_pane_line(&line(&["1", "2", "3", "", "", r"logs\\today\037x"]), socket(), pane()).expect("parses");
+        assert_eq!(facts.window.name.as_str(), r"logs\todayx", "the backslash comes back, and DisplayText drops the decoded control");
     }
 
     #[test]

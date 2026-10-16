@@ -65,6 +65,35 @@ fn hooks_bind_and_unbind_the_pane_tags() {
 }
 
 #[test]
+fn ids_that_start_with_a_dash_land_as_tag_values() {
+    let pane = Pane::new("an-dash");
+    let sandbox = Sandbox::new();
+    let stdin = |event: &str| format!(r#"{{"session_id":"-u","prompt_id":"-q","cwd":"/tmp","hook_event_name":"{event}","source":"startup"}}"#);
+    for event in ["SessionStart", "UserPromptSubmit"] {
+        let output = sandbox.run(&mut pane.command(&sandbox, &["hook", "claude-code"]), &stdin(event));
+        assert!(output.status.success(), "{event}: {output:?}");
+    }
+    assert_eq!(pane.option("@agent_notify_session"), "-u");
+    assert_eq!(pane.option("@agent_notify_prompt"), "-q");
+    assert!(!sandbox.log_text().contains("tag write failed"), "{}", sandbox.log_text());
+}
+
+#[test]
+fn a_non_ascii_window_name_survives_a_c_locale() {
+    let pane = Pane::new("an-utf8");
+    pane.server.tmux(&["rename-window", "-t", "main", "café"]);
+    let sandbox = Sandbox::new();
+    let received = listen(&sandbox.socket, ReplyMode::Ack);
+    let output = sandbox.run(pane.command(&sandbox, &["send", "--kind", "info", "--body", "Report ready"]).env("LC_ALL", "C"), "");
+    assert!(output.status.success(), "{output:?}");
+    let line = received.join().expect("listener thread").expect("a request line");
+    let Ok(Request::Agent { origin, .. }) = decode_request(line.trim_end()) else {
+        panic!("expected an agent request: {line}");
+    };
+    assert_eq!(origin.window.map(|window| window.name.as_str().to_string()), Some("café".to_string()));
+}
+
+#[test]
 fn send_carries_the_pane_tags_and_the_window() {
     let pane = Pane::new("an-send");
     let sandbox = Sandbox::new();

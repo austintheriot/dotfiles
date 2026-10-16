@@ -423,8 +423,9 @@ fn dwell_cleared(before: &DaemonState, card: &Card, now: i64) -> bool {
 }
 
 /// The exits an attention card may take: replacement by `merge`, the user's
-/// close (a snooze that later lapses), the session ending, a new turn, the
-/// turn ending or an elicitation resolving, a focus outcome, or focus dwell.
+/// close (a snooze that later lapses, or at once for a card already on its
+/// way out), the session ending, a new turn, the turn ending or an
+/// elicitation resolving, a focus outcome, or focus dwell.
 fn attention_exit_allowed(before: &DaemonState, card: &Card, op: &Op, applied: &Applied, after: &World) -> bool {
     if after.card().is_some_and(|shown| shown.id == applied.card_id) {
         return true;
@@ -432,6 +433,7 @@ fn attention_exit_allowed(before: &DaemonState, card: &Card, op: &Op, applied: &
     match op.delivered() {
         Op::SessionEnded | Op::Snapshot { tagged: false } => after.record().is_none(),
         Op::Start(_) | Op::Outcome(FocusOutcome::Done) => true,
+        Op::Close => matches!(card.phase, CardPhase::Expiring { .. }),
         Op::End(_) => matches!(card.cause, CardCause::NeedsInput(_)) && !applied.suppressed(SuppressReason::Stale),
         Op::Resolved => card.cause == CardCause::NeedsInput(InputReason::Elicitation),
         Op::Tick { .. } => timer_lapsed(before, card, after.now) || dwell_cleared(before, card, after.now),

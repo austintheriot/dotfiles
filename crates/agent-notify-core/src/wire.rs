@@ -198,6 +198,7 @@ pub enum AgentEvent {
 /// The two card kinds. `Attention` outranks `Info`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub enum Kind {
     /// Finished work. Fades after a few seconds.
     Info,

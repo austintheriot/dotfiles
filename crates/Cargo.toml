@@ -62,3 +62,6 @@ tracing = "0.1.44"
 socket2 = "0.6.5"
 # fmt only: the CLI writes one log file, and env-filter would add a regex engine for one level setting.
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std"] }
+# TypeScript bindings for the view model, behind the core crate's optional `ts` feature.
+# no-serde-warnings: the checked ids carry `try_from`/`into`, which ts-rs cannot parse and ignores. `ts(type = ...)` supplies their TypeScript type.
+ts-rs = { version = "=12.0.1", features = ["no-serde-warnings"] }

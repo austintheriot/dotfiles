@@ -9,6 +9,7 @@ use crate::{CardId, DisplayText, EpochMs, PaneKey};
 
 /// Everything the toast panel draws.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct PanelViewModel {
     /// Increases with every update. The UI drops a push with a lower value.
     pub revision: u64,
@@ -22,6 +23,7 @@ pub struct PanelViewModel {
 
 /// One card as drawn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CardView {
     /// The id the UI sends back in intents.
     pub card_id: CardId,
@@ -41,6 +43,7 @@ pub struct CardView {
 
 /// One entry in the finished row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct FinishedEntry {
     /// The folded card.
     pub card_id: CardId,
@@ -329,5 +332,36 @@ mod tests {
         let model = view(&state, EpochMs(3));
         assert_eq!(model.cards.len(), 1, "new cards wait while the pointer is over the stack");
         assert_eq!(model.revision, state.revision);
+    }
+}
+
+#[cfg(all(test, feature = "ts"))]
+mod ts_tests {
+    use ts_rs::{Config, TS};
+
+    use super::{CardView, PanelViewModel};
+    use crate::wire::Kind;
+    use crate::{CardId, EpochMs};
+
+    #[test]
+    fn the_view_model_binding_has_no_bigint_and_typed_kinds() {
+        let config = Config::new().with_large_int("number");
+        let model = PanelViewModel::export_to_string(&config).expect("exports");
+        assert!(model.contains("revision: number"), "{model}");
+        assert!(!model.contains("bigint"), "{model}");
+        let card = CardView::export_to_string(&config).expect("exports");
+        assert!(card.contains("body: string | null"), "{card}");
+        assert!(card.contains("kind: Kind"), "{card}");
+        assert!(card.contains("created_ms: EpochMs"), "{card}");
+    }
+
+    #[test]
+    fn the_kind_binding_is_the_serde_snake_case_union() {
+        let kind = Kind::export_to_string(&Config::new()).expect("exports");
+        assert!(kind.contains(r#"type Kind = "info" | "attention""#), "{kind}");
+        let epoch = EpochMs::export_to_string(&Config::new()).expect("exports");
+        assert!(epoch.contains("type EpochMs = number"), "{epoch}");
+        let card_id = CardId::export_to_string(&Config::new()).expect("exports");
+        assert!(card_id.contains("type CardId = string"), "{card_id}");
     }
 }

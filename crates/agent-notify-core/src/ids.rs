@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 /// Milliseconds since the Unix epoch. The only form time takes in this crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(type = "number"))]
 pub struct EpochMs(pub i64);
 
 impl EpochMs {
@@ -51,6 +52,7 @@ macro_rules! checked_id {
         $(#[$doc])*
         #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
         #[serde(try_from = "String", into = "String")]
+        #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(type = "string"))]
         pub struct $name(String);
 
         impl $name {

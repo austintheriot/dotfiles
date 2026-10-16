@@ -1,0 +1,14 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 59d81b2a60c489bba2e406801e5f4491ae94016ffd0fd0d571295f06d47b5092 # shrinks to ops = [Explicit(Attention, Some(0)), Close, Tick { advance_ms: 0 }]
+cc 1a226480b538b6c507b8d583b196e33d1aefe618b1b5955375559a62dfa2eabe # shrinks to ops = [Fail(Some(0)), Close, Tick { advance_ms: 600000 }]
+cc 99e9387402f5913281abcd9cdfbb6ef1d1fcf1e43c8de94423a80cee6fd37ec3 # shrinks to ops = [Explicit(Attention, Some(0)), Outcome(RaiseFailed), Tick { advance_ms: 0 }]
+cc b88ab3c5674f12f4e461593bb3fe7914530c6b887065d3a1a59388493eef3bc0 # shrinks to ops = [Fail(Some(0)), Fail(Some(1)), Explicit(Info, Some(0)), Outcome(Done), End(None)]
+cc 9a3768b327c0e8282d019a3c6be9fa4603607257777f5597f96c7ffd21a30823 # shrinks to ops = [Quiet(NextSend), Start(Some(1)), Explicit(Info, Some(0)), End(Some(1))]
+cc 8605049a7b852ad8544d802fab89891e6f442cc06e94a786f2fac302177b8250 # shrinks to ops = [Needs(Some(2), Permission), Explicit(Info, Some(0)), Late { delay_ms: 1, event: Fail(Some(1)) }]
+cc 627800f03d317ab985394ea2fd2e711d01753da904b392a2c451ba5ebd839364 # shrinks to ops = [Late { delay_ms: 1, event: Fail(Some(1)) }, Explicit(Info, Some(0)), Late { delay_ms: 1, event: Needs(Some(1), Permission) }, End(Some(1))]
+cc 2038ddfe17f626892897cc6ee5d311e1fbc20652e6525118be4d9d977d1a66a2 # shrinks to ops = [Explicit(Attention, Some(0)), Outcome(SessionGone), Close]

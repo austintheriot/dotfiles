@@ -6,10 +6,8 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use agent_notify_core::wire::{Reply, ReplyCode};
+use agent_notify_core::wire::{MAX_REPLY_BYTES, Reply, ReplyCode};
 use socket2::{Domain, SockAddr, Socket, Type};
-
-const MAX_REPLY_BYTES: u64 = 64 * 1024;
 
 /// What happened to one request.
 #[derive(Debug)]
@@ -95,7 +93,8 @@ pub fn deliver(path: &Path, line: &str, budget: Duration) -> Delivery {
         return classify(&error);
     }
     let mut reply = String::new();
-    match BufReader::new((&stream).take(MAX_REPLY_BYTES)).read_line(&mut reply) {
+    let limit = u64::try_from(MAX_REPLY_BYTES).unwrap_or(u64::MAX);
+    match BufReader::new((&stream).take(limit)).read_line(&mut reply) {
         Ok(0) => Delivery::BadReply("the daemon closed the connection without a reply".to_string()),
         Ok(_) => match serde_json::from_str::<Reply>(&reply) {
             Ok(reply) if reply.ok => Delivery::Acked { daemon: reply.daemon, data: reply.data },
@@ -273,7 +272,7 @@ mod tests {
         assert_eq!(report.decisions.len(), MAX_DECISIONS);
         let reply = Reply { data: Some(serde_json::to_value(&report).expect("a report encodes")), ..Reply::accepted(&report.daemon.stamp) };
         let line = format!("{}\n", serde_json::to_string(&reply).expect("a reply encodes"));
-        let size = u64::try_from(line.len()).expect("a small line");
+        let size = line.len();
         println!("a status reply with {REPORT_SESSIONS} sessions and {MAX_DECISIONS} decisions is {size} bytes, cap {MAX_REPLY_BYTES}");
         assert!(size < MAX_REPLY_BYTES, "{size} bytes");
     }

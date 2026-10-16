@@ -23,6 +23,9 @@ pub const OLDEST_ACCEPTED_VERSION: u16 = 1;
 /// does not count: the reader strips it and passes the rest to
 /// [`decode_request`], which measures what it is given.
 pub const MAX_LINE_BYTES: usize = 65_536;
+/// The longest reply line the CLI reads, in bytes, newline included. The CLI
+/// treats a longer line as a bad reply, so the daemon sends none at all.
+pub const MAX_REPLY_BYTES: usize = 65_536;
 
 /// One request from the CLI to the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

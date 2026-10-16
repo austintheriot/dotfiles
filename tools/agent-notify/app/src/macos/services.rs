@@ -2,13 +2,13 @@
 //! through Tauri, and every wait for the main thread is bounded.
 
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::mpsc;
 use std::time::Duration;
 
 use agent_notify_core::update::Frontmost;
 use agent_notify_daemon::aerospace::Aerospace;
-use agent_notify_daemon::child::run_bounded;
+use agent_notify_daemon::child::{RunError, run_bounded};
 use agent_notify_daemon::presence::{TERMINAL_BUNDLE_ID, frontmost_from_bundle};
 use agent_notify_daemon::services::{AttachRequest, FrontmostReader, SoundPlayer, WindowRaiser};
 use objc2::MainThreadMarker;
@@ -21,10 +21,10 @@ const MAIN_THREAD_WAIT: Duration = Duration::from_secs(1);
 /// and a cold Alacritty start can take longer than the 1 s child limit.
 const OPEN_LIMIT: Duration = Duration::from_secs(3);
 const STDERR_LOG_BYTES: usize = 1024;
-#[expect(dead_code, reason = "wired in Task 16")]
 const AFPLAY: &str = "/usr/bin/afplay";
-#[expect(dead_code, reason = "wired in Task 16")]
 const SOUND: &str = "/System/Library/Sounds/Glass.aiff";
+/// Glass.aiff plays for under 2 s. The limit only reaps a wedged `afplay`.
+const AFPLAY_LIMIT: Duration = Duration::from_secs(10);
 const OPEN: &str = "/usr/bin/open";
 
 /// Runs `work` on the main thread and waits up to `limit` for its answer.
@@ -75,12 +75,19 @@ pub struct AfplaySound;
 
 impl SoundPlayer for AfplaySound {
     fn play(&self) {
-        match Command::new(AFPLAY).arg(SOUND).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
-            Ok(mut child) => {
-                std::thread::spawn(move || child.wait());
-            }
-            Err(error) => tracing::warn!(%error, "afplay did not start"),
+        if let Err(error) = std::thread::Builder::new().name("afplay".to_owned()).spawn(play_bounded) {
+            tracing::warn!(%error, "the afplay thread did not start");
         }
+    }
+}
+
+#[expect(dead_code, reason = "wired in Task 16")]
+fn play_bounded() {
+    match run_bounded(Command::new(AFPLAY).arg(SOUND), AFPLAY_LIMIT) {
+        Ok(finished) if finished.status.success() => {}
+        Ok(finished) => tracing::warn!(status = ?finished.status, "afplay failed"),
+        Err(error @ RunError::TimedOut { .. }) => tracing::warn!(%error, "afplay was stopped"),
+        Err(error) => tracing::warn!(%error, "afplay did not finish"),
     }
 }
 

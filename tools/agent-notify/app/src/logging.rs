@@ -3,6 +3,7 @@
 use std::fs::DirBuilder;
 use std::io;
 use std::os::unix::fs::DirBuilderExt;
+use std::panic::Location;
 use std::path::Path;
 
 use tracing::level_filters::LevelFilter;
@@ -51,17 +52,25 @@ fn prepare_directory(directory: &Path) -> io::Result<()> {
     DirBuilder::new().recursive(true).mode(0o700).create(directory)
 }
 
-/// Logs a panic's location before the default hook runs. The payload can
-/// hold model text from a request, so it is logged only at `debug`, escaped.
+/// Replaces the panic hook with one that logs and prints the location only.
+/// The payload can hold model text from a request, so it is logged only at
+/// `debug`, escaped. The default hook is not chained: it prints the payload
+/// to stderr, which launchd writes to a log file.
 #[expect(dead_code, reason = "wired in Task 16")]
 pub fn install_panic_hook() {
-    let previous = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
+    std::panic::set_hook(Box::new(|info| {
         let location = info.location().map_or_else(|| "unknown".to_owned(), ToString::to_string);
         tracing::error!(%location, "agent-notifyd panicked");
         tracing::debug!(payload = ?info.payload_as_str(), "panic payload");
-        previous(info);
+        eprintln!("{}", panic_line(info.location()));
     }));
+}
+
+fn panic_line(location: Option<&Location<'_>>) -> String {
+    match location {
+        Some(location) => format!("agent-notifyd panicked at {}:{}:{}", location.file(), location.line(), location.column()),
+        None => "agent-notifyd panicked at an unknown location".to_owned(),
+    }
 }
 
 #[cfg(test)]
@@ -72,6 +81,18 @@ mod tests {
     use tracing::level_filters::LevelFilter;
 
     use super::*;
+
+    #[test]
+    fn the_panic_line_names_only_the_location() {
+        let location = Location::caller();
+        let expected = format!("agent-notifyd panicked at {}:{}:{}", location.file(), location.line(), location.column());
+        assert_eq!(panic_line(Some(location)), expected);
+    }
+
+    #[test]
+    fn a_panic_without_a_location_still_has_a_line() {
+        assert_eq!(panic_line(None), "agent-notifyd panicked at an unknown location");
+    }
 
     #[test]
     fn the_level_reads_the_variable_and_defaults_to_info() {

@@ -65,6 +65,22 @@ fn hooks_bind_and_unbind_the_pane_tags() {
 }
 
 #[test]
+fn a_prompt_submit_with_an_invalid_prompt_id_clears_the_old_prompt_tag() {
+    let pane = Pane::new("an-badprompt");
+    let sandbox = Sandbox::new();
+    let hook = |stdin: &str| {
+        let output = sandbox.run(&mut pane.command(&sandbox, &["hook", "claude-code"]), stdin);
+        assert!(output.status.success(), "{stdin}: {output:?}");
+    };
+    hook(&payload("SessionStart", "session-a"));
+    hook(&payload("UserPromptSubmit", "session-a"));
+    assert_eq!(pane.option("@agent_notify_prompt"), "prompt-1", "a positive control: the first prompt landed");
+    hook(r#"{"session_id":"session-a","prompt_id":"a:b.c","cwd":"/tmp","hook_event_name":"UserPromptSubmit"}"#);
+    assert_eq!(pane.option("@agent_notify_prompt"), "");
+    assert_eq!(pane.option("@agent_notify_session"), "session-a");
+}
+
+#[test]
 fn ids_that_start_with_a_dash_land_as_tag_values() {
     let pane = Pane::new("an-dash");
     let sandbox = Sandbox::new();

@@ -89,6 +89,17 @@ fn an_unknown_hook_event_exits_zero_and_logs_it_without_stdin_values_at_info() {
     assert!(debug_log.contains("PreCompact"), "{debug_log}");
 }
 
+#[test]
+fn the_nothing_sent_line_names_the_session_and_its_own_reason() {
+    let unmapped = r#"{"session_id":"session-a","cwd":"/tmp","hook_event_name":"Notification","notification_type":"idle_prompt"}"#;
+    let info_log = hook_log(unmapped, "info");
+    let line = info_log.lines().find(|line| line.contains("nothing sent")).unwrap_or_else(|| panic!("a nothing-sent line in {info_log}"));
+    for field in ["event_id=", r#"session_id="session-a""#, "pane=", r#"reason="notification type not mapped""#] {
+        assert!(line.contains(field), "{field} missing from {line}");
+    }
+    assert!(!info_log.contains("idle_prompt"), "{info_log}");
+}
+
 /// Runs one hook at log `level` in its own sandbox and returns the log. The
 /// sandbox drops before the next one starts.
 fn hook_log(stdin: &str, level: &str) -> String {

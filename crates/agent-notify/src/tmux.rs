@@ -83,6 +83,9 @@ pub fn apply_tag(socket: &SocketPath, pane: &PaneId, tag: &TagWrite) -> io::Resu
         TagWrite::BindPrompt(prompt) => {
             run_tmux(socket, &["set-option", "-p", "-t", target, "--", PROMPT_TAG_OPTION, prompt.as_str()])?;
         }
+        TagWrite::UnbindPrompt => {
+            run_tmux(socket, &unset_prompt)?;
+        }
         TagWrite::UnbindSession => {
             run_tmux(socket, &["set-option", "-p", "-q", "-u", "-t", target, "--", SESSION_TAG_OPTION])?;
             run_tmux(socket, &unset_prompt)?;

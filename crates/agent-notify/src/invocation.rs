@@ -78,6 +78,8 @@ pub struct Invocation {
 pub struct NothingSent {
     /// A fixed phrase with no input values in it, for the log at info.
     pub reason: &'static str,
+    /// The payload's session, whenever the hook payload parsed.
+    pub session_id: Option<SessionId>,
     /// Detail that can carry hook payload values, for the log at debug.
     pub detail: Option<String>,
 }
@@ -92,13 +94,13 @@ pub enum Exit {
 }
 
 impl Invocation {
-    fn nothing(reason: &'static str, detail: Option<String>) -> Self {
-        let log = Some(NothingSent { reason, detail });
+    fn nothing(reason: &'static str, session_id: Option<SessionId>, detail: Option<String>) -> Self {
+        let log = Some(NothingSent { reason, session_id, detail });
         Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Success, stderr: None, log, warning: None }
     }
 
     fn usage(message: &'static str) -> Self {
-        let log = Some(NothingSent { reason: message, detail: None });
+        let log = Some(NothingSent { reason: message, session_id: None, detail: None });
         Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Usage, stderr: Some(message.to_string()), log, warning: None }
     }
 
@@ -121,15 +123,15 @@ pub fn plan_invocation(command: &Command, inputs: &Inputs) -> Invocation {
 
 fn plan_hook(inputs: &Inputs) -> Invocation {
     let Some(raw) = inputs.stdin.as_deref().filter(|raw| !raw.trim().is_empty()) else {
-        return Invocation::nothing("no hook payload on stdin", None);
+        return Invocation::nothing("no hook payload on stdin", None, None);
     };
     let payload: ClaudeHookInput = match serde_json::from_str(raw) {
         Ok(payload) => payload,
-        Err(error) => return Invocation::nothing("hook payload did not parse", Some(error.to_string())),
+        Err(error) => return Invocation::nothing("hook payload did not parse", None, Some(error.to_string())),
     };
     let pane = found(inputs);
     match decide_hook(&payload, pane.and_then(|facts| facts.session_tag.as_ref())) {
-        HookDecision::Ignore { reason } => Invocation::nothing("hook event not mapped", Some(reason)),
+        HookDecision::Ignore { reason, detail } => Invocation::nothing(reason.phrase(), Some(payload.session_id.clone()), Some(detail)),
         HookDecision::Send { tags, event } => {
             let origin = origin(inputs, Some(payload.session_id.clone()), payload.prompt(), payload.session_title.clone(), payload.cwd.clone());
             let tags = if pane.is_some() { tags } else { Vec::new() };
@@ -311,6 +313,27 @@ mod tests {
         assert!(invocation.request.is_some());
         let other = plan_invocation(&hook(), &inputs(found(Some("session-b"), Some("prompt-1")), Some(&compact)));
         assert_eq!(other.tags, vec![TagWrite::BindSession(SessionId::parse("session-a").expect("id"))]);
+    }
+
+    #[test]
+    fn an_ignored_hook_logs_its_own_reason_and_the_session() {
+        let cases = [
+            (payload("PreCompact", ""), "hook event not mapped"),
+            (payload("Notification", r#","notification_type":"idle_prompt""#), "notification type not mapped"),
+        ];
+        for (stdin, reason) in cases {
+            let invocation = plan_invocation(&hook(), &inputs(PaneLookup::NotInTmux, Some(&stdin)));
+            assert!(invocation.request.is_none(), "{stdin}");
+            let log = invocation.log.expect("a nothing-sent line");
+            assert_eq!(log.reason, reason, "{stdin}");
+            assert_eq!(log.session_id.as_ref().map(SessionId::as_str), Some("session-a"), "{stdin}");
+        }
+    }
+
+    #[test]
+    fn an_unparsed_payload_logs_no_session() {
+        let invocation = plan_invocation(&hook(), &inputs(PaneLookup::NotInTmux, Some("not json")));
+        assert_eq!(invocation.log.and_then(|log| log.session_id), None);
     }
 
     #[test]

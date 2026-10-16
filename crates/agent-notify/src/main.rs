@@ -40,14 +40,24 @@ fn main() -> ExitCode {
     let level = if env.trace { Some("trace") } else { env.log_level.as_deref() };
     log::init(log_directory(&env.path_inputs()).as_deref(), level);
     std::panic::set_hook(Box::new(|info| {
-        tracing::error!(panic = %info, backtrace = %std::backtrace::Backtrace::force_capture(), "panic");
-        let _ = writeln!(io::stderr(), "agent-notify: internal error: {info}");
+        let location = report_panic(info.location(), info.payload());
+        let _ = writeln!(io::stderr(), "agent-notify: internal error at {location}");
     }));
     match catch_unwind(AssertUnwindSafe(|| run(&arguments, &env, is_hook))) {
         Ok(code) => code,
         Err(_panic) if is_hook => ExitCode::SUCCESS,
         Err(_panic) => ExitCode::from(1),
     }
+}
+
+/// Logs a panic and returns its location. A panic message can quote hook
+/// payload text, so only the location goes out at error and on stderr.
+fn report_panic(location: Option<&std::panic::Location<'_>>, payload: &(dyn std::any::Any + Send)) -> String {
+    let location = location.map_or_else(|| "an unknown location".to_string(), ToString::to_string);
+    tracing::error!(location = %location, "panic");
+    let message = payload.downcast_ref::<&str>().copied().or_else(|| payload.downcast_ref::<String>().map(String::as_str)).unwrap_or("a non-text payload");
+    tracing::debug!(location = %location, payload = ?message, backtrace = %std::backtrace::Backtrace::force_capture(), "panic detail");
+    location
 }
 
 fn run(arguments: &[OsString], env: &EnvSnapshot, is_hook: bool) -> ExitCode {
@@ -123,7 +133,8 @@ fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &En
     let event_id = inputs.event_id.as_str();
     let fields = line_fields(invocation.request.as_ref(), &inputs.pane);
     if let Some(note) = &invocation.log {
-        tracing::info!(event_id, pane = fields.pane, reason = note.reason, "nothing sent");
+        let session_id = note.session_id.as_ref().map_or(fields.session_id, SessionId::as_str);
+        tracing::info!(event_id, session_id, pane = fields.pane, reason = note.reason, "nothing sent");
         if let Some(detail) = &note.detail {
             tracing::debug!(event_id, detail = %detail, "nothing sent detail");
         }
@@ -274,6 +285,47 @@ mod tests {
         assert!(!needs_fallback(&attempt(&request, |_line| Delivery::Acked { daemon: None })));
         assert!(needs_fallback(&attempt(&request, |_line| Delivery::TimedOut)));
         assert!(needs_fallback(&attempt(&request, |_line| Delivery::Rejected { code: None })));
+    }
+
+    #[derive(Clone, Default)]
+    struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl Write for Captured {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.lock().map_err(|_poisoned| io::Error::other("poisoned"))?.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn panic_log(level: tracing::Level, payload: &(dyn std::any::Any + Send)) -> String {
+        let captured = Captured::default();
+        let writer = captured.clone();
+        let subscriber = tracing_subscriber::fmt().with_writer(move || writer.clone()).with_ansi(false).with_max_level(level).finish();
+        tracing::subscriber::with_default(subscriber, || report_panic(Some(std::panic::Location::caller()), payload));
+        let bytes = captured.0.lock().expect("an unpoisoned buffer").clone();
+        String::from_utf8(bytes).expect("UTF-8 log text")
+    }
+
+    #[test]
+    fn a_panic_logs_a_fixed_line_and_its_location_at_error_and_the_payload_only_at_debug() {
+        let payload: Box<dyn std::any::Any + Send> = Box::new("secret-payload \u{1b}[31m".to_string());
+        let at_error = panic_log(tracing::Level::ERROR, payload.as_ref());
+        assert!(at_error.contains("ERROR") && at_error.contains("panic"), "{at_error}");
+        assert!(at_error.contains("main.rs:"), "the location is on the error line: {at_error}");
+        assert!(!at_error.contains("secret-payload"), "{at_error}");
+        let at_debug = panic_log(tracing::Level::DEBUG, payload.as_ref());
+        assert!(at_debug.contains("secret-payload"), "{at_debug}");
+        assert!(!at_debug.contains('\u{1b}'), "the payload is escaped: {at_debug:?}");
+    }
+
+    #[test]
+    fn a_str_payload_is_logged_at_debug_too() {
+        let payload: Box<dyn std::any::Any + Send> = Box::new("static-payload");
+        assert!(panic_log(tracing::Level::DEBUG, payload.as_ref()).contains("static-payload"));
     }
 
     #[test]

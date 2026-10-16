@@ -68,6 +68,9 @@ pub enum TagWrite {
     BindSession(SessionId),
     /// Set the prompt tag.
     BindPrompt(PromptId),
+    /// Clear the prompt tag, so `send` and `quiet` carry no prompt rather
+    /// than the previous turn's.
+    UnbindPrompt,
     /// Clear both tags.
     UnbindSession,
 }
@@ -82,11 +85,33 @@ pub enum HookDecision {
         /// The event to send.
         event: AgentEvent,
     },
-    /// Do nothing. `reason` goes to the log.
+    /// Do nothing.
     Ignore {
-        /// Why nothing happens.
-        reason: String,
+        /// Why nothing happens, as a fixed phrase for the log at info.
+        reason: IgnoreReason,
+        /// The payload value that was not mapped, for the log at debug.
+        detail: String,
     },
+}
+
+/// Why a hook payload maps to no event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IgnoreReason {
+    /// `hook_event_name` is not in the mapping table.
+    HookEventNotMapped,
+    /// A `Notification` whose `notification_type` is not in the table.
+    NotificationTypeNotMapped,
+}
+
+impl IgnoreReason {
+    /// A fixed phrase with no payload value in it.
+    #[must_use]
+    pub fn phrase(self) -> &'static str {
+        match self {
+            IgnoreReason::HookEventNotMapped => "hook event not mapped",
+            IgnoreReason::NotificationTypeNotMapped => "notification type not mapped",
+        }
+    }
 }
 
 /// Decides the tag writes and event for one hook payload.
@@ -104,7 +129,7 @@ pub fn decide_hook(input: &ClaudeHookInput, pane_session_tag: Option<&SessionId>
             let tags = if tagged_here { Vec::new() } else { vec![TagWrite::BindSession(input.session_id.clone())] };
             send(tags, AgentEvent::SessionStarted { source: input.source.unwrap_or(SessionSource::Unknown) })
         }
-        "UserPromptSubmit" => send(input.prompt().into_iter().map(TagWrite::BindPrompt).collect(), AgentEvent::TurnStarted),
+        "UserPromptSubmit" => send(vec![input.prompt().map_or(TagWrite::UnbindPrompt, TagWrite::BindPrompt)], AgentEvent::TurnStarted),
         "Stop" => send(
             Vec::new(),
             AgentEvent::TurnEnded { last_message: input.last_assistant_message.clone() },
@@ -112,7 +137,7 @@ pub fn decide_hook(input: &ClaudeHookInput, pane_session_tag: Option<&SessionId>
         "StopFailure" => send(Vec::new(), AgentEvent::TurnFailed { error: failure_text(input) }),
         "Notification" => notification(input),
         "SessionEnd" => send(if tagged_here { vec![TagWrite::UnbindSession] } else { Vec::new() }, AgentEvent::SessionEnded),
-        other => HookDecision::Ignore { reason: format!("hook event {other:?} is not mapped") },
+        other => HookDecision::Ignore { reason: IgnoreReason::HookEventNotMapped, detail: format!("hook event {other:?} is not mapped") },
     }
 }
 
@@ -143,7 +168,7 @@ fn notification(input: &ClaudeHookInput) -> HookDecision {
         },
         Some("elicitation_complete") => AgentEvent::InputResolved,
         other => {
-            return HookDecision::Ignore { reason: format!("notification type {other:?} is not mapped") };
+            return HookDecision::Ignore { reason: IgnoreReason::NotificationTypeNotMapped, detail: format!("notification type {other:?} is not mapped") };
         }
     };
     HookDecision::Send { tags: Vec::new(), event }
@@ -172,7 +197,7 @@ mod tests {
     fn sent(decision: HookDecision) -> (Vec<TagWrite>, AgentEvent) {
         match decision {
             HookDecision::Send { tags, event } => (tags, event),
-            HookDecision::Ignore { reason } => panic!("expected a send, got ignore: {reason}"),
+            HookDecision::Ignore { detail, .. } => panic!("expected a send, got ignore: {detail}"),
         }
     }
 
@@ -193,11 +218,11 @@ mod tests {
     }
 
     #[test]
-    fn an_invalid_prompt_id_decodes_as_no_prompt() {
+    fn an_invalid_prompt_id_decodes_as_no_prompt_and_clears_the_prompt_tag() {
         let parsed = input("UserPromptSubmit", serde_json::json!({"prompt_id": "a:b.c"}));
         assert_eq!(parsed.prompt(), None);
         let (tags, event) = sent(decide_hook(&parsed, None));
-        assert!(tags.is_empty(), "no prompt tag for an invalid id: {tags:?}");
+        assert_eq!(tags, vec![TagWrite::UnbindPrompt], "the previous turn's prompt tag must not stay on the pane");
         assert_eq!(event, AgentEvent::TurnStarted);
     }
 
@@ -247,7 +272,10 @@ mod tests {
             );
             match (decision, expected) {
                 (HookDecision::Send { event, .. }, Some(expected)) => assert_eq!(event, expected, "{notification_type}"),
-                (HookDecision::Ignore { .. }, None) => {}
+                (HookDecision::Ignore { reason, detail }, None) => {
+                    assert_eq!(reason, IgnoreReason::NotificationTypeNotMapped, "{notification_type}");
+                    assert!(detail.contains(notification_type), "{detail}");
+                }
                 (other, expected) => panic!("{notification_type}: got {other:?}, expected {expected:?}"),
             }
         }
@@ -275,7 +303,13 @@ mod tests {
     #[test]
     fn unknown_hook_events_are_ignored_with_a_reason() {
         let decision = decide_hook(&input("PreCompact", serde_json::json!({})), None);
-        assert!(matches!(decision, HookDecision::Ignore { reason } if reason.contains("PreCompact")));
+        assert!(matches!(decision, HookDecision::Ignore { reason: IgnoreReason::HookEventNotMapped, detail } if detail.contains("PreCompact")));
+    }
+
+    #[test]
+    fn ignore_reasons_have_distinct_fixed_phrases() {
+        assert_eq!(IgnoreReason::HookEventNotMapped.phrase(), "hook event not mapped");
+        assert_eq!(IgnoreReason::NotificationTypeNotMapped.phrase(), "notification type not mapped");
     }
 
     #[test]

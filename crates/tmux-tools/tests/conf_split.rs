@@ -12,7 +12,7 @@
 //! silently ignored, so a shared socket would assert on stale global state
 //! instead of on the file under test.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};

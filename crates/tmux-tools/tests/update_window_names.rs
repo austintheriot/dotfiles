@@ -9,7 +9,7 @@
 //! fixture (`support::Server::new_window`) and asserted in
 //! `support_fixture.rs` rather than left to each test to remember.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

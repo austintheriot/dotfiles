@@ -4,7 +4,7 @@
 //! that spawning sessions on the default server is what made the shell tmux
 //! tests flaky on a developer machine.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use std::process::Command;
 

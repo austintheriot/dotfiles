@@ -21,11 +21,6 @@
 //!   socket from under it. [`Drop`] kills through [`Server::tmux`], the same
 //!   wrapper that set the variable.
 
-// Each integration test binary compiles this module separately and uses
-// only the part it needs, so every helper is dead code in some binary. The
-// alternative is a per-item allow on nearly every item here.
-#![allow(dead_code)]
-
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
@@ -213,6 +208,23 @@ impl Server {
             );
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    /// The absolute socket path, as tmux reports it. Valid once a session
+    /// exists, because `display-message` needs a session to answer.
+    #[must_use]
+    pub fn socket_path(&self) -> PathBuf {
+        PathBuf::from(self.stdout(&["display-message", "-p", "#{socket_path}"]))
+    }
+
+    /// The server's pid, for building a `$TMUX` value.
+    ///
+    /// # Panics
+    ///
+    /// Panics when tmux prints something that is not a pid.
+    #[must_use]
+    pub fn pid(&self) -> u32 {
+        self.stdout(&["display-message", "-p", "#{pid}"]).parse().expect("tmux prints a numeric pid")
     }
 
     /// Overrides every hook the real config installs globally, so a test

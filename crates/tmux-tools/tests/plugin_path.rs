@@ -32,7 +32,7 @@
 //! already-running server, so a shared socket would assert on stale global
 //! state instead of the file under test.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use std::path::{Path, PathBuf};
 

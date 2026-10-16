@@ -17,8 +17,6 @@
 //! counting processes, and the point is the count itself, not what tmux does
 //! with them.
 
-mod support;
-
 use std::path::Path;
 use std::process::Command;
 

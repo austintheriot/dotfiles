@@ -8,8 +8,7 @@ edition = "2024"
 # helpers replace shelled out to an inline Python parser for the same job.
 # Not serde_yaml: that crate is deprecated.
 yaml_serde = "0.10"
-
-[dev-dependencies]
+# The throwaway tmux server keeps its socket in a temporary directory.
 tempfile = "3.27"
 
 [lints]

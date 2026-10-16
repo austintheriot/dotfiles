@@ -1,7 +1,7 @@
 //! Drives `tmux-tools close` and `tmux-tools worktree-config` against a
 //! throwaway tmux server, the same seam `name_windows.rs` uses.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use std::process::Command;
 

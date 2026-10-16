@@ -15,7 +15,7 @@
 //! shim's own: that it forwards layout names and counts unchanged, and that
 //! it never takes the sourcing shell down with it.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

@@ -12,7 +12,7 @@
 //! message and `return` reach the interactive shell, so it is asserted
 //! against the shim's own source and by sourcing the shim from zsh.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use std::path::Path;
 use std::process::Command;

@@ -6,7 +6,7 @@
 //! arrangement cases use the `TMUX_TOOLS_SOCKET` seam, the same throwaway
 //! server `close_and_worktree_config.rs` uses.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use std::process::Command;
 

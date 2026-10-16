@@ -9,6 +9,7 @@ tmux-core = { path = "../tmux-core" }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+dotfiles-test-support = { path = "../dotfiles-test-support" }
 
 [lints]
 workspace = true

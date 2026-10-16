@@ -22,7 +22,7 @@
 //! `dev-tool` running, `has-session -t dev` succeeds and
 //! `has-session -t =dev` fails.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};

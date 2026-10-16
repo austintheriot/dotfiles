@@ -670,6 +670,7 @@ version = "0.1.0"
 name = "tmux-tools"
 version = "0.1.0"
 dependencies = [
+ "dotfiles-test-support",
  "tempfile",
  "tmux-core",
 ]

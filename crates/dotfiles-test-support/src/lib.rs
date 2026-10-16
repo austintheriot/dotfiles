@@ -221,6 +221,13 @@ pub mod repo {
     }
 }
 
+/// The throwaway tmux server the tmux integration tests drive.
+#[allow(
+    clippy::expect_used,
+    reason = "a broken tmux environment is a test failure, and the message names it"
+)]
+pub mod tmux_server;
+
 /// Spawning the shell that Tranche B's suites take as their subject.
 ///
 /// `expect` is allowed here for the same reason `repo` allows it: a helper

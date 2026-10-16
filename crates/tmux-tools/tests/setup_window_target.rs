@@ -16,7 +16,7 @@
 //!
 //! Runs against a throwaway tmux server, never the developer's live one.
 
-mod support;
+use dotfiles_test_support::tmux_server as support;
 
 use support::{Server, repo_root};
 

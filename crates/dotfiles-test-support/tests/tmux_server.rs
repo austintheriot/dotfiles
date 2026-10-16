@@ -5,9 +5,7 @@
 //! that carried them as prose was one edit away from every suite silently
 //! driving the developer's real server.
 
-mod support;
-
-use support::{Server, shared_socket_path};
+use dotfiles_test_support::tmux_server::{Server, shared_socket_path};
 
 /// The socket directory exists before the first tmux call.
 ///

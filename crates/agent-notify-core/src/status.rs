@@ -178,11 +178,13 @@ fn capped(text: &str) -> String {
 }
 
 /// The history entry for one request and the effects it caused. Queries make
-/// none: they change nothing.
+/// none: they change nothing. Focus changes make none either: tmux sends one
+/// on every pane switch, and they would push the agent decisions out of the log.
 #[must_use]
 pub fn decision(request: &Request, effects: &[Effect], now: EpochMs) -> Option<Decision> {
     let (event_id, kind, default_outcome) = match request {
         Request::Agent { event_id, event, .. } => (event_id, event_kind(event), "card"),
+        Request::Control { control: Control::FocusChanged { .. }, .. } => return None,
         Request::Control { event_id, control, .. } => (event_id, control_kind(control), "handled"),
         Request::Query { .. } | Request::Unknown => return None,
     };
@@ -322,9 +324,9 @@ fn reason_name(reason: SuppressReason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{agent_input, event_id, every_event, has_card_from, origin, send, session};
+    use crate::test_support::{agent_input, event_id, every_event, has_card_from, origin, pane, send, session};
     use crate::text::DISPLAY_TEXT_MAX_BYTES;
-    use crate::wire::{InputReason, WindowLabel};
+    use crate::wire::{DndCommand, InputReason, WindowLabel};
     use crate::{DisplayText, PaneId, PaneKey};
 
     fn facts() -> DaemonFacts {
@@ -358,6 +360,48 @@ mod tests {
         let report = status_report(&DaemonState::default(), EpochMs(100), &facts(), &decisions);
         assert_eq!(report.decisions.len(), MAX_DECISIONS);
         assert_eq!(report.decisions.first().map(|decision| decision.at_ms), Some(EpochMs(10)));
+    }
+
+    fn control_request(number: i64, control: Control) -> Request {
+        Request::Control { v: crate::wire::WIRE_VERSION, event_id: event_id(number), sent_at_ms: EpochMs(number), control }
+    }
+
+    #[test]
+    fn controls_other_than_focus_changes_make_decisions() {
+        let table = [
+            (Control::FocusChanged { pane: pane(1), focused: true }, None),
+            (Control::FocusChanged { pane: pane(1), focused: false }, None),
+            (Control::Dnd { command: DndCommand::Off }, Some("dnd")),
+            (Control::Jump, Some("jump")),
+            (Control::Unknown, Some("unknown")),
+        ];
+        for (control, expected) in table {
+            let made = decision(&control_request(1, control.clone()), &[], EpochMs(1));
+            assert_eq!(made.as_ref().map(|entry| entry.kind.as_str()), expected, "{control:?}");
+        }
+    }
+
+    #[test]
+    fn many_focus_changes_after_an_agent_decision_leave_that_decision_in_the_report() {
+        let mut state = DaemonState::default();
+        let input = agent_input(1, origin(Some("a"), Some("p1")), AgentEvent::TurnEnded { last_message: None });
+        let crate::update::DaemonInput::Received { request: agent, .. } = &input else { panic!("an agent input") };
+        let agent = agent.clone();
+        let effects = crate::update::update(&mut state, input, EpochMs(1));
+        let focus_changes = (2..62).map(|number| control_request(number, Control::FocusChanged { pane: pane(1), focused: number % 2 == 0 }));
+        let decisions: Vec<Decision> = std::iter::once(decision(&agent, &effects, EpochMs(1)))
+            .chain(focus_changes.map(|request| decision(&request, &[], request_time(&request))))
+            .flatten()
+            .collect();
+        let report = status_report(&state, EpochMs(100), &facts(), &decisions);
+        assert!(report.decisions.iter().any(|entry| entry.event_id == event_id(1)), "{:?}", report.decisions);
+    }
+
+    fn request_time(request: &Request) -> EpochMs {
+        match request {
+            Request::Agent { sent_at_ms, .. } | Request::Control { sent_at_ms, .. } => *sent_at_ms,
+            Request::Query { .. } | Request::Unknown => EpochMs(0),
+        }
     }
 
     #[test]

@@ -163,20 +163,24 @@ fn remove_stale_socket(path: &Path) -> io::Result<()> {
     }
 }
 
-/// A decoded request on its way to the daemon.
+/// A query on its way to the daemon. The connection waits for `answer`.
 #[derive(Debug)]
-// One value per queue hop, as in the core's `Request`. Boxing would change the actor's match for no gain.
-#[allow(clippy::large_enum_variant)]
-pub enum Inbound {
-    /// An agent or control request. Already acknowledged.
-    Request(Request),
-    /// A query. The connection waits for `answer`.
-    Query {
-        /// What is asked.
-        query: Query,
-        /// Where the answer goes.
-        answer: oneshot::Sender<serde_json::Value>,
-    },
+pub struct PendingQuery {
+    /// What is asked.
+    pub query: Query,
+    /// Where the answer goes.
+    pub answer: oneshot::Sender<serde_json::Value>,
+}
+
+/// Where [`serve`] puts decoded lines. Requests and queries have queues of
+/// their own: a full request queue refuses a request with no reply, so its
+/// client falls back, while a query still gets through.
+#[derive(Debug, Clone)]
+pub struct Intake {
+    /// Agent and control requests. A request in this queue was acknowledged.
+    pub requests: mpsc::Sender<Request>,
+    /// Queries.
+    pub queries: mpsc::Sender<PendingQuery>,
 }
 
 /// Limits for [`serve`].
@@ -200,22 +204,22 @@ impl Default for ServeOptions {
 
 struct Context {
     stamp: String,
-    inbound: mpsc::Sender<Inbound>,
+    intake: Intake,
     options: ServeOptions,
     owner: u32,
 }
 
 /// Accepts connections until the task running it is dropped. Must run
 /// inside a Tokio runtime. Dropping it also aborts every connection it
-/// is handling, so `inbound` closes promptly.
+/// is handling, so both intake queues close promptly.
 ///
 /// # Errors
 ///
 /// When the listener cannot join the runtime.
-pub async fn serve(listener: Listener, stamp: String, inbound: mpsc::Sender<Inbound>, options: ServeOptions) -> io::Result<()> {
+pub async fn serve(listener: Listener, stamp: String, intake: Intake, options: ServeOptions) -> io::Result<()> {
     let accepting = tokio::net::UnixListener::from_std(listener.listener.try_clone()?)?;
     let limit = Arc::new(Semaphore::new(options.max_connections));
-    let context = Arc::new(Context { stamp, inbound, options, owner: listener.owner });
+    let context = Arc::new(Context { stamp, intake, options, owner: listener.owner });
     let _owned = listener;
     let mut handlers = JoinSet::new();
     loop {
@@ -304,7 +308,7 @@ async fn answer(bytes: &[u8], overflowed: bool, context: &Context) -> Option<Rep
         Err(code) => Some(Reply::rejected(code)),
         Ok(Request::Query { query, .. }) => {
             let (sender, receiver) = oneshot::channel();
-            enqueue(&context.inbound, Inbound::Query { query, answer: sender })?;
+            enqueue(&context.intake.queries, PendingQuery { query, answer: sender }, "query")?;
             match timeout(context.options.query_timeout, receiver).await {
                 Ok(Ok(data)) => Some(Reply { data: Some(data), ..Reply::accepted(&context.stamp) }),
                 Ok(Err(_)) => {
@@ -318,21 +322,21 @@ async fn answer(bytes: &[u8], overflowed: bool, context: &Context) -> Option<Rep
             }
         }
         Ok(request) => {
-            enqueue(&context.inbound, Inbound::Request(request))?;
+            enqueue(&context.intake.requests, request, "request")?;
             Some(Reply::accepted(&context.stamp))
         }
     }
 }
 
-fn enqueue(inbound: &mpsc::Sender<Inbound>, item: Inbound) -> Option<()> {
-    match inbound.try_send(item) {
+fn enqueue<Item>(queue: &mpsc::Sender<Item>, item: Item, queue_name: &'static str) -> Option<()> {
+    match queue.try_send(item) {
         Ok(()) => Some(()),
         Err(TrySendError::Full(_)) => {
-            tracing::error!("the intake queue is full; closed with no reply, so the client falls back");
+            tracing::error!(queue = queue_name, "the intake queue is full; closed with no reply, so the client falls back");
             None
         }
         Err(TrySendError::Closed(_)) => {
-            tracing::error!("the intake queue is closed; closed with no reply, so the client falls back");
+            tracing::error!(queue = queue_name, "the intake queue is closed; closed with no reply, so the client falls back");
             None
         }
     }

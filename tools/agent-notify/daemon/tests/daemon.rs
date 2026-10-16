@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use agent_notify_core::EpochMs;
 use agent_notify_core::state::Dnd;
 use agent_notify_core::status::PANE_STATE_OPTION;
 use agent_notify_core::update::UiIntent;
@@ -14,9 +15,8 @@ use agent_notify_daemon::actor::DaemonConfig;
 use agent_notify_daemon::dnd_store::DndStore;
 use serde_json::json;
 use support::{
-    DaemonSetup, RecordingRaiser, SlowPresence, agent_line, control_line, eventually, first_pane, new_window, one_daemon_at_a_time, pane_option, query_line, send_line,
-    spawn_daemon,
-    spawn_daemon_in, spawn_daemon_setup, status_sessions, status_until, tag,
+    DaemonSetup, RecordingRaiser, SlowPresence, agent_line, control_line, eventually, first_pane, new_window, one_daemon_at_a_time, pane_option, query_line, send_line, spawn_daemon,
+    spawn_daemon_in, spawn_daemon_setup, status_sessions, status_until, tag, tmux_stub,
 };
 
 #[tokio::test(flavor = "multi_thread")]
@@ -143,7 +143,7 @@ async fn presence_is_read_only_for_events_that_can_show_a_card() {
 
 fn snapshotting() -> DaemonSetup {
     let base = DaemonSetup::default();
-    DaemonSetup { config: DaemonConfig { tick: Duration::from_millis(100), snapshot_every_ms: 0, ..base.config }, ..base }
+    DaemonSetup { config: DaemonConfig { tick: Duration::from_millis(100), snapshot_every: Duration::from_millis(200), ..base.config }, ..base }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -177,6 +177,89 @@ async fn a_server_that_is_gone_ends_its_sessions() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     let alive = send_line(&world.socket, query_line(2, "status")).await;
     assert_eq!(status_sessions(&alive), ["session-a"], "a live tagged pane survives snapshots: {alive}");
+    assert!(world.server.tmux(&["kill-server"]).status.success());
+    status_until(&world.socket, |reply| reply["ok"] == true && status_sessions(reply).is_empty()).await;
+    world.daemon.stop().await;
+}
+
+fn wait_for_reads(presence: &SlowPresence, count: u32) {
+    tokio::task::block_in_place(|| eventually(&count.to_string(), || presence.reads.load(Ordering::SeqCst).to_string()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_full_request_queue_refuses_at_the_socket_while_a_query_answers() {
+    let _serial = one_daemon_at_a_time().await;
+    let presence = Arc::new(SlowPresence { delay: Duration::from_secs(2), ..SlowPresence::default() });
+    let base = DaemonSetup::default();
+    let world = spawn_daemon_setup("an-full", DaemonSetup { presence: presence.clone(), config: DaemonConfig { intake_capacity: 1, ..base.config }, ..base });
+    let pane = first_pane(&world.server, "main");
+    let [first, second, third] = [1, 2, 3].map(|number| agent_line(&world.server, &pane, number, "session-a", "prompt-1", json!({ "type": "turn_ended" })));
+    assert_eq!(send_line(&world.socket, first).await["ok"], true);
+    wait_for_reads(&presence, 1);
+    assert_eq!(send_line(&world.socket, second).await["ok"], true, "one request waits in the queue");
+    let refused = send_line(&world.socket, third).await;
+    assert_eq!(refused, serde_json::Value::Null, "a full queue must close with no reply, so the client falls back: {refused}");
+    let status = send_line(&world.socket, query_line(4, "status")).await;
+    assert_eq!(status["ok"], true, "a query still answers: {status}");
+    world.daemon.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stop_applies_a_control_acknowledged_just_before_it() {
+    let _serial = one_daemon_at_a_time().await;
+    let presence = Arc::new(SlowPresence { delay: Duration::from_secs(1), ..SlowPresence::default() });
+    let world = spawn_daemon_setup("an-drain", DaemonSetup { presence: presence.clone(), ..DaemonSetup::default() });
+    let pane = first_pane(&world.server, "main");
+    send_line(&world.socket, agent_line(&world.server, &pane, 1, "session-a", "prompt-1", json!({ "type": "turn_ended" }))).await;
+    wait_for_reads(&presence, 1);
+    let reply = send_line(&world.socket, control_line(2, json!({ "type": "dnd", "command": { "type": "on" } }))).await;
+    assert_eq!(reply["ok"], true, "{reply}");
+    world.daemon.stop().await;
+    assert_eq!(DndStore::new(world.dnd_path.clone()).load(), Dnd::On { until: None }, "an acknowledged DND change survives stop");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_lost_pane_state_write_heals_on_the_next_snapshot() {
+    let _serial = one_daemon_at_a_time().await;
+    let stubs = tempfile::Builder::new().prefix("an-").tempdir_in("/tmp").expect("a directory under /tmp");
+    let fail_first_write = r#"if [ "$4" = set-option ] && [ ! -e "$DIR/failed-once" ]; then : > "$DIR/failed-once"; exit 1; fi"#;
+    let world = spawn_daemon_setup("an-heal", DaemonSetup { tmux_binary: Some(tmux_stub(stubs.path(), fail_first_write)), ..snapshotting() });
+    let pane = first_pane(&world.server, "main");
+    tag(&world.server, &pane, "session-a");
+    send_line(&world.socket, agent_line(&world.server, &pane, 1, "session-a", "prompt-1", json!({ "type": "turn_started" }))).await;
+    let server = &world.server;
+    tokio::task::block_in_place(|| eventually("working", || pane_option(server, &pane, PANE_STATE_OPTION)));
+    assert!(stubs.path().join("failed-once").exists(), "the first write failed, so a later write healed it");
+    world.daemon.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_snapshot_keeps_the_sessions() {
+    let _serial = one_daemon_at_a_time().await;
+    let stubs = tempfile::Builder::new().prefix("an-").tempdir_in("/tmp").expect("a directory under /tmp");
+    let fail_snapshots = r#"if [ "$4 $5" = "list-panes -a" ]; then echo x >> "$DIR/snapshots"; echo "boom" >&2; exit 1; fi"#;
+    let world = spawn_daemon_setup("an-failsnap", DaemonSetup { tmux_binary: Some(tmux_stub(stubs.path(), fail_snapshots)), ..snapshotting() });
+    let pane = first_pane(&world.server, "main");
+    send_line(&world.socket, agent_line(&world.server, &pane, 1, "session-a", "prompt-1", json!({ "type": "turn_started" }))).await;
+    status_until(&world.socket, |reply| status_sessions(reply) == ["session-a"]).await;
+    let snapshots = stubs.path().join("snapshots");
+    let attempted = || std::fs::read_to_string(&snapshots).map_or(0, |text| text.lines().count()) >= 2;
+    tokio::task::block_in_place(|| eventually("true", || attempted().to_string()));
+    let later = send_line(&world.socket, query_line(2, "status")).await;
+    assert_eq!(status_sessions(&later), ["session-a"], "a snapshot that failed reaps nothing: {later}");
+    world.daemon.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn snapshots_keep_their_pace_when_the_wall_clock_steps_back() {
+    let _serial = one_daemon_at_a_time().await;
+    let wall = Arc::new(std::sync::atomic::AtomicI64::new(1_760_500_000_000));
+    let clock = Arc::clone(&wall);
+    let world = spawn_daemon_setup("an-clock", DaemonSetup { clock: Arc::new(move || EpochMs(clock.fetch_sub(1_000, Ordering::SeqCst))), ..snapshotting() });
+    let pane = first_pane(&world.server, "main");
+    tag(&world.server, &pane, "session-a");
+    send_line(&world.socket, agent_line(&world.server, &pane, 1, "session-a", "prompt-1", json!({ "type": "turn_started" }))).await;
+    status_until(&world.socket, |reply| status_sessions(reply) == ["session-a"]).await;
     assert!(world.server.tmux(&["kill-server"]).status.success());
     status_until(&world.socket, |reply| reply["ok"] == true && status_sessions(reply).is_empty()).await;
     world.daemon.stop().await;

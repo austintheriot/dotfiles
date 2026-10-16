@@ -1,8 +1,9 @@
 //! The daemon's tasks and threads.
 //!
-//! - The socket task decodes lines and passes them to the intake task.
-//! - The intake task sends every query to the actor at once and every agent
-//!   or control request to the request pipeline, in arrival order.
+//! - The socket task decodes lines into two bounded queues: one for agent
+//!   and control requests, one for queries. A full request queue refuses the
+//!   request with no reply, so its client falls back. A query still gets in.
+//! - The query task passes every query to the actor at once.
 //! - The request pipeline reads focus facts on a blocking thread for a
 //!   request that can show a card, then passes the request on. Requests keep
 //!   their order among themselves. A query can overtake a request, so it
@@ -24,18 +25,19 @@ use agent_notify_core::update::{DaemonInput, Effect, FocusSnapshot, FocusTarget,
 use agent_notify_core::view::{CardView, FinishedEntry, PanelViewModel, view};
 use agent_notify_core::wire::{Query, Request};
 use agent_notify_core::{CardId, PaneId, PaneKey, ServerId, SessionId, SocketPath};
-use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 
 use crate::focus_run::run_focus;
 use crate::services::Services;
-use crate::socket::{Inbound, Listener, ServeOptions, serve};
+use crate::socket::{Intake, Listener, PendingQuery, ServeOptions, serve};
 use crate::tmux::TmuxError;
 
-/// How long [`Daemon::stop`] waits for the effects worker's current job.
-/// Every job is bounded at 1 s per child process.
-const WORKER_STOP_LIMIT: Duration = Duration::from_secs(3);
+/// How long [`Daemon::stop`] waits, in all, for queued requests, the actor
+/// and the effects worker. Every worker job is bounded at 1 s per child
+/// process.
+const STOP_LIMIT: Duration = Duration::from_secs(3);
 
 /// Timing and queue sizes.
 #[derive(Debug, Clone, Copy)]
@@ -43,16 +45,17 @@ pub struct DaemonConfig {
     /// The timer that drives expiry.
     pub tick: Duration,
     /// How often to read pane tags from each known tmux socket.
-    pub snapshot_every_ms: i64,
+    pub snapshot_every: Duration,
     /// Socket limits.
     pub serve: ServeOptions,
-    /// Requests waiting for the intake task, and again for the request pipeline.
+    /// Requests that may wait for the request pipeline, and queries that may
+    /// wait for the actor.
     pub intake_capacity: usize,
 }
 
 impl Default for DaemonConfig {
     fn default() -> Self {
-        DaemonConfig { tick: Duration::from_millis(250), snapshot_every_ms: 60_000, serve: ServeOptions::default(), intake_capacity: 1024 }
+        DaemonConfig { tick: Duration::from_millis(250), snapshot_every: Duration::from_secs(60), serve: ServeOptions::default(), intake_capacity: 1024 }
     }
 }
 
@@ -60,8 +63,9 @@ impl Default for DaemonConfig {
 #[allow(clippy::large_enum_variant)]
 enum ActorMessage {
     Input(DaemonInput),
-    Query { query: Query, answer: oneshot::Sender<serde_json::Value> },
+    Query(PendingQuery),
     ViewModel(oneshot::Sender<PanelViewModel>),
+    Shutdown,
 }
 
 enum Job {
@@ -79,36 +83,44 @@ struct Worker {
 /// A running daemon. Only `main` holds it; callbacks hold a [`DaemonHandle`].
 pub struct Daemon {
     actor: mpsc::UnboundedSender<ActorMessage>,
-    tasks: Vec<JoinHandle<()>>,
+    serving: JoinHandle<()>,
+    ticking: JoinHandle<()>,
+    forwarding_queries: JoinHandle<()>,
+    pipeline: JoinHandle<()>,
+    acting: JoinHandle<()>,
     worker: Option<Worker>,
 }
 
 impl Daemon {
-    /// Starts every task and the effects worker. DND comes from the store.
+    /// Starts every task and the effects worker. DND comes from the store,
+    /// read here once before any task runs.
     ///
     /// # Panics
     ///
     /// Outside a Tokio runtime.
     #[must_use]
     pub fn start(services: Arc<Services>, listener: Listener, config: DaemonConfig) -> Daemon {
+        let dnd = services.dnd_store.load();
         let (actor_sender, actor_receiver) = mpsc::unbounded_channel();
-        let (inbound_sender, inbound_receiver) = mpsc::channel(config.intake_capacity);
         let (request_sender, request_receiver) = mpsc::channel(config.intake_capacity);
+        let (query_sender, query_receiver) = mpsc::channel(config.intake_capacity);
         let (job_sender, job_receiver) = std::sync::mpsc::channel();
         let worker = start_worker(Arc::clone(&services), job_receiver, actor_sender.clone());
         let stamp = services.facts.stamp.clone();
-        let tasks = vec![
-            tokio::spawn(async move {
-                if let Err(error) = serve(listener, stamp, inbound_sender, config.serve).await {
+        let intake = Intake { requests: request_sender, queries: query_sender };
+        Daemon {
+            serving: tokio::spawn(async move {
+                if let Err(error) = serve(listener, stamp, intake, config.serve).await {
                     tracing::error!(%error, "the socket server stopped");
                 }
             }),
-            tokio::spawn(run_intake(inbound_receiver, actor_sender.clone(), request_sender)),
-            tokio::spawn(run_requests(Arc::clone(&services), request_receiver, actor_sender.clone())),
-            tokio::spawn(run_actor(services, actor_receiver, job_sender, config)),
-            tokio::spawn(run_ticks(actor_sender.clone(), config.tick)),
-        ];
-        Daemon { actor: actor_sender, tasks, worker }
+            ticking: tokio::spawn(run_ticks(actor_sender.clone(), config.tick)),
+            forwarding_queries: tokio::spawn(run_queries(query_receiver, actor_sender.clone())),
+            pipeline: tokio::spawn(run_requests(Arc::clone(&services), request_receiver, actor_sender.clone())),
+            acting: tokio::spawn(run_actor(services, actor_receiver, job_sender, config, dnd)),
+            actor: actor_sender,
+            worker,
+        }
     }
 
     /// A cheap handle for callbacks that outlive a borrow of the daemon.
@@ -127,26 +139,56 @@ impl Daemon {
         self.handle().view_model().await
     }
 
-    /// Stops every task, which removes the socket file, then waits up to 3 s
-    /// for the effects worker to finish its queued jobs. A worker still busy
-    /// after that is logged and left to end on its own.
-    pub async fn stop(mut self) {
-        for task in self.tasks.drain(..) {
-            task.abort();
-            if let Err(error) = task.await
-                && !error.is_cancelled()
-            {
-                tracing::error!(%error, "a daemon task failed");
-            }
+    /// Stops the daemon without losing acknowledged work, within 3 s in all.
+    ///
+    /// 1. The socket stops, which removes the socket file and closes both
+    ///    intake queues. The timer stops.
+    /// 2. The query task and the request pipeline finish what is queued,
+    ///    focus reads included.
+    /// 3. The actor applies every message before the shutdown message, then
+    ///    ends. That drops the job queue.
+    /// 4. The effects worker finishes its queued jobs.
+    ///
+    /// A step still busy at the limit is logged and left behind: a task is
+    /// aborted, the worker thread ends on its own.
+    pub async fn stop(self) {
+        let deadline = Instant::now() + STOP_LIMIT;
+        abort_and_wait(self.serving).await;
+        abort_and_wait(self.ticking).await;
+        finish_by(self.forwarding_queries, deadline, "the query task").await;
+        finish_by(self.pipeline, deadline, "the request pipeline").await;
+        if self.actor.send(ActorMessage::Shutdown).is_err() {
+            tracing::error!("the actor stopped before the daemon did");
         }
         drop(self.actor);
-        let Some(worker) = self.worker.take() else { return };
-        if tokio::time::timeout(WORKER_STOP_LIMIT, worker.finished).await.is_err() {
-            tracing::error!(limit_ms = WORKER_STOP_LIMIT.as_millis(), "the effects worker did not stop in time; left running");
+        finish_by(self.acting, deadline, "the actor").await;
+        let Some(worker) = self.worker else { return };
+        if tokio::time::timeout_at(deadline, worker.finished).await.is_err() {
+            tracing::error!(limit_ms = STOP_LIMIT.as_millis(), "the effects worker did not stop in time; left running");
             return;
         }
         if let Ok(Err(_)) = tokio::task::spawn_blocking(move || worker.thread.join()).await {
             tracing::error!("the effects worker panicked");
+        }
+    }
+}
+
+async fn abort_and_wait(task: JoinHandle<()>) {
+    task.abort();
+    if let Err(error) = task.await
+        && !error.is_cancelled()
+    {
+        tracing::error!(%error, "a daemon task failed");
+    }
+}
+
+async fn finish_by(mut task: JoinHandle<()>, deadline: Instant, name: &'static str) {
+    match tokio::time::timeout_at(deadline, &mut task).await {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => tracing::error!(%error, task = name, "a daemon task failed"),
+        Err(_) => {
+            tracing::error!(task = name, limit_ms = STOP_LIMIT.as_millis(), "queued work did not finish in time; aborted");
+            abort_and_wait(task).await;
         }
     }
 }
@@ -199,21 +241,10 @@ async fn run_ticks(actor: mpsc::UnboundedSender<ActorMessage>, every: Duration) 
     }
 }
 
-async fn run_intake(mut inbound: mpsc::Receiver<Inbound>, actor: mpsc::UnboundedSender<ActorMessage>, requests: mpsc::Sender<Request>) {
-    while let Some(message) = inbound.recv().await {
-        match message {
-            Inbound::Query { query, answer } => {
-                if actor.send(ActorMessage::Query { query, answer }).is_err() {
-                    return;
-                }
-            }
-            Inbound::Request(request) => match requests.try_send(request) {
-                Ok(()) => {}
-                Err(TrySendError::Full(dropped)) => {
-                    tracing::error!(event_id = event_id_text(&dropped), "the request pipeline is full; a request was dropped");
-                }
-                Err(TrySendError::Closed(_)) => return,
-            },
+async fn run_queries(mut queries: mpsc::Receiver<PendingQuery>, actor: mpsc::UnboundedSender<ActorMessage>) {
+    while let Some(query) = queries.recv().await {
+        if actor.send(ActorMessage::Query(query)).is_err() {
+            return;
         }
     }
 }
@@ -286,13 +317,6 @@ impl RequestContext {
     }
 }
 
-fn event_id_text(request: &Request) -> String {
-    match request {
-        Request::Agent { event_id, .. } | Request::Control { event_id, .. } | Request::Query { event_id, .. } => event_id.to_string(),
-        Request::Unknown => "-".to_string(),
-    }
-}
-
 struct Shown {
     cards: Vec<CardView>,
     finished_row: Vec<FinishedEntry>,
@@ -309,11 +333,12 @@ impl Shown {
     }
 }
 
-async fn run_actor(services: Arc<Services>, mut inbox: mpsc::UnboundedReceiver<ActorMessage>, jobs: std::sync::mpsc::Sender<Job>, config: DaemonConfig) {
-    let mut state = DaemonState { dnd: services.dnd_store.load(), ..DaemonState::default() };
+// The snapshot pace uses the monotonic clock: a wall clock that steps back would stop snapshots until it caught up.
+async fn run_actor(services: Arc<Services>, mut inbox: mpsc::UnboundedReceiver<ActorMessage>, jobs: std::sync::mpsc::Sender<Job>, config: DaemonConfig, dnd: Dnd) {
+    let mut state = DaemonState { dnd, ..DaemonState::default() };
     let mut decisions: VecDeque<Decision> = VecDeque::with_capacity(MAX_DECISIONS);
     let mut shown: Option<Shown> = None;
-    let mut last_snapshot = (services.clock)();
+    let mut last_snapshot = Instant::now();
     while let Some(message) = inbox.recv().await {
         let now = (services.clock)();
         match message {
@@ -331,8 +356,8 @@ async fn run_actor(services: Arc<Services>, mut inbox: mpsc::UnboundedReceiver<A
                     decisions.push_back(entry);
                 }
                 apply(&services, &jobs, effects, received.as_ref().and_then(RequestContext::of).as_ref());
-                if is_tick && services.tmux.is_some() && now.since(last_snapshot) >= config.snapshot_every_ms {
-                    last_snapshot = now;
+                if is_tick && services.tmux.is_some() && last_snapshot.elapsed() >= config.snapshot_every {
+                    last_snapshot = Instant::now();
                     for (socket, known) in servers_by_socket(&state) {
                         send_job(&jobs, Job::Snapshot { socket, known });
                     }
@@ -343,7 +368,7 @@ async fn run_actor(services: Arc<Services>, mut inbox: mpsc::UnboundedReceiver<A
                     shown = Some(Shown::of(&model));
                 }
             }
-            ActorMessage::Query { query, answer } => {
+            ActorMessage::Query(PendingQuery { query, answer }) => {
                 let data = match query {
                     Query::Status => {
                         let log: Vec<Decision> = decisions.iter().cloned().collect();
@@ -365,6 +390,7 @@ async fn run_actor(services: Arc<Services>, mut inbox: mpsc::UnboundedReceiver<A
                     tracing::debug!("a view model request left before its answer");
                 }
             }
+            ActorMessage::Shutdown => return,
         }
     }
 }
@@ -423,7 +449,7 @@ fn run_worker(services: &Services, jobs: &std::sync::mpsc::Receiver<Job>, result
                 if let Some(tmux) = &services.tmux
                     && let Err(error) = tmux.set_pane_state(&pane, state)
                 {
-                    tracing::debug!(%error, pane = pane.pane.as_str(), "pane state not written");
+                    tracing::warn!(%error, pane = pane.pane.as_str(), ?state, "pane state not written; the next pane snapshot writes it again");
                 }
             }
             Job::SaveDnd(dnd) => {

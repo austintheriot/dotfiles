@@ -14,7 +14,7 @@ use agent_notify_core::view::PanelViewModel;
 use agent_notify_core::{PaneId, PaneKey, ServerId, SocketPath};
 use agent_notify_daemon::actor::{Daemon, DaemonConfig};
 use agent_notify_daemon::dnd_store::DndStore;
-use agent_notify_daemon::services::{AttachRequest, Presence, PresenceReader, Services, Silent, ToastPresenter, UnknownFrontmost, UnknownPresence, WindowRaiser};
+use agent_notify_daemon::services::{AttachRequest, Clock, Presence, PresenceReader, Services, Silent, ToastPresenter, UnknownFrontmost, UnknownPresence, WindowRaiser};
 use agent_notify_daemon::socket::{BindOutcome, ServeOptions, bind};
 use agent_notify_daemon::tmux::Tmux;
 pub use dotfiles_test_support::tmux_server::Server;
@@ -42,11 +42,15 @@ pub fn socket(server: &Server) -> SocketPath {
 
 /// The adapter, pointed at the `tmux` on `PATH`.
 pub fn adapter() -> Tmux {
-    let found = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+    Tmux::new(adapter_binary())
+}
+
+/// The `tmux` on `PATH`.
+pub fn adapter_binary() -> PathBuf {
+    std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
         .map(|directory| directory.join("tmux"))
         .find(|candidate| candidate.is_file())
-        .expect("tmux on PATH");
-    Tmux::new(found)
+        .expect("tmux on PATH")
 }
 
 /// The first pane of `target`, for example `main:0`.
@@ -171,10 +175,15 @@ impl RecordingPresenter {
 
 static DAEMON_TESTS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// Runs daemon tests one at a time. Each starts a tmux server that loads the
-/// user's tmux config, and eleven at once kept the CPU so busy that the
-/// adapter's tmux calls hit their 1 s limit, which drops a pane-state write
-/// or fails a focus plan. Hold the guard for the whole test.
+/// Runs daemon tests one at a time. Hold the guard for the whole test.
+///
+/// Sixteen daemons at once push the adapter's tmux calls past their 1 s
+/// limit, which drops a pane-state write or fails a focus plan. The cause is
+/// the size of the target's `deps` directory, not the tests: on the
+/// development host one process spawn from a test binary measured 20 ms
+/// from a small directory and 650 ms from a `deps` directory of 280,000
+/// files. A parallel run failed 5 of 5 times from a `deps` directory of
+/// 24,000 files and passed 5 of 5 from a fresh one.
 pub async fn one_daemon_at_a_time() -> tokio::sync::MutexGuard<'static, ()> {
     DAEMON_TESTS.lock().await
 }
@@ -184,6 +193,9 @@ pub struct DaemonSetup {
     pub presence: Arc<dyn PresenceReader>,
     pub raiser: Arc<RecordingRaiser>,
     pub config: DaemonConfig,
+    /// The tmux binary the adapter runs. `None` means the `tmux` on `PATH`.
+    pub tmux_binary: Option<PathBuf>,
+    pub clock: Clock,
 }
 
 impl Default for DaemonSetup {
@@ -192,8 +204,31 @@ impl Default for DaemonSetup {
             presence: Arc::new(UnknownPresence),
             raiser: Arc::new(RecordingRaiser::default()),
             config: DaemonConfig { serve: ServeOptions { line_timeout: Duration::from_millis(500), ..ServeOptions::default() }, ..DaemonConfig::default() },
+            tmux_binary: None,
+            clock: Arc::new(|| EpochMs(1_760_500_000_000)),
         }
     }
+}
+
+const STUB_WARM_UP: &str = "AGENT_NOTIFY_STUB_WARM_UP";
+
+/// A tmux stand-in in `directory` that runs the shell text `before`, then
+/// the real tmux with the same arguments. The adapter calls
+/// `tmux -u -S <socket> <command> ...`, so `$4` is the tmux command and
+/// `$DIR` is `directory`.
+///
+/// macOS assesses a new executable on its first exec, so one untimed
+/// warm-up exec pays that cost before the daemon's 1 s limit applies.
+pub fn tmux_stub(directory: &Path, before: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let path = directory.join("tmux-stub");
+    let real = adapter_binary();
+    let body = format!("#!/bin/sh\n[ -n \"${STUB_WARM_UP}\" ] && exit 0\nDIR='{}'\n{before}\nexec '{}' \"$@\"\n", directory.display(), real.display());
+    std::fs::write(&path, body).expect("the stub is writable");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("the stub is executable");
+    let warmed = std::process::Command::new(&path).env(STUB_WARM_UP, "1").status().expect("the stub runs");
+    assert!(warmed.success(), "the warm-up exec of {} failed", path.display());
+    path
 }
 
 /// A running daemon on a private socket, a tmux server, and recorders.
@@ -232,14 +267,14 @@ pub fn spawn_daemon_with(label: &str, scratch: tempfile::TempDir, setup: DaemonS
     let dnd_path = scratch.path().join("state/dnd.json");
     let presenter = Arc::new(RecordingPresenter::default());
     let services = Arc::new(Services {
-        tmux: Some(adapter()),
+        tmux: Some(setup.tmux_binary.map_or_else(adapter, Tmux::new)),
         raiser: setup.raiser.clone(),
         presenter: presenter.clone(),
         frontmost: Arc::new(UnknownFrontmost),
         presence: setup.presence,
         sound: Arc::new(Silent),
         dnd_store: DndStore::new(dnd_path.clone()),
-        clock: Arc::new(|| EpochMs(1_760_500_000_000)),
+        clock: setup.clock,
         facts: DaemonFacts { stamp: "stamp-test".to_string(), started_ms: EpochMs(1_760_499_000_000), tools: Vec::new() },
     });
     let BindOutcome::Bound(listener) = bind(&socket).expect("binds") else { panic!("nothing else runs here") };

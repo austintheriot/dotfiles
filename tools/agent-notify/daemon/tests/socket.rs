@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use agent_notify_core::wire::{MAX_LINE_BYTES, MAX_REPLY_BYTES, Reply, encode_line};
-use agent_notify_daemon::socket::{BindOutcome, Inbound, ServeOptions, bind, serve};
+use agent_notify_core::wire::Request;
+use agent_notify_daemon::socket::{BindOutcome, Intake, Listener, PendingQuery, ServeOptions, bind, serve};
 use tokio::sync::mpsc;
 
 const JUMP: &str = r#"{"type":"control","v":1,"event_id":"000000000000000000000S0CK1","sent_at_ms":1760500000017,"control":{"type":"jump"}}"#;
@@ -20,7 +21,8 @@ const SOCKET_FILE: &str = "agent-notify.sock";
 struct World {
     directory: tempfile::TempDir,
     socket: PathBuf,
-    inbound: mpsc::Receiver<Inbound>,
+    requests: mpsc::Receiver<Request>,
+    queries: mpsc::Receiver<PendingQuery>,
     server: tokio::task::JoinHandle<io::Result<()>>,
 }
 
@@ -47,9 +49,14 @@ fn start_with(options: ServeOptions) -> World {
     let directory = scratch();
     let socket = directory.path().join("run").join(SOCKET_FILE);
     let BindOutcome::Bound(listener) = bind(&socket).expect("binds") else { panic!("nothing else runs here") };
-    let (sender, inbound) = mpsc::channel(16);
-    let server = tokio::spawn(serve(listener, STAMP.to_string(), sender, options));
-    World { directory, socket, inbound, server }
+    start_bound(directory, socket, listener, options, 16)
+}
+
+fn start_bound(directory: tempfile::TempDir, socket: PathBuf, listener: Listener, options: ServeOptions, capacity: usize) -> World {
+    let (request_sender, requests) = mpsc::channel(capacity);
+    let (query_sender, queries) = mpsc::channel(capacity);
+    let server = tokio::spawn(serve(listener, STAMP.to_string(), Intake { requests: request_sender, queries: query_sender }, options));
+    World { directory, socket, requests, queries, server }
 }
 
 fn exchange(socket: &Path, line: &[u8]) -> Exchange {
@@ -99,7 +106,7 @@ fn data_for_reply_of(length: usize) -> serde_json::Value {
 
 async fn ask_and_answer(world: &mut World, data: serde_json::Value) -> Exchange {
     let asking = tokio::spawn(exchange_async(world.socket.clone(), format!("{STATUS}\n").into_bytes()));
-    let Some(Inbound::Query { answer, .. }) = world.inbound.recv().await else { panic!("a query") };
+    let Some(PendingQuery { answer, .. }) = world.queries.recv().await else { panic!("a query") };
     answer.send(data).expect("the server waits");
     asking.await.expect("joins")
 }
@@ -110,7 +117,23 @@ async fn an_agent_line_is_acknowledged_and_forwarded() {
     let reply = exchange_async(world.socket.clone(), format!("{JUMP}\n").into_bytes()).await.reply;
     assert_eq!(serde_json::from_str::<serde_json::Value>(&reply).expect("JSON")["ok"], true, "{reply}");
     assert!(reply.contains(STAMP), "{reply}");
-    assert!(matches!(world.inbound.recv().await, Some(Inbound::Request(_))));
+    assert!(world.requests.recv().await.is_some());
+    world.server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_full_request_queue_closes_with_no_reply_and_a_query_still_gets_through() {
+    let directory = scratch();
+    let socket = directory.path().join("run").join(SOCKET_FILE);
+    let BindOutcome::Bound(listener) = bind(&socket).expect("binds") else { panic!("nothing else runs here") };
+    let mut world = start_bound(directory, socket, listener, options(), 1);
+    let queued = exchange_async(world.socket.clone(), format!("{JUMP}\n").into_bytes()).await;
+    assert!(queued.reply.contains("\"ok\":true"), "{}", queued.reply);
+    let refused = exchange_async(world.socket.clone(), format!("{JUMP}\n").into_bytes()).await;
+    assert_eq!((refused.read, refused.reply.as_str()), (Ok(0), ""), "a full queue closes with no reply, so the client falls back");
+    let asked = ask_and_answer(&mut world, serde_json::json!({ "answer": 7 })).await.reply;
+    assert!(asked.contains("\"answer\":7"), "{asked}");
+    assert!(world.requests.recv().await.is_some());
     world.server.abort();
 }
 
@@ -126,7 +149,7 @@ async fn a_query_is_answered_with_data() {
 async fn an_unanswered_query_closes_without_a_reply() {
     let mut world = start();
     let asking = tokio::spawn(exchange_async(world.socket.clone(), format!("{STATUS}\n").into_bytes()));
-    let held = world.inbound.recv().await;
+    let held = world.queries.recv().await;
     let asked = asking.await.expect("joins");
     assert_eq!(asked.read, Ok(0), "the daemon closed the connection, the client did not time out");
     assert_eq!(asked.reply, "");
@@ -169,7 +192,7 @@ async fn an_oversized_line_is_refused_and_other_clients_are_served() {
     assert!(refused.contains("\"code\":\"line_too_long\""), "{refused}");
     let served = exchange_async(world.socket.clone(), format!("{JUMP}\n").into_bytes()).await.reply;
     assert!(served.contains("\"ok\":true"), "{served}");
-    assert!(world.inbound.recv().await.is_some());
+    assert!(world.requests.recv().await.is_some());
     world.server.abort();
 }
 
@@ -189,7 +212,7 @@ async fn a_line_of_exactly_the_limit_is_accepted_and_one_byte_more_is_not() {
     assert_eq!(at_limit.len(), MAX_LINE_BYTES + 1, "the limit plus the newline");
     let accepted = exchange_async(world.socket.clone(), at_limit).await.reply;
     assert!(accepted.contains("\"ok\":true"), "{accepted}");
-    assert!(matches!(world.inbound.recv().await, Some(Inbound::Request(_))));
+    assert!(world.requests.recv().await.is_some());
     let refused = exchange_async(world.socket.clone(), jump_padded_to(MAX_LINE_BYTES + 1)).await.reply;
     assert!(refused.contains("\"code\":\"line_too_long\""), "{refused}");
     world.server.abort();
@@ -220,9 +243,9 @@ async fn stopping_the_server_stops_its_connections() {
     let silent = UnixStream::connect(&world.socket).expect("connects");
     let served = exchange_async(world.socket.clone(), format!("{JUMP}\n").into_bytes()).await.reply;
     assert!(served.contains("\"ok\":true"), "the silent client was accepted first: {served}");
-    assert!(matches!(world.inbound.recv().await, Some(Inbound::Request(_))));
+    assert!(world.requests.recv().await.is_some());
     world.server.abort();
-    let closed = tokio::time::timeout(Duration::from_secs(1), world.inbound.recv()).await;
+    let closed = tokio::time::timeout(Duration::from_secs(1), world.requests.recv()).await;
     assert!(matches!(closed, Ok(None)), "the silent client's handler stopped with the server");
     drop(silent);
 }

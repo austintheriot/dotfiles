@@ -3,6 +3,7 @@
 //! one request to the daemon, and falls back to a plain OS notification.
 //! `hook` exits 0 whatever happens: a `Stop` hook that exits 2 blocks the stop.
 
+mod child;
 mod cli;
 mod client;
 mod context;
@@ -12,6 +13,7 @@ mod log;
 mod tmux;
 
 use std::ffi::OsString;
+use std::io::{self, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::process::ExitCode;
 
@@ -29,7 +31,7 @@ fn main() -> ExitCode {
     let arguments: Vec<OsString> = std::env::args_os().collect();
     if arguments.get(1).is_some_and(|argument| argument == "--stamp") {
         // config-build embeds the stamp and config doctor probes it.
-        println!("{}", option_env!("CONFIG_MANIFEST_STAMP").unwrap_or("unstamped"));
+        let _ = writeln!(io::stdout(), "{}", option_env!("CONFIG_MANIFEST_STAMP").unwrap_or("unstamped"));
         return ExitCode::SUCCESS;
     }
     let is_hook = arguments.get(1).is_some_and(|argument| argument == "hook");
@@ -38,7 +40,7 @@ fn main() -> ExitCode {
     log::init(log_directory(&env.path_inputs()).as_deref(), level);
     std::panic::set_hook(Box::new(|info| {
         tracing::error!(panic = %info, backtrace = %std::backtrace::Backtrace::force_capture(), "panic");
-        eprintln!("agent-notify: internal error: {info}");
+        let _ = writeln!(io::stderr(), "agent-notify: internal error: {info}");
     }));
     match catch_unwind(AssertUnwindSafe(|| run(&arguments, &env, is_hook))) {
         Ok(code) => code,
@@ -57,7 +59,7 @@ fn run(arguments: &[OsString], env: &EnvSnapshot, is_hook: bool) -> ExitCode {
         }
         Err(error) if error.kind() == ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => error.exit(),
         Err(error) => {
-            eprintln!("{}", usage_line(&error));
+            let _ = writeln!(io::stderr(), "{}", usage_line(&error));
             return exit_code(Exit::Usage);
         }
     };
@@ -71,8 +73,9 @@ fn run(arguments: &[OsString], env: &EnvSnapshot, is_hook: bool) -> ExitCode {
 
 fn usage_line(error: &clap::Error) -> String {
     let rendered = error.render().to_string();
-    let first = rendered.lines().next().unwrap_or_default();
-    format!("agent-notify: {}", first.strip_prefix("error: ").unwrap_or(first))
+    let wanted = if error.kind() == ErrorKind::MissingRequiredArgument { 2 } else { 1 };
+    let message = rendered.lines().take(wanted).map(str::trim).collect::<Vec<_>>().join(" ");
+    format!("agent-notify: {}", message.strip_prefix("error: ").unwrap_or(&message))
 }
 
 fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &EnvSnapshot) -> ExitCode {
@@ -81,16 +84,16 @@ fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &En
         tracing::info!(event_id, reason = %reason, "nothing sent");
     }
     if let Some(message) = &invocation.stderr {
-        eprintln!("agent-notify: {message}");
+        let _ = writeln!(io::stderr(), "agent-notify: {message}");
     }
     if command.is_dry_run() {
         for tag in &invocation.tags {
-            println!("tag: {tag:?}");
+            let _ = writeln!(io::stdout(), "tag: {tag:?}");
         }
         if let Some(request) = &invocation.request
             && let Ok(line) = encode_line(request)
         {
-            print!("{line}");
+            let _ = write!(io::stdout(), "{line}");
         }
         return exit_code(invocation.exit);
     }
@@ -137,12 +140,14 @@ fn fall_back(command: &Command, invocation: &Invocation, event_id: &str) {
             Ok(()) => {
                 tracing::info!(event_id, "fallback shown");
                 if !command.is_hook() {
-                    eprintln!("agent-notify: the daemon did not answer; showed a plain notification");
+                    let _ = writeln!(io::stderr(), "agent-notify: the daemon did not answer; showed a plain notification");
                 }
             }
             Err(error) => tracing::warn!(event_id, error = %error, "fallback failed"),
         },
-        None if !command.is_hook() => eprintln!("agent-notify: the daemon did not answer; nothing was recorded"),
+        None if !command.is_hook() => {
+            let _ = writeln!(io::stderr(), "agent-notify: the daemon did not answer; nothing was recorded");
+        }
         None => {}
     }
 }
@@ -197,5 +202,14 @@ mod tests {
         assert!(!line.contains('\n'), "{line:?}");
         assert!(!line.contains("error: "), "{line:?}");
         assert!(line.contains("nope"), "{line:?}");
+    }
+
+    #[test]
+    fn a_missing_argument_is_named_on_the_one_line() {
+        let error = Cli::try_parse_from(["agent-notify", "send", "--kind", "info"]).expect_err("a usage error");
+        let line = usage_line(&error);
+        assert!(!line.contains('\n'), "{line:?}");
+        assert!(line.contains("--body"), "{line:?}");
+        assert_eq!(line, line.trim(), "{line:?}");
     }
 }

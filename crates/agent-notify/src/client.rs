@@ -1,11 +1,13 @@
 //! One request, one reply, inside a fixed time budget.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::os::fd::OwnedFd;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use agent_notify_core::wire::{Reply, ReplyCode};
+use socket2::{Domain, SockAddr, Socket, Type};
 
 /// Connect, write and reply together. A hook must not hold up the agent.
 pub const BUDGET: Duration = Duration::from_millis(300);
@@ -78,9 +80,10 @@ fn reply_code_name(code: ReplyCode) -> &'static str {
 pub fn deliver(path: &Path, line: &str, budget: Duration) -> Delivery {
     let started = Instant::now();
     let remaining = || budget.checked_sub(started.elapsed()).filter(|left| !left.is_zero());
-    let mut stream = match UnixStream::connect(path) {
+    let Some(left) = remaining() else { return Delivery::TimedOut };
+    let mut stream = match connect(path, left) {
         Ok(stream) => stream,
-        Err(error) => return Delivery::ConnectFailed(error.kind()),
+        Err(error) => return classify(&error),
     };
     let Some(left) = remaining() else { return Delivery::TimedOut };
     if let Err(error) = stream.set_write_timeout(Some(left)).and_then(|()| stream.write_all(line.as_bytes())) {
@@ -102,6 +105,15 @@ pub fn deliver(path: &Path, line: &str, budget: Duration) -> Delivery {
     }
 }
 
+/// A blocking Unix connect to a full accept queue waits on `SO_SNDTIMEO`,
+/// which std leaves infinite. Linux reports the expiry as `EAGAIN`.
+fn connect(path: &Path, timeout: Duration) -> io::Result<UnixStream> {
+    let socket = Socket::new(Domain::UNIX, Type::STREAM, None)?;
+    socket.set_write_timeout(Some(timeout))?;
+    socket.connect(&SockAddr::unix(path)?)?;
+    Ok(UnixStream::from(OwnedFd::from(socket)))
+}
+
 fn classify(error: &io::Error) -> Delivery {
     match error.kind() {
         io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut => Delivery::TimedOut,
@@ -112,6 +124,7 @@ fn classify(error: &io::Error) -> Delivery {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use socket2::{Domain, SockAddr, Socket, Type};
     use std::io::{BufRead, BufReader};
     use std::os::unix::net::UnixListener;
 
@@ -177,6 +190,30 @@ mod tests {
         let stale = directory.path().join("stale.sock");
         std::fs::write(&stale, "").expect("a regular file");
         assert!(matches!(deliver(&stale, "{}\n", BUDGET), Delivery::ConnectFailed(_)));
+    }
+
+    #[test]
+    fn a_full_accept_queue_returns_within_the_budget() {
+        let directory = socket_dir();
+        let path = directory.path().join("s.sock");
+        let address = SockAddr::unix(&path).expect("an address");
+        let listener = Socket::new(Domain::UNIX, Type::STREAM, None).expect("a socket");
+        listener.bind(&address).expect("bind");
+        listener.listen(1).expect("listen");
+        let queued: Vec<Socket> = (0..64)
+            .map_while(|_| {
+                let client = Socket::new(Domain::UNIX, Type::STREAM, None).ok()?;
+                client.set_nonblocking(true).ok()?;
+                client.connect(&address).ok().map(|()| client)
+            })
+            .collect();
+        assert!(!queued.is_empty(), "the queue took no connection at all");
+        let started = Instant::now();
+        let delivery = deliver(&path, "{}\n", BUDGET);
+        assert!(started.elapsed() < BUDGET + Duration::from_millis(300), "took {:?}", started.elapsed());
+        if cfg!(target_os = "linux") {
+            assert!(matches!(delivery, Delivery::TimedOut), "{delivery:?}");
+        }
     }
 
     #[test]

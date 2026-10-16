@@ -5,16 +5,20 @@
 use std::io;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use agent_notify_core::hook::{PROMPT_TAG_OPTION, SESSION_TAG_OPTION, TagWrite};
 use agent_notify_core::wire::WindowLabel;
 use agent_notify_core::{DisplayText, PaneId, PaneKey, PromptId, ServerId, SessionId, SocketPath};
 
+use crate::child::wait_bounded;
 use crate::invocation::PaneFacts;
 
 /// `display-message -p` prints other control characters as octal escapes
 /// (`\037`), but a tab raw.
 const FIELD_SEPARATOR: char = '\t';
+/// tmux answers in milliseconds. A wedged server must not hold the hook.
+const TMUX_LIMIT: Duration = Duration::from_secs(1);
 
 /// The socket path from `$TMUX`, which tmux sets to `<socket>,<pid>,<session>`.
 /// The socket path can contain commas, so the split runs from the right.
@@ -87,14 +91,18 @@ pub fn apply_tag(socket: &SocketPath, pane: &PaneId, tag: &TagWrite) -> io::Resu
 }
 
 fn run_tmux(socket: &SocketPath, arguments: &[&str]) -> io::Result<String> {
-    let output = Command::new("tmux")
+    let mut child = Command::new("tmux")
         .arg("-S")
         .arg(socket.as_path())
         .args(arguments)
         .stdin(Stdio::null())
-        .output()?;
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let command = arguments.first().copied().unwrap_or("");
+    wait_bounded(&mut child, TMUX_LIMIT).map_err(|error| io::Error::new(error.kind(), format!("tmux {command}: {error}")))?;
+    let output = child.wait_with_output()?;
     if !output.status.success() {
-        let command = arguments.first().copied().unwrap_or("");
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(io::Error::other(format!("tmux {command} failed: {}", stderr.trim())));
     }

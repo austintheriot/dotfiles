@@ -124,13 +124,54 @@ fn send_usage_errors_exit_two_with_a_message() {
 #[test]
 fn a_clap_usage_error_is_one_stderr_line_and_exit_two() {
     let sandbox = Sandbox::new();
-    let output = sandbox.run(&mut sandbox.command(&["send", "--kind", "nope", "--body", "x"]), "");
-    assert_eq!(output.status.code(), Some(2));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stderr.lines().count(), 1, "{stderr:?}");
-    assert!(stderr.starts_with("agent-notify: "), "{stderr:?}");
-    assert!(!stderr.contains("error: "), "{stderr:?}");
-    assert!(stderr.contains("nope"), "{stderr:?}");
+    for (arguments, named) in [(&["send", "--kind", "nope", "--body", "x"][..], "nope"), (&["send", "--kind", "info"], "--body")] {
+        let output = sandbox.run(&mut sandbox.command(arguments), "");
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(stderr.lines().count(), 1, "{stderr:?}");
+        assert!(stderr.starts_with("agent-notify: "), "{stderr:?}");
+        assert!(!stderr.contains("error: "), "{stderr:?}");
+        assert!(stderr.contains(named), "{stderr:?}");
+    }
+}
+
+#[test]
+fn a_hanging_notifier_does_not_hold_the_hook() {
+    let sandbox = Sandbox::new();
+    for name in ["terminal-notifier", "notify-send"] {
+        sandbox.stub(name, "#!/bin/sh\nexec sleep 30\n");
+    }
+    let started = Instant::now();
+    assert!(hook(&sandbox, PERMISSION).status.success());
+    assert!(started.elapsed() < Duration::from_secs(6), "took {:?}", started.elapsed());
+    assert!(sandbox.log_text().contains("fallback failed"), "{}", sandbox.log_text());
+}
+
+#[test]
+fn a_hanging_tmux_does_not_hold_the_hook() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("tmux", "#!/bin/sh\nexec sleep 30\n");
+    let started = Instant::now();
+    let output = sandbox.run(
+        sandbox.command(&["hook", "claude-code"]).env("TMUX", "/tmp/an-wedged/sock,1,0").env("TMUX_PANE", "%1"),
+        PERMISSION,
+    );
+    assert!(output.status.success());
+    assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
+    assert!(sandbox.log_text().contains("tmux pane unreadable"), "{}", sandbox.log_text());
+    assert_eq!(sandbox.fallback_calls().len(), 1);
+}
+
+#[test]
+fn closed_output_streams_do_not_crash_a_dry_run_hook() {
+    let sandbox = Sandbox::new();
+    let (stdout_reader, stdout_writer) = std::io::pipe().expect("a pipe");
+    let (stderr_reader, stderr_writer) = std::io::pipe().expect("a pipe");
+    drop((stdout_reader, stderr_reader));
+    let mut command = sandbox.command(&["hook", "claude-code", "--dry-run"]);
+    command.stdout(stdout_writer).stderr(stderr_writer);
+    let output = sandbox.run_with_own_output(&mut command, PERMISSION);
+    assert!(output.success(), "{output:?}");
 }
 
 #[test]

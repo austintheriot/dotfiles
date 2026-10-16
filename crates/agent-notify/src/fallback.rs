@@ -3,11 +3,15 @@
 
 use std::io;
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use agent_notify_core::fallback::FallbackNote;
 use agent_notify_core::paths::Platform;
 
+use crate::child::wait_bounded;
+
 const ALACRITTY_BUNDLE_ID: &str = "org.alacritty";
+const NOTIFIER_LIMIT: Duration = Duration::from_secs(2);
 
 /// Shows `note` with the platform's notifier and waits for it to exit.
 ///
@@ -18,7 +22,8 @@ pub fn notify(platform: Platform, note: &FallbackNote) -> io::Result<()> {
     let Some((program, arguments)) = argv(platform, note) else {
         return Err(io::Error::other("no fallback notifier on this platform"));
     };
-    let status = Command::new(program).args(&arguments).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status()?;
+    let mut child = Command::new(program).args(&arguments).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+    let status = wait_bounded(&mut child, NOTIFIER_LIMIT).map_err(|error| io::Error::new(error.kind(), format!("{program}: {error}")))?;
     if status.success() { Ok(()) } else { Err(io::Error::other(format!("{program} exited with {status}"))) }
 }
 
@@ -107,9 +112,13 @@ mod tests {
         value == text || (text.starts_with('-') && value == format!(" {text}"))
     }
 
+    fn dangerous_text() -> impl Strategy<Value = String> {
+        prop_oneof![any::<String>(), any::<String>().prop_map(|text| format!("-{text}")), "[-<>&\n]{1,3}.*"]
+    }
+
     proptest! {
         #[test]
-        fn macos_argv_keeps_agent_text_as_values(title in any::<String>(), message in any::<String>(), urgent in any::<bool>()) {
+        fn macos_argv_keeps_agent_text_as_values(title in dangerous_text(), message in dangerous_text(), urgent in any::<bool>()) {
             let note = FallbackNote { title: title.clone(), subtitle: OFFLINE_SUBTITLE, message: message.clone(), urgent };
             let Some((program, arguments)) = argv(Platform::MacOs, &note) else {
                 return Err(TestCaseError::fail("macOS has a notifier"));
@@ -126,7 +135,7 @@ mod tests {
         }
 
         #[test]
-        fn linux_argv_ends_options_and_neutralizes_markup(title in any::<String>(), message in any::<String>(), urgent in any::<bool>()) {
+        fn linux_argv_ends_options_and_neutralizes_markup(title in dangerous_text(), message in dangerous_text(), urgent in any::<bool>()) {
             let note = FallbackNote { title: title.clone(), subtitle: OFFLINE_SUBTITLE, message: message.clone(), urgent };
             let Some((program, arguments)) = argv(Platform::Linux, &note) else {
                 return Err(TestCaseError::fail("Linux has a notifier"));

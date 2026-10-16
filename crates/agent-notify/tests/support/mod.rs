@@ -6,10 +6,10 @@
 #![allow(dead_code)]
 
 use std::fs;
-use std::io::{BufRead, BufReader, ErrorKind, Write};
+use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, ExitStatus, Output, Stdio};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -63,12 +63,25 @@ impl Sandbox {
         command
     }
 
+    /// Replaces or adds the program `name` on the sandbox `PATH`.
+    pub fn stub(&self, name: &str, script: &str) {
+        dotfiles_test_support::stub::write(&self.stubs.join(name), script).expect("a stub");
+    }
+
+    /// Runs `command` with `stdin`, capturing its output. Panics when the
+    /// command outlives [`RUN_DEADLINE`], so a client bug fails the suite.
     pub fn run(&self, command: &mut Command, stdin: &str) -> Output {
-        let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("agent-notify starts");
-        if let Some(mut input) = child.stdin.take() {
-            input.write_all(stdin.as_bytes()).expect("stdin write");
-        }
-        child.wait_with_output().expect("agent-notify exits")
+        let mut child = start(command.stdout(Stdio::piped()).stderr(Stdio::piped()), stdin);
+        let stdout = drain(child.stdout.take());
+        let stderr = drain(child.stderr.take());
+        let status = finish(&mut child, command);
+        Output { status, stdout: stdout.join().expect("stdout reader"), stderr: stderr.join().expect("stderr reader") }
+    }
+
+    /// Like [`Sandbox::run`], but leaves stdout and stderr as the caller set them.
+    pub fn run_with_own_output(&self, command: &mut Command, stdin: &str) -> ExitStatus {
+        let mut child = start(command, stdin);
+        finish(&mut child, command)
     }
 
     /// One entry per notifier call, each the call's argv after the program name.
@@ -86,6 +99,41 @@ impl Sandbox {
 
     pub fn log_text(&self) -> String {
         fs::read_to_string(self.logs.join("cli.log")).unwrap_or_default()
+    }
+}
+
+const RUN_DEADLINE: Duration = Duration::from_secs(30);
+
+fn start(command: &mut Command, stdin: &str) -> Child {
+    let mut child = command.stdin(Stdio::piped()).spawn().expect("agent-notify starts");
+    if let Some(mut input) = child.stdin.take() {
+        input.write_all(stdin.as_bytes()).expect("stdin write");
+    }
+    child
+}
+
+fn drain(stream: Option<impl Read + Send + 'static>) -> JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        if let Some(mut stream) = stream {
+            stream.read_to_end(&mut bytes).expect("child output");
+        }
+        bytes
+    })
+}
+
+fn finish(child: &mut Child, command: &Command) -> ExitStatus {
+    let deadline = Instant::now() + RUN_DEADLINE;
+    loop {
+        if let Some(status) = child.try_wait().expect("a child status") {
+            return status;
+        }
+        if Instant::now() >= deadline {
+            let _killed = child.kill();
+            let _reaped = child.wait();
+            panic!("{command:?} ran longer than {RUN_DEADLINE:?}");
+        }
+        std::thread::sleep(Duration::from_millis(10));
     }
 }
 

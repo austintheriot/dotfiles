@@ -6,7 +6,6 @@
 //! convention the deps engine and `config-manifest` already use.
 
 mod git_branches;
-mod repo;
 mod tmux;
 
 use std::path::Path;
@@ -17,6 +16,7 @@ use tmux_core::{
     Arrangement, DEFAULT_HORIZONTAL_SPLITS, DEFAULT_VERTICAL_SPLITS, Layout, RepositoryFacts,
     WindowFacts, format_branches, layout_with_counts, window_name,
 };
+use tmux_tools::repo;
 
 /// Where the fallback `@wname_bare_repos` patterns live, relative to `$HOME`.
 ///

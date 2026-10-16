@@ -4,7 +4,7 @@
 
 use std::fs::{self, DirBuilder, File, Permissions, TryLockError};
 use std::io;
-use std::os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,11 +14,12 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Semaphore, mpsc, oneshot};
+use tokio::task::JoinSet;
 use tokio::time::timeout;
 
 const LOCK_FILE: &str = "agent-notifyd.lock";
 const PRIVATE_DIRECTORY: u32 = 0o700;
-const PRIVATE_SOCKET: u32 = 0o600;
+const PRIVATE_FILE: u32 = 0o600;
 const WRITABLE_BY_OTHERS: u32 = 0o022;
 
 /// The result of [`bind`].
@@ -52,7 +53,8 @@ impl Drop for Listener {
 ///
 /// A missing socket directory is created with mode 0700. An existing one is
 /// used unchanged, and only when this process's user owns it and neither
-/// group nor other can write to it.
+/// group nor other can write to it. Both checks pass before the lock file,
+/// the stale socket or the bind is touched. The lock file is mode 0600.
 ///
 /// # Errors
 ///
@@ -64,7 +66,8 @@ pub fn bind(path: &Path) -> io::Result<BindOutcome> {
         .filter(|parent| !parent.as_os_str().is_empty())
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, format!("the socket path {} has no directory", path.display())))?;
     prepare_directory(directory)?;
-    let lock = File::options().create(true).truncate(false).write(true).open(directory.join(LOCK_FILE))?;
+    check_owner(directory, process_uid(directory)?)?;
+    let lock = open_lock(directory)?;
     match lock.try_lock() {
         Ok(()) => {}
         Err(TryLockError::WouldBlock) => return Ok(BindOutcome::AlreadyRunning),
@@ -73,10 +76,32 @@ pub fn bind(path: &Path) -> io::Result<BindOutcome> {
     remove_stale_socket(path)?;
     let listener = std::os::unix::net::UnixListener::bind(path)?;
     let bound = Listener { listener, path: path.to_path_buf(), owner: fs::symlink_metadata(path)?.uid(), _lock: lock };
-    fs::set_permissions(path, Permissions::from_mode(PRIVATE_SOCKET))?;
+    fs::set_permissions(path, Permissions::from_mode(PRIVATE_FILE))?;
     bound.listener.set_nonblocking(true)?;
-    check_owner(directory, bound.owner)?;
     Ok(BindOutcome::Bound(bound))
+}
+
+/// `unsafe` is denied, so `getuid` is out of reach. A file this process
+/// creates carries its uid. `create_new` refuses a planted file or symlink.
+fn process_uid(directory: &Path) -> io::Result<u32> {
+    let probe = directory.join(format!(".agent-notifyd-probe-{}", std::process::id()));
+    let file = File::options().write(true).create_new(true).mode(PRIVATE_FILE).open(&probe).map_err(|error| {
+        io::Error::new(error.kind(), format!("could not create a probe file in the socket directory {}: {error}", directory.display()))
+    })?;
+    let uid = file.metadata().map(|metadata| metadata.uid());
+    let removed = fs::remove_file(&probe);
+    let uid = uid?;
+    removed?;
+    Ok(uid)
+}
+
+/// A read-only descriptor is enough to hold the lock, so the file must not
+/// be readable by others. The chmod goes through the descriptor, which
+/// also fixes a lock file left by an older build.
+fn open_lock(directory: &Path) -> io::Result<File> {
+    let lock = File::options().create(true).truncate(false).write(true).mode(PRIVATE_FILE).open(directory.join(LOCK_FILE))?;
+    lock.set_permissions(Permissions::from_mode(PRIVATE_FILE))?;
+    Ok(lock)
 }
 
 fn prepare_directory(directory: &Path) -> io::Result<()> {
@@ -177,7 +202,8 @@ struct Context {
 }
 
 /// Accepts connections until the task running it is dropped. Must run
-/// inside a Tokio runtime.
+/// inside a Tokio runtime. Dropping it also aborts every connection it
+/// is handling, so `inbound` closes promptly.
 ///
 /// # Errors
 ///
@@ -187,24 +213,32 @@ pub async fn serve(listener: Listener, stamp: String, inbound: mpsc::Sender<Inbo
     let limit = Arc::new(Semaphore::new(options.max_connections));
     let context = Arc::new(Context { stamp, inbound, options, owner: listener.owner });
     let _owned = listener;
+    let mut handlers = JoinSet::new();
     loop {
-        let stream = match accepting.accept().await {
-            Ok((stream, _)) => stream,
-            Err(error) => {
-                tracing::warn!(%error, "accept failed");
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                continue;
+        tokio::select! {
+            accepted = accepting.accept() => match accepted {
+                Ok((stream, _)) => {
+                    let Ok(permit) = Arc::clone(&limit).try_acquire_owned() else {
+                        tracing::warn!("too many connections; closed one at accept");
+                        continue;
+                    };
+                    let context = Arc::clone(&context);
+                    handlers.spawn(async move {
+                        handle(stream, &context).await;
+                        drop(permit);
+                    });
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "accept failed");
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            },
+            Some(finished) = handlers.join_next(), if !handlers.is_empty() => {
+                if let Err(error) = finished {
+                    tracing::error!(%error, "a connection handler failed");
+                }
             }
-        };
-        let Ok(permit) = Arc::clone(&limit).try_acquire_owned() else {
-            tracing::warn!("too many connections; closed one at accept");
-            continue;
-        };
-        let context = Arc::clone(&context);
-        tokio::spawn(async move {
-            handle(stream, &context).await;
-            drop(permit);
-        });
+        }
     }
 }
 
@@ -269,7 +303,11 @@ async fn answer(bytes: &[u8], overflowed: bool, context: &Context) -> Option<Rep
             enqueue(&context.inbound, Inbound::Query { query, answer: sender })?;
             match timeout(context.options.query_timeout, receiver).await {
                 Ok(Ok(data)) => Some(Reply { data: Some(data), ..Reply::accepted(&context.stamp) }),
-                Ok(Err(_)) | Err(_) => {
+                Ok(Err(_)) => {
+                    tracing::warn!("the actor dropped the query; closed with no reply");
+                    None
+                }
+                Err(_) => {
                     tracing::warn!("a query got no answer in time; closed with no reply");
                     None
                 }

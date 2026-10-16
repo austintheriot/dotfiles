@@ -9,6 +9,7 @@ pub mod environment;
 pub mod focus_run;
 pub mod presence;
 pub mod services;
+pub mod socket;
 pub mod tmux;
 pub mod tools;
 

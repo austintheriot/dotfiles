@@ -430,7 +430,7 @@ fn doctor_without_a_daemon_fails_and_names_the_check() {
 }
 
 #[test]
-fn doctor_with_a_daemon_reads_its_report_over_the_query_budget() {
+fn doctor_with_a_daemon_sends_a_status_query_and_prints_its_stamp() {
     let sandbox = Sandbox::new();
     let received = listen(&sandbox.socket, ReplyMode::Reply(report_reply(false)));
     let output = sandbox.run(&mut sandbox.command(&["doctor"]), "");

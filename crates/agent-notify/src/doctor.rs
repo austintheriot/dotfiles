@@ -217,12 +217,12 @@ fn tmux_checks(facts: &DoctorFacts) -> Vec<Check> {
             CheckStatus::Warn,
             "this pane has no @agent_notify_session: start Claude Code here, or check that the SessionStart hook runs",
         )),
-        None => {}
+        None => checks.push(check("session tag", CheckStatus::Warn, "could not read this pane's tags from tmux")),
     }
     match facts.focus_events {
         Some(true) => checks.push(check("focus events", CheckStatus::Pass, "focus-events is on")),
         Some(false) => checks.push(check("focus events", CheckStatus::Fail, "focus-events is off: add `set -g focus-events on` to tmux.conf")),
-        None => {}
+        None => checks.push(check("focus events", CheckStatus::Warn, "could not read focus-events from tmux")),
     }
     checks
 }
@@ -350,13 +350,19 @@ fn is_executable(path: &Path) -> bool {
 fn launchd_state() -> LaunchdState {
     let Some(uid) = run_text("/usr/bin/id", &["-u"]).map(|text| text.trim().to_string()) else { return LaunchdState::Unknown };
     let domain = format!("gui/{uid}");
-    if run_text("/bin/launchctl", &["print-disabled", &domain]).is_some_and(|output| parse_disabled(&output, LAUNCHD_LABEL)) {
-        return LaunchdState::Disabled;
-    }
-    match run_status("/bin/launchctl", &["print", &format!("{domain}/{LAUNCHD_LABEL}")]) {
-        Some(true) => LaunchdState::Loaded,
-        Some(false) => LaunchdState::NotLoaded,
-        None => LaunchdState::Unknown,
+    let disabled = run_text("/bin/launchctl", &["print-disabled", &domain]).map(|output| parse_disabled(&output, LAUNCHD_LABEL));
+    let loaded = run_status("/bin/launchctl", &["print", &format!("{domain}/{LAUNCHD_LABEL}")]);
+    launchd_from(disabled, loaded)
+}
+
+/// `None` means the question got no answer. A loaded agent whose disabled
+/// check never ran is `Unknown`, because a Login Items switch can be off.
+fn launchd_from(disabled: Option<bool>, loaded: Option<bool>) -> LaunchdState {
+    match (disabled, loaded) {
+        (Some(true), _) => LaunchdState::Disabled,
+        (_, Some(false)) => LaunchdState::NotLoaded,
+        (Some(false), Some(true)) => LaunchdState::Loaded,
+        (None, Some(true)) | (_, None) => LaunchdState::Unknown,
     }
 }
 
@@ -513,6 +519,32 @@ mod tests {
         assert_eq!(status_of(&checks, "cli log"), CheckStatus::Warn);
         let detail = detail_of(&checks, "cli log");
         assert!(detail.contains("/home/dev/cli.log") && detail.contains("never rotates"), "{detail}");
+    }
+
+    #[test]
+    fn unreadable_tmux_facts_inside_tmux_warn_instead_of_vanishing() {
+        let facts = DoctorFacts { pane_session_tag: None, focus_events: None, ..healthy() };
+        let checks = evaluate(&facts);
+        assert_eq!(status_of(&checks, "session tag"), CheckStatus::Warn);
+        assert_eq!(status_of(&checks, "focus events"), CheckStatus::Warn);
+        assert!(detail_of(&checks, "focus events").contains("could not read"));
+    }
+
+    #[test]
+    fn outside_tmux_the_pane_facts_stay_omitted() {
+        let facts = DoctorFacts { in_tmux_pane: false, pane_session_tag: None, focus_events: None, ..healthy() };
+        let checks = evaluate(&facts);
+        assert!(checks.iter().all(|check| check.name != "session tag" && check.name != "focus events"));
+    }
+
+    #[test]
+    fn a_loaded_agent_is_unknown_when_the_disabled_check_never_ran() {
+        assert_eq!(launchd_from(Some(false), Some(true)), LaunchdState::Loaded);
+        assert_eq!(launchd_from(None, Some(true)), LaunchdState::Unknown);
+        assert_eq!(launchd_from(Some(true), Some(true)), LaunchdState::Disabled);
+        assert_eq!(launchd_from(Some(true), None), LaunchdState::Disabled);
+        assert_eq!(launchd_from(None, Some(false)), LaunchdState::NotLoaded);
+        assert_eq!(launchd_from(Some(false), None), LaunchdState::Unknown);
     }
 
     #[test]

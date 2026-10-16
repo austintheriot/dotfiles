@@ -1,0 +1,3 @@
+# Proptest writes a failure seed here when a property fails. That is an output
+# of running the tests, and a tracked seed moves the build stamp.
+proptest-regressions/

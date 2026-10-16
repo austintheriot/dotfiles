@@ -160,3 +160,21 @@ Run on 2026-10-16 after commit c423bcfa, daemon stamp `9450aab7f8b1d831`. Test c
 
 - **F3: debug logs do not reach the launchd daemon.** `launchctl setenv AGENT_NOTIFY_LOG debug` plus `kickstart -k` left the variable out of the daemon's environment. The plist sets its own `EnvironmentVariables`. That is the likely cause. It is not confirmed. The re-test ran the daemon by hand in a throwaway tmux server with `AGENT_NOTIFY_LOG=debug`. Fix: let `agent-notify install` write a log level into the plist, or add a log-level flag.
 - **Brief corrections:** checks 13 and 13b must say that `dnd off` folds info cards into the finished row. Only attention cards come back as cards.
+
+### VM pass for the remaining checks
+
+Run on 2026-10-16 in a Tart clone of `macos-tahoe-base` (macOS 26.6.2, arm64, 1024x768 points), daemon stamp `ecd9f573343efea7` after F3 (commit dc9fcb70). The app bundle, CLI, Alacritty.app and `agent-notify.conf` came from the host through a shared folder. The plist matched the host plist with guest paths. The guest display was read through `tart run --no-graphics --vnc-experimental` and Screen Sharing.app, because panel windows are hidden from capture inside the guest (`NSWindowSharingType::None`) and a host capture of the Screen Sharing window shows them. Clicks and keys came from a small CGEvent helper in the guest. Test cards came from `agent-notify send` typed into an unfocused tagged pane.
+
+| Id | Result | Evidence |
+|---|---|---|
+| F3 | Pass | `log-level` file set to `debug` in the state directory. The launchd-started daemon wrote `DEBUG ... panel push` lines. |
+| 4 | Pass | Login Items & Extensions > App Background Activity lists "agent-notifyd, Item from unidentified developer", toggle on. On first load macOS showed the notification "agent-notifyd can run in the background. You can manage background activity in Login Items & Extensions." A "launchctl" entry from the same developer status also appears. |
+| 5 | Pass | `kickstart -k`: runs 1 to 2, new pid. `kill -9`: launchd restarted it, runs 3. A second copy by hand exited 0 and logged "another agent-notifyd runs". Runs stayed at 3, one pid. |
+| 9 | Pass | `tmux detach-client`, with no Alacritty process left. A click on the card logged `Clicked` and `focus outcome ... Done`, started a new Alacritty attached to `qa` on window 2, and removed the card. |
+| 15 | Pass | Safari in native fullscreen (Ctrl-Cmd-F by key event). The attention card shows over the fullscreen Space. |
+| A, 2 | Pass | Light mode: the info card has no scroll bars. The attention card is amber with an amber border. Sound not checked: the VM ran with no audio. |
+| 16 | Not run | Needs the home Intel Mac. A VM on Apple silicon cannot stand in. |
+| 17 | Not run | A real share needs a signed-in Zoom or Meet account. Indirect evidence only: host `screencapture` does not see cards (first pass). |
+
+- An `osascript` keystroke through System Events raised an Automation prompt for `tart-guest-agent` and timed out. Use CGEvent key events from a binary with Accessibility trust instead.
+- `tart run` started from a shell gave this VM no display window (4 attempts, table kept in the session scratchpad). The VNC route worked at once.

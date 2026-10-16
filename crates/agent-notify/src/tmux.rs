@@ -158,7 +158,7 @@ mod tests {
     fn window_name_with_separator_and_newline_parses() {
         let name = format!("a{FIELD_SEPARATOR}b\nc");
         let facts = parse_pane_line(&line(&["1", "2", "3", "", "", &name]), socket(), pane()).expect("parses");
-        assert_eq!(facts.window.name.as_str(), "ab\nc", "the separator is a control character, so DisplayText drops it");
+        assert_eq!(facts.window.name.as_str(), "a b\nc", "the separator is a tab, so DisplayText turns it into a space");
         assert_eq!(facts.window.index, 3);
     }
 

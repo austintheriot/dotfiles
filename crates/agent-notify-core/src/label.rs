@@ -39,11 +39,11 @@ pub fn location_line(window: Option<&WindowLabel>, repo: Option<&RepoInfo>, cwd:
 ///
 /// Ends at `.`, `!` or `?` followed by whitespace or the end (not after a
 /// common abbreviation), at a CJK full stop, or at `\n`. A leading code fence
-/// runs to its closing fence. The input is [`DisplayText`], which has already
-/// turned `\r`, U+2028 and U+2029 into spaces, so `\n` is the only line break.
+/// runs to its closing fence. [`DisplayText`] has already turned `\r`, NEL,
+/// U+2028 and U+2029 into spaces, so `\n` is the only line break.
 #[must_use]
-pub fn first_sentence(text: &str) -> &str {
-    let trimmed = text.trim();
+pub fn first_sentence(text: &DisplayText) -> &str {
+    let trimmed = text.as_str().trim();
     if trimmed.starts_with("```") {
         return through_closing_fence(trimmed);
     }
@@ -82,7 +82,7 @@ fn through_closing_fence(trimmed: &str) -> &str {
 /// The body of a `TurnEnded` card.
 #[must_use]
 pub fn turn_ended_body(last_message: Option<&DisplayText>) -> DisplayText {
-    let sentence = last_message.map_or("", |message| first_sentence(message.as_str()));
+    let sentence = last_message.map_or("", |message| first_sentence(message));
     if sentence.is_empty() { DisplayText::new("Finished") } else { DisplayText::new(sentence) }
 }
 
@@ -143,7 +143,7 @@ mod tests {
             ("   \n  ", ""),
         ];
         for (input, expected) in cases {
-            assert_eq!(first_sentence(input), expected, "input {input:?}");
+            assert_eq!(first_sentence(&DisplayText::new(input)), expected, "input {input:?}");
         }
     }
 
@@ -167,8 +167,9 @@ mod tests {
 
     proptest! {
         #[test]
-        fn first_sentence_is_a_non_empty_prefix_of_the_trimmed_input(text in ".{0,300}") {
-            let trimmed = text.trim();
+        fn first_sentence_is_a_non_empty_prefix_of_the_trimmed_input(raw in ".{0,300}") {
+            let text = DisplayText::new(&raw);
+            let trimmed = text.as_str().trim();
             let sentence = first_sentence(&text);
             prop_assert!(trimmed.starts_with(sentence));
             prop_assert_eq!(sentence.is_empty(), trimmed.is_empty());

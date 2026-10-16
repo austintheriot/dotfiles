@@ -147,3 +147,16 @@ Run on 2026-10-16 on the work Mac, daemon stamp `a3cb4f259a905c01` (commit 448fb
 - **F1: hover freeze holds user actions.** On hover, `ui_intent` stores `frozen_view` (`update.rs:668-672`), and `view()` returns it until mouse-leave. `close()` (`update.rs:713`) and the click path change state but not the frozen view. The actor sees no change and pushes nothing (`actor.rs:433-437`). The freeze also hides a `dnd on`. The freeze must hold back only timer and arrival changes. A close, a click and dnd must take effect at once. Red test in core: hover on, close a card, and assert that `view()` no longer contains the card. Add the same test for `dnd on`. Fails checks 10 and 13b.
 - **F2: no log of UI intents or panel pushes.** The daemon logs neither the clicks, closes and hover changes it receives nor what it pushes to the panel. That is why F1 left no trace in the log. Add a debug line in `DaemonHandle::send_ui` (`actor.rs:272`) and one at the present step (`actor.rs:435`). The presence snapshot (frontmost, lock, idle) behind each decision is not logged either, so check 14 cannot separate "screen locked" from "frontmost changed" as the cause.
 - **Brief corrections:** check 11 text (Meta-n targets attention cards only). Check 14 command (use `ioreg -n Root -d1 \| grep IOConsoleUsers`, without `-a`).
+
+### Re-test after F1 and F2
+
+Run on 2026-10-16 after commit c423bcfa, daemon stamp `9450aab7f8b1d831`. Test cards came from a detached `agent-notify send`. A harness-tracked background send ended in a new turn for the sending session, and `TurnStarted` clears that session's cards (`update.rs:453`), so the first attempt removed its own card in under a second.
+
+| Id | Result | Evidence |
+|---|---|---|
+| 10 | Pass | Hover, then a click on the close button removes the card at once, with the pointer still on the panel. |
+| 8 | Pass | A click on the card body removes the card without a mouse-leave. |
+| 13b | Pass | With debug logs: `dnd on` pushed `cards=[] dnd=true` during hover. `dnd off` pushed `cards=[] finished=1`. By design, `end_dnd` (`update.rs:417`) folds waiting info cards into the finished row, so the card comes back as a "Finished: 18" entry, not as a card. The panel shrinks to one short row (user confirmed). The first-pass note that blamed `view.rs:60-62` was wrong: `dnd on` already cleared the freeze. |
+
+- **F3: debug logs do not reach the launchd daemon.** `launchctl setenv AGENT_NOTIFY_LOG debug` plus `kickstart -k` left the variable out of the daemon's environment. The plist sets its own `EnvironmentVariables`. That is the likely cause. It is not confirmed. The re-test ran the daemon by hand in a throwaway tmux server with `AGENT_NOTIFY_LOG=debug`. Fix: let `agent-notify install` write a log level into the plist, or add a log-level flag.
+- **Brief corrections:** checks 13 and 13b must say that `dnd off` folds info cards into the finished row. Only attention cards come back as cards.

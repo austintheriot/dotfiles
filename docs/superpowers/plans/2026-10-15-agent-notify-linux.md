@@ -6,7 +6,7 @@
 
 **Architecture:** Plan 2 built the daemon library with every platform service behind a trait in one `Services` record. This plan adds Linux implementations of those traits and a Linux composition root. The daemon library gains Tauri-free adapters: X11 (`xprop`, `xdotool`), COSMIC Wayland (one long-lived Wayland connection for toplevels and idle), the sound player, the terminal opener, and a D-Bus presenter. Each adapter has a pure core (parsers, tables, diffs) with unit tests that run on macOS too. The app crate gains `linux/` beside `macos/`: the GTK panel and the start-up. The UI does not change: on Linux it receives `native_hover: false` and uses its DOM hover path.
 
-**Tech Stack:** As plan 2, plus gtk 0.18, gtk-layer-shell 0.8.2 (feature `v0_6`), wayland-client 0.31.15, wayland-protocols 0.32.13 (features `client`, `staging`), cosmic-protocols 0.2.0 (optional feature `cosmic`), notify-rust 4.18.2 (feature `z`, pure-Rust D-Bus). System tools: tmux, alacritty, pw-play or paplay, xdotool and xprop (X11 only). Docker for the Linux compile and test gate on macOS. A Tart VM with Pop!_OS 24.04 COSMIC for manual checks.
+**Tech Stack:** As plan 2, plus gtk 0.18, gtk-layer-shell 0.8.2 (feature `v0_6`), wayland-client 0.31.15, wayland-protocols 0.32.13 (features `client`, `staging`), cosmic-protocols 0.2.0, zbus 5.19.0 (pure-Rust D-Bus). System tools: tmux, alacritty, pw-play or paplay, xdotool and xprop (X11 only). Docker for the Linux compile and test gate on macOS. A Tart VM with Pop!_OS 24.04 COSMIC for manual checks.
 
 **Spec:** `~/docs/superpowers/specs/2026-10-15-agent-notify-design.md` (approved, commit `534dcfad`), sections 4, 7.2, 9 and 11. **Spike report:** `~/docs/superpowers/spikes/2026-10-15-agent-notify-spikes.md`, sections S2, S3 and S4 (S4 holds the checks run for this plan). Where the spike report differs from the spec, the spike report wins. Plans 1 and 2 must be complete before Task 1.
 
@@ -15,7 +15,7 @@
 - Every rule in plan 2's Global Constraints still holds. The ones repeated here are the ones Linux code breaks most easily.
 - Linux code compiles only under `#[cfg(target_os = "linux")]`. Pure modules (parsers, tables, diffs, unit planners) are not gated, so their tests run on macOS too.
 - No `unsafe` in Linux code. The workspace denies `unsafe_code`; no Linux file gets an `allow`.
-- Pinned versions, exact (`=`): gtk `=0.18.2`, gtk-layer-shell `=0.8.2` with feature `v0_6`, wayland-client `=0.31.15`, wayland-protocols `=0.32.13` with features `client` and `staging`, cosmic-protocols `=0.2.0` with `default-features = false, features = ["client"]`, notify-rust `=4.18.2` with `default-features = false, features = ["z"]`.
+- Pinned versions, exact (`=`): gtk `=0.18.2`, gtk-layer-shell `=0.8.2` with feature `v0_6`, wayland-client `=0.31.15`, wayland-protocols `=0.32.13` with features `client` and `staging`, cosmic-protocols `=0.2.0` with `default-features = false, features = ["client"]`, zbus `=5.19.0` with default features.
 - The adapter is chosen by `XDG_SESSION_TYPE` (spec 7.2): `wayland` or `x11`. COSMIC is detected by `XDG_CURRENT_DESKTOP` containing `COSMIC`, then confirmed by the Wayland globals the compositor offers.
 - The daemon spawns every external tool by absolute path, resolved once at start-up: tmux, alacritty, xdotool, xprop, pw-play, paplay. The systemd unit sets `AGENT_NOTIFY_TMUX` and `PATH`.
 - Terminal: Alacritty, matched by Wayland app id `Alacritty` and X11 class `Alacritty`.
@@ -39,7 +39,7 @@ These inputs are implied by the spec, but no rule table names them. Each has a t
 
 Tell the user about these at handoff.
 
-- **cosmic-protocols is GPL-3.0-only.** It is the only way to read the active window and to raise Alacritty on COSMIC (spike S2-4, S2-5). The `config` repo has no license file and the binary is built only for personal use, so linking it is allowed. The crate stays behind the `cosmic` cargo feature, on by default, with a `cargo deny` exception for that one crate. Without the feature, COSMIC still shows cards; the click switches tmux but does not raise Alacritty, and frontmost reads `Unknown`. The user decides at plan review.
+- **cosmic-protocols is GPL-3.0-only.** It is the only way to read the active window and to raise Alacritty on COSMIC (spike S2-4, S2-5). The `config` repo has no license file and the binary is built only for personal use, so linking it is allowed: GPL obligations apply when someone distributes a binary, and this build is never distributed. It is a normal Linux dependency with a `cargo deny` exception for that one crate. The user approved this at plan review. If binaries are ever published, revisit it.
 - **Sound.** `pw-play` (or `paplay`) with `/usr/share/sounds/freedesktop/stereo/message-new-instant.oga`, not libcanberra. `canberra-gtk-play` is not installed on Pop!_OS 24.04 (spike S4-4).
 - **X11 frontmost.** `xprop -root _NET_ACTIVE_WINDOW`, then `xprop -id <id> WM_CLASS`. Pop!_OS ships xdotool 3.20160805, which has no `getwindowclassname` (spike S4-3).
 - **X11 idle and lock.** `None` in v1. The core treats `None` as "show". X11 is the low-priority Arch path.
@@ -57,7 +57,7 @@ Create:
 - `tools/agent-notify/daemon/src/x11.rs`: `xprop` parsers (pure) and the X11 frontmost reader and raiser
 - `tools/agent-notify/daemon/src/linux_tools.rs`: the terminal opener and the sound player
 - `tools/agent-notify/daemon/src/cosmic/mod.rs`, `cosmic/table.rs` (pure), `cosmic/idle.rs` (pure), `cosmic/client.rs` (Wayland thread)
-- `tools/agent-notify/daemon/src/dbus_presenter.rs`: notification diff (pure) and the notify-rust presenter
+- `tools/agent-notify/daemon/src/dbus_presenter.rs`: notification diff (pure) and the zbus presenter
 - `tools/agent-notify/daemon/tests/x11_adapter.rs`
 - `tools/agent-notify/app/src/startup.rs`: start-up shared by macOS and Linux
 - `tools/agent-notify/app/src/linux/mod.rs`, `linux/panel.rs`, `linux/geometry.rs` (pure)
@@ -202,8 +202,8 @@ ignore = [
 In `[licenses]`, add `"Apache-2.0 WITH LLVM-exception"` to `allow` (target-lexicon, a build dependency of the GTK system crates), and add:
 
 ```toml
-# The COSMIC toplevel protocols. GPL-3.0-only; linked only into a personal
-# build, behind the `cosmic` feature. See the plan 3 deviation note.
+# The COSMIC toplevel protocols. GPL-3.0-only; linked only into personal
+# builds that are never distributed. See the plan 3 deviation note.
 [[licenses.exceptions]]
 crate = "cosmic-protocols"
 allow = ["GPL-3.0-only"]
@@ -931,7 +931,7 @@ config commit -m "Add the Linux terminal opener, raiser and sound" -m "Co-Author
 
 ### Task 6: The COSMIC Wayland client
 
-One thread owns one Wayland connection (spike D7). It keeps a table of toplevels (app id and activated state) and one idle notification. The table and the idle tracker are pure and generic, so their tests run on macOS. The thread and the protocol code are Linux-only and behind the `cosmic` feature.
+One thread owns one Wayland connection (spike D7). It keeps a table of toplevels (app id and activated state) and one idle notification. The table and the idle tracker are pure and generic, so their tests run on macOS. The thread and the protocol code are Linux-only.
 
 **Files:**
 - Create: `tools/agent-notify/daemon/src/cosmic/mod.rs`, `cosmic/table.rs`, `cosmic/idle.rs`, `cosmic/client.rs`
@@ -942,7 +942,7 @@ One thread owns one Wayland connection (spike D7). It keeps a table of toplevels
 - Produces:
   - `cosmic::table::{ToplevelTable<Handle>, activated_in(&[u8]) -> bool, TERMINAL_APP_ID = "Alacritty"}`. Methods: `new()`, `added(key: u32)`, `app_id(key, String)`, `attached(key, Handle)`, `state(key, activated: bool)`, `closed(key)`, `disconnect()`, `frontmost() -> Frontmost`, `terminal() -> Option<&Handle>`, `terminal_activated() -> bool`.
   - `cosmic::idle::IdleTracker` with `new(registered: EpochMs)`, `idled()`, `resumed()`, `lost()`, `idle_seconds(now: EpochMs) -> Option<u32>`.
-  - Linux and feature `cosmic`: `cosmic::client::CosmicDesktop::connect(clock: Clock) -> Option<CosmicDesktop>` (cheap `Clone`), implementing `FrontmostReader` and `PresenceReader`, plus `activate_terminal() -> bool`.
+  - Linux only: `cosmic::client::CosmicDesktop::connect(clock: Clock) -> Option<CosmicDesktop>` (cheap `Clone`), implementing `FrontmostReader` and `PresenceReader`, plus `activate_terminal() -> bool`.
   - `RaiseMethod::Cosmic(CosmicDesktop)` under the same cfg.
 
 - [ ] **Step 1: Add the dependencies**
@@ -950,14 +950,10 @@ One thread owns one Wayland connection (spike D7). It keeps a table of toplevels
 In `daemon/Cargo.toml`:
 
 ```toml
-[features]
-default = ["cosmic"]
-cosmic = ["dep:cosmic-protocols"]
-
 [target.'cfg(target_os = "linux")'.dependencies]
 wayland-client = "=0.31.15"
 wayland-protocols = { version = "=0.32.13", features = ["client", "staging"] }
-cosmic-protocols = { version = "=0.2.0", default-features = false, features = ["client"], optional = true }
+cosmic-protocols = { version = "=0.2.0", default-features = false, features = ["client"] }
 ```
 
 - [ ] **Step 2: Write the failing pure tests**
@@ -1086,7 +1082,7 @@ If plan 1 put `IDLE_LIMIT_SECONDS` somewhere other than `agent_notify_core::upda
 pub mod idle;
 pub mod table;
 
-#[cfg(all(target_os = "linux", feature = "cosmic"))]
+#[cfg(target_os = "linux")]
 pub mod client;
 ```
 
@@ -1508,19 +1504,17 @@ In `linux_tools.rs`, add the variant and its arm:
 
 ```rust
         /// COSMIC: activate the Alacritty toplevel.
-        #[cfg(feature = "cosmic")]
         Cosmic(crate::cosmic::client::CosmicDesktop),
 ```
 
 ```rust
-                #[cfg(feature = "cosmic")]
                 RaiseMethod::Cosmic(desktop) => desktop.activate_terminal(),
 ```
 
 - [ ] **Step 5: Run the gates**
 
-Run: `cd ~/tools/agent-notify && cargo test -p agent-notify-daemon && scripts/linux-check.sh clippy && scripts/linux-check.sh check --no-default-features && cargo deny check 2>&1 | tail -3`
-Expected: all pass. `--no-default-features` proves the crate builds without the GPL dependency. `cargo deny` no longer warns about the `cosmic-protocols` exception.
+Run: `cd ~/tools/agent-notify && cargo test -p agent-notify-daemon && scripts/linux-check.sh clippy && cargo deny check 2>&1 | tail -3`
+Expected: all pass. `cargo deny` no longer warns about the `cosmic-protocols` exception.
 
 The Wayland client has no automated test: it needs a COSMIC session. Task 10 checks it in the VM.
 
@@ -1555,7 +1549,7 @@ The presenter cannot hold a `DaemonHandle` at construction, because the daemon s
 
 - [ ] **Step 1: Add the dependency**
 
-In `daemon/Cargo.toml`, under the Linux target dependencies: `zbus = "=5.19.0"` (default features `async-io` and `blocking-api`; spike S4-6 used exactly this).
+In `daemon/Cargo.toml`, under the Linux target dependencies: `zbus = "=5.19.0"` (default features `async-io` and `blocking-api`; spike S4-7 used exactly this).
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -1641,7 +1635,7 @@ Above the tests:
 //! Cards as freedesktop notifications, for a Wayland desktop without layer
 //! shell. Text uses look-alike characters (spike D8). Nothing relies on
 //! popups staying up (spike D9) or on `NotificationClosed`, which COSMIC
-//! sends twice for one close (spike S4-6).
+//! sends twice for one close (spike S4-7).
 
 use agent_notify_core::ids::CardId;
 use agent_notify_core::state::Kind;
@@ -1786,7 +1780,7 @@ mod shell {
 }
 ```
 
-`present` makes D-Bus calls, and plan 2's `ToastPresenter` says it must return at once. Each call is a local socket round trip (spike S4-6: under a few milliseconds), and the actor calls `present` only when the view changed. If the log shows a slow `present`, move `apply` onto a worker thread with a channel; do not do that before a measurement says so.
+`present` makes D-Bus calls, and plan 2's `ToastPresenter` says it must return at once. Each call is a local socket round trip. The spike did not time it. The actor calls `present` only when the view changed. If the log shows a slow `present`, move `apply` onto a worker thread with a channel; do not do that before a measurement says so.
 
 Add `pub mod dbus_presenter;` to `lib.rs`.
 
@@ -1958,16 +1952,10 @@ config commit -m "Share agent-notifyd start-up between platforms" -m "Co-Authore
 In `app/Cargo.toml`:
 
 ```toml
-[features]
-default = ["cosmic"]
-cosmic = ["agent-notify-daemon/cosmic"]
-
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "=0.18.2"
 gtk-layer-shell = { version = "=0.8.2", features = ["v0_6"] }
 ```
-
-And make the daemon dependency `agent-notify-daemon = { path = "../daemon", default-features = false }`, so the `cosmic` feature flows only through the app's own feature.
 
 In `logging.rs`, add:
 
@@ -2022,7 +2010,7 @@ Expected: plan 2's geometry tests and these 2 pass.
 
 - [ ] **Step 4: Write the Linux panel**
 
-`app/src/linux/panel.rs`, following spike S2-1 to S2-3 and S4-1 (layer shell before realize, explicit size request, resize by size request, hide and show keep the anchors):
+`app/src/linux/panel.rs`, following spike S2-1 to S2-3 and S4-6 (layer shell before realize, explicit size request, resize by size request, hide and show keep the anchors):
 
 ```rust
 //! The toast window on Linux: a layer-shell surface on Wayland, a
@@ -2190,7 +2178,6 @@ struct Adapters {
 fn adapters(desktop: Desktop, prepared: &Prepared) -> Adapters {
     let unknown = || Adapters { raise: RaiseMethod::None, frontmost: Arc::new(UnknownFrontmost), presence: Arc::new(UnknownPresence) };
     match desktop {
-        #[cfg(feature = "cosmic")]
         Desktop::CosmicWayland => match agent_notify_daemon::cosmic::client::CosmicDesktop::connect(prepared.clock.clone()) {
             Some(cosmic) => Adapters { raise: RaiseMethod::Cosmic(cosmic.clone()), frontmost: Arc::new(cosmic.clone()), presence: Arc::new(cosmic) },
             None => unknown(),
@@ -2314,8 +2301,8 @@ and narrow the existing no-op to `#[cfg(not(any(target_os = "macos", target_os =
 
 - [ ] **Step 6: Run the gates**
 
-Run: `cd ~/tools/agent-notify && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && scripts/linux-check.sh clippy && scripts/linux-check.sh clippy --no-default-features && scripts/linux-check.sh test && cargo deny check 2>&1 | tail -3`
-Expected: all pass on both platforms, with and without `cosmic`, and `cargo deny` prints no warnings.
+Run: `cd ~/tools/agent-notify && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings && scripts/linux-check.sh clippy && scripts/linux-check.sh test && cargo deny check 2>&1 | tail -3`
+Expected: all pass on both platforms, and `cargo deny` prints no warnings.
 
 - [ ] **Step 7: Commit**
 
@@ -2584,10 +2571,6 @@ Arch: `sudo pacman -S base-devel webkit2gtk-4.1 gtk-layer-shell`.
 Install or update with `config build --tools`. It runs as the systemd user
 unit `agent-notifyd.service`. `agent-notify doctor` checks the setup, and
 `journalctl --user -u agent-notifyd` shows its log.
-
-The COSMIC raise links `cosmic-protocols`, which is GPL-3.0-only. Build
-without it with `cargo build --no-default-features` in `tools/agent-notify`;
-cards still show and tmux still switches, but Alacritty is not raised.
 ```
 
 Check the Arch package names with `pacman -Si webkit2gtk-4.1 gtk-layer-shell` on an Arch machine or container (`docker run --rm archlinux pacman -Sy --noconfirm >/dev/null && pacman -Si ...`) before you commit; fix them if they differ.
@@ -2645,7 +2628,7 @@ No code. Run each check and add a "Plan 3 smoke test" table to the spike report 
 6. `agent-notify send info done` with the card's pane focused in the front Alacritty window, while typing: no card (frontmost Terminal, idle 0, pane active).
 7. Stop typing for 35 s, then send the same: a card shows (idle 30).
 8. `systemctl --user restart agent-notifyd`: the daemon comes back, a terminal opened in check 5 stays open, and `journalctl --user -u agent-notifyd -n 20` shows the start-up line with `desktop=cosmic-wayland`.
-9. Rebuild with `--no-default-features` in the VM, reinstall, and repeat check 4: tmux switches, Alacritty is not raised, and the card does not report an error beyond "window not raised".
+9. (Removed: the `cosmic` feature no longer exists.)
 
 - [ ] **Step 2: D-Bus path**
 

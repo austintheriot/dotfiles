@@ -80,7 +80,7 @@ Run in the Tart VM `pop-cosmic-spike` (Pop!_OS 24.04 COSMIC, arm64) and in Docke
 
 | Id | Question | Result |
 |---|---|---|
-| S4-1 | Does `cargo deny` pass with the Linux dependency set? | No. cargo-deny 0.20.2 on aarch64 and x86_64 Linux targets reports exactly 5 failures. Licenses: `GPL-3.0-only` (`cosmic-protocols` 0.2.0) and `Apache-2.0 WITH LLVM-exception` (`target-lexicon`). Advisories: RUSTSEC-2024-0422 (`gtk-layer-shell`), RUSTSEC-2024-0423 (`gtk-layer-shell-sys`), RUSTSEC-2024-0370 (`proc-macro-error` through the GTK3 macros). No other GTK3 advisory fires. Plan 3 Task 1 adds narrow ignores and one license exception, and puts `cosmic-protocols` behind the default-on `cosmic` feature. |
+| S4-1 | Does `cargo deny` pass with the Linux dependency set? | No. cargo-deny 0.20.2 on aarch64 and x86_64 Linux targets reports exactly 5 failures. Licenses: `GPL-3.0-only` (`cosmic-protocols` 0.2.0) and `Apache-2.0 WITH LLVM-exception` (`target-lexicon`). Advisories: RUSTSEC-2024-0422 (`gtk-layer-shell`), RUSTSEC-2024-0423 (`gtk-layer-shell-sys`), RUSTSEC-2024-0370 (`proc-macro-error` through the GTK3 macros). No other GTK3 advisory fires. Plan 3 Task 1 adds narrow ignores and one license exception. |
 | S4-2 | Does COSMIC send idle events? | Yes. `ext_idle_notifier_v1` version 2. A 3 s notification sent `idled` at 3006 ms, `resumed` on mouse move and on key press, and `idled` again 3 s later. `get_input_idle_notification` behaves the same. |
 | S4-3 | Which X11 tool reads the frontmost class? | `xprop`. Pop's xdotool (`1:3.20160805.1-5build1`) has no `getwindowclassname`. `xprop -root _NET_ACTIVE_WINDOW` prints `window id # 0x400004`, or `not found.` with no window manager. `xprop -id <id> WM_CLASS` prints `"Alacritty", "Alacritty"`. `xprop -id 0x0` fails. `xdotool search --class Alacritty` works for the raise. |
 | S4-4 | Which sound player is present? | `pw-play` (pipewire-bin) played `/usr/share/sounds/freedesktop/stereo/message-new-instant.oga`. `paplay` is present. `canberra-gtk-play` is missing. |
@@ -105,7 +105,7 @@ Run in the Tart VM `pop-cosmic-spike` (Pop!_OS 24.04 COSMIC, arm64) and in Docke
 | D11 | The systemd unit uses `PartOf`, `After` and `WantedBy=graphical-session.target`, as the spec says. | S2-9, S2-10 |
 | D12 | The X11 card accepts a focus flicker on click in v1. | S3-2 |
 | D13 | Rust-to-TypeScript types come from `ts-rs` 12.0.1. `tauri-specta` has no stable 2.x release. | Planning check, not a spike |
-| D14 | `cosmic-protocols` is GPL-3.0-only. It sits behind the default-on `cosmic` feature, with a narrow `[[licenses.exceptions]]` entry. The user decides whether to keep it on. Without it, cards and the tmux switch still work, and Alacritty is not raised on COSMIC. | S4-1 |
+| D14 | `cosmic-protocols` is GPL-3.0-only. It is a normal Linux dependency with a narrow `[[licenses.exceptions]]` entry. The user approved this: the build is personal and is never distributed, so the GPL obligations do not apply. Revisit if binaries are ever published. | S4-1 |
 | D15 | Sound on Linux is `pw-play`, else `paplay`. | S4-4 |
 | D16 | X11 frontmost uses `xprop`. X11 idle and lock read as unknown. | S4-3 |
 | D17 | COSMIC idle is one 30 s idle notification: 0 while active, 30 while idle, unknown until the first 30 s pass. The toplevel reader, the raise and the idle reader share one Wayland connection on one thread (this refines D7). | S4-2 |

@@ -19,7 +19,8 @@ use std::process::ExitCode;
 
 use agent_notify_core::paths::{Platform, SocketLocation, log_directory, socket_location};
 use agent_notify_core::SessionId;
-use agent_notify_core::wire::{AgentEvent, Request, encode_line};
+use agent_notify_core::status::event_kind;
+use agent_notify_core::wire::{Request, encode_line};
 use clap::Parser;
 use clap::error::ErrorKind;
 
@@ -105,27 +106,11 @@ fn line_fields<'a>(request: Option<&'a Request>, lookup: &'a PaneLookup) -> Line
     };
     match request {
         Some(Request::Agent { origin, event, .. }) => LineFields {
-            event: event_name(event),
+            event: event_kind(event),
             session_id: origin.session.as_ref().map_or(ABSENT, SessionId::as_str),
             pane: origin.pane.as_ref().map_or(lookup_pane, |pane| pane.pane.as_str()),
         },
         _ => LineFields { event: ABSENT, session_id: ABSENT, pane: lookup_pane },
-    }
-}
-
-fn event_name(event: &AgentEvent) -> &'static str {
-    match event {
-        AgentEvent::SessionStarted { .. } => "session_started",
-        AgentEvent::TurnStarted => "turn_started",
-        AgentEvent::TurnEnded { .. } => "turn_ended",
-        AgentEvent::TurnFailed { .. } => "turn_failed",
-        AgentEvent::NeedsInput { .. } => "needs_input",
-        AgentEvent::InputResolved => "input_resolved",
-        AgentEvent::Explicit { .. } => "explicit",
-        AgentEvent::Quiet { .. } => "quiet",
-        AgentEvent::QuietOff => "quiet_off",
-        AgentEvent::SessionEnded => "session_ended",
-        AgentEvent::Unknown => "unknown",
     }
 }
 
@@ -255,28 +240,6 @@ mod tests {
         let attempt = attempt(&request, |_line| panic!("an unencodable request must not be sent"));
         assert!(attempt.is_err());
         assert!(needs_fallback(&attempt));
-    }
-
-    #[test]
-    fn log_event_names_match_the_wire_type_tags() {
-        use agent_notify_core::wire::{InputReason, QuietUntil, SessionSource};
-        let text = DisplayText::new;
-        let events = [
-            AgentEvent::SessionStarted { source: SessionSource::Startup },
-            AgentEvent::TurnStarted,
-            AgentEvent::TurnEnded { last_message: None },
-            AgentEvent::TurnFailed { error: text("x") },
-            AgentEvent::NeedsInput { reason: InputReason::Permission, message: text("x") },
-            AgentEvent::InputResolved,
-            AgentEvent::Explicit { kind: Kind::Info, body: text("x") },
-            AgentEvent::Quiet { until: QuietUntil::NextSend, max_minutes: 1 },
-            AgentEvent::QuietOff,
-            AgentEvent::SessionEnded,
-        ];
-        for event in events {
-            let tagged = serde_json::to_value(&event).expect("serializes");
-            assert_eq!(Some(event_name(&event)), tagged["type"].as_str(), "{event:?}");
-        }
     }
 
     #[test]

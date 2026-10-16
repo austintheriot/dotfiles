@@ -9,6 +9,7 @@ pub mod label;
 pub mod ids;
 pub mod paths;
 pub mod state;
+pub mod status;
 pub mod text;
 pub mod tmux_text;
 pub mod update;

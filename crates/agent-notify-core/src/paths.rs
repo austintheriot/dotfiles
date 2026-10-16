@@ -87,14 +87,29 @@ pub fn log_directory(inputs: &PathInputs<'_>) -> Option<PathBuf> {
     if let Some(directory) = absolute(inputs.log_dir_override) {
         return Some(directory.to_path_buf());
     }
-    let home = absolute(inputs.home);
     match inputs.platform {
-        Platform::MacOs => home.map(|home| home.join("Library/Logs/agent-notify")),
-        Platform::Linux | Platform::Other => absolute(inputs.xdg_state_home)
-            .map(Path::to_path_buf)
-            .or_else(|| home.map(|home| home.join(".local/state")))
-            .map(|state| state.join("agent-notify")),
+        Platform::MacOs => absolute(inputs.home).map(|home| home.join("Library/Logs/agent-notify")),
+        Platform::Linux | Platform::Other => xdg_state_directory(inputs),
     }
+}
+
+/// Where the daemon keeps state that must survive a restart: do-not-disturb
+/// and the install stamp. Not the socket directory: on Linux that is a tmpfs.
+#[must_use]
+pub fn state_directory(inputs: &PathInputs<'_>) -> Option<PathBuf> {
+    match inputs.platform {
+        Platform::MacOs => {
+            absolute(inputs.home).map(|home| home.join("Library/Application Support/agent-notify"))
+        }
+        Platform::Linux | Platform::Other => xdg_state_directory(inputs),
+    }
+}
+
+fn xdg_state_directory(inputs: &PathInputs<'_>) -> Option<PathBuf> {
+    absolute(inputs.xdg_state_home)
+        .map(Path::to_path_buf)
+        .or_else(|| absolute(inputs.home).map(|home| home.join(".local/state")))
+        .map(|state| state.join("agent-notify"))
 }
 
 fn absolute(path: Option<&Path>) -> Option<&Path> {
@@ -162,5 +177,28 @@ mod tests {
         assert_eq!(log_directory(&overridden), Some(PathBuf::from("/tmp/logs")));
         let homeless = PathInputs { home: None, ..inputs(Platform::MacOs) };
         assert_eq!(log_directory(&homeless), None);
+    }
+
+    #[test]
+    fn the_state_directory_follows_the_platform() {
+        let home = Path::new("/home/dev");
+        let inputs = |platform, xdg_state_home| PathInputs {
+            platform,
+            home: Some(home),
+            xdg_runtime_dir: None,
+            xdg_state_home,
+            socket_override: None,
+            log_dir_override: None,
+        };
+        assert_eq!(
+            state_directory(&inputs(Platform::MacOs, None)),
+            Some(PathBuf::from("/home/dev/Library/Application Support/agent-notify"))
+        );
+        assert_eq!(state_directory(&inputs(Platform::Linux, None)), Some(PathBuf::from("/home/dev/.local/state/agent-notify")));
+        assert_eq!(
+            state_directory(&inputs(Platform::Linux, Some(Path::new("/state")))),
+            Some(PathBuf::from("/state/agent-notify"))
+        );
+        assert_eq!(state_directory(&inputs(Platform::Linux, Some(Path::new("relative")))), Some(PathBuf::from("/home/dev/.local/state/agent-notify")));
     }
 }

@@ -384,8 +384,13 @@ mod tests {
     use dotfiles_test_support::tmux_server::Server;
 
     use super::*;
-    use crate::child::{CHILD_LIMIT, StreamEnd, run_bounded};
+    use crate::child::{StreamEnd, run_bounded};
     use crate::test_support::stub_executable;
+
+    /// These tests check how a run ends, not how fast it is. One spawn from
+    /// a test binary measured 0.6 s to 0.75 s on a development host, which
+    /// left the 1 s production limit no margin.
+    const TEST_RUN_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
 
     fn socket() -> SocketPath {
         SocketPath::parse(Path::new("/tmp/tmux-501/default")).expect("absolute")
@@ -581,7 +586,7 @@ mod tests {
             &["select-window", "-t", &pane_id, ";", "select-pane", "-t", &pane_id],
         ];
         for arguments in calls {
-            let finished = run_bounded(&mut tmux.command(&socket, arguments), CHILD_LIMIT).expect("a finished run");
+            let finished = run_bounded(&mut tmux.command(&socket, arguments), TEST_RUN_LIMIT).expect("a finished run");
             assert!(finished.status.success(), "{arguments:?}: {finished:?}");
             assert_eq!(finished.stream_end, StreamEnd::Closed, "{arguments:?}");
         }
@@ -591,8 +596,8 @@ mod tests {
     fn a_server_started_through_the_runner_leaves_its_group_and_closes_the_streams() {
         let server = Server::new("an-spawn");
         let mut command = Command::new(tmux_on_path());
-        command.env("TMUX_TMPDIR", server.socket_dir()).args(["-u", "-L", server.socket(), "new-session", "-d", "-s", "main", "sleep", "600"]);
-        let finished = run_bounded(&mut command, CHILD_LIMIT).expect("a finished run");
+        command.env("TMUX_TMPDIR", server.socket_dir()).args(["-u", "-L", server.socket(), "-f", "/dev/null", "new-session", "-d", "-s", "main", "sleep", "600"]);
+        let finished = run_bounded(&mut command, TEST_RUN_LIMIT).expect("a finished run");
         assert!(finished.status.success(), "{finished:?}");
         assert_eq!(finished.stream_end, StreamEnd::Closed);
         assert!(server.tmux(&["has-session"]).status.success(), "the server outlived the client's process group");

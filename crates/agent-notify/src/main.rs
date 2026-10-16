@@ -18,7 +18,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::process::ExitCode;
 
 use agent_notify_core::paths::{Platform, SocketLocation, log_directory, socket_location};
-use agent_notify_core::wire::{Request, encode_line};
+use agent_notify_core::SessionId;
+use agent_notify_core::wire::{AgentEvent, Request, encode_line};
 use clap::Parser;
 use clap::error::ErrorKind;
 
@@ -78,10 +79,54 @@ fn usage_line(error: &clap::Error) -> String {
     format!("agent-notify: {}", message.strip_prefix("error: ").unwrap_or(&message))
 }
 
+/// The named fields every log line about a request carries (spec 9.2).
+struct LineFields<'a> {
+    event: &'static str,
+    session_id: &'a str,
+    pane: &'a str,
+}
+
+const ABSENT: &str = "none";
+
+fn line_fields<'a>(request: Option<&'a Request>, lookup: &'a PaneLookup) -> LineFields<'a> {
+    let lookup_pane = match lookup {
+        PaneLookup::Found(facts) => facts.key.pane.as_str(),
+        PaneLookup::NotInTmux | PaneLookup::Unreadable { .. } => ABSENT,
+    };
+    match request {
+        Some(Request::Agent { origin, event, .. }) => LineFields {
+            event: event_name(event),
+            session_id: origin.session.as_ref().map_or(ABSENT, SessionId::as_str),
+            pane: origin.pane.as_ref().map_or(lookup_pane, |pane| pane.pane.as_str()),
+        },
+        _ => LineFields { event: ABSENT, session_id: ABSENT, pane: lookup_pane },
+    }
+}
+
+fn event_name(event: &AgentEvent) -> &'static str {
+    match event {
+        AgentEvent::SessionStarted { .. } => "session_started",
+        AgentEvent::TurnStarted => "turn_started",
+        AgentEvent::TurnEnded { .. } => "turn_ended",
+        AgentEvent::TurnFailed { .. } => "turn_failed",
+        AgentEvent::NeedsInput { .. } => "needs_input",
+        AgentEvent::InputResolved => "input_resolved",
+        AgentEvent::Explicit { .. } => "explicit",
+        AgentEvent::Quiet { .. } => "quiet",
+        AgentEvent::QuietOff => "quiet_off",
+        AgentEvent::SessionEnded => "session_ended",
+        AgentEvent::Unknown => "unknown",
+    }
+}
+
 fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &EnvSnapshot) -> ExitCode {
     let event_id = inputs.event_id.as_str();
-    if let Some(reason) = &invocation.log {
-        tracing::info!(event_id, reason = %reason, "nothing sent");
+    let fields = line_fields(invocation.request.as_ref(), &inputs.pane);
+    if let Some(note) = &invocation.log {
+        tracing::info!(event_id, pane = fields.pane, reason = note.reason, "nothing sent");
+        if let Some(detail) = &note.detail {
+            tracing::debug!(event_id, detail = %detail, "nothing sent detail");
+        }
     }
     if let Some(warning) = &invocation.warning {
         tracing::warn!(event_id, warning = %warning, "hook input problem");
@@ -113,11 +158,23 @@ fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &En
     let Some(request) = &invocation.request else { return exit_code(invocation.exit) };
     let attempt = attempt(request, |line| send(line, env));
     match &attempt {
-        Ok(delivery) => tracing::info!(event_id, request = ?request, delivered = delivery.acknowledged(), reason = %delivery.reason(), daemon = delivery.daemon(), "sent"),
-        Err(error) => tracing::error!(event_id, error = %error, "request did not encode"),
+        Ok(delivery) => {
+            tracing::info!(
+                event_id,
+                event = fields.event,
+                session_id = fields.session_id,
+                pane = fields.pane,
+                delivered = delivery.acknowledged(),
+                reason = %delivery.reason(),
+                daemon = delivery.daemon(),
+                "sent"
+            );
+            tracing::debug!(event_id, request = ?request, "sent request");
+        }
+        Err(error) => tracing::error!(event_id, event = fields.event, session_id = fields.session_id, pane = fields.pane, error = %error, "request did not encode"),
     }
     if needs_fallback(&attempt) {
-        fall_back(command, invocation, event_id);
+        fall_back(command, invocation, event_id, &fields);
     }
     exit_code(invocation.exit)
 }
@@ -137,16 +194,16 @@ fn send(line: &str, env: &EnvSnapshot) -> Delivery {
     }
 }
 
-fn fall_back(command: &Command, invocation: &Invocation, event_id: &str) {
+fn fall_back(command: &Command, invocation: &Invocation, event_id: &str, fields: &LineFields<'_>) {
     match &invocation.fallback {
         Some(note) => match fallback::notify(Platform::current(), note) {
             Ok(()) => {
-                tracing::info!(event_id, "fallback shown");
+                tracing::info!(event_id, event = fields.event, session_id = fields.session_id, pane = fields.pane, "fallback shown");
                 if !command.is_hook() {
                     let _ = writeln!(io::stderr(), "agent-notify: the daemon did not answer; showed a plain notification");
                 }
             }
-            Err(error) => tracing::warn!(event_id, error = %error, "fallback failed"),
+            Err(error) => tracing::warn!(event_id, event = fields.event, session_id = fields.session_id, pane = fields.pane, error = %error, "fallback failed"),
         },
         None if !command.is_hook() => {
             let _ = writeln!(io::stderr(), "agent-notify: the daemon did not answer; nothing was recorded");
@@ -187,6 +244,28 @@ mod tests {
         let attempt = attempt(&request, |_line| panic!("an unencodable request must not be sent"));
         assert!(attempt.is_err());
         assert!(needs_fallback(&attempt));
+    }
+
+    #[test]
+    fn log_event_names_match_the_wire_type_tags() {
+        use agent_notify_core::wire::{InputReason, QuietUntil, SessionSource};
+        let text = DisplayText::new;
+        let events = [
+            AgentEvent::SessionStarted { source: SessionSource::Startup },
+            AgentEvent::TurnStarted,
+            AgentEvent::TurnEnded { last_message: None },
+            AgentEvent::TurnFailed { error: text("x") },
+            AgentEvent::NeedsInput { reason: InputReason::Permission, message: text("x") },
+            AgentEvent::InputResolved,
+            AgentEvent::Explicit { kind: Kind::Info, body: text("x") },
+            AgentEvent::Quiet { until: QuietUntil::NextSend, max_minutes: 1 },
+            AgentEvent::QuietOff,
+            AgentEvent::SessionEnded,
+        ];
+        for event in events {
+            let tagged = serde_json::to_value(&event).expect("serializes");
+            assert_eq!(Some(event_name(&event)), tagged["type"].as_str(), "{event:?}");
+        }
     }
 
     #[test]

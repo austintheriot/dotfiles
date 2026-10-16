@@ -68,9 +68,18 @@ pub struct Invocation {
     /// One line for stderr.
     pub stderr: Option<String>,
     /// Why nothing was sent, for the log.
-    pub log: Option<String>,
+    pub log: Option<NothingSent>,
     /// A problem with the input that did not stop the send, for the log at warn.
     pub warning: Option<String>,
+}
+
+/// Why an invocation sent nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NothingSent {
+    /// A fixed phrase with no input values in it, for the log at info.
+    pub reason: &'static str,
+    /// Detail that can carry hook payload values, for the log at debug.
+    pub detail: Option<String>,
 }
 
 /// The exit status.
@@ -83,12 +92,14 @@ pub enum Exit {
 }
 
 impl Invocation {
-    fn nothing(reason: String) -> Self {
-        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Success, stderr: None, log: Some(reason), warning: None }
+    fn nothing(reason: &'static str, detail: Option<String>) -> Self {
+        let log = Some(NothingSent { reason, detail });
+        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Success, stderr: None, log, warning: None }
     }
 
-    fn usage(message: &str) -> Self {
-        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Usage, stderr: Some(message.to_string()), log: Some(message.to_string()), warning: None }
+    fn usage(message: &'static str) -> Self {
+        let log = Some(NothingSent { reason: message, detail: None });
+        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Usage, stderr: Some(message.to_string()), log, warning: None }
     }
 
     fn agent(inputs: &Inputs, origin: Origin, event: AgentEvent, tags: Vec<TagWrite>) -> Self {
@@ -110,15 +121,15 @@ pub fn plan_invocation(command: &Command, inputs: &Inputs) -> Invocation {
 
 fn plan_hook(inputs: &Inputs) -> Invocation {
     let Some(raw) = inputs.stdin.as_deref().filter(|raw| !raw.trim().is_empty()) else {
-        return Invocation::nothing("no hook payload on stdin".to_string());
+        return Invocation::nothing("no hook payload on stdin", None);
     };
     let payload: ClaudeHookInput = match serde_json::from_str(raw) {
         Ok(payload) => payload,
-        Err(error) => return Invocation::nothing(format!("hook payload did not parse: {error}")),
+        Err(error) => return Invocation::nothing("hook payload did not parse", Some(error.to_string())),
     };
     let pane = found(inputs);
     match decide_hook(&payload, pane.and_then(|facts| facts.session_tag.as_ref())) {
-        HookDecision::Ignore { reason } => Invocation::nothing(reason),
+        HookDecision::Ignore { reason } => Invocation::nothing("hook event not mapped", Some(reason)),
         HookDecision::Send { tags, event } => {
             let origin = origin(inputs, Some(payload.session_id.clone()), payload.prompt(), payload.session_title.clone(), payload.cwd.clone());
             let tags = if pane.is_some() { tags } else { Vec::new() };
@@ -318,14 +329,18 @@ mod tests {
         let invocation = plan_invocation(&hook(), &inputs(PaneLookup::NotInTmux, Some(stdin)));
         assert!(invocation.request.is_none());
         assert_eq!(invocation.exit, Exit::Success);
-        assert!(invocation.log.as_deref().is_some_and(|reason| reason.contains("session id")));
+        let note = invocation.log.expect("a log note");
+        assert_eq!(note.reason, "hook payload did not parse");
+        assert!(note.detail.is_some_and(|detail| detail.contains("session id")));
     }
 
     #[test]
     fn an_ignored_hook_event_logs_its_reason() {
         let invocation = plan_invocation(&hook(), &inputs(PaneLookup::NotInTmux, Some(&payload("PreCompact", ""))));
         assert!(invocation.request.is_none());
-        assert!(invocation.log.as_deref().is_some_and(|reason| reason.contains("PreCompact")));
+        let note = invocation.log.expect("a log note");
+        assert!(!note.reason.contains("PreCompact"), "the info reason must not carry payload values");
+        assert!(note.detail.is_some_and(|detail| detail.contains("PreCompact")));
     }
 
     #[test]

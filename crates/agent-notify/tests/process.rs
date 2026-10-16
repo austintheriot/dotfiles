@@ -80,11 +80,59 @@ fn empty_and_garbage_stdin_exit_zero_without_a_notification() {
 }
 
 #[test]
-fn an_unknown_hook_event_exits_zero_and_logs_it() {
-    let sandbox = Sandbox::new();
+fn an_unknown_hook_event_exits_zero_and_logs_it_without_stdin_values_at_info() {
     let stdin = r#"{"session_id":"s","cwd":"/tmp","hook_event_name":"PreCompact"}"#;
-    assert!(hook(&sandbox, stdin).status.success());
-    assert!(sandbox.log_text().contains("PreCompact"));
+    let info_log = hook_log(stdin, "info");
+    assert!(info_log.contains("nothing sent"), "{info_log}");
+    assert!(!info_log.contains("PreCompact"), "{info_log}");
+    let debug_log = hook_log(stdin, "debug");
+    assert!(debug_log.contains("PreCompact"), "{debug_log}");
+}
+
+/// Runs one hook at log `level` in its own sandbox and returns the log. The
+/// sandbox drops before the next one starts.
+fn hook_log(stdin: &str, level: &str) -> String {
+    let sandbox = Sandbox::new();
+    assert!(sandbox.run(sandbox.command(&["hook", "claude-code"]).env("AGENT_NOTIFY_LOG", level), stdin).status.success());
+    sandbox.log_text()
+}
+
+#[test]
+fn the_sent_line_names_its_fields_and_keeps_the_request_at_debug() {
+    let marker = "last-message-marker-91c2";
+    let stdin = format!(r#"{{"session_id":"session-a","prompt_id":"prompt-1","cwd":"/tmp","hook_event_name":"Stop","last_assistant_message":"Done {marker}."}}"#);
+    let info_log = hook_log(&stdin, "info");
+    let sent = info_log.lines().find(|line| line.contains(" sent")).unwrap_or_else(|| panic!("a sent line in {info_log}"));
+    for field in ["event_id=", r#"event="turn_ended""#, r#"session_id="session-a""#, "pane=", "delivered=false", "reason="] {
+        assert!(sent.contains(field), "{field} missing from {sent}");
+    }
+    assert!(!info_log.contains(marker), "{info_log}");
+    let debug_log = hook_log(&stdin, "debug");
+    assert!(debug_log.contains(marker), "{debug_log}");
+}
+
+#[test]
+fn the_fallback_line_names_its_fields() {
+    let sandbox = Sandbox::new();
+    assert!(hook(&sandbox, PERMISSION).status.success());
+    let log = sandbox.log_text();
+    let shown = log.lines().find(|line| line.contains("fallback shown")).unwrap_or_else(|| panic!("a fallback line in {log}"));
+    for field in ["event_id=", r#"event="needs_input""#, r#"session_id="session-a""#, "pane="] {
+        assert!(shown.contains(field), "{field} missing from {shown}");
+    }
+}
+
+#[test]
+fn session_start_and_prompt_submit_hooks_print_nothing_on_stdout() {
+    let start = r#"{"session_id":"session-a","cwd":"/tmp","hook_event_name":"SessionStart","source":"startup"}"#;
+    let submit = r#"{"session_id":"session-a","prompt_id":"prompt-1","cwd":"/tmp","hook_event_name":"UserPromptSubmit","prompt":"hi"}"#;
+    for stdin in [start, submit] {
+        let sandbox = Sandbox::new();
+        let output = hook(&sandbox, stdin);
+        assert!(output.status.success(), "{stdin}");
+        assert!(output.stdout.is_empty(), "stdout goes into the model context: {:?}", String::from_utf8_lossy(&output.stdout));
+        assert!(sandbox.log_text().contains(" sent"), "a positive control: the hook ran to the send in {}", sandbox.log_text());
+    }
 }
 
 #[test]

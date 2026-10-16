@@ -7,7 +7,10 @@ pub mod hook;
 pub mod label;
 pub mod ids;
 pub mod paths;
+pub mod state;
 pub mod text;
+pub mod update;
+pub mod view;
 pub mod wire;
 
 #[cfg(test)]

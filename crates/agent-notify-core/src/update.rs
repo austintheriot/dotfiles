@@ -377,6 +377,11 @@ fn control_event(state: &mut DaemonState, control: Control, now: EpochMs, effect
             end_dnd(state);
             effects.push(Effect::PersistDnd(Dnd::Off));
         }
+        Control::Jump => {
+            if let Some((card, target)) = jump_target(state) {
+                effects.push(Effect::RunFocusPlan { card, target });
+            }
+        }
         Control::Unknown => {}
     }
 }
@@ -631,6 +636,20 @@ fn click_target(state: &DaemonState, card_id: &CardId) -> Option<FocusTarget> {
         }
     }
     state.oneoff_cards.iter().any(|oneoff| &oneoff.card.id == card_id).then_some(FocusTarget::RaiseOnly)
+}
+
+/// The newest attention card that is not on its way out, and where it goes.
+/// A snoozed card counts: the user closed it, but the agent still waits.
+/// Card ids embed a ULID, so the larger id breaks a tie on `created` stably.
+fn jump_target(state: &DaemonState) -> Option<(CardId, FocusTarget)> {
+    let sessions = state.sessions.values().filter_map(|record| record.card.as_ref());
+    let oneoffs = state.oneoff_cards.iter().map(|oneoff| &oneoff.card);
+    let newest = sessions
+        .chain(oneoffs)
+        .filter(|card| card.kind == Kind::Attention && !matches!(card.phase, CardPhase::Expiring { .. }))
+        .max_by_key(|card| (card.created, &card.id))?;
+    let card = newest.id.clone();
+    click_target(state, &card).map(|target| (card, target))
 }
 
 fn close(state: &mut DaemonState, card_id: &CardId, now: EpochMs) {
@@ -1527,5 +1546,76 @@ mod tests {
         let restarted = ServerId { pid: 200, ..server() };
         update(&mut state, DaemonInput::PaneSnapshot(PaneSnapshot { server: restarted, panes: Vec::new() }), EpochMs(1));
         assert!(state.sessions.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod jump_tests {
+    use super::*;
+    use crate::DisplayText;
+    use crate::test_support::{agent_input, card, event_id, origin, send, session};
+    use crate::wire::{AgentEvent, Control, InputReason, Request, WIRE_VERSION};
+
+    fn jump(state: &mut DaemonState, number: i64) -> Vec<Effect> {
+        let request = Request::Control { v: WIRE_VERSION, event_id: event_id(number), sent_at_ms: EpochMs(number), control: Control::Jump };
+        update(state, DaemonInput::Received { request, focus: FocusSnapshot::unknown() }, EpochMs(number))
+    }
+
+    fn needs_input() -> AgentEvent {
+        AgentEvent::NeedsInput { reason: InputReason::Permission, message: DisplayText::new("Allow?") }
+    }
+
+    fn needs(state: &mut DaemonState, number: i64, name: &str) {
+        send(state, number, name, Some("p1"), needs_input());
+    }
+
+    fn card_id(state: &DaemonState, name: &str) -> CardId {
+        card(state, name).map(|shown| shown.id.clone()).expect("the session has a card")
+    }
+
+    #[test]
+    fn jump_targets_the_newest_attention_card() {
+        let mut state = DaemonState::default();
+        needs(&mut state, 1, "a");
+        needs(&mut state, 2, "b");
+        send(&mut state, 3, "c", None, AgentEvent::Explicit { kind: Kind::Info, body: DisplayText::new("done") });
+        let expected = card_id(&state, "b");
+        let effects = jump(&mut state, 4);
+        assert!(
+            matches!(
+                effects.as_slice(),
+                [Effect::RunFocusPlan { card, target: FocusTarget::Session { session: target, .. } }]
+                    if *card == expected && *target == session("b")
+            ),
+            "{effects:?}"
+        );
+    }
+
+    #[test]
+    fn jump_breaks_a_creation_time_tie_on_the_larger_card_id() {
+        let mut state = DaemonState::default();
+        update(&mut state, agent_input(6, origin(Some("a"), Some("p1")), needs_input()), EpochMs(10));
+        update(&mut state, agent_input(5, origin(Some("b"), Some("p1")), needs_input()), EpochMs(10));
+        let expected = card_id(&state, "a");
+        assert!(expected > card_id(&state, "b"));
+        let effects = jump(&mut state, 11);
+        assert!(matches!(effects.as_slice(), [Effect::RunFocusPlan { card, .. }] if *card == expected), "{effects:?}");
+    }
+
+    #[test]
+    fn jump_reaches_a_snoozed_attention_card() {
+        let mut state = DaemonState::default();
+        needs(&mut state, 1, "a");
+        let expected = card_id(&state, "a");
+        update(&mut state, DaemonInput::Ui(UiIntent::Closed { card_id: expected.clone() }), EpochMs(2));
+        let effects = jump(&mut state, 3);
+        assert!(matches!(effects.as_slice(), [Effect::RunFocusPlan { card, .. }] if *card == expected), "{effects:?}");
+    }
+
+    #[test]
+    fn jump_without_an_attention_card_does_nothing() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", None, AgentEvent::Explicit { kind: Kind::Info, body: DisplayText::new("done") });
+        assert!(jump(&mut state, 2).is_empty());
     }
 }

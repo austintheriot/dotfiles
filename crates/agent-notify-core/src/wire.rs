@@ -261,6 +261,8 @@ pub enum Control {
         /// On or off.
         command: DndCommand,
     },
+    /// Run the focus plan for the newest attention card.
+    Jump,
     /// A control from a newer CLI.
     #[serde(other)]
     Unknown,

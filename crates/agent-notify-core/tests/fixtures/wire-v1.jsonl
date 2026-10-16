@@ -22,3 +22,4 @@
 {"type":"agent","v":1,"event_id":"0000000000000000000000000P","sent_at_ms":1760500000019,"origin":{"agent":"claude_code","session":"session-b","cwd":"/home/dev/code"},"event":{"type":"session_started","source":"compact"}}
 {"type":"agent","v":1,"event_id":"0000000000000000000000000Q","sent_at_ms":1760500000020,"origin":{"agent":"claude_code","session":"session-b","cwd":"/home/dev/code"},"event":{"type":"session_started","source":"fork"}}
 {"type":"agent","v":1,"event_id":"0000000000000000000000000R","sent_at_ms":1760500000021,"origin":{"agent":"claude_code","session":"session-b","prompt":"prompt-2","cwd":"/home/dev/code"},"event":{"type":"quiet","until":"next_prompt","max_minutes":120}}
+{"type":"control","v":1,"event_id":"0000000000000000000000000S","sent_at_ms":1760500000022,"control":{"type":"jump"}}

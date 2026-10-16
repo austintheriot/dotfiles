@@ -24,7 +24,7 @@ fn every_request_fixture_decodes_and_re_encodes_to_the_same_json() {
         assert_eq!(as_value(&encoded), as_value(line), "round trip changed {line}");
         count += 1;
     }
-    assert_eq!(count, 24, "a fixture line went missing");
+    assert_eq!(count, 25, "a fixture line went missing");
 }
 
 #[test]

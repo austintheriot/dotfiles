@@ -236,7 +236,9 @@ pub fn event_kind(event: &AgentEvent) -> &'static str {
     }
 }
 
-fn control_kind(control: &Control) -> &'static str {
+/// The control's kind as logs and `status` name it, for example `focus_changed`.
+#[must_use]
+pub fn control_kind(control: &Control) -> &'static str {
     match control {
         Control::FocusChanged { .. } => "focus_changed",
         Control::Dnd { .. } => "dnd",

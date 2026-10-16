@@ -10,7 +10,12 @@ use agent_notify_core::wire::{AgentEvent, AgentKind, Control, DndCommand, Kind, 
 use agent_notify_core::{DisplayText, EpochMs, EventId, PaneId, PaneKey, PromptId, ServerId, SessionId, SocketPath};
 
 use crate::cli::{Command, DndAction, FocusDirection, HookAgent};
-use crate::client::{BUDGET, QUERY_BUDGET};
+
+/// Connect, write and reply together. A hook must not hold up the agent.
+pub const BUDGET: Duration = Duration::from_millis(300);
+/// The budget for a read of daemon state. Nothing waits on it but the user,
+/// and the daemon answers a query within its own 1 s.
+pub const QUERY_BUDGET: Duration = Duration::from_secs(1);
 
 /// Everything the planner reads.
 #[derive(Debug, Clone)]

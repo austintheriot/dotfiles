@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use agent_notify_core::paths::{Platform, SocketLocation, log_directory, socket_location};
 use agent_notify_core::SessionId;
-use agent_notify_core::status::event_kind;
-use agent_notify_core::wire::{Request, encode_line};
+use agent_notify_core::status::{control_kind, event_kind};
+use agent_notify_core::wire::{Control, Request, encode_line};
 use clap::Parser;
 use clap::error::ErrorKind;
 
@@ -115,6 +115,14 @@ fn line_fields<'a>(request: Option<&'a Request>, lookup: &'a PaneLookup) -> Line
             event: event_kind(event),
             session_id: origin.session.as_ref().map_or(ABSENT, SessionId::as_str),
             pane: origin.pane.as_ref().map_or(lookup_pane, |pane| pane.pane.as_str()),
+        },
+        Some(Request::Control { control, .. }) => LineFields {
+            event: control_kind(control),
+            session_id: ABSENT,
+            pane: match control {
+                Control::FocusChanged { pane, .. } => pane.pane.as_str(),
+                Control::Dnd { .. } | Control::Jump | Control::Unknown => lookup_pane,
+            },
         },
         _ => LineFields { event: ABSENT, session_id: ABSENT, pane: lookup_pane },
     }
@@ -254,11 +262,11 @@ fn exit_code(exit: Exit) -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use agent_notify_core::wire::{AgentEvent, AgentKind, Kind, Origin, WIRE_VERSION};
-    use agent_notify_core::{DisplayText, EpochMs, EventId};
+    use agent_notify_core::wire::{AgentEvent, AgentKind, Control, DndCommand, Kind, Origin, WIRE_VERSION};
+    use agent_notify_core::{DisplayText, EpochMs, EventId, PaneId, PaneKey, ServerId, SocketPath};
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     fn request_in(cwd: PathBuf) -> Request {
         Request::Agent {
@@ -284,6 +292,27 @@ mod tests {
         assert!(!needs_fallback(&attempt(&request, |_line| Delivery::Acked { daemon: None, data: None })));
         assert!(needs_fallback(&attempt(&request, |_line| Delivery::TimedOut)));
         assert!(needs_fallback(&attempt(&request, |_line| Delivery::Rejected { code: None })));
+    }
+
+    fn control_request(control: Control) -> Request {
+        Request::Control { v: WIRE_VERSION, event_id: EventId::from_parts(EpochMs(1), [1; 10]), sent_at_ms: EpochMs(1), control }
+    }
+
+    #[test]
+    fn a_control_line_names_its_kind_and_the_focused_pane() {
+        let pane = PaneKey {
+            server: ServerId { socket_path: SocketPath::parse(Path::new("/tmp/tmux-501/default")).expect("absolute"), pid: 77, start_time: 1 },
+            pane: PaneId::parse("%3").expect("pane"),
+        };
+        let cases = [
+            (control_request(Control::FocusChanged { pane, focused: true }), "focus_changed", "%3"),
+            (control_request(Control::Dnd { command: DndCommand::Off }), "dnd", ABSENT),
+            (control_request(Control::Jump), "jump", ABSENT),
+        ];
+        for (request, event, pane) in &cases {
+            let fields = line_fields(Some(request), &PaneLookup::NotInTmux);
+            assert_eq!((fields.event, fields.session_id, fields.pane), (*event, ABSENT, *pane), "{request:?}");
+        }
     }
 
     #[derive(Clone, Default)]

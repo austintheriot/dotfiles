@@ -9,11 +9,6 @@ use std::time::{Duration, Instant};
 use agent_notify_core::wire::{Reply, ReplyCode};
 use socket2::{Domain, SockAddr, Socket, Type};
 
-/// Connect, write and reply together. A hook must not hold up the agent.
-pub const BUDGET: Duration = Duration::from_millis(300);
-/// The budget for a read of daemon state. Nothing waits on it but the user,
-/// and the daemon answers a query within its own 1 s.
-pub const QUERY_BUDGET: Duration = Duration::from_secs(1);
 const MAX_REPLY_BYTES: u64 = 64 * 1024;
 
 /// What happened to one request.
@@ -131,6 +126,7 @@ fn classify(error: &io::Error) -> Delivery {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::invocation::BUDGET;
     use agent_notify_core::status::{DaemonFacts, Decision, DndStatus, MAX_DECISIONS, SessionStatus, StatusReport, ToolStatus};
     use agent_notify_core::{EpochMs, EventId, SessionId};
     use socket2::{Domain, SockAddr, Socket, Type};

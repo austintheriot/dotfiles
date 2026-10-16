@@ -10,15 +10,36 @@ use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
-/// The level from `$AGENT_NOTIFY_LOG`. Unknown values read as `info`.
+/// The file in the state directory that holds a log level, for a daemon
+/// that launchd starts with its own environment.
+pub const LEVEL_FILE: &str = "log-level";
+
+/// The level from `$AGENT_NOTIFY_LOG`, else from the level file. An empty
+/// value counts as unset. Unknown values read as `info`.
 #[must_use]
-pub fn level_from(value: Option<&str>) -> LevelFilter {
-    match value.map(str::to_ascii_lowercase).as_deref() {
+pub fn level_from(variable: Option<&str>, file: Option<&str>) -> LevelFilter {
+    let chosen = [variable, file].into_iter().flatten().map(str::trim).find(|value| !value.is_empty());
+    match chosen.map(str::to_ascii_lowercase).as_deref() {
         Some("error") => LevelFilter::ERROR,
         Some("warn") => LevelFilter::WARN,
         Some("debug") => LevelFilter::DEBUG,
         Some("trace") => LevelFilter::TRACE,
         _ => LevelFilter::INFO,
+    }
+}
+
+/// The level file's text, or `None` when it is absent. Any other read
+/// failure goes to stderr, because logging has not started yet.
+#[must_use]
+pub fn read_level_file(state_directory: &Path) -> Option<String> {
+    let path = state_directory.join(LEVEL_FILE);
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Some(text),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => {
+            let _ = writeln!(io::stderr(), "agent-notifyd: {} not read: {error}", path.display());
+            None
+        }
     }
 }
 
@@ -94,10 +115,30 @@ mod tests {
 
     #[test]
     fn the_level_reads_the_variable_and_defaults_to_info() {
-        assert_eq!(level_from(None), LevelFilter::INFO);
-        assert_eq!(level_from(Some("debug")), LevelFilter::DEBUG);
-        assert_eq!(level_from(Some("TRACE")), LevelFilter::TRACE);
-        assert_eq!(level_from(Some("loud")), LevelFilter::INFO);
+        assert_eq!(level_from(None, None), LevelFilter::INFO);
+        assert_eq!(level_from(Some("debug"), None), LevelFilter::DEBUG);
+        assert_eq!(level_from(Some("TRACE"), None), LevelFilter::TRACE);
+        assert_eq!(level_from(Some("loud"), None), LevelFilter::INFO);
+    }
+
+    #[test]
+    fn the_level_file_applies_when_the_variable_is_unset_or_empty() {
+        assert_eq!(level_from(None, Some("debug\n")), LevelFilter::DEBUG);
+        assert_eq!(level_from(Some(""), Some("  warn  ")), LevelFilter::WARN);
+        assert_eq!(level_from(None, Some("")), LevelFilter::INFO);
+    }
+
+    #[test]
+    fn the_variable_wins_over_the_level_file() {
+        assert_eq!(level_from(Some("error"), Some("debug")), LevelFilter::ERROR);
+    }
+
+    #[test]
+    fn a_missing_level_file_reads_as_none() {
+        let directory = tempfile::tempdir().expect("a temporary directory");
+        assert_eq!(read_level_file(directory.path()), None);
+        fs::write(directory.path().join(LEVEL_FILE), "debug\n").expect("the file is written");
+        assert_eq!(read_level_file(directory.path()).as_deref(), Some("debug\n"));
     }
 
     fn mode(path: &Path) -> u32 {

@@ -28,7 +28,8 @@ use crate::{STAMP, logging};
 pub fn run() -> ExitCode {
     let environment = DaemonEnvironment::read();
     let inputs = environment.path_inputs();
-    let level = logging::level_from(std::env::var("AGENT_NOTIFY_LOG").ok().as_deref());
+    let level_file = state_directory(&inputs).and_then(|directory| logging::read_level_file(&directory));
+    let level = logging::level_from(std::env::var("AGENT_NOTIFY_LOG").ok().as_deref(), level_file.as_deref());
     let log_guard = match log_directory(&inputs).map(|directory| logging::init(&directory, level)) {
         Some(Ok(guard)) => Some(guard),
         Some(Err(error)) => {

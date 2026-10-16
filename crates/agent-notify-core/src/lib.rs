@@ -3,6 +3,7 @@
 //! `EpochMs` data, so every rule is testable with plain values.
 
 pub mod fallback;
+pub mod focus;
 pub mod hook;
 pub mod label;
 pub mod ids;

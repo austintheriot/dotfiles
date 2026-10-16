@@ -21,6 +21,7 @@ export type InstallPlan = {
   stampPath: string;
   logDir: string;
   domain: string;
+  targetDir: string;
 };
 
 export function xmlEscape(text: string): string {
@@ -88,7 +89,30 @@ export function planInstall(inputs: InstallInputs): InstallPlan {
     stampPath: `${stateDir}/installed-stamp`,
     logDir,
     domain: `gui/${inputs.uid}`,
+    targetDir: `${inputs.home}/.cache/agent-notify/target`,
   };
+}
+
+export const STAMP_PATHS: ReadonlyArray<string> = ["tools/agent-notify", "crates/agent-notify-core", "crates/Cargo.toml", "crates/Cargo.lock"];
+
+export type BuildPlan = { command: string[]; env: Record<string, string | undefined>; builtPath: string };
+
+export function planBuild(plan: InstallPlan, stamp: string, environment: Record<string, string | undefined>): BuildPlan {
+  return {
+    command: ["cargo", "build", "--release", "--locked", "-p", EXECUTABLE, "--target-dir", plan.targetDir],
+    env: { ...environment, CARGO_TARGET_DIR: plan.targetDir, CONFIG_MANIFEST_STAMP: stamp },
+    builtPath: `${plan.targetDir}/release/${EXECUTABLE}`,
+  };
+}
+
+export type ReloadStep = { step: "kickstart" } | { step: "bootout" } | { step: "bootstrap"; tries: number; delayMs: number };
+
+export const BOOTSTRAP_TRIES = 5;
+export const BOOTSTRAP_RETRY_DELAY_MS = 500;
+
+export function planReload(state: { loaded: boolean; plistChanged: boolean }): ReadonlyArray<ReloadStep> {
+  if (state.loaded && !state.plistChanged) return [{ step: "kickstart" }];
+  return [{ step: "bootout" }, { step: "bootstrap", tries: BOOTSTRAP_TRIES, delayMs: BOOTSTRAP_RETRY_DELAY_MS }];
 }
 
 export function stampFrom(files: ReadonlyArray<{ path: string; bytes: Uint8Array }>): string {

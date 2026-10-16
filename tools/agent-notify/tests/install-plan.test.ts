@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LABEL, planInstall, renderInfoPlist, stampFrom, xmlEscape, type InstallInputs } from "../scripts/install-plan";
+import { LABEL, planBuild, planInstall, planReload, renderInfoPlist, STAMP_PATHS, stampFrom, xmlEscape, type InstallInputs } from "../scripts/install-plan";
 
 const inputs: InstallInputs = {
   home: "/Users/dev",
@@ -20,6 +20,45 @@ test("paths sit under the home directory", () => {
   expect(plan.launchAgentPath).toBe(`/Users/dev/Library/LaunchAgents/${LABEL}.plist`);
   expect(plan.stampPath).toBe("/Users/dev/Library/Application Support/agent-notify/installed-stamp");
   expect(plan.domain).toBe("gui/501");
+  expect(plan.targetDir).toBe("/Users/dev/.cache/agent-notify/target");
+});
+
+test("the build writes to and copies from the planned target directory, whatever CARGO_TARGET_DIR holds", () => {
+  const plan = planInstall(inputs);
+  const build = planBuild(plan, "abc123", { CARGO_TARGET_DIR: "/Users/dev/.cache/config-manifest/target", HOME: "/Users/dev" });
+  const flag = build.command.indexOf("--target-dir");
+  expect(flag).toBeGreaterThan(-1);
+  expect(build.command[flag + 1]).toBe(plan.targetDir);
+  expect(build.builtPath).toBe(`${plan.targetDir}/release/agent-notifyd`);
+  expect(build.env.CARGO_TARGET_DIR).toBe(plan.targetDir);
+  expect(build.env.CONFIG_MANIFEST_STAMP).toBe("abc123");
+  expect(build.env.HOME).toBe("/Users/dev");
+});
+
+test("the build plan is the same with no CARGO_TARGET_DIR set", () => {
+  const plan = planInstall(inputs);
+  const foreign = planBuild(plan, "abc123", { CARGO_TARGET_DIR: "/tmp/elsewhere" });
+  const unset = planBuild(plan, "abc123", {});
+  expect(foreign.command).toEqual(unset.command);
+  expect(foreign.builtPath).toBe(unset.builtPath);
+});
+
+test.each([
+  { loaded: true, plistChanged: false, steps: [{ step: "kickstart" }] },
+  { loaded: true, plistChanged: true, steps: [{ step: "bootout" }, { step: "bootstrap", tries: 5, delayMs: 500 }] },
+  { loaded: false, plistChanged: false, steps: [{ step: "bootout" }, { step: "bootstrap", tries: 5, delayMs: 500 }] },
+  { loaded: false, plistChanged: true, steps: [{ step: "bootout" }, { step: "bootstrap", tries: 5, delayMs: 500 }] },
+])("reload with loaded=$loaded and plistChanged=$plistChanged", ({ loaded, plistChanged, steps }) => {
+  expect(planReload({ loaded, plistChanged })).toEqual(steps);
+});
+
+test("the stamp covers the workspace files the core crate inherits from", () => {
+  const manifest = readFileSync(join(cratesDirectory, "agent-notify-core/Cargo.toml"), "utf8");
+  expect(manifest).toContain("workspace = true");
+  expect(STAMP_PATHS).toContain("crates/Cargo.toml");
+  expect(STAMP_PATHS).toContain("crates/Cargo.lock");
+  expect(STAMP_PATHS).toContain("crates/agent-notify-core");
+  expect(STAMP_PATHS).toContain("tools/agent-notify");
 });
 
 test("the launch agent restarts only after a failure", () => {

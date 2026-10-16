@@ -1,0 +1,81 @@
+import { expect, test } from "bun:test";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { replaceVerified, writeAtomic } from "../scripts/install-files";
+
+type World = { directory: string; destination: string; cleanup: () => Promise<void> };
+
+async function makeWorld(): Promise<World> {
+  const directory = await mkdtemp(join(tmpdir(), "agent-notify-install-"));
+  const destination = join(directory, "bundle", "agent-notifyd");
+  await mkdir(join(directory, "bundle"));
+  await writeFile(destination, "old binary");
+  return { directory, destination, cleanup: () => rm(directory, { recursive: true, force: true }) };
+}
+
+async function fakeBinary(world: World, reportedStamp: string): Promise<string> {
+  const path = join(world.directory, "built-agent-notifyd");
+  await writeFile(path, `#!/bin/sh\necho ${reportedStamp}\n`);
+  await chmod(path, 0o755);
+  return path;
+}
+
+async function leftovers(world: World): Promise<string[]> {
+  return (await readdir(join(world.directory, "bundle"))).filter((name) => name.includes(".tmp-"));
+}
+
+test("a binary that reports the expected stamp replaces the destination", async () => {
+  const world = await makeWorld();
+  const source = await fakeBinary(world, "abc123");
+
+  await replaceVerified({ source, destination: world.destination, expectedStamp: "abc123" });
+
+  expect(await readFile(world.destination, "utf8")).toContain("echo abc123");
+  expect((await stat(world.destination)).mode & 0o111).not.toBe(0);
+  expect(await leftovers(world)).toEqual([]);
+  await world.cleanup();
+});
+
+test("a binary that reports another stamp leaves the destination unchanged and removes its staged copy", async () => {
+  const world = await makeWorld();
+  const source = await fakeBinary(world, "stale99");
+
+  await expect(replaceVerified({ source, destination: world.destination, expectedStamp: "abc123" })).rejects.toThrow("stale99");
+
+  expect(await readFile(world.destination, "utf8")).toBe("old binary");
+  expect(await leftovers(world)).toEqual([]);
+  await world.cleanup();
+});
+
+test("a missing build output fails with its path and leaves the destination unchanged", async () => {
+  const world = await makeWorld();
+  const source = join(world.directory, "no-such-binary");
+
+  await expect(replaceVerified({ source, destination: world.destination, expectedStamp: "abc123" })).rejects.toThrow(source);
+
+  expect(await readFile(world.destination, "utf8")).toBe("old binary");
+  expect(await leftovers(world)).toEqual([]);
+  await world.cleanup();
+});
+
+test("a write whose rename fails removes its staged file", async () => {
+  const world = await makeWorld();
+  const blocked = join(world.directory, "bundle", "Info.plist");
+  await mkdir(join(blocked, "occupied"), { recursive: true });
+
+  await expect(writeAtomic(blocked, "text")).rejects.toThrow();
+
+  expect(await leftovers(world)).toEqual([]);
+  await world.cleanup();
+});
+
+test("a write lands the full text at the path", async () => {
+  const world = await makeWorld();
+  const path = join(world.directory, "nested", "state", "installed-stamp");
+
+  await writeAtomic(path, "abc123\n");
+
+  expect(await readFile(path, "utf8")).toBe("abc123\n");
+  await world.cleanup();
+});

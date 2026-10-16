@@ -390,7 +390,23 @@ fn attention_exit_allowed(before: &DaemonState, card: &Card, op: &Op, applied: &
         Op::Start(_) | Op::Outcome(FocusOutcome::Done) => true,
         Op::End(_) => matches!(card.cause, CardCause::NeedsInput(_)) && !applied.suppressed(SuppressReason::Stale),
         Op::Resolved => card.cause == CardCause::NeedsInput(InputReason::Elicitation),
-        Op::Tick { .. } => matches!(card.phase, CardPhase::Snoozed { .. } | CardPhase::Expiring { .. }) || dwell_cleared(before, card, after.now),
+        Op::Tick { .. } => timer_lapsed(before, card, after.now) || dwell_cleared(before, card, after.now),
+        _ => false,
+    }
+}
+
+/// A snoozed card lapses at `until` once its session no longer waits in the
+/// snoozed turn. An expiring card lapses at `remove_at`.
+fn timer_lapsed(before: &DaemonState, card: &Card, now: i64) -> bool {
+    match &card.phase {
+        CardPhase::Snoozed { until, prompt } => {
+            let still_waiting = before
+                .sessions
+                .get(&session())
+                .is_some_and(|record| matches!(record.turn, Turn::NeedsYou { .. } | Turn::Failed { .. }) && record.turn.prompt() == prompt.as_ref());
+            now >= until.0 && !still_waiting
+        }
+        CardPhase::Expiring { remove_at } => now >= remove_at.0,
         _ => false,
     }
 }

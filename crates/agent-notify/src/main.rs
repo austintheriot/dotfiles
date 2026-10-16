@@ -5,6 +5,10 @@
 #[allow(dead_code)] // used from main in Task 17
 mod cli;
 #[allow(dead_code)] // used from main in Task 17
+mod context;
+#[allow(dead_code)] // used from main in Task 17
 mod invocation;
+#[allow(dead_code)] // used from main in Task 17
+mod tmux;
 
 fn main() {}

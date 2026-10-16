@@ -8,10 +8,18 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use agent_notify_core::EpochMs;
+use agent_notify_core::status::DaemonFacts;
 use agent_notify_core::update::Frontmost;
 use agent_notify_core::view::PanelViewModel;
 
-/// Draws the toast stack. Must return at once: it is called from the actor.
+use crate::dnd_store::DndStore;
+use crate::tmux::Tmux;
+
+/// Draws the toast stack.
+///
+/// The actor task calls [`ToastPresenter::present`] on a Tokio worker
+/// thread, so it must return at once: hand the view to the UI thread and
+/// never wait on it, on IO or on a child process.
 pub trait ToastPresenter: Send + Sync {
     /// Shows `view`, or hides the panel when it has no cards and no finished row.
     fn present(&self, view: &PanelViewModel);
@@ -60,6 +68,9 @@ pub trait PresenceReader: Send + Sync {
 }
 
 /// Plays the attention sound.
+///
+/// The actor task calls [`SoundPlayer::play`] on a Tokio worker thread, so
+/// it must return at once: spawn the player and never wait for it to end.
 pub trait SoundPlayer: Send + Sync {
     /// Starts the sound and returns at once.
     fn play(&self);
@@ -67,6 +78,32 @@ pub trait SoundPlayer: Send + Sync {
 
 /// The wall clock, injected so tests can fix the time.
 pub type Clock = Arc<dyn Fn() -> EpochMs + Send + Sync>;
+
+/// Every service the daemon uses, built once by `main`.
+///
+/// The frontmost and presence readers, and every tmux call, block their
+/// thread. The daemon runs them only on its effects worker or on a blocking
+/// thread, never on a Tokio worker thread.
+pub struct Services {
+    /// tmux, when found.
+    pub tmux: Option<Tmux>,
+    /// The terminal raiser. Runs on the effects worker.
+    pub raiser: Arc<dyn WindowRaiser>,
+    /// The toast panel. Called from the actor.
+    pub presenter: Arc<dyn ToastPresenter>,
+    /// The frontmost-app reader. Runs on a blocking thread.
+    pub frontmost: Arc<dyn FrontmostReader>,
+    /// The presence reader. Runs on a blocking thread.
+    pub presence: Arc<dyn PresenceReader>,
+    /// The attention sound. Called from the actor.
+    pub sound: Arc<dyn SoundPlayer>,
+    /// The DND file. Saved on the effects worker.
+    pub dnd_store: DndStore,
+    /// The wall clock.
+    pub clock: Clock,
+    /// Facts for `status`.
+    pub facts: DaemonFacts,
+}
 
 /// The system clock. A backwards step is an accepted risk, documented on the
 /// core's `update::sent_before_turn_start`.

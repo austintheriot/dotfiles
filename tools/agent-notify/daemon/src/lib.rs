@@ -2,6 +2,7 @@
 //! crate reads the world, applies effects and serves the socket. Every
 //! platform service arrives through [`services`].
 
+pub mod actor;
 pub mod aerospace;
 pub mod bridge;
 pub mod child;

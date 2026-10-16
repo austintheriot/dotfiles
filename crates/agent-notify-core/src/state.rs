@@ -58,6 +58,9 @@ pub struct SessionRecord {
     pub title: Option<DisplayText>,
     /// The current turn.
     pub turn: Turn,
+    /// The `sent_at_ms` of the request that started the current turn. An
+    /// unseen prompt sent at or before it is stale. `None` until a turn starts.
+    pub turn_started_at: Option<EpochMs>,
     /// True once the agent called `send` in the current turn, in any turn
     /// state. A new prompt's turn resets it.
     pub explicit_sent: bool,
@@ -78,6 +81,7 @@ impl SessionRecord {
             cwd: origin.cwd.clone(),
             title: origin.session_title.clone(),
             turn: Turn::Idle,
+            turn_started_at: None,
             explicit_sent: false,
             quiet: QuietMode::Armed,
             card: None,

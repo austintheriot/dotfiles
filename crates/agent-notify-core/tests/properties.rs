@@ -2,8 +2,9 @@
 //! of `plan_focus` over generated tmux worlds. The reference model restates
 //! the turn rules of spec 6.2 as the code applies them: `explicit_sent` is per
 //! turn, a mid-turn event with an unseen prompt adopts that prompt as a new
-//! turn, and an event is stale only for another prompt (`TurnEnded`) or for a
-//! turn that already ended.
+//! turn when it was sent after the current turn started, and an event is
+//! stale for another prompt (`TurnEnded`), for a turn that already ended, or
+//! for an unseen prompt sent at or before the current turn's start.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -242,6 +243,7 @@ enum TurnMatch {
     Current,
     Ended,
     Other,
+    Older,
 }
 
 /// The reference model of one session record's turn facts.
@@ -249,13 +251,14 @@ enum TurnMatch {
 struct ModelRecord {
     prompt: Option<u8>,
     phase: Phase,
+    turn_started_at: Option<i64>,
     explicit_sent: bool,
     quiet: Option<(QuietUntil, i64)>,
 }
 
 impl ModelRecord {
     fn fresh() -> Self {
-        ModelRecord { prompt: None, phase: Phase::Idle, explicit_sent: false, quiet: None }
+        ModelRecord { prompt: None, phase: Phase::Idle, turn_started_at: None, explicit_sent: false, quiet: None }
     }
 
     fn observed(record: &SessionRecord) -> Self {
@@ -270,21 +273,27 @@ impl ModelRecord {
             QuietMode::Armed => None,
             QuietMode::Until { until, deadline } => Some((until, deadline.0)),
         };
-        ModelRecord { prompt: prompt.map(prompt_number), phase, explicit_sent: record.explicit_sent, quiet }
+        let turn_started_at = record.turn_started_at.map(|started| started.0);
+        ModelRecord { prompt: prompt.map(prompt_number), phase, turn_started_at, explicit_sent: record.explicit_sent, quiet }
     }
 
     /// A record with no prompt, or an event with none, means the current turn.
-    fn turn_match(&self, prompt: Option<u8>) -> TurnMatch {
+    /// An unseen prompt is a new turn only when it was sent after the current
+    /// turn started. Otherwise it is stale, like a repeat of an ended turn.
+    fn turn_match(&self, prompt: Option<u8>, sent_at: i64) -> TurnMatch {
         match (prompt, self.prompt) {
-            (Some(event_prompt), Some(current)) if event_prompt != current => TurnMatch::Other,
+            (Some(event_prompt), Some(current)) if event_prompt != current => {
+                if self.turn_started_at.is_some_and(|started| sent_at <= started) { TurnMatch::Older } else { TurnMatch::Other }
+            }
             (Some(_), Some(_)) if matches!(self.phase, Phase::Finished | Phase::Failed) => TurnMatch::Ended,
             _ => TurnMatch::Current,
         }
     }
 
-    fn begin_turn(&mut self, prompt: Option<u8>) {
+    fn begin_turn(&mut self, prompt: Option<u8>, sent_at: i64) {
         self.prompt = prompt;
         self.phase = Phase::Working;
+        self.turn_started_at = Some(sent_at);
         self.explicit_sent = false;
         if matches!(self.quiet, Some((QuietUntil::NextPrompt, _))) {
             self.quiet = None;
@@ -297,43 +306,48 @@ impl ModelRecord {
         }
     }
 
-    fn enter_mid_turn(&mut self, prompt: Option<u8>, phase: Phase) {
-        match self.turn_match(prompt) {
-            TurnMatch::Ended => return,
-            TurnMatch::Other => self.begin_turn(prompt),
+    fn enter_mid_turn(&mut self, prompt: Option<u8>, phase: Phase, sent_at: i64) {
+        match self.turn_match(prompt, sent_at) {
+            TurnMatch::Ended | TurnMatch::Older => return,
+            TurnMatch::Other => self.begin_turn(prompt, sent_at),
             TurnMatch::Current => {}
         }
         self.prompt = prompt.or(self.prompt);
         self.phase = phase;
     }
 
-    /// True when `TurnEnded` for `prompt` at `now` passes the turn rules.
-    /// A pending attention card is not part of the turn facts.
+    /// True when `TurnEnded` for `prompt`, sent and received at `now`, passes
+    /// the turn rules. A pending attention card is not part of the turn facts.
     fn turn_end_offers_info(&self, prompt: Option<u8>, now: i64) -> bool {
         let mut after_expiry = self.clone();
         after_expiry.expire_quiet(now);
-        self.turn_match(prompt) == TurnMatch::Current && !self.explicit_sent && after_expiry.quiet.is_none()
+        self.turn_match(prompt, now) == TurnMatch::Current && !self.explicit_sent && after_expiry.quiet.is_none()
     }
 
+    /// The test world sends every request at the time it arrives, so
+    /// `sent_at` is `now`. Events between two ticks share one sent time.
     fn apply_agent_event(&mut self, op: &Op, now: i64) {
+        let sent_at = now;
         match op {
-            Op::Start(prompt) => self.begin_turn(*prompt),
+            Op::Start(prompt) => self.begin_turn(*prompt, sent_at),
             Op::Explicit(_, prompt) => {
-                if self.turn_match(*prompt) == TurnMatch::Other {
-                    self.begin_turn(*prompt);
+                match self.turn_match(*prompt, sent_at) {
+                    TurnMatch::Older => return,
+                    TurnMatch::Other => self.begin_turn(*prompt, sent_at),
+                    TurnMatch::Current | TurnMatch::Ended => {}
                 }
                 self.explicit_sent = true;
                 if matches!(self.quiet, Some((QuietUntil::NextSend, _))) {
                     self.quiet = None;
                 }
             }
-            Op::End(prompt) if self.turn_match(*prompt) == TurnMatch::Current => {
+            Op::End(prompt) if self.turn_match(*prompt, sent_at) == TurnMatch::Current => {
                 self.prompt = prompt.or(self.prompt);
                 self.phase = Phase::Finished;
                 self.expire_quiet(now);
             }
-            Op::Fail(prompt) => self.enter_mid_turn(*prompt, Phase::Failed),
-            Op::Needs(prompt, _) => self.enter_mid_turn(*prompt, Phase::NeedsYou),
+            Op::Fail(prompt) => self.enter_mid_turn(*prompt, Phase::Failed, sent_at),
+            Op::Needs(prompt, _) => self.enter_mid_turn(*prompt, Phase::NeedsYou, sent_at),
             Op::Resolved if self.phase == Phase::NeedsYou => self.phase = Phase::Working,
             Op::Quiet(until) => self.quiet = Some((*until, now + QUIET_MAX_MS)),
             Op::QuietOff => self.quiet = None,

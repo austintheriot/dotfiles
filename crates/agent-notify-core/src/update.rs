@@ -272,13 +272,23 @@ fn receive(state: &mut DaemonState, request: Request, focus: &FocusSnapshot, now
         state.screen_shared = shared;
     }
     match request {
-        Request::Agent { event_id, origin, event, .. } => agent_event(state, event_id, origin, event, focus, now, effects),
+        Request::Agent { event_id, sent_at_ms, origin, event, .. } => {
+            agent_event(state, Arrival { event_id, sent_at: sent_at_ms, origin, event }, focus, now, effects);
+        }
         Request::Control { control, .. } => control_event(state, control, now, effects),
         Request::Query { .. } | Request::Unknown => {}
     }
 }
 
-fn agent_event(state: &mut DaemonState, event_id: EventId, origin: Origin, event: AgentEvent, focus: &FocusSnapshot, now: EpochMs, effects: &mut Vec<Effect>) {
+struct Arrival {
+    event_id: EventId,
+    sent_at: EpochMs,
+    origin: Origin,
+    event: AgentEvent,
+}
+
+fn agent_event(state: &mut DaemonState, arrival: Arrival, focus: &FocusSnapshot, now: EpochMs, effects: &mut Vec<Effect>) {
+    let Arrival { event_id, sent_at, origin, event } = arrival;
     let Some(session) = origin.session.clone() else {
         oneoff_event(state, event_id, &origin, event, focus, now, effects);
         return;
@@ -300,7 +310,7 @@ fn agent_event(state: &mut DaemonState, event_id: EventId, origin: Origin, event
     let dnd = state.dnd_active(now);
     let record = state.sessions.entry(session).or_insert_with(|| SessionRecord::new(&origin));
     record.absorb(&origin);
-    match step(record, origin.prompt.as_ref(), event, now) {
+    match step(record, origin.prompt.as_ref(), event, sent_at, now) {
         Step::Offer(offer) => {
             if is_suppressed_by_focus(focus, record.pane.as_ref()) {
                 effects.push(Effect::Suppressed { event_id, reason: SuppressReason::Focused });
@@ -384,17 +394,21 @@ enum Step {
     Nothing(SuppressReason),
 }
 
-fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent, now: EpochMs) -> Step {
+fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent, sent_at: EpochMs, now: EpochMs) -> Step {
     match event {
         AgentEvent::TurnStarted => {
-            begin_turn(record);
+            begin_turn(record, sent_at);
             record.turn = Turn::Working { prompt: prompt.cloned() };
             Step::Clear
         }
         AgentEvent::Explicit { kind, body } => {
-            if turn_match(&record.turn, prompt) == TurnMatch::Other {
-                begin_turn(record);
-                record.turn = Turn::Working { prompt: prompt.cloned() };
+            match turn_match(&record.turn, prompt) {
+                TurnMatch::Other if sent_before_turn_start(record, sent_at) => return Step::Nothing(SuppressReason::Stale),
+                TurnMatch::Other => {
+                    begin_turn(record, sent_at);
+                    record.turn = Turn::Working { prompt: prompt.cloned() };
+                }
+                TurnMatch::Current | TurnMatch::Ended => {}
             }
             record.explicit_sent = true;
             if record.quiet.ends_on(QuietUntil::NextSend) {
@@ -420,14 +434,14 @@ fn step(record: &mut SessionRecord, prompt: Option<&PromptId>, event: AgentEvent
             }
         }
         AgentEvent::TurnFailed { error } => {
-            if !enter_turn_of(record, prompt) {
+            if !enter_turn_of(record, prompt, sent_at) {
                 return Step::Nothing(SuppressReason::Stale);
             }
             record.turn = Turn::Failed { prompt: current_prompt(&record.turn, prompt) };
             Step::Offer(CardOffer { kind: Kind::Attention, cause: CardCause::TurnFailed, body: turn_failed_body(&error) })
         }
         AgentEvent::NeedsInput { reason, message } => {
-            if !enter_turn_of(record, prompt) {
+            if !enter_turn_of(record, prompt, sent_at) {
                 return Step::Nothing(SuppressReason::Stale);
             }
             record.turn = Turn::NeedsYou { prompt: current_prompt(&record.turn, prompt), reason };
@@ -471,22 +485,31 @@ fn turn_match(turn: &Turn, prompt: Option<&PromptId>) -> TurnMatch {
     }
 }
 
-fn begin_turn(record: &mut SessionRecord) {
+fn begin_turn(record: &mut SessionRecord, sent_at: EpochMs) {
+    record.turn_started_at = Some(sent_at);
     record.explicit_sent = false;
     if record.quiet.ends_on(QuietUntil::NextPrompt) {
         record.quiet = QuietMode::Armed;
     }
 }
 
+/// Async hooks reach the daemon in connect order, not hook order, so an event
+/// for an older prompt can arrive after a newer turn started.
+fn sent_before_turn_start(record: &SessionRecord, sent_at: EpochMs) -> bool {
+    record.turn_started_at.is_some_and(|started| sent_at <= started)
+}
+
 /// For mid-turn events. A prompt the record has not seen means its
-/// `TurnStarted` was lost, so the event starts that turn. Returns false when
-/// the event repeats a turn that already ended.
-fn enter_turn_of(record: &mut SessionRecord, prompt: Option<&PromptId>) -> bool {
+/// `TurnStarted` was lost, so the event starts that turn, unless the event
+/// was sent before the current turn started. Returns false when the event is
+/// stale: it repeats a turn that already ended, or it comes from an older turn.
+fn enter_turn_of(record: &mut SessionRecord, prompt: Option<&PromptId>, sent_at: EpochMs) -> bool {
     match turn_match(&record.turn, prompt) {
         TurnMatch::Current => true,
         TurnMatch::Ended => false,
+        TurnMatch::Other if sent_before_turn_start(record, sent_at) => false,
         TurnMatch::Other => {
-            begin_turn(record);
+            begin_turn(record, sent_at);
             true
         }
     }
@@ -708,7 +731,7 @@ fn focus_outcome(state: &mut DaemonState, card_id: &CardId, outcome: FocusOutcom
 mod tests {
     use super::*;
     use crate::state::{CardCause, QuietMode, Turn};
-    use crate::test_support::{agent_input, card, event_id, origin, pane, prompt, reasons, send, session};
+    use crate::test_support::{agent_input, card, event_id, origin, pane, prompt, reasons, send, send_sent_at, session};
     use crate::wire::{AgentEvent, InputReason, Kind, QuietUntil, SessionSource};
     use crate::DisplayText;
 
@@ -825,6 +848,57 @@ mod tests {
         assert_eq!(card(&state, "a").map(|shown| shown.kind), Some(Kind::Attention));
         let expected = Turn::NeedsYou { prompt: Some(prompt("p2")), reason: InputReason::Permission };
         assert_eq!(state.sessions[&session("a")].turn, expected);
+    }
+
+    #[test]
+    fn a_needs_input_sent_before_the_current_turn_started_is_stale() {
+        let mut state = DaemonState::default();
+        send(&mut state, 200, "a", Some("p2"), AgentEvent::TurnStarted);
+        let effects = send_sent_at(&mut state, 250, 100, "a", Some("p1"), needs_permission());
+        assert_eq!(reasons(&effects), vec![SuppressReason::Stale]);
+        assert!(card(&state, "a").is_none(), "no phantom permission card");
+        assert_eq!(state.sessions[&session("a")].turn, Turn::Working { prompt: Some(prompt("p2")) });
+        send(&mut state, 300, "a", Some("p2"), turn_ended("Done."));
+        assert_eq!(card(&state, "a").map(|shown| shown.cause), Some(CardCause::TurnEnded), "p2 still gets its finished card");
+    }
+
+    #[test]
+    fn a_needs_input_sent_after_the_current_turn_started_is_adopted() {
+        let mut state = DaemonState::default();
+        send(&mut state, 200, "a", Some("p2"), AgentEvent::TurnStarted);
+        let effects = send_sent_at(&mut state, 350, 300, "a", Some("p3"), needs_permission());
+        assert!(reasons(&effects).is_empty());
+        let expected = Turn::NeedsYou { prompt: Some(prompt("p3")), reason: InputReason::Permission };
+        assert_eq!(state.sessions[&session("a")].turn, expected);
+        assert_eq!(state.sessions[&session("a")].turn_started_at, Some(EpochMs(300)));
+    }
+
+    #[test]
+    fn a_record_with_no_turn_start_time_adopts_as_before() {
+        let mut state = DaemonState::default();
+        send(&mut state, 500, "a", Some("p1"), needs_permission());
+        assert_eq!(state.sessions[&session("a")].turn_started_at, None);
+        let effects = send_sent_at(&mut state, 600, 100, "a", Some("p0"), needs_permission());
+        assert!(reasons(&effects).iter().all(|reason| *reason != SuppressReason::Stale));
+        let expected = Turn::NeedsYou { prompt: Some(prompt("p0")), reason: InputReason::Permission };
+        assert_eq!(state.sessions[&session("a")].turn, expected);
+    }
+
+    #[test]
+    fn an_explicit_send_from_before_the_current_turn_does_not_take_it_over() {
+        let mut state = DaemonState::default();
+        send(&mut state, 200, "a", Some("p2"), AgentEvent::TurnStarted);
+        let effects = send_sent_at(&mut state, 250, 100, "a", Some("p1"), explicit(Kind::Info, "old"));
+        assert_eq!(reasons(&effects), vec![SuppressReason::Stale]);
+        assert!(!state.sessions[&session("a")].explicit_sent);
+        assert_eq!(state.sessions[&session("a")].turn, Turn::Working { prompt: Some(prompt("p2")) });
+    }
+
+    #[test]
+    fn turn_started_records_its_sent_time() {
+        let mut state = DaemonState::default();
+        send_sent_at(&mut state, 210, 200, "a", Some("p2"), AgentEvent::TurnStarted);
+        assert_eq!(state.sessions[&session("a")].turn_started_at, Some(EpochMs(200)));
     }
 
     #[test]

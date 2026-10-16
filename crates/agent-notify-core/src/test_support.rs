@@ -51,16 +51,33 @@ pub fn origin(session_name: Option<&str>, prompt_name: Option<&str>) -> Origin {
 }
 
 pub fn agent_input(number: i64, origin: Origin, event: AgentEvent) -> DaemonInput {
+    agent_input_sent_at(number, number, origin, event)
+}
+
+pub fn agent_input_sent_at(number: i64, sent_at: i64, origin: Origin, event: AgentEvent) -> DaemonInput {
     DaemonInput::Received {
         request: Request::Agent {
             v: WIRE_VERSION,
             event_id: event_id(number),
-            sent_at_ms: EpochMs(number),
+            sent_at_ms: EpochMs(sent_at),
             origin,
             event,
         },
         focus: FocusSnapshot::unknown(),
     }
+}
+
+/// Like [`send`], but the CLI built the request at `sent_at`, so a test can
+/// deliver an event later than it was sent.
+pub fn send_sent_at(
+    state: &mut DaemonState,
+    number: i64,
+    sent_at: i64,
+    session_name: &str,
+    prompt_name: Option<&str>,
+    event: AgentEvent,
+) -> Vec<Effect> {
+    update(state, agent_input_sent_at(number, sent_at, origin(Some(session_name), prompt_name), event), EpochMs(number))
 }
 
 /// Sends `event` for session `session_name` at time `number`, which is also

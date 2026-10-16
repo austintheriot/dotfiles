@@ -172,10 +172,24 @@ impl Invocation {
         Invocation { tags: Vec::new(), request: Some(request), fallback: None, exit: Exit::Success, stderr: None, log: None, warning: None, output }
     }
 
+    fn unplanned(message: &'static str) -> Self {
+        Invocation { tags: Vec::new(), request: None, fallback: None, exit: Exit::Usage, stderr: Some(message.to_string()), log: None, warning: None, output: Output::Silent }
+    }
+
     fn query(inputs: &Inputs, query: Query, output: Output) -> Self {
-        let request = Request::Query { v: WIRE_VERSION, event_id: inputs.event_id.clone(), query };
+        let request = query_request(inputs, query);
         Invocation { tags: Vec::new(), request: Some(request), fallback: None, exit: Exit::Success, stderr: None, log: None, warning: None, output }
     }
+}
+
+fn query_request(inputs: &Inputs, query: Query) -> Request {
+    Request::Query { v: WIRE_VERSION, event_id: inputs.event_id.clone(), query }
+}
+
+/// The request `status` sends. `doctor` sends the same one.
+#[must_use]
+pub fn status_request(inputs: &Inputs) -> Request {
+    query_request(inputs, Query::Status)
 }
 
 /// Decides what `command` does with `inputs`.
@@ -196,7 +210,7 @@ pub fn plan_invocation(command: &Command, inputs: &Inputs) -> Invocation {
             };
             Invocation::query(inputs, Query::Status, Output::Status(format))
         }
-        Command::Doctor => Invocation::nothing("doctor gathers its own facts in main", None, None),
+        Command::Doctor => Invocation::unplanned("doctor gathers its own facts and is never planned"),
     }
 }
 
@@ -640,6 +654,21 @@ mod tests {
             assert_eq!(output.budget(), BUDGET, "{output:?}");
         }
         assert!(QUERY_BUDGET > BUDGET);
+    }
+
+    #[test]
+    fn doctor_is_never_planned_and_says_so_loudly() {
+        let invocation = plan_invocation(&Command::Doctor, &bare_inputs());
+        assert!(invocation.request.is_none() && invocation.log.is_none());
+        assert_eq!(invocation.exit, Exit::Usage);
+        assert!(invocation.stderr.as_deref().is_some_and(|message| message.contains("doctor")), "{invocation:?}");
+    }
+
+    #[test]
+    fn the_status_request_is_the_planners_status_query() {
+        let inputs = bare_inputs();
+        let planned = plan_invocation(&Command::Status { json: false, tmux: false }, &inputs).request;
+        assert_eq!(Some(status_request(&inputs)), planned);
     }
 
     #[test]

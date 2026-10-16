@@ -66,7 +66,8 @@ pub fn dnd_output(delivery: &Delivery) -> Printed {
     }
 }
 
-fn report_from(delivery: &Delivery) -> Result<StatusReport, String> {
+/// The daemon's report, or one line that says why there is none.
+pub fn report_from(delivery: &Delivery) -> Result<StatusReport, String> {
     match delivery {
         Delivery::Acked { data: Some(data), .. } => {
             serde_json::from_value(data.clone()).map_err(|error| format!("the daemon sent a report this CLI cannot read: {error}"))

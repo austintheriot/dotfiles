@@ -67,6 +67,15 @@ pub fn read_pane(socket: &SocketPath, pane: &PaneId) -> io::Result<String> {
     run_tmux(socket, &["display-message", "-p", "-t", pane.as_str(), &pane_format()])
 }
 
+/// Reads one global option's value, for example `focus-events`.
+///
+/// # Errors
+///
+/// Returns the spawn error, or tmux's stderr when tmux fails.
+pub fn show_global_option(socket: &SocketPath, name: &str) -> io::Result<String> {
+    run_tmux(socket, &["show-options", "-g", "-v", name])
+}
+
 /// Applies one tag write to `pane`.
 ///
 /// # Errors

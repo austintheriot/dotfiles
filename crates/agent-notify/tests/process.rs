@@ -420,11 +420,35 @@ fn an_answered_status_tmux_writes_nothing_at_info() {
 }
 
 #[test]
-fn doctor_is_not_built_yet() {
+fn doctor_without_a_daemon_fails_and_names_the_check() {
     let sandbox = Sandbox::new();
     let output = sandbox.run(&mut sandbox.command(&["doctor"]), "");
     assert_eq!(output.status.code(), Some(1), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stderr).contains("not built yet"), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("FAIL  daemon answers"), "{stdout}");
+    assert!(stdout.lines().all(|line| line.starts_with("ok    ") || line.starts_with("warn  ") || line.starts_with("FAIL  ")), "{stdout}");
+}
+
+#[test]
+fn doctor_with_a_daemon_reads_its_report_over_the_query_budget() {
+    let sandbox = Sandbox::new();
+    let received = listen(&sandbox.socket, ReplyMode::Reply(report_reply(false)));
+    let output = sandbox.run(&mut sandbox.command(&["doctor"]), "");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("ok    daemon answers: stamp stamp-9"), "{stdout}");
+    let line = received.join().expect("listener thread").expect("a request line");
+    assert!(line.contains("\"query\":\"status\""), "{line}");
+}
+
+#[test]
+fn doctor_warns_about_a_large_cli_log() {
+    let sandbox = Sandbox::new();
+    std::fs::create_dir_all(&sandbox.logs).expect("log dir");
+    let log = std::fs::File::create(sandbox.logs.join("cli.log")).expect("a log file");
+    log.set_len(50 * 1024 * 1024).expect("a sparse file");
+    let output = sandbox.run(&mut sandbox.command(&["doctor"]), "");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("warn  cli log:"), "{stdout}");
 }
 
 #[test]

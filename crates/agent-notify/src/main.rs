@@ -7,6 +7,7 @@ mod child;
 mod cli;
 mod client;
 mod context;
+mod doctor;
 mod fallback;
 mod invocation;
 mod log;
@@ -78,8 +79,8 @@ fn run(arguments: &[OsString], env: &EnvSnapshot, is_hook: bool) -> ExitCode {
         }
     };
     if matches!(cli.command, Command::Doctor) {
-        let _ = writeln!(io::stderr(), "agent-notify: doctor is not built yet");
-        return ExitCode::from(1);
+        let checks = doctor::evaluate(&doctor::gather(env));
+        return emit(&render::Printed { stdout: doctor::render(&checks), stderr: None, success: !doctor::any_failed(&checks) });
     }
     let inputs = context::gather(&cli.command, env, context::clock(), context::random_bytes());
     if env.trace {

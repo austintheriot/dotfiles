@@ -79,7 +79,7 @@ read explicitly by an agent naming the file path in prose.
 3. **Only 5 tracked files mention "Claude Code", and 4 mention it as
    subject matter.** `agent-sandboxing.md` and `agent-orchestration.md`
    already treat Claude Code, Codex and Cursor as peers. The genuine
-   machinery is `settings.json`, `.claude/hooks/notify.sh`, and one line in
+   machinery is `settings.json`, the `tools/agent-notify` plugin, and one line in
    `.claude/skills/monitor-ci/SKILL.md`.
 
 ## What each tool reads natively

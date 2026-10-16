@@ -839,4 +839,137 @@ mod tests {
         send(&mut state, 2, "a", Some("p1"), AgentEvent::TurnStarted);
         assert_eq!(state.revision, 2);
     }
+
+    use crate::state::Dnd;
+    use crate::update::Frontmost;
+    use crate::wire::{Control, DndCommand, Request, WIRE_VERSION};
+
+    fn present_at(pane_number: u32) -> FocusSnapshot {
+        FocusSnapshot {
+            frontmost: Frontmost::Terminal,
+            active_pane: Some(pane(pane_number)),
+            idle_seconds: Some(5),
+            screen_locked: Some(false),
+            screen_shared: Some(false),
+        }
+    }
+
+    fn with_focus(input: DaemonInput, focus: FocusSnapshot) -> DaemonInput {
+        match input {
+            DaemonInput::Received { request, .. } => DaemonInput::Received { request, focus },
+            other => other,
+        }
+    }
+
+    fn control(number: i64, control: Control) -> DaemonInput {
+        DaemonInput::Received {
+            request: Request::Control { v: WIRE_VERSION, event_id: event_id(number), sent_at_ms: EpochMs(number), control },
+            focus: FocusSnapshot::unknown(),
+        }
+    }
+
+    #[test]
+    fn a_user_looking_at_the_pane_gets_no_card() {
+        let mut state = DaemonState::default();
+        let input = with_focus(agent_input(1, origin(Some("a"), Some("p1")), needs_permission()), present_at(1));
+        let effects = update(&mut state, input, EpochMs(1));
+        assert_eq!(reasons(&effects), vec![SuppressReason::Focused]);
+        assert!(card(&state, "a").is_none());
+    }
+
+    #[test]
+    fn each_missing_presence_fact_means_show() {
+        let variants = [
+            FocusSnapshot { frontmost: Frontmost::Other, ..present_at(1) },
+            FocusSnapshot { frontmost: Frontmost::Unknown, ..present_at(1) },
+            FocusSnapshot { active_pane: Some(pane(2)), ..present_at(1) },
+            FocusSnapshot { idle_seconds: Some(IDLE_LIMIT_SECONDS), ..present_at(1) },
+            FocusSnapshot { idle_seconds: None, ..present_at(1) },
+            FocusSnapshot { screen_locked: Some(true), ..present_at(1) },
+            FocusSnapshot { screen_locked: None, ..present_at(1) },
+        ];
+        for focus in variants {
+            let mut state = DaemonState::default();
+            let input = with_focus(agent_input(1, origin(Some("a"), Some("p1")), needs_permission()), focus.clone());
+            update(&mut state, input, EpochMs(1));
+            assert!(card(&state, "a").is_some(), "expected a card for {focus:?}");
+        }
+    }
+
+    #[test]
+    fn a_shared_screen_is_remembered_from_the_snapshot() {
+        let mut state = DaemonState::default();
+        let focus = FocusSnapshot { screen_shared: Some(true), ..FocusSnapshot::unknown() };
+        update(&mut state, with_focus(agent_input(1, origin(Some("a"), None), AgentEvent::TurnStarted), focus), EpochMs(1));
+        assert!(state.screen_shared);
+    }
+
+    #[test]
+    fn the_first_attention_card_plays_a_sound_and_info_cards_do_not() {
+        let mut state = DaemonState::default();
+        let info = send(&mut state, 1, "a", None, explicit(Kind::Info, "x"));
+        assert!(!info.contains(&Effect::PlaySound));
+        let attention = send(&mut state, 2, "b", Some("p1"), needs_permission());
+        assert!(attention.contains(&Effect::PlaySound));
+    }
+
+    #[test]
+    fn sounds_are_at_least_three_seconds_apart() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1_000, "a", Some("p1"), needs_permission());
+        let too_soon = send(&mut state, 2_000, "b", Some("p1"), needs_permission());
+        assert!(!too_soon.contains(&Effect::PlaySound));
+        let later = send(&mut state, 1_000 + SOUND_GAP_MS, "c", Some("p1"), needs_permission());
+        assert!(later.contains(&Effect::PlaySound));
+    }
+
+    #[test]
+    fn attention_replacing_attention_in_one_session_is_silent() {
+        let mut state = DaemonState::default();
+        send(&mut state, 1, "a", Some("p1"), needs_permission());
+        let replaced = send(&mut state, 10_000, "a", Some("p1"), needs_permission());
+        assert!(!replaced.contains(&Effect::PlaySound));
+    }
+
+    #[test]
+    fn dnd_keeps_cards_in_state_without_sound_and_persists() {
+        let mut state = DaemonState::default();
+        let on = update(&mut state, control(1, Control::Dnd { command: DndCommand::On { for_minutes: None } }), EpochMs(1));
+        assert_eq!(on, vec![Effect::PersistDnd(Dnd::On { until: None })]);
+        let effects = send(&mut state, 2, "a", Some("p1"), needs_permission());
+        assert!(!effects.contains(&Effect::PlaySound));
+        assert_eq!(reasons(&effects), vec![SuppressReason::Dnd]);
+        assert!(card(&state, "a").is_some());
+    }
+
+    #[test]
+    fn dnd_off_folds_waiting_info_cards_and_keeps_attention_showing() {
+        let mut state = DaemonState::default();
+        update(&mut state, control(1, Control::Dnd { command: DndCommand::On { for_minutes: None } }), EpochMs(1));
+        send(&mut state, 2, "a", None, explicit(Kind::Info, "x"));
+        send(&mut state, 3, "b", Some("p1"), needs_permission());
+        let off = update(&mut state, control(4, Control::Dnd { command: DndCommand::Off }), EpochMs(4));
+        assert_eq!(off, vec![Effect::PersistDnd(Dnd::Off)]);
+        assert_eq!(card(&state, "a").map(|shown| shown.phase), Some(CardPhase::Folded));
+        assert!(matches!(card(&state, "b").map(|shown| shown.phase), Some(CardPhase::Showing { .. })));
+    }
+
+    #[test]
+    fn timed_dnd_is_active_until_its_end() {
+        let mut state = DaemonState::default();
+        update(&mut state, control(0, Control::Dnd { command: DndCommand::On { for_minutes: Some(30) } }), EpochMs(0));
+        assert!(state.dnd_active(EpochMs(30 * 60_000 - 1)));
+        assert!(!state.dnd_active(EpochMs(30 * 60_000)));
+    }
+
+    #[test]
+    fn focus_events_track_the_focused_pane() {
+        let mut state = DaemonState::default();
+        update(&mut state, control(5, Control::FocusChanged { pane: pane(1), focused: true }), EpochMs(5));
+        assert_eq!(state.focus.as_ref().map(|focus| (focus.pane.clone(), focus.since)), Some((pane(1), EpochMs(5))));
+        update(&mut state, control(6, Control::FocusChanged { pane: pane(2), focused: false }), EpochMs(6));
+        assert!(state.focus.is_some(), "focus-out of another pane changes nothing");
+        update(&mut state, control(7, Control::FocusChanged { pane: pane(1), focused: false }), EpochMs(7));
+        assert!(state.focus.is_none());
+    }
 }

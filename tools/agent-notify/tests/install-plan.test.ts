@@ -45,9 +45,9 @@ test("the build plan is the same with no CARGO_TARGET_DIR set", () => {
 
 test.each([
   { loaded: true, plistChanged: false, steps: [{ step: "kickstart" }] },
-  { loaded: true, plistChanged: true, steps: [{ step: "bootout" }, { step: "bootstrap", tries: 5, delayMs: 500 }] },
-  { loaded: false, plistChanged: false, steps: [{ step: "bootout" }, { step: "bootstrap", tries: 5, delayMs: 500 }] },
-  { loaded: false, plistChanged: true, steps: [{ step: "bootout" }, { step: "bootstrap", tries: 5, delayMs: 500 }] },
+  { loaded: true, plistChanged: true, steps: [{ step: "bootout" }, { step: "bootstrap", tries: 24, delayMs: 500 }] },
+  { loaded: false, plistChanged: false, steps: [{ step: "bootout" }, { step: "bootstrap", tries: 24, delayMs: 500 }] },
+  { loaded: false, plistChanged: true, steps: [{ step: "bootout" }, { step: "bootstrap", tries: 24, delayMs: 500 }] },
 ])("reload with loaded=$loaded and plistChanged=$plistChanged", ({ loaded, plistChanged, steps }) => {
   expect(planReload({ loaded, plistChanged })).toEqual(steps);
 });

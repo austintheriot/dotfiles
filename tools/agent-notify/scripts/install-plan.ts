@@ -107,7 +107,8 @@ export function planBuild(plan: InstallPlan, stamp: string, environment: Record<
 
 export type ReloadStep = { step: "kickstart" } | { step: "bootout" } | { step: "bootstrap"; tries: number; delayMs: number };
 
-export const BOOTSTRAP_TRIES = 5;
+// 24 tries 500 ms apart outlast the daemon's 7 s SIGTERM stop, which can hold up bootout's teardown.
+export const BOOTSTRAP_TRIES = 24;
 export const BOOTSTRAP_RETRY_DELAY_MS = 500;
 
 export function planReload(state: { loaded: boolean; plistChanged: boolean }): ReadonlyArray<ReloadStep> {

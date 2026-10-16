@@ -71,7 +71,10 @@ function bootstrapWithRetry(plan: InstallPlan, tries: number, delayMs: number): 
     const result = attempt(command);
     if (result.success) return;
     if (i < tries) Bun.sleepSync(delayMs);
-    else throw new Error(`${command.join(" ")} failed ${tries} times, last exit ${result.exitCode}`);
+    else
+      throw new Error(
+        `${command.join(" ")} failed ${tries} times, last exit ${result.exitCode}; ${LABEL} is now unloaded until the next login or until you run: /bin/launchctl bootstrap ${plan.domain} ${plan.launchAgentPath}`,
+      );
   }
 }
 

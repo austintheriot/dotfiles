@@ -3,6 +3,7 @@
 //! platform service arrives through [`services`].
 
 pub mod aerospace;
+pub mod bridge;
 pub mod child;
 pub mod environment;
 pub mod focus_run;

@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use crate::DisplayText;
 use crate::state::{Card, DaemonState};
 use crate::update::{DaemonInput, Effect, FocusSnapshot, SuppressReason, update};
-use crate::wire::{AgentEvent, AgentKind, Origin, Request, WIRE_VERSION, WindowLabel};
-use crate::{EpochMs, EventId, PaneId, PaneKey, PromptId, ServerId, SessionId, SocketPath};
+use crate::wire::{AgentEvent, AgentKind, InputReason, Kind, Origin, QuietUntil, Request, SessionSource, WIRE_VERSION, WindowLabel};
+use crate::{CardId, EpochMs, EventId, PaneId, PaneKey, PromptId, ServerId, SessionId, SocketPath};
 
 pub const WINDOW_INDEX: u32 = 4;
 
@@ -90,6 +90,32 @@ pub fn send(
     event: AgentEvent,
 ) -> Vec<Effect> {
     update(state, agent_input(number, origin(Some(session_name), prompt_name), event), EpochMs(number))
+}
+
+/// One event of every kind, `Unknown` included.
+pub fn every_event() -> Vec<AgentEvent> {
+    let text = DisplayText::new;
+    vec![
+        AgentEvent::SessionStarted { source: SessionSource::Startup },
+        AgentEvent::TurnStarted,
+        AgentEvent::TurnEnded { last_message: Some(text("Done.")) },
+        AgentEvent::TurnFailed { error: text("overloaded") },
+        AgentEvent::NeedsInput { reason: InputReason::Permission, message: text("Allow?") },
+        AgentEvent::InputResolved,
+        AgentEvent::Explicit { kind: Kind::Info, body: text("Built.") },
+        AgentEvent::Quiet { until: QuietUntil::NextSend, max_minutes: 5 },
+        AgentEvent::QuietOff,
+        AgentEvent::SessionEnded,
+        AgentEvent::Unknown,
+    ]
+}
+
+/// True when the event with id `number` left a card in `state`.
+pub fn has_card_from(state: &DaemonState, number: i64) -> bool {
+    let id = CardId::for_event(&event_id(number));
+    let sessions = state.sessions.values().filter_map(|record| record.card.as_ref());
+    let oneoffs = state.oneoff_cards.iter().map(|oneoff| &oneoff.card);
+    sessions.chain(oneoffs).any(|card| card.id == id)
 }
 
 pub fn card<'a>(state: &'a DaemonState, session_name: &str) -> Option<&'a Card> {

@@ -6,13 +6,17 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::label::location_line;
-use crate::state::{Card, CardPhase, DaemonState, Dnd, QuietMode, Turn};
+use crate::state::{Card, CardPhase, DaemonState, Dnd, QuietMode, SessionRecord, Turn};
 use crate::update::{Effect, PaneState, SuppressReason};
-use crate::wire::{AgentEvent, Control, Kind, QuietUntil, Request};
+use crate::wire::{AgentEvent, Control, Kind, MAX_REPLY_BYTES, QuietUntil, Reply, Request, encode_line};
 use crate::{EpochMs, EventId, SessionId};
 
 /// How many decisions `status` shows.
 pub const MAX_DECISIONS: usize = 50;
+/// How many sessions `status` shows at most, the newest ones.
+pub const MAX_STATUS_SESSIONS: usize = 100;
+/// The longest text field of a session row, in characters.
+pub const MAX_STATUS_TEXT_CHARS: usize = 256;
 /// The pane option that holds a session's turn state.
 pub const PANE_STATE_OPTION: &str = "@agent_notify_state";
 /// The window option the tmux status line reads.
@@ -47,7 +51,8 @@ pub struct Decision {
     pub event_id: EventId,
     /// The event or control kind, for example `turn_ended`.
     pub kind: String,
-    /// `card`, `handled`, or `suppressed: <reason>`.
+    /// `card` when the event left a card, `no_card` when its kind never makes
+    /// one, `suppressed: <reason>`, or `handled` for a control.
     pub outcome: String,
 }
 
@@ -86,39 +91,89 @@ pub struct StatusReport {
     pub now_ms: EpochMs,
     /// Do-not-disturb.
     pub dnd: DndStatus,
-    /// Every session record, ordered by session id.
+    /// The newest session records that fit one reply, ordered by session id.
     pub sessions: Vec<SessionStatus>,
     /// The newest decisions, oldest first.
     pub decisions: Vec<Decision>,
 }
 
 /// Builds the report. `decisions` is the daemon's history, oldest first.
+///
+/// The report always fits one reply line of [`MAX_REPLY_BYTES`]: each
+/// session text is cut to [`MAX_STATUS_TEXT_CHARS`], and only the newest
+/// sessions that fit are listed, at most [`MAX_STATUS_SESSIONS`]. A session
+/// is newer when its current turn started later; one with no turn is oldest.
 #[must_use]
 pub fn status_report(state: &DaemonState, now: EpochMs, daemon: &DaemonFacts, decisions: &[Decision]) -> StatusReport {
-    let until_ms = match state.dnd {
-        Dnd::On { until } => until,
-        Dnd::Off => None,
-    };
-    let sessions = state
-        .sessions
-        .iter()
-        .map(|(session, record)| SessionStatus {
-            session: session.clone(),
-            pane: record.pane.as_ref().map(|pane| pane.pane.as_str().to_string()),
-            location: location_line(record.window.as_ref(), record.repo.as_ref(), &record.cwd),
-            turn: turn_name(&record.turn).to_string(),
-            quiet: quiet_text(&record.quiet, now),
-            card: record.card.as_ref().map(card_text),
-        })
-        .collect();
     let skip = decisions.len().saturating_sub(MAX_DECISIONS);
-    StatusReport {
+    let without_sessions = StatusReport {
         daemon: daemon.clone(),
         now_ms: now,
-        dnd: DndStatus { on: state.dnd_active(now), until_ms },
-        sessions,
+        dnd: dnd_status(state, now),
+        sessions: Vec::new(),
         decisions: decisions.iter().skip(skip).cloned().collect(),
+    };
+    let sessions = sessions_that_fit(&without_sessions, newest_sessions(state, now));
+    StatusReport { sessions, ..without_sessions }
+}
+
+/// A deadline that passed reads as off even before a tick clears it.
+fn dnd_status(state: &DaemonState, now: EpochMs) -> DndStatus {
+    let on = state.dnd_active(now);
+    let until_ms = match state.dnd {
+        Dnd::On { until } if on => until,
+        Dnd::On { .. } | Dnd::Off => None,
+    };
+    DndStatus { on, until_ms }
+}
+
+fn newest_sessions(state: &DaemonState, now: EpochMs) -> Vec<SessionStatus> {
+    let mut records: Vec<(&SessionId, &SessionRecord)> = state.sessions.iter().collect();
+    records.sort_by(|left, right| (right.1.turn_started_at, right.0).cmp(&(left.1.turn_started_at, left.0)));
+    records
+        .into_iter()
+        .take(MAX_STATUS_SESSIONS)
+        .map(|(session, record)| SessionStatus {
+            session: session.clone(),
+            pane: record.pane.as_ref().map(|pane| capped(pane.pane.as_str())),
+            location: capped(&location_line(record.window.as_ref(), record.repo.as_ref(), &record.cwd)),
+            turn: capped(turn_name(&record.turn)),
+            quiet: capped(&quiet_text(&record.quiet, now)),
+            card: record.card.as_ref().map(|card| capped(&card_text(card))),
+        })
+        .collect()
+}
+
+/// Keeps rows from the front of `newest_first` while the reply still fits,
+/// counting one comma per row, then orders them by session id.
+fn sessions_that_fit(without_sessions: &StatusReport, newest_first: Vec<SessionStatus>) -> Vec<SessionStatus> {
+    let budget = MAX_REPLY_BYTES.saturating_sub(reply_line_bytes(without_sessions));
+    let mut kept: Vec<SessionStatus> = newest_first
+        .into_iter()
+        .scan(0_usize, |used, row| {
+            *used = used.saturating_add(encoded_bytes(&row).saturating_add(1));
+            (*used < budget).then_some(row)
+        })
+        .collect();
+    kept.sort_by(|left, right| left.session.cmp(&right.session));
+    kept
+}
+
+fn reply_line_bytes(report: &StatusReport) -> usize {
+    let line = serde_json::to_value(report)
+        .and_then(|data| encode_line(&Reply { data: Some(data), ..Reply::accepted(&report.daemon.stamp) }));
+    line.map_or(MAX_REPLY_BYTES, |line| line.len())
+}
+
+fn encoded_bytes(row: &SessionStatus) -> usize {
+    serde_json::to_string(row).map_or(MAX_REPLY_BYTES, |text| text.len())
+}
+
+fn capped(text: &str) -> String {
+    if text.chars().count() <= MAX_STATUS_TEXT_CHARS {
+        return text.to_string();
     }
+    text.chars().take(MAX_STATUS_TEXT_CHARS - 1).chain(['…']).collect()
 }
 
 /// The history entry for one request and the effects it caused. Queries make
@@ -134,7 +189,11 @@ pub fn decision(request: &Request, effects: &[Effect], now: EpochMs) -> Option<D
         Effect::Suppressed { event_id: id, reason } if id == event_id => Some(*reason),
         _ => None,
     });
-    let outcome = suppressed.map_or_else(|| default_outcome.to_string(), |reason| format!("suppressed: {}", reason_name(reason)));
+    let outcome = match suppressed {
+        None => default_outcome.to_string(),
+        Some(SuppressReason::NoCardForEvent) => "no_card".to_string(),
+        Some(reason) => format!("suppressed: {}", reason_name(reason)),
+    };
     Some(Decision { at_ms: now, event_id: event_id.clone(), kind: kind.to_string(), outcome })
 }
 
@@ -262,11 +321,10 @@ fn reason_name(reason: SuppressReason) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DisplayText;
-    use crate::state::DaemonState;
-    use crate::test_support::{event_id, send};
-    use crate::update::{Effect, PaneState, SuppressReason};
-    use crate::wire::{AgentEvent, InputReason, Kind, QuietUntil};
+    use crate::test_support::{agent_input, event_id, every_event, has_card_from, origin, send, session};
+    use crate::text::DISPLAY_TEXT_MAX_BYTES;
+    use crate::wire::{InputReason, WindowLabel};
+    use crate::{DisplayText, PaneId, PaneKey};
 
     fn facts() -> DaemonFacts {
         DaemonFacts { stamp: "stamp-1".to_string(), started_ms: EpochMs(0), tools: Vec::new() }
@@ -304,11 +362,7 @@ mod tests {
     #[test]
     fn a_decision_names_the_suppression_reason() {
         let mut state = DaemonState::default();
-        let input = crate::test_support::agent_input(
-            7,
-            crate::test_support::origin(Some("a"), Some("p1")),
-            AgentEvent::TurnEnded { last_message: None },
-        );
+        let input = agent_input(7, origin(Some("a"), Some("p1")), AgentEvent::TurnEnded { last_message: None });
         let crate::update::DaemonInput::Received { request, .. } = &input else { panic!("an agent input") };
         let request = request.clone();
         let effects = crate::update::update(&mut state, input, EpochMs(7));
@@ -365,6 +419,117 @@ mod tests {
             let tagged = serde_json::to_value(&event).expect("serializes");
             assert_eq!(Some(event_kind(&event)), tagged["type"].as_str(), "{event:?}");
         }
+    }
+
+    fn outcome_of(state: &mut DaemonState, number: i64, session_name: Option<&str>, event: AgentEvent) -> String {
+        let input = agent_input(number, origin(session_name, Some("p1")), event);
+        let crate::update::DaemonInput::Received { request, .. } = &input else { panic!("an agent input") };
+        let request = request.clone();
+        let effects = crate::update::update(state, input, EpochMs(number));
+        decision(&request, &effects, EpochMs(number)).expect("agent requests make decisions").outcome
+    }
+
+    #[test]
+    fn a_decision_says_card_only_when_the_event_left_a_card() {
+        for event in every_event() {
+            for session_name in [Some("a"), None] {
+                let mut state = DaemonState::default();
+                send(&mut state, 0, "a", Some("p1"), AgentEvent::TurnStarted);
+                let outcome = outcome_of(&mut state, 1, session_name, event.clone());
+                assert_eq!(outcome == "card", has_card_from(&state, 1), "{event:?} from {session_name:?}: {outcome}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_event_kind_that_never_makes_a_card_is_no_card_not_suppressed() {
+        let mut state = DaemonState::default();
+        assert_eq!(outcome_of(&mut state, 1, Some("a"), AgentEvent::TurnStarted), "no_card");
+        assert_eq!(outcome_of(&mut state, 2, Some("a"), AgentEvent::QuietOff), "no_card");
+        assert_eq!(outcome_of(&mut state, 3, Some("a"), AgentEvent::SessionEnded), "no_card");
+        assert_eq!(outcome_of(&mut state, 4, Some("b"), AgentEvent::TurnEnded { last_message: None }), "card");
+        assert_eq!(outcome_of(&mut state, 5, Some("b"), AgentEvent::TurnEnded { last_message: None }), "suppressed: stale");
+    }
+
+    #[test]
+    fn dnd_past_its_deadline_reports_off_with_no_end() {
+        let rows = [
+            (Dnd::Off, DndStatus { on: false, until_ms: None }),
+            (Dnd::On { until: None }, DndStatus { on: true, until_ms: None }),
+            (Dnd::On { until: Some(EpochMs(101)) }, DndStatus { on: true, until_ms: Some(EpochMs(101)) }),
+            (Dnd::On { until: Some(EpochMs(100)) }, DndStatus { on: false, until_ms: None }),
+            (Dnd::On { until: Some(EpochMs(5)) }, DndStatus { on: false, until_ms: None }),
+        ];
+        for (dnd, expected) in rows {
+            let state = DaemonState { dnd, ..DaemonState::default() };
+            assert_eq!(status_report(&state, EpochMs(100), &facts(), &[]).dnd, expected, "{dnd:?}");
+        }
+    }
+
+    fn crowded_state(count: u32, window_name: &str, pane_digits: usize) -> DaemonState {
+        let mut state = DaemonState::default();
+        for number in 0..count {
+            let mut from = origin(Some(&format!("session-{number:04}")), Some("p1"));
+            let pane_id = format!("%{}{}", number, "9".repeat(pane_digits));
+            from.pane = Some(PaneKey { server: crate::test_support::server(), pane: PaneId::parse(&pane_id).expect("a pane id") });
+            from.window = Some(WindowLabel { index: number, name: DisplayText::new(window_name) });
+            let mut record = SessionRecord::new(&from);
+            record.turn_started_at = Some(EpochMs(i64::from(number)));
+            state.sessions.insert(session(&format!("session-{number:04}")), record);
+        }
+        state
+    }
+
+    fn reply_bytes(report: &StatusReport) -> usize {
+        let reply = Reply { data: Some(serde_json::to_value(report).expect("encodes")), ..Reply::accepted(&report.daemon.stamp) };
+        encode_line(&reply).expect("encodes").len()
+    }
+
+    fn full_decisions() -> Vec<Decision> {
+        (0..MAX_DECISIONS)
+            .map(|number| Decision {
+                at_ms: EpochMs(1_800_000_000_000),
+                event_id: event_id(i64::try_from(number).expect("small")),
+                kind: "session_started".to_string(),
+                outcome: "suppressed: no_card_for_event".to_string(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_huge_status_report_still_fits_in_one_reply() {
+        let widest = "\"\u{20000}\n".repeat(DISPLAY_TEXT_MAX_BYTES);
+        for window_name in ["x".repeat(8192), widest] {
+            let state = crowded_state(200, &window_name, 8192);
+            let busy = DaemonFacts { stamp: "a".repeat(64), ..facts() };
+            let report = status_report(&state, EpochMs(1_000), &busy, &full_decisions());
+            let size = reply_bytes(&report);
+            assert!(size < MAX_REPLY_BYTES, "{size} bytes");
+            assert!(!report.sessions.is_empty() && report.sessions.len() <= MAX_STATUS_SESSIONS, "{}", report.sessions.len());
+            assert_eq!(report.decisions.len(), MAX_DECISIONS);
+        }
+    }
+
+    #[test]
+    fn long_session_text_is_cut_with_an_ellipsis() {
+        let state = crowded_state(1, &"y".repeat(1000), 1000);
+        let row = &status_report(&state, EpochMs(1_000), &facts(), &[]).sessions[0];
+        for text in [&row.location, row.pane.as_ref().expect("a pane")] {
+            assert_eq!(text.chars().count(), MAX_STATUS_TEXT_CHARS, "{text}");
+            assert!(text.ends_with('…'), "{text}");
+        }
+        let short = crowded_state(1, "main", 0);
+        assert_eq!(status_report(&short, EpochMs(1_000), &facts(), &[]).sessions[0].location, "0 · main");
+    }
+
+    #[test]
+    fn the_report_keeps_the_newest_sessions_in_id_order() {
+        let state = crowded_state(150, "main", 0);
+        let report = status_report(&state, EpochMs(1_000), &facts(), &[]);
+        assert_eq!(report.sessions.len(), MAX_STATUS_SESSIONS);
+        let names: Vec<&str> = report.sessions.iter().map(|row| row.session.as_str()).collect();
+        let expected: Vec<String> = (50..150).map(|number| format!("session-{number:04}")).collect();
+        assert_eq!(names, expected.iter().map(String::as_str).collect::<Vec<_>>());
     }
 
     #[test]

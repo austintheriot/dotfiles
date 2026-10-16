@@ -269,6 +269,19 @@ pub fn is_suppressed_by_focus(snapshot: &FocusSnapshot, pane: Option<&PaneKey>) 
         && snapshot.screen_locked == Some(false)
 }
 
+/// True when `request` is an agent event that can put a card on screen. Only
+/// these need the focus facts, so the shell reads presence for no other.
+#[must_use]
+pub fn may_offer_card(request: &Request) -> bool {
+    matches!(
+        request,
+        Request::Agent {
+            event: AgentEvent::TurnEnded { .. } | AgentEvent::TurnFailed { .. } | AgentEvent::NeedsInput { .. } | AgentEvent::Explicit { .. },
+            ..
+        }
+    )
+}
+
 /// Applies one input and returns the work the shell must do.
 pub fn update(state: &mut DaemonState, input: DaemonInput, now: EpochMs) -> Vec<Effect> {
     state.revision += 1;
@@ -1723,8 +1736,8 @@ mod jump_tests {
 mod card_life_tests {
     use super::*;
     use crate::state::{CardCause, Turn};
-    use crate::test_support::{agent_input, card, origin, pane, prompt, reasons, send, session};
-    use crate::wire::{AgentEvent, DndCommand, InputReason, Request, WIRE_VERSION};
+    use crate::test_support::{agent_input, card, event_id, every_event, has_card_from, origin, pane, prompt, reasons, send, session};
+    use crate::wire::{AgentEvent, Control, DndCommand, InputReason, Query, Request, WIRE_VERSION};
 
     fn needs_permission() -> AgentEvent {
         AgentEvent::NeedsInput { reason: InputReason::Permission, message: DisplayText::new("Allow Bash?") }
@@ -1747,7 +1760,7 @@ mod card_life_tests {
     }
 
     fn dnd(state: &mut DaemonState, command: DndCommand, now: i64) {
-        let request = Request::Control { v: WIRE_VERSION, event_id: crate::test_support::event_id(now), sent_at_ms: EpochMs(now), control: Control::Dnd { command } };
+        let request = Request::Control { v: WIRE_VERSION, event_id: event_id(now), sent_at_ms: EpochMs(now), control: Control::Dnd { command } };
         update(state, DaemonInput::Received { request, focus: FocusSnapshot::unknown() }, EpochMs(now));
     }
 
@@ -1869,5 +1882,40 @@ mod card_life_tests {
         let effects = update(&mut state, agent_input(2, origin(Some("a"), None), AgentEvent::SessionEnded), EpochMs(2));
         assert!(!effects.iter().any(|effect| matches!(effect, Effect::SetPaneState { .. })));
         assert!(state.sessions.contains_key(&session("b")));
+    }
+
+    fn agent_request(input: &DaemonInput) -> &Request {
+        let DaemonInput::Received { request, .. } = input else { panic!("an agent input") };
+        request
+    }
+
+    #[test]
+    fn only_turn_ends_failures_input_requests_and_sends_may_offer_a_card() {
+        let offering: Vec<bool> = every_event()
+            .into_iter()
+            .map(|event| may_offer_card(agent_request(&agent_input(1, origin(Some("a"), Some("p1")), event))))
+            .collect();
+        assert_eq!(offering, vec![false, false, true, true, true, false, true, false, false, false, false]);
+        let control = Request::Control { v: WIRE_VERSION, event_id: event_id(1), sent_at_ms: EpochMs(1), control: Control::Jump };
+        assert!(!may_offer_card(&control));
+        let query = Request::Query { v: WIRE_VERSION, event_id: event_id(1), query: Query::Status };
+        assert!(!may_offer_card(&query));
+        assert!(!may_offer_card(&Request::Unknown));
+    }
+
+    #[test]
+    fn an_event_that_may_not_offer_a_card_never_makes_one() {
+        for event in every_event() {
+            for (session_name, prompt_name) in [(Some("a"), Some("p1")), (Some("a"), None), (None, None)] {
+                let mut working = DaemonState::default();
+                send(&mut working, 0, "a", Some("p1"), AgentEvent::TurnStarted);
+                for mut state in [DaemonState::default(), working] {
+                    let input = agent_input(1, origin(session_name, prompt_name), event.clone());
+                    let offers = may_offer_card(agent_request(&input));
+                    update(&mut state, input, EpochMs(1));
+                    assert!(offers || !has_card_from(&state, 1), "{event:?} from {session_name:?} made a card");
+                }
+            }
+        }
     }
 }

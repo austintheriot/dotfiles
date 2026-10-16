@@ -12,7 +12,9 @@ use agent_notify_core::{DisplayText, PaneId, PaneKey, PromptId, ServerId, Sessio
 
 use crate::invocation::PaneFacts;
 
-const FIELD_SEPARATOR: char = '\u{1f}';
+/// `display-message -p` prints other control characters as octal escapes
+/// (`\037`), but a tab raw.
+const FIELD_SEPARATOR: char = '\t';
 
 /// The socket path from `$TMUX`, which tmux sets to `<socket>,<pid>,<session>`.
 /// The socket path can contain commas, so the split runs from the right.
@@ -154,6 +156,6 @@ mod tests {
     #[test]
     fn bad_numbers_are_errors() {
         assert!(parse_pane_line(&line(&["x", "2", "3", "", "", "w"]), socket(), pane()).is_err());
-        assert!(parse_pane_line("1\u{1f}2", socket(), pane()).is_err());
+        assert!(parse_pane_line("1\t2", socket(), pane()).is_err());
     }
 }

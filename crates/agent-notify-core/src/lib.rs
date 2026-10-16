@@ -4,6 +4,7 @@
 
 pub mod ids;
 pub mod text;
+pub mod wire;
 
 #[cfg(test)]
 pub(crate) mod test_support;

@@ -1,0 +1,3 @@
+{"ok":true,"daemon":"stamp-abc123"}
+{"ok":false,"code":"unsupported_version","accepts":[1,1]}
+{"ok":false,"code":"unknown_kind","accepts":[1,1]}

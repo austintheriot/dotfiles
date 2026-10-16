@@ -197,11 +197,31 @@ fn execute(command: &Command, inputs: &Inputs, invocation: &Invocation, env: &En
         }
         Output::Silent => exit_code(invocation.exit),
         Output::Confirm(message) => confirm(&attempt, message),
-        Output::Status(_) | Output::DndStatus => {
-            let _ = writeln!(io::stderr(), "agent-notify: status is not built yet");
-            ExitCode::from(1)
+        Output::Status(format) => {
+            let socket_file_exists = matches!(socket_location(&env.path_inputs()), SocketLocation::At(path) if path.exists());
+            emit(&attempt_printed(&attempt, |delivery| render::status_output(format, delivery, socket_file_exists)))
         }
+        Output::DndStatus => emit(&attempt_printed(&attempt, render::dnd_output)),
     }
+}
+
+fn attempt_printed(attempt: &Result<Delivery, serde_json::Error>, render: impl FnOnce(&Delivery) -> render::Printed) -> render::Printed {
+    match attempt {
+        Ok(delivery) => render(delivery),
+        Err(error) => render::Printed {
+            stdout: String::new(),
+            stderr: Some(format!("the request did not encode: {error}; run `agent-notify doctor`")),
+            success: false,
+        },
+    }
+}
+
+fn emit(printed: &render::Printed) -> ExitCode {
+    let _ = write!(io::stdout().lock(), "{}", printed.stdout);
+    if let Some(line) = &printed.stderr {
+        let _ = writeln!(io::stderr().lock(), "agent-notify: {line}");
+    }
+    if printed.success { ExitCode::SUCCESS } else { ExitCode::from(1) }
 }
 
 fn confirm(attempt: &Result<Delivery, serde_json::Error>, message: Option<&str>) -> ExitCode {

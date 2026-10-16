@@ -389,11 +389,23 @@ fn a_rejected_jump_fails_and_names_the_reason_and_doctor() {
     assert!(sandbox.fallback_calls().is_empty());
 }
 
-/// Task 6 replaces the "not built yet" exit, and must add a stdout assertion here.
+fn report_reply(dnd_on: bool) -> String {
+    let report = serde_json::json!({
+        "daemon": { "stamp": "stamp-9", "started_ms": 0, "tools": [] },
+        "now_ms": 60_000,
+        "dnd": { "on": dnd_on, "until_ms": null },
+        "sessions": [],
+        "decisions": []
+    });
+    serde_json::json!({ "ok": true, "daemon": "stamp-9", "data": report }).to_string()
+}
+
 fn status_tmux_log(level: &str) -> String {
     let sandbox = Sandbox::new();
-    let received = listen(&sandbox.socket, ReplyMode::Reply(r#"{"ok":true,"daemon":"test","data":{}}"#.to_string()));
-    let _output = sandbox.run(sandbox.command(&["status", "--tmux"]).env("AGENT_NOTIFY_LOG", level), "");
+    let received = listen(&sandbox.socket, ReplyMode::Reply(report_reply(false)));
+    let output = sandbox.run(sandbox.command(&["status", "--tmux"]).env("AGENT_NOTIFY_LOG", level), "");
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stdout.is_empty(), "an answered status with DND off prints nothing: {output:?}");
     let line = received.join().expect("listener thread").expect("a request line");
     assert!(line.contains(r#""query":"status""#), "{line}");
     sandbox.log_text()
@@ -413,4 +425,50 @@ fn doctor_is_not_built_yet() {
     let output = sandbox.run(&mut sandbox.command(&["doctor"]), "");
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     assert!(String::from_utf8_lossy(&output.stderr).contains("not built yet"), "{output:?}");
+}
+
+#[test]
+fn status_tmux_prints_nothing_without_a_socket_and_offline_with_a_stale_one() {
+    let sandbox = Sandbox::new();
+    let output = sandbox.run(&mut sandbox.command(&["status", "--tmux"]), "");
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty(), "{output:?}");
+    std::fs::write(&sandbox.socket, "").expect("a stale regular file");
+    let output = sandbox.run(&mut sandbox.command(&["status", "--tmux"]), "");
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "#[fg=red]notify offline#[default] ");
+}
+
+#[test]
+fn status_prints_the_daemon_report() {
+    let sandbox = Sandbox::new();
+    let received = listen(&sandbox.socket, ReplyMode::Reply(report_reply(true)));
+    let output = sandbox.run(&mut sandbox.command(&["status"]), "");
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("agent-notifyd stamp-9, up 1m"), "{stdout}");
+    assert!(stdout.contains("do-not-disturb: on"), "{stdout}");
+    let line = received.join().expect("listener thread").expect("a request line");
+    assert!(line.contains("\"query\":\"status\""), "{line}");
+}
+
+#[test]
+fn status_json_and_dnd_status_and_a_down_daemon() {
+    let sandbox = Sandbox::new();
+    let received = listen(&sandbox.socket, ReplyMode::Reply(report_reply(true)));
+    let output = sandbox.run(&mut sandbox.command(&["status", "--json"]), "");
+    assert!(output.status.success(), "{output:?}");
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON on stdout");
+    assert_eq!(parsed["daemon"]["stamp"], "stamp-9");
+    received.join().expect("listener thread");
+    std::fs::remove_file(&sandbox.socket).expect("remove the socket");
+    let received = listen(&sandbox.socket, ReplyMode::Reply(report_reply(true)));
+    let output = sandbox.run(&mut sandbox.command(&["dnd", "status"]), "");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "on\n", "{output:?}");
+    received.join().expect("listener thread");
+    std::fs::remove_file(&sandbox.socket).expect("remove the socket");
+    let output = sandbox.run(&mut sandbox.command(&["status"]), "");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("the daemon is not running"), "{output:?}");
 }

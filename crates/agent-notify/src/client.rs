@@ -19,7 +19,6 @@ pub enum Delivery {
         /// The daemon's build stamp.
         daemon: Option<String>,
         /// The answer to a query.
-        #[cfg_attr(not(test), expect(dead_code, reason = "read by status in Task 6"))]
         data: Option<serde_json::Value>,
     },
     /// The daemon refused it.

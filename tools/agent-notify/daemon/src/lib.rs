@@ -5,6 +5,7 @@
 pub mod aerospace;
 pub mod bridge;
 pub mod child;
+pub mod dnd_store;
 pub mod environment;
 pub mod focus_run;
 pub mod presence;

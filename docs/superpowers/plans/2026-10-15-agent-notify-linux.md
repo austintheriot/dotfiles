@@ -1559,7 +1559,7 @@ In `daemon/Cargo.toml`, under the Linux target dependencies: `zbus = "=5.19.0"` 
 #[cfg(test)]
 mod tests {
     use agent_notify_core::ids::{CardId, EpochMs, EventId};
-    use agent_notify_core::state::Kind;
+    use agent_notify_core::wire::Kind;
     use agent_notify_core::view::{CardView, PanelViewModel};
 
     use super::*;
@@ -1638,7 +1638,7 @@ Above the tests:
 //! sends twice for one close (spike S4-7).
 
 use agent_notify_core::ids::CardId;
-use agent_notify_core::state::Kind;
+use agent_notify_core::wire::Kind;
 use agent_notify_core::text::neutralize_markup;
 use agent_notify_core::view::{CardView, PanelViewModel};
 

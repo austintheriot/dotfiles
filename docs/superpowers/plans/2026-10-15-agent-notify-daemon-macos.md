@@ -1185,7 +1185,6 @@ Append to `crates/agent-notify/tests/process.rs`:
 
 ```rust
 use std::io::{BufRead, BufReader, Write as _};
-use std::os::unix::net::UnixListener;
 
 fn answer_once(path: &std::path::Path, reply: String) -> std::thread::JoinHandle<Option<String>> {
     let listener = UnixListener::bind(path).expect("bind");

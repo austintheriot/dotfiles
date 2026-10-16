@@ -128,7 +128,7 @@ impl WindowRaiser for MacRaiser {
             Ok(finished) if finished.status.success() => true,
             Ok(finished) => {
                 let shown = &finished.stderr[..finished.stderr.len().min(STDERR_LOG_BYTES)];
-                tracing::warn!(status = ?finished.status, stderr = %String::from_utf8_lossy(shown).trim(), "open did not start the terminal");
+                tracing::warn!(status = ?finished.status, stderr = ?String::from_utf8_lossy(shown).trim(), "open did not start the terminal");
                 false
             }
             Err(error) => {

@@ -44,24 +44,37 @@ const STOP_LIMIT: Duration = Duration::from_secs(3);
 /// [`STOP_LIMIT`] the total stays well under launchd's 20 s exit timeout.
 const WORKER_STOP_LIMIT: Duration = Duration::from_secs(4);
 
-/// Where the actor task is in its life, for [`Daemon::actor_ended`].
+/// A daemon task whose early end stops the app, for [`Daemon::ended_early`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ActorLife {
-    Running,
-    Stopping,
-    EndedEarly,
+pub enum DaemonPart {
+    /// The actor that owns the core state.
+    Actor,
+    /// The socket server. Without it the daemon takes no requests.
+    SocketServer,
 }
 
-/// Marks the actor as ended early when its task ends while still running.
-/// It is dropped on every end of the task, a panic included.
-struct EndAlarm(Arc<watch::Sender<ActorLife>>);
+/// Where the daemon is in its life. The first early end wins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DaemonLife {
+    Running,
+    Stopping,
+    EndedEarly(DaemonPart),
+}
+
+/// Marks `part` as ended early when its task ends while the daemon still
+/// runs. It is dropped on every end of the task, a panic included.
+struct EndAlarm {
+    life: Arc<watch::Sender<DaemonLife>>,
+    part: DaemonPart,
+}
 
 impl Drop for EndAlarm {
     fn drop(&mut self) {
-        self.0.send_if_modified(|state| {
-            let early = *state == ActorLife::Running;
+        let part = self.part;
+        self.life.send_if_modified(|state| {
+            let early = *state == DaemonLife::Running;
             if early {
-                *state = ActorLife::EndedEarly;
+                *state = DaemonLife::EndedEarly(part);
             }
             early
         });
@@ -117,7 +130,7 @@ pub struct Daemon {
     forwarding_queries: JoinHandle<()>,
     pipeline: JoinHandle<()>,
     acting: JoinHandle<()>,
-    life: Arc<watch::Sender<ActorLife>>,
+    life: Arc<watch::Sender<DaemonLife>>,
     worker: Option<Worker>,
 }
 
@@ -138,10 +151,12 @@ impl Daemon {
         let worker = start_worker(Arc::clone(&services), job_receiver, actor_sender.clone());
         let stamp = services.facts.stamp.clone();
         let intake = Intake { requests: request_sender, queries: query_sender };
-        let life = Arc::new(watch::Sender::new(ActorLife::Running));
-        let alarm = EndAlarm(Arc::clone(&life));
+        let life = Arc::new(watch::Sender::new(DaemonLife::Running));
+        let alarm = EndAlarm { life: Arc::clone(&life), part: DaemonPart::Actor };
+        let server_alarm = EndAlarm { life: Arc::clone(&life), part: DaemonPart::SocketServer };
         Daemon {
             serving: tokio::spawn(async move {
+                let _alarm = server_alarm;
                 if let Err(error) = serve(listener, stamp, intake, config.serve).await {
                     tracing::error!(%error, "the socket server stopped");
                 }
@@ -175,14 +190,17 @@ impl Daemon {
         self.handle().view_model().await
     }
 
-    /// Resolves when the actor task ends while the daemon runs: a panic, or
-    /// any end that [`Daemon::stop`] did not start. It never resolves after
-    /// `stop` begins. The future owns what it needs, so it can outlive `self`.
-    pub fn actor_ended(&self) -> impl Future<Output = ()> + Send + 'static {
+    /// Resolves with the first [`DaemonPart`] whose task ends while the
+    /// daemon runs: a panic, an error, or any end that [`Daemon::stop`] did
+    /// not start. It never resolves after `stop` begins. The future owns what
+    /// it needs, so it can outlive `self`.
+    pub fn ended_early(&self) -> impl Future<Output = DaemonPart> + Send + 'static {
         let mut life = self.life.subscribe();
         async move {
-            if life.wait_for(|state| *state == ActorLife::EndedEarly).await.is_err() {
-                std::future::pending::<()>().await;
+            let ended = life.wait_for(|state| matches!(state, DaemonLife::EndedEarly(_))).await.map(|state| *state);
+            match ended {
+                Ok(DaemonLife::EndedEarly(part)) => part,
+                _ => std::future::pending().await,
             }
         }
     }
@@ -201,7 +219,7 @@ impl Daemon {
     /// [`WORKER_STOP_LIMIT`]. A step still busy at its limit is logged and
     /// left behind: a task is aborted, the worker thread ends on its own.
     pub async fn stop(self) {
-        self.life.send_replace(ActorLife::Stopping);
+        self.life.send_replace(DaemonLife::Stopping);
         let deadline = Instant::now() + STOP_LIMIT;
         abort_and_wait(self.serving).await;
         abort_and_wait(self.ticking).await;

@@ -96,9 +96,9 @@ pub fn run() -> ExitCode {
                 let _entered = runtime_handle.enter();
                 Daemon::start(services, listener, DaemonConfig::default())
             };
-            exit_when_the_actor_ends(&runtime_handle, &daemon, handle.clone());
+            exit_when_a_part_ends(&runtime_handle, &daemon, handle.clone());
             exit_on_signals(&runtime_handle, &handle);
-            panel::build(&handle, daemon.handle())?;
+            panel::build(&handle, daemon.handle()).inspect_err(|error| tracing::error!(%error, "the panel did not build"))?;
             app.manage(Shell { daemon: daemon.handle(), native_hover: true });
             if let Ok(mut slot) = setup_slot.lock() {
                 *slot = Some(daemon);
@@ -127,13 +127,13 @@ pub fn run() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Exits with 1 when the actor ends on its own, so launchd restarts the
-/// daemon (`KeepAlive` with `SuccessfulExit` false).
-fn exit_when_the_actor_ends(runtime: &Handle, daemon: &Daemon, app: AppHandle) {
-    let ended = daemon.actor_ended();
+/// Exits with 1 when the actor or the socket server ends on its own, so
+/// launchd restarts the daemon (`KeepAlive` with `SuccessfulExit` false).
+fn exit_when_a_part_ends(runtime: &Handle, daemon: &Daemon, app: AppHandle) {
+    let ended = daemon.ended_early();
     runtime.spawn(async move {
-        ended.await;
-        tracing::error!("the daemon's actor ended while the app ran; exiting so launchd restarts it");
+        let part = ended.await;
+        tracing::error!(?part, "a daemon task ended while the app ran; exiting so launchd restarts it");
         app.exit(1);
     });
 }

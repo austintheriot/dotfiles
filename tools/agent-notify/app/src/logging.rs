@@ -59,7 +59,7 @@ pub fn install_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
         let location = info.location().map_or_else(|| "unknown".to_owned(), ToString::to_string);
         tracing::error!(%location, "agent-notifyd panicked");
-        tracing::debug!(payload = ?info.payload_as_str(), "panic payload");
+        tracing::debug!(payload = ?info.payload_as_str(), backtrace = %std::backtrace::Backtrace::force_capture(), "panic payload");
         let _ = writeln!(io::stderr(), "{}", panic_line(info.location()));
     }));
 }

@@ -11,7 +11,7 @@ use agent_notify_core::state::Dnd;
 use agent_notify_core::status::PANE_STATE_OPTION;
 use agent_notify_core::update::UiIntent;
 use agent_notify_core::wire::Kind;
-use agent_notify_daemon::actor::DaemonConfig;
+use agent_notify_daemon::actor::{DaemonConfig, DaemonPart};
 use agent_notify_daemon::dnd_store::DndStore;
 use agent_notify_daemon::services::NoPresenter;
 use serde_json::json;
@@ -112,16 +112,29 @@ async fn stopping_frees_the_socket_for_the_next_daemon() {
 async fn an_actor_that_ends_early_is_reported() {
     let _serial = one_daemon_at_a_time().await;
     let (daemon, _scratch) = spawn_headless_daemon(Arc::new(PanickingPresenter));
-    let ended = tokio::time::timeout(Duration::from_secs(2), daemon.actor_ended()).await;
-    assert!(ended.is_ok(), "the actor panicked on its first view, but no early end was reported");
+    let ended = tokio::time::timeout(Duration::from_secs(2), daemon.ended_early()).await;
+    assert_eq!(ended.ok(), Some(DaemonPart::Actor), "the actor panicked on its first view, but no early end was reported");
     daemon.stop().await;
+}
+
+// A runtime with no IO driver makes the socket server fail as it starts, while every other task runs.
+#[test]
+fn a_socket_server_that_ends_early_is_reported() {
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_time().build().expect("a runtime");
+    runtime.block_on(async {
+        let _serial = one_daemon_at_a_time().await;
+        let (daemon, _scratch) = spawn_headless_daemon(Arc::new(NoPresenter));
+        let ended = tokio::time::timeout(Duration::from_secs(2), daemon.ended_early()).await;
+        assert_eq!(ended.ok(), Some(DaemonPart::SocketServer), "the socket server could not start, but no early end was reported");
+        daemon.stop().await;
+    });
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stopped_actor_is_not_reported_as_ended_early() {
     let _serial = one_daemon_at_a_time().await;
     let (daemon, _scratch) = spawn_headless_daemon(Arc::new(NoPresenter));
-    let ended = daemon.actor_ended();
+    let ended = daemon.ended_early();
     daemon.stop().await;
     assert!(tokio::time::timeout(Duration::from_millis(300), ended).await.is_err(), "a clean stop was reported as an early end");
 }

@@ -351,6 +351,8 @@ pub fn packages() -> PackageCatalog {
         per_manager(vec![
             (PackageManager::Apt, named("libnotify-bin")),
             (PackageManager::Pacman, named("libnotify")),
+            // Explicit, not left to the fallback: the parse-failure sentinel
+            // check rejects the unnamed-manager value for Brew.
             (
                 PackageManager::Brew,
                 PackageAvailability::Unavailable(NoInstallReason::NotPackagedForThisManager),

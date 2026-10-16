@@ -1441,6 +1441,23 @@ fn doctor_is_silent_and_exits_zero_when_every_binary_is_current() {
     );
 }
 
+/// Workspace members that ship a binary: the same set doctor checks, found
+/// the way `has_installed_binary` finds it (a `src/main.rs`).
+fn binary_crates_in(crates_dir: &Path) -> Vec<String> {
+    let manifest = fs::read_to_string(crates_dir.join("Cargo.toml")).expect("readable manifest");
+    let members_line = manifest
+        .lines()
+        .find(|line| line.trim_start().starts_with("members"))
+        .expect("a members line");
+    members_line
+        .split('"')
+        .skip(1)
+        .step_by(2)
+        .filter(|member| crates_dir.join(member).join("src/main.rs").is_file())
+        .map(str::to_owned)
+        .collect()
+}
+
 /// Doctor must look where `config-build` installs, even when `DOTFILES_ROOT`
 /// is not `$HOME`.
 ///
@@ -1503,7 +1520,7 @@ fn doctor_does_not_report_not_installed_when_dotfiles_root_is_not_home() {
     let zero_id = "0".repeat(40);
     let stale_stamp = format!("{zero_id}:{zero_id}:{zero_id}");
     let home = scratch.path().join("home");
-    for crate_name in ["config-cli", "tmux-tools"] {
+    for crate_name in binary_crates_in(&split_root.join("crates")) {
         write_executable(
             &home.join(".local/bin").join(crate_name),
             &format!("#!/bin/sh\necho {stale_stamp}\n"),

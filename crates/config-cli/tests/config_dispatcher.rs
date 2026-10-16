@@ -1372,6 +1372,10 @@ fn run_build() -> Output {
 /// passes `--no-launchd` through so a CI or doctor run never touches launchd.
 #[test]
 fn build_with_tools_runs_each_install_script() {
+    if Command::new("bun").arg("--version").output().is_err() {
+        dotfiles_test_support::skip("bun is not installed, and every tool install script runs on bun");
+        return;
+    }
     let root = tempfile::tempdir().expect("a temp root");
     let script_dir = root.path().join("tools/sample/scripts");
     fs::create_dir_all(&script_dir).expect("the script directory");

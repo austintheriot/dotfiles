@@ -350,7 +350,7 @@ fn focus_changed_without_a_daemon_is_silent_and_succeeds() {
 fn focus_changed_does_not_read_the_current_pane() {
     let sandbox = Sandbox::new();
     sandbox.stub("tmux", "#!/bin/sh\nexec sleep 30\n");
-    let output = sandbox.run(sandbox.command(&FOCUS_IN).env("TMUX", "/tmp/an-wedged/sock,1,0").env("TMUX_PANE", "%1"), "");
+    let output = sandbox.run(sandbox.command(&FOCUS_IN).env("TMUX", "/tmp/an-wedged/sock,1,0").env("TMUX_PANE", "%1").env("AGENT_NOTIFY_LOG", "debug"), "");
     assert!(output.status.success(), "{output:?}");
     let log = sandbox.log_text();
     assert!(log.contains(" sent"), "a positive control: the command ran to the send in {log}");

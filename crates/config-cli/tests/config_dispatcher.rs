@@ -612,6 +612,14 @@ impl HooksFixture {
                 .expect("executable");
         }
 
+        // `create_dir_all` honors the process umask, and a Linux account with
+        // user private groups defaults to 0002. The directories would then be
+        // group-writable, and install-hooks would rightly refuse the fixture
+        // before any test reached its subject.
+        for trusted in [home_path.join("tests"), home.git_dir().join("hooks"), install_dir.clone()] {
+            set_mode(&trusted, 0o755);
+        }
+
         Self { home, install_dir }
     }
 
@@ -656,6 +664,35 @@ fn install_hooks_links_both_hooks_and_the_dispatcher_and_is_idempotent() {
     assert_eq!(
         again.text, run.text,
         "a second install-hooks prints the same report"
+    );
+}
+
+/// A fresh Linux account with user private groups runs with umask 0002. When
+/// `~/.local/bin` does not exist yet, install-hooks creates it, and a
+/// directory created at that umask is group-writable. The script must not
+/// then refuse the directory it just made.
+#[test]
+fn install_hooks_creates_a_trusted_bin_dir_under_a_group_writable_umask() {
+    let fixture = HooksFixture::new();
+    let local_bin = fixture.home.path().join(".local/bin");
+    assert!(!local_bin.exists(), "the fixture starts without ~/.local/bin");
+
+    let dispatcher = fixture.install_dir.join("config");
+    let run = fixture.home.run_program(
+        Path::new("/bin/sh"),
+        &[
+            "-c",
+            "umask 0002 && exec \"$0\" install-hooks",
+            &dispatcher.to_string_lossy(),
+        ],
+        |_| {},
+    );
+
+    run.assert_status(0, "install-hooks accepts the ~/.local/bin it created");
+    assert_eq!(
+        mode_of(&local_bin) & 0o022,
+        0,
+        "the created ~/.local/bin is writable by its owner only"
     );
 }
 

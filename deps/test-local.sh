@@ -53,7 +53,12 @@ build_seed_binary() {
     "$HOME/deps/docker/build-seed-binary.sh" "$1" "$HOME" "$2"
 }
 
-workdir=$(mktemp -d "${TMPDIR:-/tmp}/depcheck-docker-XXXXXX")
+# Under $HOME, not /tmp: the seed is bind-mounted into containers, and
+# Docker Desktop shares $HOME with its VM by default but not /tmp. A seed
+# under /tmp fails there with "mounts denied ... is not shared from the host".
+docker_scratch="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-docker"
+mkdir -p "$docker_scratch"
+workdir=$(mktemp -d "$docker_scratch/depcheck-docker-XXXXXX")
 trap 'rm -rf "$workdir"' EXIT INT TERM HUP
 
 # Archive the committed tree, then overlay the working tree's own copy of

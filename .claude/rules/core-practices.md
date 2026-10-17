@@ -1,5 +1,5 @@
 ---
-last-verified: 2026-10-14
+last-verified: 2026-10-17
 sources:
   - bug-patterns.md
   - data-flow-and-ownership.md
@@ -13,6 +13,7 @@ sources:
   - debuggability.md
   - i18n.md
   - browser-spec.md
+  - frontend-architecture.md
 ---
 
 # Core Practices Digest
@@ -148,3 +149,18 @@ Source: `browser-spec.md`. Agent: `browser-spec`.
 - **One `AbortController`** for listener and fetch cleanup instead of arrays of teardown callbacks.
 - **Scroll and touch listeners** that do not call `preventDefault` must be `passive`.
 - **Text input**: check `isComposing` before acting on Enter, or IME users submit half-typed text.
+
+## Frontend architecture
+
+Source: `frontend-architecture.md`. Agents: `fp-effects`, `data-flow`, `react-components`.
+
+- **Effect in the view or the reducer**: a component, selector, or reducer calls `fetch`, a timer, storage, `Date.now`, `new Date()`, `Math.random`, or `location`. Request an effect as data. One interpreter performs it through injected services.
+- **Second path to IO**: a `Services` bag reaches a component through props, context, or an import. Components dispatch. Only the effect layer calls services.
+- **Unbanned global**: an IO global that lint does not ban outside `services/`. The clock is the one most often missed. Each ban message names the replacement interface, and a test proves the ban fires.
+- **Producer-less variant**: `assertNever` catches a missing handler, not a missing producer. Test that every effect variant and action creator has a production dispatcher.
+- **Effect hub**: one effect union and one interpreter file for every feature. Give each feature its own union and handler, and compose them at the root.
+- **Process-scoped handle**: a module-level `let` holds a timer handle or an unsubscribe function. Create it in a per-store factory, keyed by a token in the store.
+- **Load from render**: a fetch starts from `useEffect` or `willUpdate` behind a local "already requested" flag. Start it from the event that caused it.
+- **URL drift**: a route field that the type carries and the URL drops. Test `matchRoute(routeToUrl(route))` for every variant.
+- **Feature drift**: a feature imports another feature's internals, `shared/` imports upward, or a slice name differs from its folder stem. One stem names the folder, slice, action prefix, and files. An import-boundary lint rule and a folder-shape scan test hold the layout.
+- **README rule**: a boundary that a README states and no lint rule or test checks. It will be violated.

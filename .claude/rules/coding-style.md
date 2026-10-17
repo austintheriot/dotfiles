@@ -34,6 +34,7 @@ Structural typing makes brands easy to forge, so:
 - **Interfaces over singletons.** Enable testing and flexibility.
 - **Explicit over implicit.** Clear data flow and dependencies. Surface errors in explicit ways (typed results, thrown errors with context, exhaustive switches) rather than swallowing them or relying on implicit fallbacks.
 - **Prefer pure functions.** Use `const` over `let`, return new values instead of mutating arguments, and push side effects to the edges. Especially avoid global mutation.
+- **Frontend: The Elm Architecture (TEA) shape.** Events into a pure update, effects as data, one interpreter, and IO only through an injected `Services` bag. The full rules and their reasons are in `~/.claude/rules/frontend-architecture.md`.
 - **Lean on existing infrastructure.** Before writing new helpers, search for utilities the project (or adjacent subsystems) already provides. Match their patterns rather than parallel-implementing.
 
 ## Linters

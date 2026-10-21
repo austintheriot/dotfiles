@@ -89,12 +89,21 @@ pub fn deliver(path: &Path, line: &str, budget: Duration) -> Delivery {
         return classify(&error);
     }
     let Some(left) = remaining() else { return Delivery::TimedOut };
-    if let Err(error) = stream.set_read_timeout(Some(left)) {
-        return classify(&error);
+    read_reply(&stream, left)
+}
+
+/// Reads one reply line within `left`.
+fn read_reply(stream: &UnixStream, left: Duration) -> Delivery {
+    // macOS refuses the timeout with EINVAL once the daemon has replied and
+    // closed. The reply is already buffered and the read cannot block, so
+    // that refusal is not a failure.
+    match stream.set_read_timeout(Some(left)) {
+        Err(error) if error.kind() != io::ErrorKind::InvalidInput => return classify(&error),
+        _ => {}
     }
     let mut reply = String::new();
     let limit = u64::try_from(MAX_REPLY_BYTES).unwrap_or(u64::MAX);
-    match BufReader::new((&stream).take(limit)).read_line(&mut reply) {
+    match BufReader::new(stream.take(limit)).read_line(&mut reply) {
         Ok(0) => Delivery::BadReply("the daemon closed the connection without a reply".to_string()),
         Ok(_) => match serde_json::from_str::<Reply>(&reply) {
             Ok(reply) if reply.ok => Delivery::Acked { daemon: reply.daemon, data: reply.data },
@@ -169,6 +178,15 @@ mod tests {
             matches!(&delivery, Delivery::Acked { data: Some(data), .. } if data["answer"] == 42),
             "{delivery:?}"
         );
+    }
+
+    #[test]
+    fn a_reply_from_a_daemon_that_already_closed_is_still_read() {
+        let (client, daemon) = UnixStream::pair().expect("a socket pair");
+        (&daemon).write_all(b"{\"ok\":true,\"daemon\":\"stamp\"}\n").expect("the reply is written");
+        drop(daemon);
+        let delivery = read_reply(&client, BUDGET);
+        assert!(matches!(&delivery, Delivery::Acked { daemon: Some(daemon), .. } if daemon == "stamp"), "{delivery:?}");
     }
 
     #[test]

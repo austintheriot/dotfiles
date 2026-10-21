@@ -17,13 +17,13 @@ For the self-authorship line, name `/expert-review`:
 
 ## Orchestrated mode
 
-When the invocation includes `--contribution <path>`, follow the orchestrated mode in `~/.claude/rules/outside-pr-review.md`. Run the analysis and the filter as usual. Then write one `code-review` contribution as JSON to that path. Skip the local summary, the approval question, and `draft-review`. Each inline comment names the id of its finding, so this skill assigns a finding id to every finding. Fill `behavior` on every code finding that has a user-visible symptom, because only those findings go to Dev QA for verification. The posture file holds the field contract. Put the agent-and-model line, the finding count line, and the harmful-convention line in `handback`, as the Local summary section says. A clean run writes empty `comments` and empty `findings`, with the clean body (see Clean runs).
+When the invocation includes `--contribution <path>`, follow the orchestrated mode in `~/.claude/rules/outside-pr-review.md`. Run the analysis and the filter as usual. Then write one `code-review` contribution as JSON to that path. Skip the local summary, the approval question, and `draft-review`. Each inline comment names the id of its finding, so this skill assigns a finding id to every finding. Fill `behavior` on every code finding that has a user-visible symptom, because only those findings go to the other outside-review skill for verification. The posture file holds the field contract. Put the agent-and-model line, the finding count line, and the harmful-convention line in `handback`, as the Local summary section says. A clean run writes empty `comments` and empty `findings`, with the clean body (see Clean runs).
 
 ## Trace mode
 
 Trace mode answers one question for each finding it receives: which code causes this behavior? The findings come from any source, such as a failed step or an observed bug. The posture file `~/.claude/rules/outside-pr-review.md` defines the `code-trace` kind, its `verdicts` table, and every field type. Follow it.
 
-**Input.** `--trace <findings.json> --contribution <path>`. Optional: `--known <findings.json>`. Each file is a JSON object `{"findings": [...]}`. Each entry has the finding shape from the posture file. The user is not reachable. Put every blocker into `handback`.
+**Input.** `--trace <findings.json> --contribution <path>`. Optional: `--known <findings.json>`. Each file is a JSON object `{"findings": [...]}`. Each entry has the finding shape from the posture file. The `--known` file can also be a full `code-review` contribution. Trace mode reads its `findings` array and ignores the other keys. The user is not reachable. Put every blocker into `handback`.
 
 **Run these steps, in this order:**
 
@@ -323,7 +323,7 @@ When several gaps anchor to the same line, merge them into one short comment wit
 
 ## Posting
 
-End a standalone run with the sequence in `~/.claude/rules/outside-pr-review.md`: write the contribution, run `draft-review add`, print `draft-review show`, ask one question, and on approval run `draft-review create`. The result for the user is one pending review for this head. The user submits it. While the first draft is still pending, a later `/dev-qa` run on the same head replaces that draft with the merged review, so one review holds both parts.
+End a standalone run with the sequence in `~/.claude/rules/outside-pr-review.md`: write the contribution, run `draft-review add`, print `draft-review show`, ask one question, and on approval run `draft-review create`. The result for the user is one pending review for this head. The user submits it. While the first draft is still pending, a later run of the other outside-review skill on the same head replaces that draft with the merged review, so one review holds both parts.
 
 When someone else has a pending review on the pull request, `draft-review create` exits with code 3 and changes nothing. The posture file says what to tell the user.
 

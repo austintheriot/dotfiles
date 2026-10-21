@@ -171,7 +171,7 @@ QA writes only data it creates, and removes it before it finishes. When the prod
 
 Compose the section (next heading). Copy the evidence set (videos and screenshots) and the unit directories to the session scratchpad.
 
-- **Standalone**: write the contribution file to a path in the session scratchpad (see Contribution). Write every video and screenshot to disk first. If a cited file does not exist, `draft-review add` exits with code 66. Then follow the sequence in the posture file: `draft-review add`, `draft-review show` printed in chat, one question, and on approval `draft-review create`. The result is one pending review for the head. While the first draft is still pending, running `/expert-review-pr` later on the same head replaces that draft with the merged review, so one review holds both parts. The user submits the review.
+- **Standalone**: write the contribution file to a path in the session scratchpad (see Contribution). Write every video and screenshot to disk first. If a cited file does not exist, `draft-review add` exits with code 66. Then follow the sequence in the posture file: `draft-review add`, `draft-review show` printed in chat, one question, and on approval `draft-review create`. The result is one pending review for the head. While the first draft is still pending, running the other outside-review skill later on the same head replaces that draft with the merged review, so one review holds both parts. The user submits the review.
 - **Orchestrated**: write the contribution file at `--contribution <path>` (see Contribution).
 
 ## The Dev QA section

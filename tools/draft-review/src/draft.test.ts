@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {bodyHash, contributionsDigest, draftRecordAfterCreate} from './draft'
+import {bodyHash, contributionsDigest, draftRecordAfterCreate, lostDraftMessage} from './draft'
 import type {ReadBack} from './draft'
 import {HEAD} from './testing/fixtures'
 
@@ -8,6 +8,20 @@ const created = {id: 7, body: 'Body.', url: 'https://example.test/review'}
 const comment = (id: number, body: string) => ({id, body})
 const afterCreate = (requestedBodies: string[], readBack: ReadBack) =>
   draftRecordAfterCreate({review: created, head: HEAD, requestedBodies, readBack, contributionsDigest: DIGEST})
+
+describe('lostDraftMessage', () => {
+  const text = lostDraftMessage({deletedId: 7, requestPath: '/store/payload.request', cause: 'gh could not create the pending review: HTTP 422'})
+
+  test('names the deleted review, the cause, and the request file', () => {
+    expect(text).toContain('deleted pending review 7')
+    expect(text).toContain('HTTP 422')
+    expect(text).toContain('/store/payload.request')
+  })
+
+  test('says that a GitHub 422 repeats until a contribution changes', () => {
+    expect(text).toContain('A GitHub 422 reply repeats on every create until a contribution changes.')
+  })
+})
 
 describe('draftRecordAfterCreate', () => {
   test('records the review, each read-back comment id with its body hash, and the contributions digest', () => {

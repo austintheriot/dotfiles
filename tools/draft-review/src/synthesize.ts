@@ -127,17 +127,19 @@ function composeBody(set: ContributionSet, notes: Notes, attribution: string | u
     .join(PARAGRAPH)
 }
 
-function toInline(comment: ContributionComment, notes: string[], attribution: string | undefined): InlineComment {
+function toInline(comment: ContributionComment, source: string, notes: string[], attribution: string | undefined): InlineComment {
   const body = [attribution, comment.body, ...notes].filter(isDefined).join(PARAGRAPH)
-  return {path: comment.path, line: comment.line, side: comment.side, ...(comment.startLine === undefined ? {} : {startLine: comment.startLine}), body}
+  return {path: comment.path, line: comment.line, side: comment.side, ...(comment.startLine === undefined ? {} : {startLine: comment.startLine}), body, source}
 }
+
+const devQaSource = (devQa: DevQaContribution) => (devQa.platform === undefined ? 'dev-qa' : `dev-qa@${devQa.platform}`)
 
 function composeComments(set: ContributionSet, notes: Notes, attribution: string | undefined): InlineComment[] {
   const notesFor = (id: string) => notes.reviewNotes.filter(note => note.id === id).map(note => note.line)
-  const devQaComments = set.devQas.flatMap(devQa => devQa.comments)
   return [
-    ...reviewComments(set).map(comment => toInline(comment, notesFor(comment.finding), attribution)),
-    ...[...devQaComments, ...notes.traceComments].map(comment => toInline(comment, [], attribution))
+    ...reviewComments(set).map(comment => toInline(comment, 'code-review', notesFor(comment.finding), attribution)),
+    ...set.devQas.flatMap(devQa => devQa.comments.map(comment => toInline(comment, devQaSource(devQa), [], attribution))),
+    ...notes.traceComments.map(comment => toInline(comment, 'code-trace', [], attribution))
   ]
 }
 

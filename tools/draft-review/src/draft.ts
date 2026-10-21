@@ -79,6 +79,11 @@ export function draftRecordAfterCreate(created: CreatedDraft): RecordDecision {
   return {kind: 'record', record: {reviewId: review.id, bodyHash: bodyHash(review.body), comments, contributionsDigest, head, url: review.url}}
 }
 
+export type LostDraft = {deletedId: number; requestPath: string; cause: string}
+
+export const lostDraftMessage = (lost: LostDraft): string =>
+  `draft-review deleted pending review ${lost.deletedId}, and then the new draft was not made: ${lost.cause}. The review request is in ${lost.requestPath}. A GitHub 422 reply repeats on every create until a contribution changes. For any other cause, run create again to make the draft again.`
+
 export function contributionsDigest(files: readonly {name: string; sha256: string}[]): string {
   const lines = files.map(file => `${file.name}\u0000${file.sha256}`).sort()
   return bodyHash(lines.join('\n'))

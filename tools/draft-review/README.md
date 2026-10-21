@@ -46,28 +46,29 @@ Takes the per-PR lock, merges the store, and creates the pending review. The ste
 
 1. Read and merge the stored contributions for the head. Keep a digest of the contribution file names and contents, and of the `.files` hash record beside each contribution.
 2. Find the upload for each cited file by the hash that `add` recorded for it:
-   - When the file holds the recorded content, reuse its upload from the ledger, or upload it in step 4.
+   - When the file holds the recorded content, reuse its upload from the ledger, or upload it in step 5.
    - When the file changed after `add`, or no longer exists, use the ledger upload of the recorded content. When the ledger has none, exit with code 66. For a changed file, the message says `<path> changed after add, run add again`.
    - When two contributions for the head recorded different content for one path, exit with code 66.
    - When `add` recorded no hash for the path, use the content that the path holds now.
-3. Find the pending reviews of the signed-in user on the pull request, with the inline comments of each review. Read the review that `draft.json` names by its id, and get its state. Then decide:
+3. Check each inline comment against the pull-request diff. The command reads `GET repos/{owner}/{repo}/pulls/{pr}/files` and takes the line ranges of each hunk from the `patch` of each file. The `line` of the comment must sit inside one hunk on the side of the comment, together with its optional `startLine`. When a comment fails, the command uploads nothing, deletes nothing, and exits with code 65. The message names the file, the line, and the contribution that holds the comment. A file that GitHub sends with no `patch` fails every comment on it.
+4. Find the pending reviews of the signed-in user on the pull request, with the inline comments of each review. Read the review that `draft.json` names by its id, and get its state. Then decide:
    - When the user submitted that review, and `draft.json` names the same head, change nothing. Write the merged review to `synthesized.md`, print the path, and exit with code 3. See [A submitted first draft](#a-submitted-first-draft).
    - When GitHub returns `404` for that review, the command ignores `draft.json` for this decision.
    - When a submitted review by the user is for the head and holds the body that the command is about to send, change nothing. Write the merged review to `synthesized.md`, print the path, and exit with code 3. This check does not use `draft.json`.
    - When a pending review is not one that `draft-review` can replace, change nothing. Write the merged review to `synthesized.md`, print the path, and exit with code 3.
-4. Upload each file from step 2. For each file, the command reads the file one time, hashes those bytes, and uploads the same bytes. When the hash is not the hash from step 2, the file changed while `create` ran. The command then uploads nothing more, says `<path> changed while create ran. Run create again.`, and exits with code 66. The command writes the ledger after each upload, so a failed run keeps the URLs it already has.
-5. Put the URLs in place of the local paths. Write the merged review to `synthesized.md` and the exact request to `payload.request`.
-6. Find the pending reviews again, and decide again.
-7. When no pending review exists, create one.
-8. When the only pending review is the review that `draft-review` created last, delete that review and create the new one. The body and every inline comment must be unchanged. An added, an edited, or a deleted inline comment makes the review one that `draft-review` cannot replace.
-9. When any other pending review exists, change nothing, and exit with code 3.
-10. When the user submitted a review after step 3, and step 3 refuses that review now, change nothing, and exit with code 3.
+5. Upload each file from step 2. For each file, the command reads the file one time, hashes those bytes, and uploads the same bytes. When the hash is not the hash from step 2, the file changed while `create` ran. The command then uploads nothing more, says `<path> changed while create ran. Run create again.`, and exits with code 66. The command writes the ledger after each upload, so a failed run keeps the URLs it already has.
+6. Put the URLs in place of the local paths. Write the merged review to `synthesized.md` and the exact request to `payload.request`.
+7. Find the pending reviews again, and decide again.
+8. When no pending review exists, create one.
+9. When the only pending review is the review that `draft-review` created last, delete that review and create the new one. The body and every inline comment must be unchanged. An added, an edited, or a deleted inline comment makes the review one that `draft-review` cannot replace.
+10. When any other pending review exists, change nothing, and exit with code 3.
+11. When the user submitted a review after step 4, and step 4 refuses that review now, change nothing, and exit with code 3.
 
 On success, the command prints the URL of the pending review. Then it reads the inline comments of the new review back from GitHub and compares them with the request. The comparison changes CRLF to LF and removes trailing whitespace from each body on both sides. When the count or the set of comment bodies differs, a comment can be the user's work. The command then writes no `draft.json`, says why, and exits with code 3. When the read fails, the command writes no `draft.json`, says why, and exits with code 69. Without `draft.json`, the next `create` refuses to replace that review.
 
 When the comments match, the command writes `draft.json`. Then it reads the contribution files for the head again. When the digest from step 1 changed, an `add` landed while `create` ran, and the new draft does not hold it. The command says that the draft is stale and exits with code 75. Run `create` again: it replaces the stale draft.
 
-When the create fails after the delete, the command names the deleted review and the path of `payload.request`, and exits with code 69. Run `create` again to make the draft again.
+When the create fails after the delete, the command names the deleted review and the path of `payload.request`, and exits with code 69. A GitHub `422` reply repeats on every `create` until a contribution changes. For any other cause, run `create` again to make the draft again.
 
 The request never names an `event`, so GitHub keeps the review pending.
 
@@ -124,7 +125,7 @@ The check runs after the upload plan. So a missing cited file (code 66) or a mis
 | 0 | `ok` | The command finished. |
 | 3 | `refused` | Another pending review by the user exists, the user edited the review that `draft-review` created, the user submitted the first draft for the head, a submitted review for the head holds the same body, or the comments of a new review do not match the request. When no review URL was printed, the merged review is in `synthesized.md`. When a review URL was printed, a new pending review exists with no `draft.json`, and the user must check it on GitHub and delete it before the next `create`. |
 | 64 | `usage` | The command line is wrong. |
-| 65 | `dataErr` | A contribution is invalid, the stored contributions break a merge rule, or `draft.json` is invalid. See [An invalid draft.json](#an-invalid-draftjson). |
+| 65 | `dataErr` | A contribution is invalid, the stored contributions break a merge rule, an inline comment is outside the pull-request diff, or `draft.json` is invalid. See [An invalid draft.json](#an-invalid-draftjson). |
 | 66 | `noInput` | An input file is missing, a cited file is missing or changed after `add` with no upload of its recorded content, a cited file changed while `create` ran, two contributions recorded different content for one file, or the store holds nothing for the head. |
 | 69 | `unavailable` | `gh` is missing or not signed in, or a GitHub call or an upload failed. This code includes a create that failed after the delete, and a failed read of the new review's comments. When a review URL was printed, a pending review exists with no `draft.json`. The user must check it on GitHub and delete it before the next `create`. |
 | 73 | `cantCreate` | Another run holds the per-PR lock for longer than 30 seconds. |

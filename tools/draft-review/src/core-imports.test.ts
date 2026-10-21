@@ -3,7 +3,7 @@ import {readdirSync, readFileSync} from 'node:fs'
 import {join} from 'node:path'
 import ts from 'typescript'
 
-const CORE_FILES = ['add-plan', 'args', 'clear', 'contribution', 'contribution-set', 'draft', 'exit', 'ledger', 'lists', 'parsed', 'payload', 'render', 'synthesize', 'uploads']
+const CORE_FILES = ['add-plan', 'args', 'clear', 'contribution', 'contribution-set', 'diff-anchors', 'draft', 'exit', 'ledger', 'lists', 'parsed', 'payload', 'render', 'synthesize', 'uploads']
 const ALLOWED_PACKAGES = new Set(['zod', 'node:crypto', 'node:util'])
 const FORBIDDEN_GLOBALS = [/\bBun\b/, /\bprocess\b/, /\brequire\s*\(/, /\bDate\.now\b/, /\bnew\s+(globalThis\.)?Date\b/, /\bglobalThis\s*\[/]
 

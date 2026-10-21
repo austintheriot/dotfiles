@@ -5,8 +5,8 @@ test('renders the body, each inline comment with its location, the uploads, and 
   const text = renderReview({
     body: 'Body text.',
     comments: [
-      {path: 'src/a.ts', line: 42, side: 'RIGHT', body: 'One line.'},
-      {path: 'src/b.ts', line: 9, side: 'LEFT', startLine: 7, body: 'A range.'}
+      {path: 'src/a.ts', line: 42, side: 'RIGHT', body: 'One line.', source: 'code-review'},
+      {path: 'src/b.ts', line: 9, side: 'LEFT', startLine: 7, body: 'A range.', source: 'code-trace'}
     ],
     uploads: ['/tmp/qa/a.png'],
     handback: ['Check the head.']

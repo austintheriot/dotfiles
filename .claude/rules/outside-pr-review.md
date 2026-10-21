@@ -254,6 +254,7 @@ When `create` exits with a code other than 0, act as follows. The README exit co
 
 - Code 3 with no review URL on stdout: another pending review exists, or someone edited the draft. `create` wrote nothing to GitHub. Tell the user the path of `synthesized.md`, which holds the merged review. Do not touch the other review. When the other review is the user's own hand-written draft, the user can copy text from `synthesized.md` into it. After the user submits or discards it, run `create` again.
 - Code 3 with a review URL on stdout: the new pending review exists, and it has no record. The read-back found different comments. Tell the user to check it on GitHub and delete it before you run `create` again.
+- Code 65: a contribution is invalid, breaks a merge rule, or has an inline comment outside the diff. `create` uploaded nothing and deleted nothing. Fix the contribution and run `add` again. Then run `show` again, and ask the question again before `create`.
 - Code 66: a cited file does not exist or was edited after `add`. Write the file again and run `add` again. Then run `show` again, and ask the question again before `create`.
 - Code 75: a contribution changed while `create` ran. Run `create` again.
 - Code 69 with a review URL on stdout: the new pending review exists, and it has no record. Tell the user to check it on GitHub and delete it before you run `create` again.
@@ -268,7 +269,7 @@ Before you write an inline comment into a contribution, fetch the patch for the 
 gh api "repos/$REPO/pulls/$PR/files" --jq '.[] | select(.filename=="<path>") | .patch'
 ```
 
-The hunk headers (`@@ -old,count +new,count @@`) give the valid `RIGHT`-side lines. A comment whose line does not verify moves into the body, described by file path alone. Never write an anchor you just disproved. `draft-review` does not check anchors.
+The hunk headers (`@@ -old,count +new,count @@`) give the valid `RIGHT`-side lines. A comment whose line does not verify moves into the body, described by file path alone. Never write an anchor you just disproved. Before any upload or delete, `draft-review create` checks each anchor against the diff hunks. When an anchor is outside the diff, `create` exits with code 65 and names the comment.
 
 ## Red flags
 

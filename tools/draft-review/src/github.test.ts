@@ -1,7 +1,7 @@
 import {describe, expect, test} from 'bun:test'
 import {DraftReviewError, EXIT} from './exit'
 import {isPendingReviewConflict, parseHttpReply, recordedReviewFrom, reviewRequest} from './github'
-import type {ReviewPayload} from './payload'
+import type {InlineComment, ReviewPayload} from './payload'
 
 const reply = (statusLine: string, body: string) => `${statusLine}\r\nContent-Type: application/json\r\nX-Github-Request-Id: 1\r\n\r\n${body}`
 
@@ -46,7 +46,7 @@ describe('recordedReviewFrom', () => {
 describe('reviewRequest', () => {
   const head = 'c'.repeat(40)
   const payload = (comments: ReviewPayload['comments']): ReviewPayload => ({body: 'Body.', comments, uploads: [], handback: ['Not posted.']})
-  const comment = (overrides: Partial<ReviewPayload['comments'][number]> = {}) => ({path: 'src/a.ts', line: 42, side: 'RIGHT' as const, body: 'Comment.', ...overrides})
+  const comment = (overrides: Partial<InlineComment> = {}): InlineComment => ({path: 'src/a.ts', line: 42, side: 'RIGHT', body: 'Comment.', source: 'code-review', ...overrides})
 
   test('never names an event, so GitHub keeps the review pending', () => {
     expect(Object.keys(reviewRequest(head, payload([comment()])))).not.toContain('event')

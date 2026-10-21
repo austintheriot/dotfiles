@@ -6,13 +6,26 @@ import type {ContributionSet} from './contribution-set'
 import {routeFindings, validateContributions} from './contribution-set'
 import type {Contribution} from './contribution'
 import type {DraftAction, ReadBack} from './draft'
-import {draftAction, draftRecordAfterCreate} from './draft'
+import {anchorProblems} from './diff-anchors'
+import {draftAction, draftRecordAfterCreate, lostDraftMessage} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ExitCode} from './exit'
 import type {CreatedReview} from './github'
-import {createPendingReview, currentRepo, deleteReview, ensureGh, ghUploader, recordedReview, reviewComments, reviewRequest, viewerLogin, viewerReviews} from './github'
+import {
+  createPendingReview,
+  currentRepo,
+  deleteReview,
+  ensureGh,
+  ghUploader,
+  pullRequestFiles,
+  recordedReview,
+  reviewComments,
+  reviewRequest,
+  viewerLogin,
+  viewerReviews
+} from './github'
 import {withLock} from './lock'
-import type {ReviewPayload} from './payload'
+import type {InlineComment, ReviewPayload} from './payload'
 import {renderReview} from './render'
 import type {IUploader, PrStore} from './store'
 import {
@@ -182,9 +195,15 @@ function refuseStale(target: Target, reviewId: number): void {
   throw new DraftReviewError(message, EXIT.tempFail)
 }
 
-function lostDraft(written: Written, deletedId: number, cause: string): DraftReviewError {
-  const steps = `The review request is in ${written.requestPath}. Run create again to make the draft again.`
-  return new DraftReviewError(`draft-review deleted pending review ${deletedId}, and then the new draft was not made: ${cause}. ${steps}`, EXIT.unavailable)
+const lostDraft = (written: Written, deletedId: number, cause: string): DraftReviewError =>
+  new DraftReviewError(lostDraftMessage({deletedId, requestPath: written.requestPath, cause}), EXIT.unavailable)
+
+function refuseOffDiff(target: Target, comments: readonly InlineComment[]): void {
+  if (comments.length === 0) return
+  const problems = anchorProblems(comments, pullRequestFiles(target.repo, target.command.pr))
+  if (problems.length === 0) return
+  const steps = 'draft-review uploaded nothing and changed nothing on GitHub. Fix the line or move the comment into the body, then run add again.'
+  throw new DraftReviewError(`${problems.join('. ')}. ${steps}`, EXIT.dataErr)
 }
 
 function post(target: Target, written: Written, deletedId: number | undefined): ExitCode {
@@ -233,6 +252,7 @@ async function create(command: CreateCommand): Promise<ExitCode> {
     const uploads = prepareUploads(store, command.head, payload.uploads, firstPath => uploaderFor(settings, configPath, firstPath))
     ensureGh()
     const target: Target = {repo, store, command, login: viewerLogin(), contributionsDigest: digest}
+    refuseOffDiff(target, payload.comments)
     const early = decide(target, substituteUploads(payload, uploads.plan.urlByPath).body)
     if (isRefusal(early)) return refuseFor(early, target, writeSynthesized(store, command.head, renderReview(payload)))
     const urls = await runUploads(store, uploads)

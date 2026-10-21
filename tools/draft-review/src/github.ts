@@ -2,6 +2,7 @@ import {basename, extname} from 'node:path'
 import {z} from 'zod'
 import type {Repo} from './args'
 import {parseRepo} from './args'
+import type {PullFile} from './diff-anchors'
 import type {DraftRecord, PendingComment, PendingReview, RecordedReview, SubmittedReview} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ReviewPayload} from './payload'
@@ -95,6 +96,17 @@ export function recordedReviewFrom(run: GhRun, record: DraftRecord): RecordedRev
   if (reply.status === 404 || (reply.status === undefined && /HTTP 404/.test(run.stderr))) return {kind: 'gone', record}
   const review = parseReply({...run, stdout: reply.body}, z.object({state: z.string()}), `read review ${record.reviewId}, which draft.json names`)
   return {kind: 'found', record, state: review.state}
+}
+
+const PullFileSchema = z.object({filename: z.string(), patch: z.string().optional()})
+
+export function pullRequestFiles(repo: Repo, pr: number): PullFile[] {
+  const pages = ghJson(
+    ['api', `repos/${repo.owner}/${repo.name}/pulls/${pr}/files`, '--paginate', '--slurp'],
+    z.array(z.array(PullFileSchema)),
+    `list the changed files of pull request ${pr}`
+  )
+  return pages.flat().map(file => ({filename: file.filename, patch: file.patch}))
 }
 
 export function deleteReview(repo: Repo, pr: number, reviewId: number): void {

@@ -4,7 +4,7 @@ import {citedPaths, substituteUploads} from './uploads'
 
 const payload = (body: string, commentBody = body): ReviewPayload => ({
   body,
-  comments: [{path: 'src/a.ts', line: 1, side: 'RIGHT', body: commentBody}],
+  comments: [{path: 'src/a.ts', line: 1, side: 'RIGHT', body: commentBody, source: 'code-review'}],
   uploads: ['/a.png', '/a.png.mp4'],
   handback: ['Unchanged.']
 })
@@ -14,7 +14,7 @@ describe('substituteUploads', () => {
     const urls = new Map([['/a.png', 'https://cdn.example/1'], ['/a.png.mp4', 'https://cdn.example/2']])
     expect(substituteUploads(payload('See /a.png and /a.png.mp4.'), urls)).toEqual({
       body: 'See https://cdn.example/1 and https://cdn.example/2.',
-      comments: [{path: 'src/a.ts', line: 1, side: 'RIGHT', body: 'See https://cdn.example/1 and https://cdn.example/2.'}],
+      comments: [{path: 'src/a.ts', line: 1, side: 'RIGHT', body: 'See https://cdn.example/1 and https://cdn.example/2.', source: 'code-review'}],
       uploads: ['/a.png', '/a.png.mp4'],
       handback: ['Unchanged.']
     })

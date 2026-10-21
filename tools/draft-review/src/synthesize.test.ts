@@ -8,10 +8,17 @@ describe('synthesize', () => {
   test('builds a review-only payload under the zone headers and the attribution line', () => {
     expect(payloadOf([review()])).toEqual({
       body: `${ZONES}\n\n${ATTRIBUTION}\n\nThe refresh path has one defect.`,
-      comments: [{path: 'src/a.ts', line: 42, side: 'RIGHT', body: attributed('The token expires before the refresh.')}],
+      comments: [{path: 'src/a.ts', line: 42, side: 'RIGHT', body: attributed('The token expires before the refresh.'), source: 'code-review'}],
       uploads: [],
       handback: []
     })
+  })
+
+  test('names the source contribution of each inline comment', () => {
+    const verdict: TraceVerdict = {id: 'Q1@Windows', result: 'root-cause', anchor: {path: 'src/b.ts', line: 7, side: 'RIGHT'}, body: 'The loader returns early.'}
+    const qaComment = {path: 'src/c.ts', line: 3, side: 'RIGHT' as const, body: 'Blank here.', finding: 'Q1'}
+    const payload = payloadOf([review(), windowsDevQa({comments: [qaComment]}), trace([verdict])])
+    expect(payload.comments.map(comment => comment.source)).toEqual(['code-review', 'dev-qa@Windows', 'code-trace'])
   })
 
   test('adds no attribution line when none is defined or it is empty', () => {
@@ -110,8 +117,8 @@ describe('synthesize', () => {
     const verdict: TraceVerdict = {id: 'Q1', result: 'root-cause', anchor: {path: 'src/b.ts', line: 7, side: 'RIGHT'}, body: 'The loader returns early.'}
     const payload = payloadOf([review(), devQa(), trace([verdict])])
     expect(payload.comments).toEqual([
-      {path: 'src/a.ts', line: 42, side: 'RIGHT', body: attributed('The token expires before the refresh.')},
-      {path: 'src/b.ts', line: 7, side: 'RIGHT', body: attributed('The loader returns early.')}
+      {path: 'src/a.ts', line: 42, side: 'RIGHT', body: attributed('The token expires before the refresh.'), source: 'code-review'},
+      {path: 'src/b.ts', line: 7, side: 'RIGHT', body: attributed('The loader returns early.'), source: 'code-trace'}
     ])
     expect(payload.body.endsWith('/tmp/qa/blank.png\n\nBlank page: the cause is in `src/b.ts` line 7. See the inline comment there.')).toBe(true)
   })
@@ -127,7 +134,13 @@ describe('synthesize', () => {
     const verdict: TraceVerdict = {id: 'Q1@macOS', result: 'root-cause', body: 'Same race as the token refresh.', duplicateOf: 'R1'}
     const payload = payloadOf([review(), devQa({platform: 'macOS'}), trace([verdict])])
     expect(payload.comments).toEqual([
-      {path: 'src/a.ts', line: 42, side: 'RIGHT', body: attributed('The token expires before the refresh.\n\nSeen on the deployed build (macOS): Blank page.\n\n/tmp/qa/blank.png')}
+      {
+        path: 'src/a.ts',
+        line: 42,
+        side: 'RIGHT',
+        body: attributed('The token expires before the refresh.\n\nSeen on the deployed build (macOS): Blank page.\n\n/tmp/qa/blank.png'),
+        source: 'code-review'
+      }
     ])
   })
 
@@ -145,7 +158,7 @@ describe('synthesize', () => {
 
   test('no round-two contribution leaves the round-one parts as written', () => {
     const payload = payloadOf([review(), devQa()])
-    expect(payload.comments).toEqual([{path: 'src/a.ts', line: 42, side: 'RIGHT', body: attributed('The token expires before the refresh.')}])
+    expect(payload.comments).toEqual([{path: 'src/a.ts', line: 42, side: 'RIGHT', body: attributed('The token expires before the refresh.'), source: 'code-review'}])
     expect(payload.handback).toEqual([])
   })
 

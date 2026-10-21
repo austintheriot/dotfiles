@@ -3,7 +3,8 @@ import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, wr
 import {basename, dirname, join} from 'node:path'
 import {z} from 'zod'
 import type {Repo} from './args'
-import {CONTRIBUTION_FILE_NAME, FILE_HASHES_SUFFIX, namesToClear, staleRoundTwoNames} from './clear'
+import {planAdd} from './add-plan'
+import {CONTRIBUTION_FILE_NAME, FILE_HASHES_SUFFIX, namesToClear} from './clear'
 import type {Contribution} from './contribution'
 import {parseContribution} from './contribution'
 import type {RoutedFindings} from './contribution-set'
@@ -68,12 +69,6 @@ export function readContributionFile(path: string): Contribution {
   return parseStoredContribution(path, readText(path))
 }
 
-// A platform label is free text but never contains @, so @ keeps `dev-qa` with platform `verify-x` apart from `dev-qa-verify` with platform `x`.
-const contributionFileName = (contribution: Contribution) => {
-  const platform = contribution.kind === 'dev-qa' || contribution.kind === 'dev-qa-verify' ? contribution.platform : undefined
-  return platform === undefined ? `${contribution.kind}.json` : `${contribution.kind}@${encodeURIComponent(platform)}.json`
-}
-
 const FileHashesSchema = z.object({files: z.array(z.object({path: z.string().min(1), sha256: Sha256Schema}).strict())}).strict()
 type FileHashes = z.infer<typeof FileHashesSchema>
 
@@ -101,16 +96,26 @@ const listingOf = (dir: string) => (existsSync(dir) ? readdirSync(dir) : [])
 
 export type StoredContribution = {path: string; removed: string[]}
 
+const storedFiles = (dir: string, listing: readonly string[]) =>
+  listing
+    .filter(name => CONTRIBUTION_FILE_NAME.test(name))
+    .sort()
+    .map(name => ({name, contribution: parseStoredContribution(join(dir, name), readText(join(dir, name)))}))
+
 // The hashes sit beside the contribution, not inside it, so the stored contribution stays the exact file that add received.
 export function writeContribution(store: PrStore, contribution: Contribution): StoredContribution {
   const hashes = citedFileHashes(contribution)
   const dir = headDir(store, contribution.head)
-  const removed = staleRoundTwoNames(contribution.kind, listingOf(dir))
-  removeNames(dir, removed)
-  const path = join(dir, contributionFileName(contribution))
+  const listing = listingOf(dir)
+  const plan = planAdd({contribution, listing, stored: storedFiles(dir, listing)})
+  if (plan.kind === 'refuse') {
+    throw new DraftReviewError(`add stored nothing: this contribution and the stored contributions for head ${contribution.head} break a merge rule: ${plan.reason}`, EXIT.dataErr)
+  }
+  removeNames(dir, plan.remove)
+  const path = join(dir, plan.name)
   writeJson(`${path}${FILE_HASHES_SUFFIX}`, hashes)
   writeJson(path, contribution)
-  return {path, removed: removed.map(name => join(dir, name))}
+  return {path, removed: plan.remove.map(name => join(dir, name))}
 }
 
 export function clearHead(store: PrStore, head: string): string[] {

@@ -122,7 +122,7 @@ Use the same agent type, model rule, and prompt as in step 2. Wait for every age
 1. Read its `head`. When the `head` is not the head from step 1, do not add the file.
 2. Otherwise, run `draft-review add` on it.
 
-A round-two file can be absent, name another head, or fail `add`. Then that cross-check did not run. The contract has no `not-run` status for a round-two kind, so do not write a replacement. Step 1 cleared the store for this head. So a round-two contribution that is not in the store leaves the draft unchanged. Report the cross-check that did not run to the user in step 6.
+A round-two file can be absent, name another head, or fail `add`. An `add` that exits 65 because the set breaks a merge rule stores nothing. In each case, that cross-check did not run. The contract has no `not-run` status for a round-two kind, so do not write a replacement. Step 1 cleared the store for this head. So a round-two contribution that is not in the store leaves the draft unchanged. Report the cross-check that did not run to the user in step 6.
 
 ### 5. Show, ask, create
 

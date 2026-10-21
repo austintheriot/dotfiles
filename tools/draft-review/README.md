@@ -23,6 +23,8 @@ The command also records the SHA-256 hash of each file in the `uploads` list of 
 
 When the file is not a valid contribution, the command stores nothing and names the field path in the error. When a file in the `uploads` list does not exist, the command stores nothing, names the file, and exits with code 66.
 
+Before it stores, `add` checks the merge rules on the set that the head holds after the add. When the set breaks a rule, the command stores nothing, names the rule, and exits with code 65.
+
 `add` does not take the per-PR lock. Each stored file has its own name, and a rename puts each file in place, so two runs of `add` cannot mix their files.
 
 ### `draft-review route --pr <n> --head <sha> --out <dir>`
@@ -201,7 +203,7 @@ The contribution contract is the `## Orchestrated mode` section of `.claude/rule
 
 ## Layout of the code
 
-- The pure core: `clear.ts`, `contribution.ts`, `contribution-set.ts`, `synthesize.ts`, `uploads.ts`, `payload.ts`, `parsed.ts`, `lists.ts`, `args.ts`, `draft.ts`, `ledger.ts`, `render.ts`, and `exit.ts`. These files do no IO.
+- The pure core: `add-plan.ts`, `clear.ts`, `contribution.ts`, `contribution-set.ts`, `synthesize.ts`, `uploads.ts`, `payload.ts`, `parsed.ts`, `lists.ts`, `args.ts`, `draft.ts`, `ledger.ts`, `render.ts`, and `exit.ts`. These files do no IO.
 - The shell: `main.ts` (the commands), `store.ts` (the store files and the upload loop), `github.ts` (every `gh` call), `lock.ts` (the lock), and `config.ts` (the config file).
 
 The test `src/core-imports.test.ts` holds that boundary. A core file can import only core files, `zod`, `node:crypto`, and `node:util`. It cannot name `Bun` or `process`, it cannot call `require`, and it cannot read the clock with `Date.now` or `new Date(`. The test removes comments and string literals before it looks for these names, so a comment or a message can use the words.

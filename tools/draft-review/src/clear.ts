@@ -4,6 +4,12 @@ export const CONTRIBUTION_FILE_NAME = /^(code-review|dev-qa|dev-qa-verify|code-t
 
 export const FILE_HASHES_SUFFIX = '.files'
 
+// A platform label is free text but never contains @, so @ keeps `dev-qa` with platform `verify-x` apart from `dev-qa-verify` with platform `x`.
+export const contributionFileName = (contribution: Contribution): string => {
+  const platform = contribution.kind === 'dev-qa' || contribution.kind === 'dev-qa-verify' ? contribution.platform : undefined
+  return platform === undefined ? `${contribution.kind}.json` : `${contribution.kind}@${encodeURIComponent(platform)}.json`
+}
+
 const isContribution = (name: string) => CONTRIBUTION_FILE_NAME.test(name)
 
 const isHashRecord = (name: string) => name.endsWith(FILE_HASHES_SUFFIX) && isContribution(name.slice(0, -FILE_HASHES_SUFFIX.length))

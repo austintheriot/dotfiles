@@ -188,6 +188,29 @@ describe('add removes the round-two files that answered the kind it replaces', (
   })
 })
 
+describe('add checks the merge rules before it stores', () => {
+  test('refuses with exit 65 when the stored set plus the new file breaks a merge rule, names the rule, and stores nothing', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    const before = world.listing()
+    const run = await world.add(verify([{id: 'R2', result: 'reproduced', evidence: [world.evidence('r2.mp4')], note: 'Seen.'}]))
+    expect(run.code).toBe(EXIT.dataErr)
+    expect(run.stderr).toContain('R2, which is not a review finding with a behavior')
+    expect(world.listing()).toEqual(before)
+  })
+
+  test('a refused round-one add removes no round-two file', async () => {
+    const world = makeWorld()
+    await world.add(world.devQa({platform: 'macOS'}))
+    await world.add(trace([{id: 'Q1@macOS', result: 'no-code-cause', body: 'The build config.'}]))
+    const before = world.listing()
+    const run = await world.add(world.devQa())
+    expect(run.code).toBe(EXIT.dataErr)
+    expect(world.listing()).toEqual(before)
+    expect(before).toContain('code-trace.json')
+  })
+})
+
 describe('route', () => {
   test('writes the findings for each other skill as {"findings": [...]}', async () => {
     const world = makeWorld()
@@ -201,10 +224,10 @@ describe('route', () => {
     expect(read('to-trace.json')).toEqual({findings: [blankPage(png)]})
   })
 
-  test('refuses a set that breaks a merge rule with exit 65 and the reason', async () => {
+  test('refuses a stored set that breaks a merge rule with exit 65 and the reason', async () => {
     const world = makeWorld()
     await world.add(world.devQa({platform: 'macOS'}))
-    await world.add(world.devQa())
+    world.plant(`${HEAD}/dev-qa.json`, JSON.stringify(world.devQa()))
     const run = await world.cli(['route', ...world.target, '--out', join(world.dir, 'routed')])
     expect(run.code).toBe(EXIT.dataErr)
     expect(run.stderr).toContain('platform')

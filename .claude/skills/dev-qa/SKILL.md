@@ -18,7 +18,9 @@ Three files share the work:
 
 **Read `~/.claude/local/dev-qa.md` and `~/.claude/rules/outside-pr-review.md` before you test.** If the project file does not exist, ask the user for the deployed URL and a test account before you test.
 
-In orchestrated mode, never ask the user. When a blocker stops every step from starting, write the contribution with `status` `not-run` and the blocker as `reason`. A blocker is a missing project file, a failed target proof, or a failed session proof. When some steps ran before the blocker, use `status` `incomplete` instead.
+In orchestrated mode, never ask the user. When a blocker stops every step from starting, write the contribution with `status` `not-run`. A blocker is a missing project file, a failed target proof, or a failed session proof. When some steps ran before the blocker, use `status` `incomplete` instead.
+
+`draft-review` posts the `reason` in the review body. Write the `reason` as a plain fact about the pull request or the build. An example: "The deployed build for this head could not be tested." The `reason` never names a local file, a local path, or a private project file. Put that detail in `handback`, which is never posted.
 
 ## Test environments
 

@@ -50,6 +50,14 @@ gh api "repos/<owner>/<repo>/pulls/<n>/reviews" --paginate \
 
 Read `reviewId` from `~/.cache/draft-review/<owner>/<repo>/<n>/draft.json`. When a pending review exists, and its id is not that `reviewId`, stop. The file can be absent. Then every pending review counts as one that `draft-review` did not create. Tell the user that a pending review by them is on the pull request, and that `draft-review` did not create it. Name its id. Tell the user to submit it or delete it, and then to run `/draft-review` again. Do not start the agents.
 
+Clear the stored contributions of any earlier run on this head:
+
+```bash
+draft-review clear --pr <n> --head <head>
+```
+
+The command clears local store files only. It publishes nothing, so it needs no question. It keeps the upload ledger and `draft.json`. The command prints the name of each file that it cleared. When it prints names, tell the user in one line which old files it cleared. Without this step, an old round-two verdict can attach to a new finding that has the same id.
+
 Make a new folder for this run in the session scratchpad: `<scratchpad>/draft-review/<n>-<first 12 characters of the head>/`. The steps below call this folder `<dir>`.
 
 ### 2. Round one
@@ -109,9 +117,12 @@ The command writes `<dir>/to-verify.json` and `<dir>/to-trace.json`. Each file h
 | `to-verify.json` | `/dev-qa <n> --verify <dir>/to-verify.json --contribution <dir>/dev-qa-verify.json` | `<dir>/dev-qa-verify.json` |
 | `to-trace.json` | `/expert-review-pr <n> --trace <dir>/to-trace.json --known <dir>/review.json --contribution <dir>/code-trace.json` | `<dir>/code-trace.json` |
 
-Use the same agent type, model rule, and prompt as in step 2. Wait for every agent that you dispatched. Then run `draft-review add` on each file that exists.
+Use the same agent type, model rule, and prompt as in step 2. Wait for every agent that you dispatched. Then check each round-two file that exists:
 
-A round-two file can be absent, or `add` can fail on it. Then do not write a replacement. A missing round-two contribution leaves the draft unchanged. Report the missing file to the user in step 6.
+1. Read its `head`. When the `head` is not the head from step 1, do not add the file.
+2. Otherwise, run `draft-review add` on it.
+
+A round-two file can be absent, name another head, or fail `add`. Then that cross-check did not run. The contract has no `not-run` status for a round-two kind, so do not write a replacement. Step 1 cleared the store for this head. So a round-two contribution that is not in the store leaves the draft unchanged. Report the cross-check that did not run to the user in step 6.
 
 ### 5. Show, ask, create
 
@@ -134,9 +145,9 @@ On exit code 0, `create` prints the URL of the pending review. Report these item
   - A `root-cause` verdict. A new inline comment sits at the trace anchor.
   - A `root-cause` verdict with `duplicateOf`. The review comment for that finding now holds the Dev QA evidence.
 - Each `not-run` part, with its reason.
-- Each round-two file that was absent, and each `add` that failed.
+- Each cross-check that did not run: a round-two file that was absent, named another head, or failed `add`.
 
-Find the verdicts in `<dir>/dev-qa-verify.json` and `<dir>/code-trace.json`. A `not-reproduced`, `not-reachable`, `no-code-cause`, or `inconclusive` verdict does not change the draft. The `show` output already listed those as hand-back lines.
+Report verdicts only from the round-two files that `draft-review add` accepted for the head from step 1. A file that `add` did not accept is not in the draft, so its verdicts changed nothing. A `not-reproduced`, `not-reachable`, `no-code-cause`, or `inconclusive` verdict does not change the draft. The `show` output already listed those as hand-back lines.
 
 ## Exit codes of `create`
 
@@ -169,3 +180,4 @@ Any of these means stop and re-read the rule it breaks:
 - A `not-run` reason that names an agent, a skill, or a tool.
 - A pending review by the user that `draft-review` did not create, and the agents start anyway.
 - A contribution for a head other than the head from step 1, and the run continues to `show`.
+- Round one starts before `draft-review clear` runs for the head.

@@ -48,6 +48,20 @@ test("a binary that reports another stamp leaves the destination unchanged and r
   await world.cleanup();
 });
 
+test("a binary that prints no stamp fails with its exit status and stderr and leaves the destination unchanged", async () => {
+  const world = await makeWorld();
+  const source = join(world.directory, "built-thumperd");
+  await writeFile(source, "#!/bin/sh\necho 'no stamp compiled in' >&2\n");
+  await chmod(source, 0o755);
+
+  const attempt = replaceVerified({ source, destination: world.destination, expectedStamp: "abc123" });
+
+  await expect(attempt).rejects.toThrow("printed no stamp (exit 0, signal none): no stamp compiled in");
+  expect(await readFile(world.destination, "utf8")).toBe("old binary");
+  expect(await leftovers(world)).toEqual([]);
+  await world.cleanup();
+});
+
 test("a missing build output fails with its path and leaves the destination unchanged", async () => {
   const world = await makeWorld();
   const source = join(world.directory, "no-such-binary");

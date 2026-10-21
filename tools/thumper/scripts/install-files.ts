@@ -24,7 +24,12 @@ function reportedStamp(executable: string): string {
   if (!result.success) {
     throw new Error(`${executable} --stamp failed with exit ${result.exitCode}: ${result.stderr.toString().trim()}`);
   }
-  return result.stdout.toString().trim();
+  const stamp = result.stdout.toString().trim();
+  if (stamp === "") {
+    const signal = result.signalCode ?? "none";
+    throw new Error(`${executable} --stamp printed no stamp (exit ${result.exitCode}, signal ${signal}): ${result.stderr.toString().trim()}`);
+  }
+  return stamp;
 }
 
 export async function replaceVerified(request: ReplaceRequest): Promise<void> {

@@ -1,6 +1,7 @@
 import {describe, expect, test} from 'bun:test'
 import {DraftReviewError, EXIT} from './exit'
-import {isPendingReviewConflict, parseHttpReply, recordedReviewFrom} from './github'
+import {isPendingReviewConflict, parseHttpReply, recordedReviewFrom, reviewRequest} from './github'
+import type {ReviewPayload} from './payload'
 
 const reply = (statusLine: string, body: string) => `${statusLine}\r\nContent-Type: application/json\r\nX-Github-Request-Id: 1\r\n\r\n${body}`
 
@@ -39,6 +40,34 @@ describe('recordedReviewFrom', () => {
       }
     })()
     expect(caught).toBe(EXIT.unavailable)
+  })
+})
+
+describe('reviewRequest', () => {
+  const head = 'c'.repeat(40)
+  const payload = (comments: ReviewPayload['comments']): ReviewPayload => ({body: 'Body.', comments, uploads: [], handback: ['Not posted.']})
+  const comment = (overrides: Partial<ReviewPayload['comments'][number]> = {}) => ({path: 'src/a.ts', line: 42, side: 'RIGHT' as const, body: 'Comment.', ...overrides})
+
+  test('never names an event, so GitHub keeps the review pending', () => {
+    expect(Object.keys(reviewRequest(head, payload([comment()])))).not.toContain('event')
+    expect(Object.keys(reviewRequest(head, payload([])))).not.toContain('event')
+  })
+
+  test('sends the head, the body, and each comment, and leaves the hand-back out', () => {
+    expect(reviewRequest(head, payload([comment()]))).toEqual({commit_id: head, body: 'Body.', comments: [{path: 'src/a.ts', line: 42, side: 'RIGHT', body: 'Comment.'}]})
+  })
+
+  test('maps a multi-line comment to start_line and start_side on the side of the comment', () => {
+    const request = reviewRequest(head, payload([comment({startLine: 40, side: 'LEFT'})]))
+    expect(request.comments).toEqual([{path: 'src/a.ts', line: 42, side: 'LEFT', start_line: 40, start_side: 'LEFT', body: 'Comment.'}])
+  })
+
+  test('sends no start_line when startLine equals line', () => {
+    expect(reviewRequest(head, payload([comment({startLine: 42})])).comments).toEqual([{path: 'src/a.ts', line: 42, side: 'RIGHT', body: 'Comment.'}])
+  })
+
+  test('sends no comments key when the review has no inline comments', () => {
+    expect(reviewRequest(head, payload([]))).toEqual({commit_id: head, body: 'Body.'})
   })
 })
 

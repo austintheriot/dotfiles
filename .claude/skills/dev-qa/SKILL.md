@@ -28,10 +28,9 @@ A test environment is where a step runs and what drives it: a browser on this ma
 
 - **Standalone** (`/dev-qa [PR]`): this skill owns the post. It ends with the local summary, one question, and on approval a `COMMENT` review whose body is the zone headers from `~/.claude/rules/outside-pr-review.md`, then the Dev QA section.
 - **Orchestrated** (`/dev-qa [PR] --contribution <path>`): this skill never uploads, never posts, and never asks to post. It writes its result as one JSON file at `<path>`, under the Orchestrated mode rules in `~/.claude/rules/outside-pr-review.md`. The orchestrator owns the summary, the approval, the uploads, the merge, and the post. The user is not reachable in this mode. Put a needed hand-off into `handback` instead of asking for it. Wait for every confirmer verdict before you write the file.
+- **Verify** (`/dev-qa [PR] --verify <findings.json> --contribution <path>`): an orchestrated mode that tries to reproduce findings from another source on the deployed build. It runs no Test Steps. All Orchestrated rules apply, including the rule that the user is never asked. The `status`, `reason`, and `body` rules of orchestrated mode do not apply, because a verify contribution has none of those fields. See Verify mode.
 
-- **Verify** (`/dev-qa [PR] --verify <findings.json> --contribution <path>`): an orchestrated mode that tries to reproduce findings from another source on the deployed build. It runs no Test Steps. All Orchestrated rules apply, including the rule that the user is never asked. See Verify mode.
-
-`--no-confirm` skips the independent confirm stage. Every verdict is then reported as unconfirmed.
+`--no-confirm` skips the independent confirm stage. Every verdict is then reported as unconfirmed. Verify mode ignores `--no-confirm` and always confirms, because the orchestrator counts `reproduced` as confirmed.
 
 ## The repository's QA framework
 
@@ -217,7 +216,7 @@ Verify mode answers one question for each finding it receives: does the symptom 
 2. Target proof, as in Process step 2.
 3. Session proof, as in Process step 4.
 4. For each finding in input order, derive the symptom, reach the state the finding names, and drive and capture as in Process step 5. Use the same recorder, screenshot, popup, and no-injection rules as for a Test Steps step.
-5. Confirm, as in Process step 6, for every `reproduced` and `not-reproduced` verdict. The confirmer judges the symptom from the screenshots and state reads. When a verdict is disputed twice, change it to `not-reachable` with the note "needs-human".
+5. Confirm, as in Process step 6, for every `reproduced` and `not-reproduced` verdict. The confirmer judges the symptom from the screenshots and state reads. When the confirmer disputes a verdict twice, write `not-reachable`. The `note` says what the driver saw and that the confirmer disputed it twice. Add one `handback` line for the verdict with the finding `id` and the observed symptom.
 6. Writes, as in Process step 7.
 
 Do not run the steps extractor, do not write scenario records, and do not play freely. Verify mode runs no Test Steps, and it adds no section to the Dev QA post.
@@ -243,7 +242,9 @@ Do not run the steps extractor, do not write scenario records, and do not play f
 
 **Coverage.** Write exactly one verdict for each input finding, in input order, with the finding's `id` in `id`. When time runs out before the run reaches a finding, write `not-reachable` for it with the note "not reached before the run ended". When a blocker stops every finding (a missing project file, a failed target proof, or a failed session proof), write `not-reachable` for every finding with the blocker as the note, and put the blocker in `handback`.
 
-**Contribution.** Write one file at `--contribution <path>` as `kind: "dev-qa-verify"`, with `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback` only. It has no `body`, `comments`, `findings`, `status`, or `reason`. A verdict has `id`, `result`, `evidence`, and `note`. Write the `note` as one or two sentences on what the run did and saw. Every path in a verdict's `evidence` also appears in `uploads`, in citation order. Put these items in `handback`: each framework role that fell back, each verdict that is unconfirmed, and each hand-off that needs the user. Write the file in one call, as the last action of the run, after every confirmer verdict is in.
+**Unreadable input.** When the findings file is missing, unreadable, or invalid JSON, or lacks a `findings` array, that is a blocker. Write `verdicts` as an empty array and add one `handback` line that names the file and the parse error. Empty `verdicts` are legal only in this case.
+
+**Contribution.** Write one file at `--contribution <path>` as `kind: "dev-qa-verify"`, with `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback` only. It has no `body`, `comments`, `findings`, `status`, or `reason`. A verdict has `id`, `result`, `evidence`, and `note`. Write the `note` as one or two sentences on what the run did and saw. Every path in a verdict's `evidence` also appears in `uploads`, in citation order. Put these items in `handback`: each framework role that fell back, each verdict that is unconfirmed, each verdict that the confirmer disputed twice (finding `id` and observed symptom), and each hand-off that needs the user. Write the file in one call, as the last action of the run, after every confirmer verdict is in.
 
 ## Red flags
 

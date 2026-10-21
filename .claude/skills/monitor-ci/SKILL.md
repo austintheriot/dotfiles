@@ -1,6 +1,6 @@
 ---
 name: monitor-ci
-description: Watch CI and any AI review bot on the current branch's PR until the build completes and review feedback is in. Diagnoses failures, plans fixes, offers to rerun flaky workflows, and never waits out or approves a manual gate. Provider-agnostic -- reads the concrete CI CLI, workflow names, and known gates from a machine-local config file (`~/.claude/local/ci-config.md`), so it works across projects and CI providers. Triggers -- "monitor CI", "watch CI", "is the build green", "check my PR build", "wait for CI", "babysit the PR", "is CI passing".
+description: Watch CI and any AI review bot on the current branch's PR until the build completes and review feedback is in. Diagnoses failures, plans fixes, offers to rerun flaky workflows, and never waits out or approves a manual gate. Provider-agnostic -- reads the concrete CI CLI, workflow names, and known gates from a config file (machine-local `~/.claude/local/ci-config.md`, then tracked `~/.claude/ci-config.md`), so it works across projects and CI providers. Triggers -- "monitor CI", "watch CI", "is the build green", "check my PR build", "wait for CI", "babysit the PR", "is CI passing".
 argument-hint: "[PR number or URL -- defaults to PR for current branch]"
 ---
 
@@ -12,7 +12,12 @@ The monitoring shape below is universal. The project-specific parts — which CL
 
 ## Step 0: Load local CI configuration
 
-Read `~/.claude/local/ci-config.md` and select the project section whose repo matches the current remote (`gh repo view --json nameWithOwner`).
+Find the project section whose repo matches the current remote (`gh repo view --json nameWithOwner`). Look in two files, in this order:
+
+1. `~/.claude/local/ci-config.md`: machine-local and untracked. Private projects live here.
+2. `~/.claude/ci-config.md`: tracked in the public dotfiles repo. Public projects live here.
+
+Use the first section that matches. A local section wins over a tracked one for the same repo. A missing file is not an error.
 
 That file supplies:
 
@@ -23,7 +28,7 @@ That file supplies:
 - **AI review bot** — login, opt-in / opt-out labels, workflow file, and the events that trigger a review.
 - **Prerequisites** — how the CLI is installed and how it stores its API token.
 
-**If the file is missing, or has no section for this repo**, do not guess. Say so, name the two or three things you would need (how to query CI status from the terminal, what the workflows are called, which jobs are manual gates), and offer to write a new section. A wrong guess about a deploy-adjacent job is the failure mode worth avoiding here.
+**If neither file has a section for this repo**, do not guess. Say so, name the two or three things you would need (how to query CI status from the terminal, what the workflows are called, which jobs are manual gates), and offer to write a new section: in the tracked file for a public repo, in the local file for a private one. A wrong guess about a deploy-adjacent job is the failure mode worth avoiding here.
 
 **If the config names a CLI that is not installed**, print its documented install steps from the config and stop.
 
@@ -206,7 +211,7 @@ Send it only at a terminal state, never on an intermediate wake-up. A non-zero e
 
 ## Important
 
-- **Project specifics live in `~/.claude/local/ci-config.md`, never in this file.** This skill is checked into a public dotfiles repo; the config file is machine-local and untracked. Repo names, internal workflow and job names, deploy gates, and tool install paths belong in the config. If you learn a new gate or workflow name while monitoring, offer to add it to the config — do not write it here.
+- **Project specifics live in the config files, never in this file.** A private project goes in `~/.claude/local/ci-config.md`, which is machine-local and untracked. A public project goes in `~/.claude/ci-config.md`, which is tracked in the public dotfiles repo. Never put a private repo name, internal workflow, or internal job in the tracked file. Repo names, internal workflow and job names, deploy gates, and tool install paths belong in the config. If you learn a new gate or workflow name while monitoring, offer to add it to the config — do not write it here.
 - **The event wait and the fallback heartbeat run together.** The event wait gives the precise wake-up. The 1200-1800s `ScheduleWakeup` heartbeat only catches a dropped notification. Run both whenever CI is in flight, and never poll by hand between them. Only when backgrounding is unavailable does `ScheduleWakeup` become the sole mechanism (with the interval table in Step 2d). Once the user has invoked the skill, keep re-scheduling the heartbeat each cycle without re-asking -- stop only at a terminal state or on the user's say-so.
 - **A gated workflow is never waited out and never auto-approved.** It needs a human, so it is terminal-pending: report the gate (Step 3b), name it in the final report, and stop polling once it's the only thing left. Approving a manual gate is outside this skill's default the same way editing files is (see "Observe vs implement") -- and unlike a fix, an explicit "approve it" ask has no command behind it in most configs, so point the user at the CI UI rather than improvising one.
 - **Background processes don't survive session close.** The wait process is tied to the Claude Code session. If the developer exits Claude Code, they must re-invoke `/monitor-ci` to resume — same constraint as the polling path.

@@ -1,7 +1,7 @@
 ---
 name: dev-qa
 description: Use when asked to dev QA, smoke test, or verify a pull request on its deployed build (a per-commit preview URL, a review environment, or a staging deploy). The check runs the pull request's Test Steps in the test environments the project file names and reports the result on the pull request. Also runs under an orchestrator that merges its contribution with other work. Not for QA of an undeployed local branch. The repository's own local QA skills cover that.
-argument-hint: "[<PR number | PR URL>] [--contribution <path>] [--no-confirm]"
+argument-hint: "[<PR number | PR URL>] [--contribution <path>] [--verify <findings.json>] [--no-confirm]"
 ---
 
 # Dev QA
@@ -28,6 +28,8 @@ A test environment is where a step runs and what drives it: a browser on this ma
 
 - **Standalone** (`/dev-qa [PR]`): this skill owns the post. It ends with the local summary, one question, and on approval a `COMMENT` review whose body is the zone headers from `~/.claude/rules/outside-pr-review.md`, then the Dev QA section.
 - **Orchestrated** (`/dev-qa [PR] --contribution <path>`): this skill never uploads, never posts, and never asks to post. It writes its result as one JSON file at `<path>`, under the Orchestrated mode rules in `~/.claude/rules/outside-pr-review.md`. The orchestrator owns the summary, the approval, the uploads, the merge, and the post. The user is not reachable in this mode. Put a needed hand-off into `handback` instead of asking for it. Wait for every confirmer verdict before you write the file.
+
+- **Verify** (`/dev-qa [PR] --verify <findings.json> --contribution <path>`): an orchestrated mode that tries to reproduce findings from another source on the deployed build. It runs no Test Steps. All Orchestrated rules apply, including the rule that the user is never asked. See Verify mode.
 
 `--no-confirm` skips the independent confirm stage. Every verdict is then reported as unconfirmed.
 
@@ -202,6 +204,41 @@ In orchestrated mode, write the file at `--contribution <path>` as `kind: "dev-q
 - `platform`: the label of the platform the run tested, when the project file names one. Omit the field otherwise.
 
 Write the file in one call, as the last action of the run, after every confirmer verdict is in.
+
+## Verify mode
+
+Verify mode answers one question for each finding it receives: does the symptom appear on the deployed build? The findings come from any source, usually a code review. The posture file `~/.claude/rules/outside-pr-review.md` defines the `dev-qa-verify` kind, its `verdicts` table, and every field type. Follow it.
+
+**Input.** `--verify <findings.json> --contribution <path>`. The findings file is a JSON object `{"findings": [...]}`. Each entry has the finding shape from the posture file. The user is not reachable. Put every blocker into `handback`.
+
+**Run these steps, in this order:**
+
+1. Scope. Resolve the pull request and its head, and write the full head SHA to `head`.
+2. Target proof, as in Process step 2.
+3. Session proof, as in Process step 4.
+4. For each finding in input order, derive the symptom, reach the state the finding names, and drive and capture as in Process step 5. Use the same recorder, screenshot, popup, and no-injection rules as for a Test Steps step.
+5. Confirm, as in Process step 6, for every `reproduced` and `not-reproduced` verdict. The confirmer judges the symptom from the screenshots and state reads. When a verdict is disputed twice, change it to `not-reachable` with the note "needs-human".
+6. Writes, as in Process step 7.
+
+Do not run the steps extractor, do not write scenario records, and do not play freely. Verify mode runs no Test Steps, and it adds no section to the Dev QA post.
+
+**Derive the symptom.** Use the finding's `behavior`. When the finding has no `behavior`, derive the user-visible symptom from its `title` and `body`. When no symptom on the deployed build follows from them, write `not-reachable` with the note "no user-visible behavior to reproduce". Never invent a symptom that the finding does not state.
+
+**Results.**
+
+| Result | Means | `evidence` |
+|---|---|---|
+| `reproduced` | The confirm stage saw the symptom. | Required, non-empty. The screenshots and video that show the symptom. |
+| `not-reproduced` | The run reached the state the finding names, and the symptom did not appear. | Required. The screenshot that shows the reached state with no symptom. |
+| `not-reachable` | The run could not reach the state the finding names. The `note` gives the reason. | Can be empty. |
+
+`not-reproduced` is not proof that the code is correct. It says only that this run, on this build, did not see the symptom.
+
+**Never report `not-reproduced` for a state the run did not reach.** When the run cannot reach the state, the result is `not-reachable`. These are reasons: the state needs an account that the project file forbids creating, no available test environment can drive the platform, the deployed commit does not carry a file the finding exercises (cause `needs-retest`), or the rig rules list the path as out of rig scope.
+
+**Coverage.** Write exactly one verdict for each input finding, in input order, with the finding's `id` in `id`. When time runs out before the run reaches a finding, write `not-reachable` for it with the note "not reached before the run ended". When a blocker stops every finding (a missing project file, a failed target proof, or a failed session proof), write `not-reachable` for every finding with the blocker as the note, and put the blocker in `handback`.
+
+**Contribution.** Write one file at `--contribution <path>` as `kind: "dev-qa-verify"`, with `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback` only. It has no `body`, `comments`, `findings`, `status`, or `reason`. A verdict has `id`, `result`, `evidence`, and `note`. Write the `note` as one or two sentences on what the run did and saw. Every path in a verdict's `evidence` also appears in `uploads`, in citation order. Put these items in `handback`: each framework role that fell back, each verdict that is unconfirmed, and each hand-off that needs the user. Write the file in one call, as the last action of the run, after every confirmer verdict is in.
 
 ## Red flags
 

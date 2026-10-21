@@ -1,6 +1,7 @@
-import type {CodeReviewContribution, CodeTraceContribution, Contribution, DevQaContribution, DevQaVerifyContribution, Finding, TraceVerdict, VerifyVerdict} from './contribution'
-import {validateContributions, type ContributionSet} from './contribution-set'
-import {synthesize, type ReviewPayload} from './synthesize'
+import type {CodeReviewContribution, CodeTraceContribution, Contribution, DevQaContribution, DevQaVerifyContribution, Finding, TraceVerdict, VerifyVerdict} from '../contribution'
+import {validateContributions, type ContributionSet} from '../contribution-set'
+import type {ReviewPayload} from '../payload'
+import {synthesize} from '../synthesize'
 
 export const HEAD = 'a'.repeat(40)
 export const OTHER_HEAD = 'b'.repeat(40)
@@ -91,9 +92,7 @@ export function refusalOf(contributions: Contribution[]): string {
 }
 
 export function payloadOf(contributions: Contribution[], attribution: string | undefined = ATTRIBUTION): ReviewPayload {
-  const result = synthesize(setOf(contributions), attribution)
-  if (!result.ok) throw new Error(`synthesize refused: ${result.reason}`)
-  return result.value
+  return synthesize(setOf(contributions), attribution)
 }
 
 export const attributed = (body: string) => `${ATTRIBUTION}\n\n${body}`

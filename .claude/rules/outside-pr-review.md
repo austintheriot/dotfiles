@@ -96,7 +96,7 @@ Every contribution is one JSON object. This example is a `code-review` contribut
 }
 ```
 
-A `dev-qa` contribution has the same fields plus `"platform": "<free label, optional>"`, `"status": "passed" | "failed" | "incomplete" | "not-run"`, and `"reason"` (required for every status except `passed`). Its `body` is the Dev QA section only.
+A `dev-qa` contribution has the same fields plus `"platform": "<free label, optional>"`, `"status": "passed" | "failed" | "incomplete" | "not-run"`, and `"reason"` (required for every status except `passed`). Its `body` is the Dev QA section only. A `not-run` Dev QA contribution has empty `findings` and empty `comments`.
 
 A `code-review` contribution can also carry `"status": "completed" | "not-run"` and `"reason"`. An absent `status` means `completed`. A `not-run` code review has a `reason`, empty `comments`, empty `findings`, and a `body` that says the review did not run.
 
@@ -215,6 +215,16 @@ The orchestrator applies round-two verdicts to round-one findings with this tabl
 | Any | no round-two contribution | Unchanged, no note. A standalone or two-skill run has no round two by design. |
 
 The pointer line for a reproduced finding goes in the Dev QA part that has the same `platform` as the `dev-qa-verify` contribution. When no Dev QA part matches, the line goes before the first platform heading.
+
+#### Hand-back order
+
+The orchestrator lists hand-back lines in this order:
+
+1. The `code-review` lines.
+2. The lines of each `dev-qa` contribution, in input order.
+3. The lines of each `dev-qa-verify` contribution, in input order.
+4. The `code-trace` lines.
+5. One line for each `not-reproduced` or `not-reachable` verdict.
 
 ## Local summary
 

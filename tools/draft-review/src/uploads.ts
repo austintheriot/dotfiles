@@ -1,5 +1,5 @@
 import {unique} from './lists'
-import type {ReviewPayload} from './synthesize'
+import type {ReviewPayload} from './payload'
 
 const escapeForRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -7,7 +7,7 @@ const escapeForRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\
 function pathMatcher(paths: readonly string[]): RegExp | undefined {
   const longestFirst = unique(paths.filter(path => path.length > 0)).sort((left, right) => right.length - left.length)
   if (longestFirst.length === 0) return undefined
-  return new RegExp(`(?<![\\w./-])(?:${longestFirst.map(escapeForRegExp).join('|')})(?![\\w/-]|\\.\\w)`, 'g')
+  return new RegExp(`(?<![\\p{L}\\p{N}_./-])(?:${longestFirst.map(escapeForRegExp).join('|')})(?![\\p{L}\\p{N}_/-]|\\.[\\p{L}\\p{N}_])`, 'gu')
 }
 
 export function citedPaths(texts: readonly string[], candidates: readonly string[]): string[] {

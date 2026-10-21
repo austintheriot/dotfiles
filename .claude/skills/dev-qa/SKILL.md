@@ -199,7 +199,7 @@ In orchestrated mode, write the file at `--contribution <path>` as `kind: "dev-q
   - Each framework role that fell back, and why.
   - Each verdict that is unconfirmed.
   - Each hand-off that needs the user.
-- `status`: the whole-run rollup. `pass` gives `passed`. `fail` gives `failed`. `incomplete` gives `incomplete`. A run that did not start gives `not-run`. Every status except `passed` also needs `reason`.
+- `status`: the whole-run rollup. `pass` gives `passed`. `fail` gives `failed`. `incomplete` gives `incomplete`. A run that did not start gives `not-run`. Every status except `passed` also needs `reason`. A `not-run` contribution has empty `findings` and empty `comments`. A blocked run writes no untested-step findings.
 - `platform`: the label of the platform the run tested, when the project file names one. Omit the field otherwise.
 
 Write the file in one call, as the last action of the run, after every confirmer verdict is in.
@@ -215,13 +215,11 @@ Verify mode answers one question for each finding it receives: does the symptom 
 1. Scope. Resolve the pull request and its head, and write the full head SHA to `head`.
 2. Target proof, as in Process step 2.
 3. Session proof, as in Process step 4.
-4. For each finding in input order, derive the symptom, reach the state the finding names, and drive and capture as in Process step 5. Use the same recorder, screenshot, popup, and no-injection rules as for a Test Steps step.
+4. For each finding in input order, reach the state the finding names and look for the symptom in its `behavior`. Drive and capture as in Process step 5. Use the same recorder, screenshot, popup, and no-injection rules as for a Test Steps step.
 5. Confirm, as in Process step 6, for every `reproduced` and `not-reproduced` verdict. The confirmer judges the symptom from the screenshots and state reads. When the confirmer disputes a verdict twice, write `not-reachable`. The `note` says what the driver saw and that the confirmer disputed it twice. Add one `handback` line for the verdict with the finding `id` and the observed symptom.
 6. Writes, as in Process step 7.
 
 Do not run the steps extractor, do not write scenario records, and do not play freely. Verify mode runs no Test Steps, and it adds no section to the Dev QA post.
-
-**Derive the symptom.** Use the finding's `behavior`. When the finding has no `behavior`, derive the user-visible symptom from its `title` and `body`. When no symptom on the deployed build follows from them, write `not-reachable` with the note "no user-visible behavior to reproduce". Never invent a symptom that the finding does not state.
 
 **Results.**
 

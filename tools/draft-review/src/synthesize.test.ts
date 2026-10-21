@@ -2,7 +2,7 @@ import {describe, expect, test} from 'bun:test'
 import type {TraceVerdict, VerifyVerdict} from './contribution'
 import {notRun} from './contribution'
 import {synthesize} from './synthesize'
-import {ATTRIBUTION, attributed, blankPage, devQa, HEAD, payloadOf, review, setOf, trace, verify, windowsDevQa, ZONES} from './test-fixtures'
+import {ATTRIBUTION, attributed, blankPage, devQa, HEAD, payloadOf, review, setOf, trace, verify, windowsDevQa, ZONES} from './testing/fixtures'
 
 describe('synthesize', () => {
   test('builds a review-only payload under the zone headers and the attribution line', () => {
@@ -16,9 +16,9 @@ describe('synthesize', () => {
 
   test('adds no attribution line when none is defined or it is empty', () => {
     const set = setOf([review()])
-    const results = [synthesize(set, undefined), synthesize(set, '')]
-    expect(results.map(result => (result.ok ? result.value.body : result.reason))).toEqual([`${ZONES}\n\nThe refresh path has one defect.`, `${ZONES}\n\nThe refresh path has one defect.`])
-    expect(results.map(result => (result.ok ? result.value.comments[0]?.body : result.reason))).toEqual(['The token expires before the refresh.', 'The token expires before the refresh.'])
+    const payloads = [synthesize(set, undefined), synthesize(set, '')]
+    expect(payloads.map(payload => payload.body)).toEqual([`${ZONES}\n\nThe refresh path has one defect.`, `${ZONES}\n\nThe refresh path has one defect.`])
+    expect(payloads.map(payload => payload.comments[0]?.body)).toEqual(['The token expires before the refresh.', 'The token expires before the refresh.'])
   })
 
   test('keeps the startLine of a multi-line comment', () => {
@@ -168,10 +168,16 @@ describe('synthesize', () => {
     )
   })
 
-  test('collects hand-back lines from every contribution in input order', () => {
+  test('orders hand-back lines by kind, then adds the lines for verdicts that did not reproduce', () => {
     const verdict: VerifyVerdict = {id: 'R1', result: 'not-reachable', evidence: [], note: 'No account.'}
-    const payload = payloadOf([review({handback: ['Review line.']}), devQa({handback: ['Dev QA line.']}), verify([verdict], {handback: ['Verify line.']})])
-    expect(payload.handback).toEqual(['Review line.', 'Dev QA line.', 'Verify line.', 'R1 not-reachable: No account.'])
+    const traced: TraceVerdict = {id: 'Q1', result: 'inconclusive', body: 'Nothing found.'}
+    const payload = payloadOf([
+      {...trace([traced]), handback: ['Trace line.']},
+      verify([verdict], {handback: ['Verify line.']}),
+      devQa({handback: ['Dev QA line.']}),
+      review({handback: ['Review line.']})
+    ])
+    expect(payload.handback).toEqual(['Review line.', 'Dev QA line.', 'Verify line.', 'Trace line.', 'R1 not-reachable: No account.'])
   })
 
 

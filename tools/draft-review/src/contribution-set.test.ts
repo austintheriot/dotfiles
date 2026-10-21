@@ -1,7 +1,7 @@
 import {describe, expect, test} from 'bun:test'
 import type {Finding, TraceVerdict, VerifyVerdict} from './contribution'
-import {routeFindings} from './contribution-set'
-import {blankPage, devQa, HEAD, OTHER_HEAD, refusalOf, review, setOf, staleToken, trace, verify, windowsDevQa} from './test-fixtures'
+import {ContributionSet, routeFindings} from './contribution-set'
+import {blankPage, devQa, HEAD, OTHER_HEAD, refusalOf, review, setOf, staleToken, trace, verify, windowsDevQa} from './testing/fixtures'
 
 describe('routeFindings', () => {
   test('sends review findings with a behavior to verify and skips the others', () => {
@@ -24,6 +24,13 @@ describe('routeFindings', () => {
 })
 
 describe('validateContributions', () => {
+  test('a spread copy of a validated set is not a ContributionSet', () => {
+    const set = setOf([review()])
+    // @ts-expect-error A spread drops the private field, so only validateContributions can make a ContributionSet.
+    const forged: ContributionSet = {...set, devQas: []}
+    expect(forged).not.toBeInstanceOf(ContributionSet)
+  })
+
   test('groups the contributions by kind', () => {
     const set = setOf([devQa(), review(), verify([])])
     expect({review: set.review?.kind, devQas: set.devQas.length, verifies: set.verifies.length, trace: set.trace}).toEqual({review: 'code-review', devQas: 1, verifies: 1, trace: undefined})

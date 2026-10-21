@@ -3,19 +3,43 @@ import type {CodeReviewContribution, CodeTraceContribution, Contribution, DevQaC
 import {duplicates, isDefined, unique} from './lists'
 import type {Parsed} from './parsed'
 
-const validated: unique symbol = Symbol('validated contribution set')
+const constructionToken: unique symbol = Symbol('contribution set construction token')
 
-export type ContributionSet = {
-  readonly review?: CodeReviewContribution
-  readonly devQas: readonly DevQaContribution[]
-  readonly verifies: readonly DevQaVerifyContribution[]
-  readonly trace?: CodeTraceContribution
-  readonly [validated]: true
+type Members = {
+  review: CodeReviewContribution | undefined
+  devQas: readonly DevQaContribution[]
+  verifies: readonly DevQaVerifyContribution[]
+  trace: CodeTraceContribution | undefined
+}
+
+export class ContributionSet {
+  readonly #members: Members
+
+  public constructor(token: typeof constructionToken, members: Members) {
+    if (token !== constructionToken) throw new Error('only validateContributions can build a ContributionSet')
+    this.#members = members
+  }
+
+  public get review(): CodeReviewContribution | undefined {
+    return this.#members.review
+  }
+
+  public get devQas(): readonly DevQaContribution[] {
+    return this.#members.devQas
+  }
+
+  public get verifies(): readonly DevQaVerifyContribution[] {
+    return this.#members.verifies
+  }
+
+  public get trace(): CodeTraceContribution | undefined {
+    return this.#members.trace
+  }
 }
 
 export type RoutedFindings = {toVerify: Finding[]; toTrace: Finding[]}
 
-export const qualify = (id: string, platform: string | undefined) => (platform === undefined ? id : `${id}@${platform}`)
+const qualify = (id: string, platform: string | undefined) => (platform === undefined ? id : `${id}@${platform}`)
 
 export const qualifiedFindings = (devQa: DevQaContribution): Finding[] => devQa.findings.map(finding => ({...finding, id: qualify(finding.id, devQa.platform)}))
 
@@ -99,14 +123,5 @@ export function validateContributions(list: readonly Contribution[]): Parsed<Con
   if (conflict !== undefined) return {ok: false, reason: conflict}
   const [review] = grouped.reviews
   const [trace] = grouped.traces
-  return {
-    ok: true,
-    value: {
-      ...(review === undefined ? {} : {review}),
-      devQas: grouped.devQas,
-      verifies: grouped.verifies,
-      ...(trace === undefined ? {} : {trace}),
-      [validated]: true
-    }
-  }
+  return {ok: true, value: new ContributionSet(constructionToken, {review, devQas: grouped.devQas, verifies: grouped.verifies, trace})}
 }

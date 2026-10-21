@@ -225,12 +225,12 @@ describe('parseContribution id grammar', () => {
   })
 
   test('rejects a not-run dev-qa contribution that has findings', () => {
-    expect(reasonOf({...devQaJson, status: 'not-run'})).toContain('findings')
+    expect(reasonOf({...devQaJson, status: 'not-run'})).toBe('findings: a not-run dev-qa contribution has no findings')
   })
 
   test('rejects a not-run dev-qa contribution that has comments', () => {
     const comments = [{path: 'src/a.ts', line: 1, side: 'RIGHT', body: 'Draft.', finding: 'Q1'}]
-    expect(reasonOf({...devQaJson, status: 'not-run', findings: [], uploads: [], comments})).toContain('comments')
+    expect(reasonOf({...devQaJson, status: 'not-run', findings: [], uploads: [], comments})).toBe('comments: a not-run dev-qa contribution has no comments')
   })
 })
 

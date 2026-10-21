@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import type {ReviewPayload} from './synthesize'
+import type {ReviewPayload} from './payload'
 import {citedPaths, substituteUploads} from './uploads'
 
 const payload = (body: string, commentBody = body): ReviewPayload => ({
@@ -34,6 +34,18 @@ describe('substituteUploads', () => {
 describe('citedPaths', () => {
   test('finds whole paths in order of first citation, once each', () => {
     expect(citedPaths(['/a.png.mp4 then /b.png', 'and /b.png again'], ['/b.png', '/a.png', '/a.png.mp4'])).toEqual(['/a.png.mp4', '/b.png'])
+  })
+
+  test('prefers the longest path when a shorter path is its prefix', () => {
+    expect(citedPaths(['see /a b.png and /a.'], ['/a', '/a b.png'])).toEqual(['/a b.png', '/a'])
+  })
+
+  test('does not match a path that a non-ASCII letter continues', () => {
+    expect(citedPaths(['/tmp/café.png and /tmp/naïve'], ['/tmp/caf', '/tmp/na'])).toEqual([])
+  })
+
+  test('matches a non-ASCII path as a whole', () => {
+    expect(citedPaths(['see /tmp/café.png.'], ['/tmp/café.png'])).toEqual(['/tmp/café.png'])
   })
 
   test('finds nothing when there are no candidates', () => {

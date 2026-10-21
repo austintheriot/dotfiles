@@ -2,11 +2,9 @@ import type {CodeReviewContribution, ContributionComment, DevQaContribution, Dev
 import type {ContributionSet} from './contribution-set'
 import {qualifiedFindings} from './contribution-set'
 import {isDefined, unique} from './lists'
-import type {Parsed} from './parsed'
+import type {InlineComment, ReviewPayload} from './payload'
 import {citedPaths} from './uploads'
 
-export type InlineComment = {path: string; line: number; side: 'LEFT' | 'RIGHT'; startLine?: number; body: string}
-export type ReviewPayload = {body: string; comments: InlineComment[]; uploads: string[]; handback: string[]}
 
 const ZONE_HEADERS = '# Pre-Claude zone\n\n# Claude zone'
 const PARAGRAPH = '\n\n'
@@ -149,11 +147,11 @@ function candidateUploads(set: ContributionSet): string[] {
     .flatMap(item => [...item.uploads, ...(item.kind === 'dev-qa-verify' ? item.verdicts.flatMap(verdict => verdict.evidence) : [])])
 }
 
-export function synthesize(set: ContributionSet, attribution: string | undefined): Parsed<ReviewPayload> {
+export function synthesize(set: ContributionSet, attribution: string | undefined): ReviewPayload {
   const signature = attribution === undefined || attribution.trim() === '' ? undefined : attribution
   const notes = crossCheck(set)
   const body = composeBody(set, notes, signature)
   const comments = composeComments(set, notes, signature)
   const uploads = citedPaths([body, ...comments.map(comment => comment.body)], candidateUploads(set))
-  return {ok: true, value: {body, comments, uploads, handback: handback(set)}}
+  return {body, comments, uploads, handback: handback(set)}
 }

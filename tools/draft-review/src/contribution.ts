@@ -59,11 +59,11 @@ const roundOne = {
   findings: z.array(FindingSchema)
 }
 
-export const CodeReviewSchema = z
+export const CodeReviewShapeSchema = z
   .object({...common, ...roundOne, kind: z.literal('code-review'), status: z.enum(['completed', 'not-run']).optional(), reason: Text.optional()})
   .strict()
 
-export const DevQaSchema = z
+export const DevQaShapeSchema = z
   .object({
     ...common,
     ...roundOne,
@@ -74,21 +74,21 @@ export const DevQaSchema = z
   })
   .strict()
 
-export const DevQaVerifySchema = z
+export const DevQaVerifyShapeSchema = z
   .object({...common, kind: z.literal('dev-qa-verify'), platform: Platform.optional(), verdicts: z.array(VerifyVerdictSchema)})
   .strict()
 
-export const CodeTraceSchema = z.object({...common, kind: z.literal('code-trace'), verdicts: z.array(TraceVerdictSchema)}).strict()
+export const CodeTraceShapeSchema = z.object({...common, kind: z.literal('code-trace'), verdicts: z.array(TraceVerdictSchema)}).strict()
 
 export type Anchor = z.infer<typeof AnchorSchema>
 export type ContributionComment = z.infer<typeof ContributionCommentSchema>
 export type Finding = z.infer<typeof FindingSchema>
 export type VerifyVerdict = z.infer<typeof VerifyVerdictSchema>
 export type TraceVerdict = z.infer<typeof TraceVerdictSchema>
-export type CodeReviewContribution = z.infer<typeof CodeReviewSchema>
-export type DevQaContribution = z.infer<typeof DevQaSchema>
-export type DevQaVerifyContribution = z.infer<typeof DevQaVerifySchema>
-export type CodeTraceContribution = z.infer<typeof CodeTraceSchema>
+export type CodeReviewContribution = z.infer<typeof CodeReviewShapeSchema>
+export type DevQaContribution = z.infer<typeof DevQaShapeSchema>
+export type DevQaVerifyContribution = z.infer<typeof DevQaVerifyShapeSchema>
+export type CodeTraceContribution = z.infer<typeof CodeTraceShapeSchema>
 export type Contribution = CodeReviewContribution | DevQaContribution | DevQaVerifyContribution | CodeTraceContribution
 
 type Problem = {path: (string | number)[]; message: string}
@@ -181,7 +181,7 @@ function crossFieldProblems(contribution: Contribution): Problem[] {
 }
 
 export const ContributionSchema = z
-  .discriminatedUnion('kind', [CodeReviewSchema, DevQaSchema, DevQaVerifySchema, CodeTraceSchema])
+  .discriminatedUnion('kind', [CodeReviewShapeSchema, DevQaShapeSchema, DevQaVerifyShapeSchema, CodeTraceShapeSchema])
   .superRefine((contribution, context) => {
     crossFieldProblems(contribution).forEach(problem => context.addIssue({code: z.ZodIssueCode.custom, ...problem}))
   })
@@ -208,7 +208,9 @@ export function parseContribution(text: string): Parsed<Contribution> {
   return json.ok ? checkContribution(json.value) : json
 }
 
-export type NotRunInput = {kind: 'code-review' | 'dev-qa'; pr: number; head: string; platform?: string; reason: string}
+export type NotRunInput =
+  | {kind: 'code-review'; pr: number; head: string; reason: string}
+  | {kind: 'dev-qa'; pr: number; head: string; platform?: string; reason: string}
 
 export function notRun(input: NotRunInput): CodeReviewContribution | DevQaContribution {
   const empty = {comments: [], findings: [], uploads: [], handback: []}
@@ -230,7 +232,7 @@ export function notRun(input: NotRunInput): CodeReviewContribution | DevQaContri
       }
     }
     default: {
-      const unreachable: never = input.kind
+      const unreachable: never = input
       return unreachable
     }
   }

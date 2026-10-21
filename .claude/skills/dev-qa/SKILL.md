@@ -244,7 +244,7 @@ Do not run the steps extractor, do not write scenario records, and do not play f
 
 **Unreadable input.** When the findings file cannot be read, is invalid JSON, or lacks a `findings` array, that is a blocker. Write `verdicts` as an empty array and add one `handback` line that names the file and the parse error. An empty `findings` array is not a blocker. It gives empty `verdicts`, and that is legal.
 
-**Contribution.** Write one file at `--contribution <path>` as `kind: "dev-qa-verify"`, with `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback` only. It has no `body`, `comments`, `findings`, `status`, or `reason`. A verdict has `id`, `result`, `evidence`, and `note`. Write the `note` as one or two sentences on what the run did and saw. Every path in a verdict's `evidence` also appears in `uploads`, in citation order. Put these items in `handback`:
+**Contribution.** Write one file at `--contribution <path>` as `kind: "dev-qa-verify"`, with `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback` only. When the project file names the platform that the run tested, also write that label in `platform`. It has no `body`, `comments`, `findings`, `status`, or `reason`. A verdict has `id`, `result`, `evidence`, and `note`. Write the `note` as one or two sentences on what the run did and saw. Every path in a verdict's `evidence` also appears in `uploads`, in citation order. Put these items in `handback`:
 
 - Each framework role that fell back.
 - Each verdict that is unconfirmed.

@@ -17,7 +17,7 @@ For the self-authorship line, name `/expert-review`:
 
 ## Orchestrated mode
 
-When the invocation includes `--contribution <path>`, follow the orchestrated mode in `~/.claude/rules/outside-pr-review.md`. Run the analysis and the filter as usual. Then write one `code-review` contribution as JSON to that path. Skip the local summary, the approval question, and the post. Each inline comment names the id of its finding, so this skill assigns a finding id to every finding. The posture file holds the field contract.
+When the invocation includes `--contribution <path>`, follow the orchestrated mode in `~/.claude/rules/outside-pr-review.md`. Run the analysis and the filter as usual. Then write one `code-review` contribution as JSON to that path. Skip the local summary, the approval question, and the post. Each inline comment names the id of its finding, so this skill assigns a finding id to every finding. Fill `behavior` on every code finding that has a user-visible symptom, because only those findings go to Dev QA for verification. The posture file holds the field contract.
 
 ## Trace mode
 

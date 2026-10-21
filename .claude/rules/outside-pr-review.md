@@ -98,6 +98,8 @@ Every contribution is one JSON object. This example is a `code-review` contribut
 
 A `dev-qa` contribution has the same fields plus `"platform": "<free label, optional>"`, `"status": "passed" | "failed" | "incomplete" | "not-run"`, and `"reason"` (required for every status except `passed`). Its `body` is the Dev QA section only.
 
+A `code-review` contribution can also carry `"status": "completed" | "not-run"` and `"reason"`. An absent `status` means `completed`. A `not-run` code review has a `reason`, empty `comments`, empty `findings`, and a `body` that says the review did not run.
+
 Both kinds also carry `findings`, so an orchestrator can route single findings to the other skill:
 
 ```json
@@ -113,7 +115,7 @@ Two round-two contributions answer a list of findings from the other skill:
 - `kind: "dev-qa-verify"`: `verdicts: [{id, result: "reproduced" | "not-reproduced" | "not-reachable", evidence: [...], note}]`.
 - `kind: "code-trace"`: `verdicts: [{id, result: "root-cause" | "no-code-cause" | "inconclusive", anchor?, body, duplicateOf?}]`. `duplicateOf` names a review finding id that already covers the same defect.
 
-A round-two contribution carries `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback`. It has no `body`, `comments`, or `findings`.
+A round-two contribution carries `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback`. It has no `body`, `comments`, or `findings`. A `dev-qa-verify` contribution can also carry `platform`, with the same meaning as on `dev-qa`. An orchestrator can receive one `dev-qa-verify` contribution per platform. When any platform reproduced a review finding, the finding counts as reproduced.
 
 #### Rules for every kind
 
@@ -136,9 +138,9 @@ A round-two contribution carries `version`, `kind`, `pr`, `head`, `verdicts`, `u
 | `uploads` | array of string | required for all kinds | Absolute local paths that the text cites, in citation order. The array can be empty. |
 | `handback` | array of string | required for all kinds | One line per item the orchestrator must see. The array can be empty. |
 | `findings` | array of finding | required for `code-review` and `dev-qa` | Findings that an orchestrator can route to the other skill. The array can be empty. |
-| `platform` | string | optional for `dev-qa` | Free label for the test environment. |
-| `status` | `"passed"`, `"failed"`, `"incomplete"`, or `"not-run"` | required for `dev-qa` | Overall result of the Dev QA run. |
-| `reason` | non-empty string | required for `dev-qa` when `status` is not `passed`, otherwise optional | Why the run did not pass. |
+| `platform` | string | optional for `dev-qa` and `dev-qa-verify` | Free label for the test environment. |
+| `status` | `dev-qa`: `"passed"`, `"failed"`, `"incomplete"`, or `"not-run"`. `code-review`: `"completed"` or `"not-run"`. | required for `dev-qa`, optional for `code-review` | Overall result of the run. An absent `code-review` status means `completed`. |
+| `reason` | non-empty string | required for `dev-qa` when `status` is not `passed`, required for `code-review` when `status` is `not-run`, otherwise optional | Why the run did not pass or did not run. |
 | `verdicts` | array of verdict | required for `dev-qa-verify` and `code-trace` | One verdict per finding that the skill received. The verdict shape depends on `kind`. |
 
 #### Comment fields

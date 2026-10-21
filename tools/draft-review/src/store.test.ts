@@ -1,5 +1,5 @@
 import {afterAll, describe, expect, test} from 'bun:test'
-import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
+import {chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {bodyHash, draftAction, draftRecordAfterCreate} from './draft'
@@ -21,9 +21,23 @@ afterAll(() => worlds.forEach(dir => rmSync(dir, {recursive: true, force: true})
 
 type Run = {code: number; stdout: string; stderr: string}
 
+const FAKE_GH_MESSAGE = 'fake gh: the CLI tests never reach the real GitHub CLI'
+
+function blockedGhEnv(dir: string): Record<string, string | undefined> {
+  const bin = join(dir, 'fake-bin')
+  mkdirSync(bin)
+  const fakeGh = join(bin, 'gh')
+  writeFileSync(fakeGh, `#!/bin/sh\necho "${FAKE_GH_MESSAGE}" >&2\nexit 1\n`)
+  chmodSync(fakeGh, 0o755)
+  const ghConfigDir = join(dir, 'gh-config')
+  mkdirSync(ghConfigDir)
+  return {...process.env, NO_COLOR: '1', PATH: `${bin}:${process.env.PATH ?? ''}`, GH_CONFIG_DIR: ghConfigDir, GH_TOKEN: 'invalid'}
+}
+
 function makeWorld() {
   const dir = mkdtempSync(join(tmpdir(), 'draft-review-test-'))
   worlds.push(dir)
+  const env = blockedGhEnv(dir)
   const root = join(dir, 'store')
   const store = prStore(root, REPO, 1234)
   const configPath = join(dir, 'draft-review.json')
@@ -33,7 +47,7 @@ function makeWorld() {
     return path
   }
   const start = (args: string[]) =>
-    Bun.spawn(['bun', MAIN, ...args, '--store', root, '--repo', 'acme/widgets'], {stdout: 'pipe', stderr: 'pipe', env: {...process.env, NO_COLOR: '1'}})
+    Bun.spawn(['bun', MAIN, ...args, '--store', root, '--repo', 'acme/widgets'], {stdout: 'pipe', stderr: 'pipe', env})
   const finish = async (proc: ReturnType<typeof start>): Promise<Run> => ({
     code: await proc.exited,
     stdout: await new Response(proc.stdout).text(),
@@ -218,6 +232,15 @@ describe('create', () => {
     const run = await world.cli(['create', ...world.target, '--config', world.configPath])
     expect(run.code).toBe(EXIT.noInput)
     expect(run.stderr).toContain(png)
+  })
+
+  test('a run that reaches gh gets the fake gh, so no test calls GitHub', async () => {
+    const world = makeWorld()
+    world.writeConfig({repositories: {'acme/widgets': {}}})
+    await world.add(review())
+    const run = await world.cli(['create', ...world.target, '--config', world.configPath])
+    expect(run.code).toBe(EXIT.unavailable)
+    expect(run.stderr).toContain(FAKE_GH_MESSAGE)
   })
 })
 

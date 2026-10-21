@@ -248,6 +248,8 @@ A standalone run ends with this sequence:
 
 When the current folder is not a checkout of the repository, add `--repo <owner/repo>` to each command. The README describes every flag.
 
+When any `draft-review` command exits with code 127, the tool is not installed. Stop. Tell the user, and print the install line from the README: `ln -s ~/tools/draft-review/bin/draft-review ~/.local/bin/draft-review`. Say that the contribution file is still on disk, and give its path. Do not create the link yourself.
+
 The result for the user is one pending review for that head. The user reads it on GitHub and submits it. While the first draft is still pending, the other skill can run later on the same head. Its `add` and `create` replace that draft with the merged review, so one review holds both parts. When someone edited the draft, `create` refuses to replace it.
 
 When `add` stores a `code-review` or `dev-qa` contribution, it removes the round-two verdicts on the earlier one, so a rerun never carries a stale cross-check.

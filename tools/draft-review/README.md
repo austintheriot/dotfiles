@@ -2,9 +2,17 @@
 
 `draft-review` merges the JSON contributions of the code review skill and the Dev QA skill into one pending GitHub review. It never submits the review. The user reads the pending review on GitHub and submits it.
 
+## Install
+
+Run this command one time. It creates a link to the launcher in `~/.local/bin`, a folder on `PATH`, so the skills can run `draft-review` by name:
+
+```sh
+ln -s ~/tools/draft-review/bin/draft-review ~/.local/bin/draft-review
+```
+
 ## Run it
 
-Run `bin/draft-review`. A symbolic link to that file in a folder on `PATH` also works. The launcher finds Bun, installs the dependencies on the first run, and starts `src/main.ts`.
+Run `draft-review`, or `bin/draft-review` from this folder. The launcher finds Bun, installs the dependencies on the first run, and starts `src/main.ts`.
 
 Every command takes these options:
 
@@ -26,6 +34,8 @@ When the file is not a valid contribution, the command stores nothing and names 
 Before it stores, `add` checks the merge rules on the set that the head holds after the add. When the set breaks a rule, the command stores nothing, names the rule, and exits with code 65.
 
 `add` does not take the per-PR lock. Each stored file has its own name, and a rename puts each file in place, so two runs of `add` cannot mix their files.
+
+Two orchestrators on one head at the same time can mix their contributions. Each `add` replaces the file of the same kind, so the round-two verdicts of one run can answer the findings of the other run. Run one orchestrator per head at a time.
 
 ### `draft-review route --pr <n> --head <sha> --out <dir>`
 

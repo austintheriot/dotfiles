@@ -48,7 +48,7 @@ gh api "repos/<owner>/<repo>/pulls/<n>/reviews" --paginate \
   --jq '.[] | select(.state == "PENDING" and .user.login == "<login>") | .id'
 ```
 
-Read `reviewId` from `~/.cache/draft-review/<owner>/<repo>/<n>/draft.json`. When a pending review exists, and its id is not that `reviewId`, stop. The file can be absent. Then every pending review counts as one that `draft-review` did not create. Tell the user that a pending review by them is on the pull request, and that `draft-review` did not create it. Name its id. Tell the user to submit it or delete it, and then to run `/draft-review` again. Do not start the agents.
+Read `reviewId` from `~/.cache/draft-review/<owner>/<repo>/<n>/draft.json`. When a pending review exists, and its id is not that `reviewId`, stop. The file can be absent. Then every pending review counts as one with no `draft-review` record. Tell the user that a pending review by them is on the pull request, and that `draft-review` has no record of it. An earlier `create` that stopped before it wrote its record can leave such a review. Name its id. Tell the user to check it on GitHub, to submit it or delete it, and then to run `/draft-review` again. Do not start the agents.
 
 Clear the stored contributions of any earlier run on this head:
 
@@ -57,6 +57,8 @@ draft-review clear --pr <n> --head <head>
 ```
 
 The command clears local store files only. It publishes nothing, so it needs no question. It keeps the upload ledger and `draft.json`. The command prints the name of each file that it cleared. When it prints names, tell the user in one line which old files it cleared. Without this step, an old round-two verdict can attach to a new finding that has the same id.
+
+When `clear` exits with code 73, another run holds the lock for this pull request. Stop, and tell the user. For any other code that is not 0, stop and print the message from stderr. Do not start the agents.
 
 Make a new folder for this run in the session scratchpad: `<scratchpad>/draft-review/<n>-<first 12 characters of the head>/`. The steps below call this folder `<dir>`.
 
@@ -110,6 +112,8 @@ Write the routing lists:
 draft-review route --pr <n> --head <head> --out <dir>
 ```
 
+When `route` exits with a code other than 0, stop and print the message from stderr. Keep the round-one files in the store and in `<dir>`. Do not dispatch round-two agents.
+
 The command writes `<dir>/to-verify.json` and `<dir>/to-trace.json`. Each file holds `{"findings": [...]}`. Dispatch one agent for each file whose `findings` array is not empty. When both lists are not empty, dispatch both agents in one message.
 
 | List | Skill call | Writes |
@@ -148,6 +152,16 @@ On exit code 0, `create` prints the URL of the pending review. Report these item
 - Each cross-check that did not run: a round-two file that was absent, named another head, or failed `add`.
 
 Report verdicts only from the round-two files that `draft-review add` accepted for the head from step 1. A file that `add` did not accept is not in the draft, so its verdicts changed nothing. A `not-reproduced`, `not-reachable`, `no-code-cause`, or `inconclusive` verdict does not change the draft. The `show` output already listed those as hand-back lines.
+
+## Exit code 127 from any `draft-review` command
+
+Code 127 means that `draft-review` is not installed. Stop. Tell the user, and print the install line from the README:
+
+```bash
+ln -s ~/tools/draft-review/bin/draft-review ~/.local/bin/draft-review
+```
+
+When the run already wrote contribution files, say that they are still on disk, and give each path in `<dir>`. Do not create the link yourself.
 
 ## Exit codes of `create`
 

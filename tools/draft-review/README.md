@@ -40,7 +40,7 @@ Prints the merged review: the body, each inline comment with its file and line, 
 
 Takes the per-PR lock, merges the store, and creates the pending review. The steps are:
 
-1. Read and merge the stored contributions for the head. Keep a digest of the contribution file names and contents.
+1. Read and merge the stored contributions for the head. Keep a digest of the contribution file names and contents, and of the `.files` hash record beside each contribution.
 2. Find the upload for each cited file by the hash that `add` recorded for it:
    - When the file holds the recorded content, reuse its upload from the ledger, or upload it in step 4.
    - When the file changed after `add`, or no longer exists, use the ledger upload of the recorded content. When the ledger has none, exit with code 66. For a changed file, the message says `<path> changed after add, run add again`.
@@ -54,7 +54,7 @@ Takes the per-PR lock, merges the store, and creates the pending review. The ste
 8. When the only pending review is the review that `draft-review` created last, delete that review and create the new one. The body and every inline comment must be unchanged. An added, an edited, or a deleted inline comment makes the review one that `draft-review` cannot replace.
 9. When any other pending review exists, change nothing, and exit with code 3.
 
-On success, the command prints the URL of the pending review. Then it reads the inline comments of the new review back from GitHub and compares them with the request. When the count or the set of comment bodies differs, a comment can be the user's work. The command then writes no `draft.json`, says why, and exits with code 3. When the read fails, the command writes no `draft.json`, says why, and exits with code 69. Without `draft.json`, the next `create` refuses to replace that review.
+On success, the command prints the URL of the pending review. Then it reads the inline comments of the new review back from GitHub and compares them with the request. The comparison changes CRLF to LF and removes trailing whitespace from each body on both sides. When the count or the set of comment bodies differs, a comment can be the user's work. The command then writes no `draft.json`, says why, and exits with code 3. When the read fails, the command writes no `draft.json`, says why, and exits with code 69. Without `draft.json`, the next `create` refuses to replace that review.
 
 When the comments match, the command writes `draft.json`. Then it reads the contribution files for the head again. When the digest from step 1 changed, an `add` landed while `create` ran, and the new draft does not hold it. The command says that the draft is stale and exits with code 75. Run `create` again: it replaces the stale draft.
 

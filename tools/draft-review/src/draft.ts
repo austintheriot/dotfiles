@@ -29,7 +29,8 @@ export type CreatedDraft = {
   contributionsDigest: string
 }
 
-const sortedText = (bodies: readonly string[]) => JSON.stringify([...bodies].sort())
+const normalizedBody = (body: string) => body.replace(/\r\n/g, '\n').trimEnd()
+const sortedText = (bodies: readonly string[]) => JSON.stringify(bodies.map(normalizedBody).sort())
 
 // A comment the user adds between the create and the read-back would otherwise be recorded as the tool's, and a later replace would delete it.
 function readBackMismatch(reviewId: number, requestedBodies: readonly string[], comments: readonly PendingComment[]): string | undefined {

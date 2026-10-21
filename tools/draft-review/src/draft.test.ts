@@ -45,6 +45,18 @@ describe('draftRecordAfterCreate', () => {
     expect(decision).toEqual({kind: 'skip', cause: 'mismatch', reason: 'the inline comments on pending review 7 are not the comments that the request sent'})
   })
 
+  test('records when a read-back body differs from the request only in CRLF line ends', () => {
+    expect(afterCreate(['Line one.\n\n- item'], {kind: 'read', comments: [comment(11, 'Line one.\r\n\r\n- item')]}).kind).toBe('record')
+  })
+
+  test('records when a read-back body differs from the request only in a trailing newline', () => {
+    expect(afterCreate(['Body text.\n'], {kind: 'read', comments: [comment(11, 'Body text.')]}).kind).toBe('record')
+  })
+
+  test('skips the record when a read-back body differs from the request in its text, not only in line ends', () => {
+    expect(afterCreate(['Line one.\n- item'], {kind: 'read', comments: [comment(11, 'Line one.\r\n- other')]})).toMatchObject({kind: 'skip', cause: 'mismatch'})
+  })
+
   test('skips the record when the comments could not be read back, and names the failure', () => {
     expect(afterCreate(['First.'], {kind: 'failed', reason: 'gh could not list the comments: HTTP 502'})).toEqual({
       kind: 'skip',

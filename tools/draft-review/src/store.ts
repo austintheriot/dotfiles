@@ -106,7 +106,7 @@ function recordedHashes(store: PrStore, head: string): Map<string, RecordedHash>
   return new Map([...new Set(files.map(file => file.path))].map(path => [path, recordedFor(path)]))
 }
 
-type StoredFile = {name: string; path: string; text: string}
+type StoredFile = {name: string; path: string; text: string; hashRecord: string | undefined}
 
 function readContributionFiles(store: PrStore, head: string): StoredFile[] {
   const dir = headDir(store, head)
@@ -114,10 +114,20 @@ function readContributionFiles(store: PrStore, head: string): StoredFile[] {
   return readdirSync(dir)
     .filter(name => CONTRIBUTION_FILE_NAME.test(name))
     .sort()
-    .map(name => ({name, path: join(dir, name), text: readText(join(dir, name))}))
+    .map(name => {
+      const path = join(dir, name)
+      const hashRecordPath = `${path}${FILE_HASHES_SUFFIX}`
+      return {name, path, text: readText(path), hashRecord: existsSync(hashRecordPath) ? readText(hashRecordPath) : undefined}
+    })
 }
 
-const digestOf = (files: readonly StoredFile[]) => contributionsDigest(files.map(file => ({name: file.name, sha256: bodyHash(file.text)})))
+const digestOf = (files: readonly StoredFile[]) =>
+  contributionsDigest(
+    files.flatMap(file => [
+      {name: file.name, sha256: bodyHash(file.text)},
+      ...(file.hashRecord === undefined ? [] : [{name: `${file.name}${FILE_HASHES_SUFFIX}`, sha256: bodyHash(file.hashRecord)}])
+    ])
+  )
 
 export function readHead(store: PrStore, head: string): {contributions: Contribution[]; digest: string} {
   const files = readContributionFiles(store, head)

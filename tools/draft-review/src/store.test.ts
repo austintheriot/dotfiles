@@ -300,6 +300,18 @@ describe('readContributions', () => {
     expect(headDigest(world.store, HEAD)).not.toBe(digest)
   })
 
+  test('the head digest changes when an add rewrites a contribution with identical bytes but new evidence content', async () => {
+    const world = makeWorld()
+    const png = world.evidence('step.png', 'the first recording')
+    await world.add(world.devQaCiting(png))
+    const contributionBefore = readFileSync(join(world.store.prDir, HEAD, 'dev-qa.json'), 'utf8')
+    const {digest} = readHead(world.store, HEAD)
+    world.evidence('step.png', 'the second recording')
+    await world.add(world.devQaCiting(png))
+    expect(readFileSync(join(world.store.prDir, HEAD, 'dev-qa.json'), 'utf8')).toBe(contributionBefore)
+    expect(headDigest(world.store, HEAD)).not.toBe(digest)
+  })
+
   test('ignores a JSON file whose name is not a contribution file name', async () => {
     const world = makeWorld()
     await world.add(review())

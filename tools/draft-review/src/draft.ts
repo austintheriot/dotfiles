@@ -87,6 +87,12 @@ export const replacedHeadLine = (earlier: EarlierDraft | undefined, head: string
     ? undefined
     : `create replaces the pending draft for head ${earlier.head.slice(0, 7)}. Its text is in ${earlier.synthesizedPath}.`
 
+// The anchor check reads the current diff, but the review posts against `head`. After a push, the two diffs differ.
+export const movedHeadRefusal = (head: string, pullRequestHead: string): string | undefined =>
+  head === pullRequestHead
+    ? undefined
+    : `the pull request head moved to ${pullRequestHead.slice(0, 7)}, and this run is for head ${head.slice(0, 7)}. draft-review uploaded nothing and changed nothing on GitHub. Start the run again on the new head.`
+
 export type LostDraft ={deletedId: number; requestPath: string; cause: string}
 
 export const lostDraftMessage = (lost: LostDraft): string =>

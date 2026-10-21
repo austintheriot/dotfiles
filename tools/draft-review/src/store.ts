@@ -243,7 +243,7 @@ export async function runUploads(store: PrStore, prepared: PreparedUploads): Pro
   if (uploader === undefined) return plan.urlByPath
   for (const file of plan.toUpload) {
     const bytes = readBytes(file.path)
-    if (sha256Of(bytes) !== file.sha256) throw new DraftReviewError(`${file.path} changed while create ran. Run create again.`, EXIT.noInput)
+    if (sha256Of(bytes) !== file.sha256) throw new DraftReviewError(`${file.path} changed while create ran. Run show, then create, again.`, EXIT.noInput)
     const url = await uploadOne(uploader, {path: file.path, bytes})
     writeJson(ledgerPath(store), recordUpload(readLedger(store), {...file, url}))
   }

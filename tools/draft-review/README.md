@@ -33,7 +33,7 @@ When the file is not a valid contribution, the command stores nothing and names 
 
 Before it stores, `add` checks the merge rules on the set that the head holds after the add. When the set breaks a rule, the command stores nothing, names the rule, and exits with code 65.
 
-`add` does not take the per-PR lock. Each stored file has its own name, and a rename puts each file in place, so two runs of `add` cannot mix their files.
+`add` does not take the per-PR lock. A rename puts each stored file in place, so a reader never sees a half-written file.
 
 Two orchestrators on one head at the same time can mix their contributions. Each `add` replaces the file of the same kind, so the round-two verdicts of one run can answer the findings of the other run. Run one orchestrator per head at a time.
 
@@ -64,19 +64,19 @@ create replaces the pending draft for head <short head>. Its text is in <path to
 
 Takes the per-PR lock, merges the store, and creates the pending review. The steps are:
 
-1. Read and merge the stored contributions for the head. Keep a digest of the contribution file names and contents, and of the `.files` hash record beside each contribution. When the body or a comment holds an absolute local path that `uploads` does not list, exit with code 65 and name the path and its location. A local path starts with `/Users/`, `/home/`, `/private/`, `/tmp/`, or `~/`.
+1. Read and merge the stored contributions for the head. Keep a digest of the contribution file names and contents, and of the `.files` hash record beside each contribution. When the body or a comment holds an absolute local path that `uploads` does not list, exit with code 65 and name the path and its location. A local path starts with `/Users/`, `/home/`, `/private/`, `/tmp/`, `/var/folders/`, `~/`, or `file://`. The check skips inline code spans and fenced code blocks, because review text can quote paths from the code under review.
 2. Find the upload for each cited file by the hash that `add` recorded for it:
    - When the file holds the recorded content, reuse its upload from the ledger, or upload it in step 5.
    - When the file changed after `add`, or no longer exists, use the ledger upload of the recorded content. When the ledger has none, exit with code 66. For a changed file, the message says `<path> changed after add, run add again`.
    - When two contributions for the head recorded different content for one path, exit with code 66.
    - When `add` recorded no hash for the path, use the content that the path holds now.
-3. Check each inline comment against the pull-request diff. The command reads `GET repos/{owner}/{repo}/pulls/{pr}/files` and takes the line ranges of each hunk from the `patch` of each file. The `line` of the comment must sit inside one hunk on the side of the comment, together with its optional `startLine`. When a comment fails, the command uploads nothing, deletes nothing, and exits with code 65. The message names the file, the line, and the contribution that holds the comment. A file that GitHub sends with no `patch` fails every comment on it.
+3. Check each inline comment against the pull-request diff. When `head.sha` from `GET repos/{owner}/{repo}/pulls/{pr}` is not `--head`, the command exits with code 65 and says that the head moved. The command reads `GET repos/{owner}/{repo}/pulls/{pr}/files` and takes the line ranges of each hunk from the `patch` of each file. The `line` of the comment must sit inside one hunk on the side of the comment, together with its optional `startLine`. When a comment fails, the command uploads nothing, deletes nothing, and exits with code 65. The message names the file, the line, and the contribution that holds the comment. A file that GitHub sends with no `patch` fails every comment on it.
 4. Find the pending reviews of the signed-in user on the pull request, with the inline comments of each review. Read the review that `draft.json` names by its id, and get its state. Then decide:
    - When the user submitted that review, and `draft.json` names the same head, change nothing. Write the merged review to `synthesized.md`, print the path, and exit with code 3. See [A submitted first draft](#a-submitted-first-draft).
    - When GitHub returns `404` for that review, the command ignores `draft.json` for this decision.
    - When a submitted review by the user is for the head and holds the body that the command is about to send, change nothing. Write the merged review to `synthesized.md`, print the path, and exit with code 3. This check does not use `draft.json`.
    - When a pending review is not one that `draft-review` can replace, change nothing. Write the merged review to `synthesized.md`, print the path, and exit with code 3.
-5. Upload each file from step 2. For each file, the command reads the file one time, hashes those bytes, and uploads the same bytes. When the hash is not the hash from step 2, the file changed while `create` ran. The command then uploads nothing more, says `<path> changed while create ran. Run create again.`, and exits with code 66. The command writes the ledger after each upload, so a failed run keeps the URLs it already has.
+5. Upload each file from step 2. For each file, the command reads the file one time, hashes those bytes, and uploads the same bytes. When the hash is not the hash from step 2, the file changed while `create` ran. The command then uploads nothing more, says `<path> changed while create ran. Run show, then create, again.`, and exits with code 66. The command writes the ledger after each upload, so a failed run keeps the URLs it already has.
 6. Put the URLs in place of the local paths. Write the merged review to `synthesized.md` and the exact request to `payload.request`.
 7. Find the pending reviews again, and decide again.
 8. When no pending review exists, create one.
@@ -145,12 +145,12 @@ The check runs after the upload plan. So a missing cited file (code 66) or a mis
 | 0 | `ok` | The command finished. |
 | 3 | `refused` | Another pending review by the user exists, the user edited the review that `draft-review` created, the user submitted the first draft for the head, a submitted review for the head holds the same body, or the comments of a new review do not match the request. When no review URL was printed, the merged review is in `synthesized.md`. When a review URL was printed, a new pending review exists with no `draft.json`, and the user must check it on GitHub and delete it before the next `create`. |
 | 64 | `usage` | The command line is wrong. |
-| 65 | `dataErr` | A contribution is invalid, the stored contributions break a merge rule, an inline comment is outside the pull-request diff, the text holds a local path that `uploads` does not list, or `draft.json` is invalid. See [An invalid draft.json](#an-invalid-draftjson). |
+| 65 | `dataErr` | A contribution is invalid, the stored contributions break a merge rule, the pull request head moved, an inline comment is outside the pull-request diff, the text holds a local path that `uploads` does not list, or `draft.json` is invalid. See [An invalid draft.json](#an-invalid-draftjson). |
 | 66 | `noInput` | An input file is missing, a cited file is missing or changed after `add` with no upload of its recorded content, a cited file changed while `create` ran, two contributions recorded different content for one file, or the store holds nothing for the head. |
 | 69 | `unavailable` | `gh` is missing or not signed in, or a GitHub call or an upload failed. This code includes a create that failed after the delete, and a failed read of the new review's comments. When a review URL was printed, a pending review exists with no `draft.json`. The user must check it on GitHub and delete it before the next `create`. |
 | 73 | `cantCreate` | Another run holds the per-PR lock for longer than 30 seconds. |
 | 74 | `ioErr` | A store file cannot be read or written. |
-| 75 | `tempFail` | `create` made the pending review, but a contribution for the head changed while it ran. Run `create` again. |
+| 75 | `tempFail` | `create` made the pending review, but a contribution for the head changed while it ran. Run `show`, then `create`, again. |
 | 78 | `config` | The config file is missing or invalid, it has no entry for the repository, or an upload needs an `uploadEndpoint` that the entry does not set. |
 
 ## An invalid draft.json

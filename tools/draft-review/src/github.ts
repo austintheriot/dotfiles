@@ -98,7 +98,10 @@ export function recordedReviewFrom(run: GhRun, record: DraftRecord): RecordedRev
   return {kind: 'found', record, state: review.state}
 }
 
-const PullFileSchema = z.object({filename: z.string(), patch: z.string().optional()})
+export const pullRequestHead = (repo: Repo, pr: number): string =>
+  ghJson(['api', `repos/${repo.owner}/${repo.name}/pulls/${pr}`], z.object({head: z.object({sha: z.string()})}), `read the head of pull request ${pr}`).head.sha
+
+const PullFileSchema =z.object({filename: z.string(), patch: z.string().optional()})
 
 export function pullRequestFiles(repo: Repo, pr: number): PullFile[] {
   const pages = ghJson(

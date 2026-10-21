@@ -257,11 +257,11 @@ When `add` stores a `code-review` or `dev-qa` contribution, it removes the round
 When `create` exits with a code other than 0, act as follows. The README exit code table has the full list.
 
 - Code 3 with no review URL on stdout: another pending review exists, or someone edited the draft. `create` wrote nothing to GitHub. Tell the user the path of `synthesized.md`, which holds the merged review. Do not touch the other review. When the other review is the user's own hand-written draft, the user can copy text from `synthesized.md` into it. After the user submits or discards it, run `show` and ask again.
-- Code 3 with a review URL on stdout: the new pending review exists, and it has no record. The read-back found different comments. Tell the user to check it on GitHub and delete it before you run `create` again.
-- Code 65: a contribution is invalid, breaks a merge rule, has an inline comment outside the diff, or holds a local path that `uploads` does not list. `create` uploaded nothing and deleted nothing. Fix the contribution and run `add` again. Then run `show` again, and ask the question again before `create`.
+- Code 3 with a review URL on stdout: the new pending review exists, and it has no record. The read-back found different comments. Tell the user to check it on GitHub and delete it. Run `show` again and ask again before the next `create`.
+- Code 65: a contribution is invalid, breaks a merge rule, has an inline comment outside the diff, or holds a local path that `uploads` does not list. `create` uploaded nothing and deleted nothing. Fix the contribution and run `add` again. Then run `show` again, and ask the question again before `create`. When the message says that the pull request head moved, start the run again on the new head.
 - Code 66: a cited file does not exist or was edited after `add`. Write the file again and run `add` again. Then run `show` again, and ask the question again before `create`.
 - Code 75: a contribution changed while `create` ran. Run `show` again, ask again, and on approval run `create`.
-- Code 69 with a review URL on stdout: the new pending review exists, and it has no record. Tell the user to check it on GitHub and delete it before you run `create` again.
+- Code 69 with a review URL on stdout: the new pending review exists, and it has no record. Tell the user to check it on GitHub and delete it. Run `show` again and ask again before the next `create`.
 - Code 69 with no review URL: a GitHub call failed. Tell the user the message. If the message says that the review was deleted, run `show` again, ask again, and on approval run `create`. When the cause is a GitHub 422 reply, a contribution must change first.
 - Code 78: the `draft-review` config does not exist, is not valid, has no entry for this repository, or has no `uploadEndpoint` for an upload. Tell the user which cause the error message names.
 

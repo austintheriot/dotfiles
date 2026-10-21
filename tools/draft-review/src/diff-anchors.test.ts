@@ -41,6 +41,17 @@ describe('parsePatch', () => {
     expect(parsePatch('@@ -4 +4 @@\n-old\n+new')).toEqual({right: [{start: 4, end: 4}], left: [{start: 4, end: 4}]})
   })
 
+  test('gives a deleted-only hunk left-side lines and no right-side lines', () => {
+    expect(parsePatch('@@ -5,3 +4,0 @@\n-one\n-two\n-three')).toEqual({right: [], left: [{start: 5, end: 7}]})
+  })
+
+  test('does not count a no-newline marker as a line', () => {
+    expect(parsePatch('@@ -1,2 +1,2 @@\n one\n-two\n\\ No newline at end of file\n+two\n\\ No newline at end of file')).toEqual({
+      right: [{start: 1, end: 2}],
+      left: [{start: 1, end: 2}]
+    })
+  })
+
   test('gives no ranges for an empty patch', () => {
     expect(parsePatch('')).toEqual({right: [], left: []})
   })

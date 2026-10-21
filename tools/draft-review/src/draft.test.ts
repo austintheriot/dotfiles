@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {bodyHash, contributionsDigest, draftRecordAfterCreate, lostDraftMessage, replacedHeadLine} from './draft'
+import {bodyHash, contributionsDigest, draftRecordAfterCreate, lostDraftMessage, movedHeadRefusal, replacedHeadLine} from './draft'
 import type {ReadBack} from './draft'
 import {HEAD} from './testing/fixtures'
 
@@ -8,6 +8,18 @@ const created = {id: 7, body: 'Body.', url: 'https://example.test/review'}
 const comment = (id: number, body: string) => ({id, body})
 const afterCreate = (requestedBodies: string[], readBack: ReadBack) =>
   draftRecordAfterCreate({review: created, head: HEAD, requestedBodies, readBack, contributionsDigest: DIGEST})
+
+describe('movedHeadRefusal', () => {
+  test('refuses when the pull request head is not the head of the run, and names the new head', () => {
+    expect(movedHeadRefusal(HEAD, 'c'.repeat(40))).toBe(
+      `the pull request head moved to ccccccc, and this run is for head ${HEAD.slice(0, 7)}. draft-review uploaded nothing and changed nothing on GitHub. Start the run again on the new head.`
+    )
+  })
+
+  test('accepts when the pull request head is the head of the run', () => {
+    expect(movedHeadRefusal(HEAD, HEAD)).toBeUndefined()
+  })
+})
 
 describe('replacedHeadLine', () => {
   const earlier = {head: 'b'.repeat(40), synthesizedPath: `/store/${'b'.repeat(40)}/synthesized.md`}

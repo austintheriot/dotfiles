@@ -692,7 +692,7 @@ describe('prepareUploads and runUploads', () => {
     expect(ledgerEntries(world.store).map(entry => ({sha256: entry.sha256, sent: cdn.contentByUrl.get(entry.url)}))).toEqual([
       {sha256: bodyHash('bytes of the first file'), sent: bodyHash('bytes of the first file')}
     ])
-    expect(outcome).toEqual({code: EXIT.noInput, message: `${second} changed while create ran. Run create again.`})
+    expect(outcome).toEqual({code: EXIT.noInput, message: `${second} changed while create ran. Run show, then create, again.`})
     expect(cdn.contentByUrl.size).toBe(1)
   })
 

@@ -7,7 +7,7 @@ import {routeFindings, validateContributions} from './contribution-set'
 import type {Contribution} from './contribution'
 import type {DraftAction, ReadBack} from './draft'
 import {anchorProblems} from './diff-anchors'
-import {draftAction, draftRecordAfterCreate, lostDraftMessage, replacedHeadLine} from './draft'
+import {draftAction, draftRecordAfterCreate, lostDraftMessage, movedHeadRefusal, replacedHeadLine} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ExitCode} from './exit'
 import type {CreatedReview} from './github'
@@ -18,6 +18,7 @@ import {
   ensureGh,
   ghUploader,
   pullRequestFiles,
+  pullRequestHead,
   recordedReview,
   reviewComments,
   reviewRequest,
@@ -188,14 +189,14 @@ function recordDraft(target: Target, written: Written, review: CreatedReview): v
   const decision = draftRecordAfterCreate({review, head: command.head, requestedBodies: written.requestedBodies, readBack: readBack(target, review.id), contributionsDigest})
   if (decision.kind === 'record') return writeDraftRecord(store, decision.record)
   const consequence =
-    'draft-review wrote no draft.json, so the next create refuses to replace that review while it is pending. When you submit it, create never posts the same content again. Check the review on GitHub, delete it, then run create again.'
+    'draft-review wrote no draft.json, so the next create refuses to replace that review while it is pending. When you submit it, create never posts the same content again. Check the review on GitHub and delete it. Then run show, then create, again.'
   throw new DraftReviewError(`pending review ${review.id} exists, but ${decision.reason}. ${consequence}`, SKIP_EXIT[decision.cause])
 }
 
 function refuseStale(target: Target, reviewId: number): void {
   const {store, command} = target
   if (headDigest(store, command.head) === target.contributionsDigest) return
-  const message = `a contribution for head ${command.head} changed while create ran, so pending review ${reviewId} is stale. Run create again.`
+  const message = `a contribution for head ${command.head} changed while create ran, so pending review ${reviewId} is stale. Run show, then create, again.`
   throw new DraftReviewError(message, EXIT.tempFail)
 }
 
@@ -208,6 +209,11 @@ function refuseStrayPaths(payload: ReviewPayload): void {
   const found = strays.map(stray => `${stray.location} holds the local path ${stray.path}`).join(', ')
   const steps = 'That path is not in uploads, so GitHub gets it as raw text. List the file in uploads, or remove the path, then run add again.'
   throw new DraftReviewError(`${found}. ${steps}`, EXIT.dataErr)
+}
+
+function refuseMovedHead(target: Target): void {
+  const refusal = movedHeadRefusal(target.command.head, pullRequestHead(target.repo, target.command.pr))
+  if (refusal !== undefined) throw new DraftReviewError(refusal, EXIT.dataErr)
 }
 
 function refuseOffDiff(target: Target, comments: readonly InlineComment[]): void {
@@ -268,6 +274,7 @@ async function create(command: CreateCommand): Promise<ExitCode> {
     const uploads = prepareUploads(store, command.head, payload.uploads, firstPath => uploaderFor(settings, configPath, firstPath))
     ensureGh()
     const target: Target = {repo, store, command, login: viewerLogin(), contributionsDigest: digest}
+    refuseMovedHead(target)
     refuseOffDiff(target, payload.comments)
     const early = decide(target, substituteUploads(payload, uploads.plan.urlByPath).body)
     if (isRefusal(early)) return refuseFor(early, target, writeSynthesized(store, command.head, renderReview(payload)))

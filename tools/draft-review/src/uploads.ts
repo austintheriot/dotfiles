@@ -19,10 +19,15 @@ export function citedPaths(texts: readonly string[], candidates: readonly string
 
 export type StrayPath = {location: string; path: string}
 
-const LOCAL_PATH = /(?<![\p{L}\p{N}_./:~-])(?:\/(?:Users|home|private|tmp)\/|~\/)[^\s)\]>'"`]+/gu
+const LOCAL_PATH = /(?<![\p{L}\p{N}_./:~-])(?:file:\/\/|\/(?:Users|home|private|tmp|var\/folders)\/|~\/)[^\s)\]>'"`]+/gu
 const TRAILING_PUNCTUATION = /[.,;:!?]+$/u
+const FENCED_BLOCK = /^ {0,3}(`{3,}|~{3,})[^\n]*\n?[\s\S]*?(?:^ {0,3}\1[`~]*[ \t]*$|(?![\s\S]))/gm
+const CODE_SPAN = /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g
 
-const localPathsIn = (text: string) => [...text.matchAll(LOCAL_PATH)].map(match => match[0].replace(TRAILING_PUNCTUATION, ''))
+// Review text quotes paths from the code under review (a Dockerfile, a CI config, a suggestion block), so code is not a stray path.
+const withoutCode = (text: string) => text.replace(FENCED_BLOCK, ' ').replace(CODE_SPAN, ' ')
+
+const localPathsIn = (text: string) => [...withoutCode(text).matchAll(LOCAL_PATH)].map(match => match[0].replace(TRAILING_PUNCTUATION, ''))
 
 // A path in uploads gets its URL in create, so only the paths left after that substitution reach GitHub as raw text.
 export function strayLocalPaths(payload: ReviewPayload): StrayPath[] {

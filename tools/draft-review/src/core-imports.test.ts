@@ -5,7 +5,7 @@ import ts from 'typescript'
 
 const CORE_FILES = ['args', 'contribution', 'contribution-set', 'draft', 'exit', 'ledger', 'lists', 'parsed', 'payload', 'render', 'synthesize', 'uploads']
 const ALLOWED_PACKAGES = new Set(['zod', 'node:crypto', 'node:util'])
-const FORBIDDEN_GLOBALS = [/\bBun\b/, /\bprocess\b/, /\brequire\s*\(/, /\bDate\.now\b/, /\bnew\s+Date\s*\(/]
+const FORBIDDEN_GLOBALS = [/\bBun\b/, /\bprocess\b/, /\brequire\s*\(/, /\bDate\.now\b/, /\bnew\s+(globalThis\.)?Date\b/, /\bglobalThis\s*\[/]
 
 const sourceOf = (name: string) => readFileSync(join(import.meta.dir, `${name}.ts`), 'utf8')
 const importsOf = (source: string) => [...source.matchAll(/(?:import|export)\s[^'"]*?from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g)].map(match => match[1] ?? match[2] ?? match[3] ?? '')
@@ -69,9 +69,15 @@ describe('the forbidden-name check', () => {
     expect(forbiddenNames('const text = `pid ${process.pid}`')).toEqual([String(/\bprocess\b/)])
   })
 
-  test('finds Date.now and new Date( in code', () => {
+  test('finds Date.now and new Date in code, with or without parentheses', () => {
     expect(forbiddenNames('const stamp = Date.now()')).toEqual([String(/\bDate\.now\b/)])
-    expect(forbiddenNames('const today = new Date()')).toEqual([String(/\bnew\s+Date\s*\(/)])
+    expect(forbiddenNames('const today = new Date()')).toEqual([String(/\bnew\s+(globalThis\.)?Date\b/)])
+    expect(forbiddenNames('const today = new Date;')).toEqual([String(/\bnew\s+(globalThis\.)?Date\b/)])
+    expect(forbiddenNames('const today = new globalThis.Date()')).toEqual([String(/\bnew\s+(globalThis\.)?Date\b/)])
+  })
+
+  test('finds a global that code reaches through globalThis with a string key', () => {
+    expect(forbiddenNames("const env = globalThis['process'].env")).toEqual([String(/\bglobalThis\s*\[/)])
   })
 })
 

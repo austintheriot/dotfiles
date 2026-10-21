@@ -2,12 +2,12 @@ import {basename, extname} from 'node:path'
 import {z} from 'zod'
 import type {Repo} from './args'
 import {parseRepo} from './args'
-import type {DraftRecord, PendingComment, PendingReview, RecordedReview} from './draft'
+import type {DraftRecord, PendingComment, PendingReview, RecordedReview, SubmittedReview} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ReviewPayload} from './payload'
 import type {IUploader} from './store'
 
-type GhRun = {code: number; stdout: string; stderr: string}
+export type GhRun = {code: number; stdout: string; stderr: string}
 
 function gh(args: readonly string[], input?: string | Uint8Array): GhRun {
   try {
@@ -51,7 +51,13 @@ export function currentRepo(): Repo {
 
 export const viewerLogin = (): string => ghJson(['api', 'user'], z.object({login: z.string()}), 'read the signed-in user').login
 
-const ReviewSchema = z.object({id: z.number().int(), state: z.string(), body: z.string().nullable(), user: z.object({login: z.string()}).nullable()})
+const ReviewSchema = z.object({
+  id: z.number().int(),
+  state: z.string(),
+  body: z.string().nullable(),
+  commit_id: z.string().nullable().optional(),
+  user: z.object({login: z.string()}).nullable()
+})
 const ReviewCommentSchema = z.object({id: z.number().int(), body: z.string()})
 
 export function reviewComments(repo: Repo, pr: number, reviewId: number): PendingComment[] {
@@ -63,18 +69,28 @@ export function reviewComments(repo: Repo, pr: number, reviewId: number): Pendin
   return pages.flat().map(comment => ({id: comment.id, body: comment.body}))
 }
 
-export function pendingReviews(repo: Repo, pr: number, login: string): PendingReview[] {
+export type ViewerReviews = {pending: PendingReview[]; submitted: SubmittedReview[]}
+
+export function viewerReviews(repo: Repo, pr: number, login: string): ViewerReviews {
   const pages = ghJson(['api', reviewsPath(repo, pr), '--paginate', '--slurp'], z.array(z.array(ReviewSchema)), `list the reviews of pull request ${pr}`)
-  return pages
-    .flat()
-    .filter(review => review.state === 'PENDING' && review.user?.login === login)
-    .map(review => ({id: review.id, body: review.body ?? '', comments: reviewComments(repo, pr, review.id)}))
+  const own = pages.flat().filter(review => review.user?.login === login)
+  return {
+    pending: own
+      .filter(review => review.state === 'PENDING')
+      .map(review => ({id: review.id, body: review.body ?? '', comments: reviewComments(repo, pr, review.id)})),
+    submitted: own
+      .filter(review => review.state !== 'PENDING')
+      .map(review => ({id: review.id, state: review.state, commitId: review.commit_id ?? undefined, body: review.body ?? ''}))
+  }
 }
 
 // A 404 means the review is gone: the user deleted the pending draft, which discards it. Any other failure stops the run.
 export function recordedReview(repo: Repo, pr: number, record: DraftRecord | undefined): RecordedReview {
   if (record === undefined) return {kind: 'none'}
-  const run = gh(['api', '--include', `${reviewsPath(repo, pr)}/${record.reviewId}`])
+  return recordedReviewFrom(gh(['api', '--include', `${reviewsPath(repo, pr)}/${record.reviewId}`]), record)
+}
+
+export function recordedReviewFrom(run: GhRun, record: DraftRecord): RecordedReview {
   const reply = parseHttpReply(run.stdout)
   if (reply.status === 404 || (reply.status === undefined && /HTTP 404/.test(run.stderr))) return {kind: 'gone', record}
   const review = parseReply({...run, stdout: reply.body}, z.object({state: z.string()}), `read review ${record.reviewId}, which draft.json names`)

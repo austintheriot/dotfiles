@@ -2,15 +2,16 @@ import {afterAll, describe, expect, test} from 'bun:test'
 import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
-import {bodyHash, draftAction} from './draft'
-import type {DraftRecord, PendingReview, RecordedReview} from './draft'
+import {bodyHash, draftAction, draftRecordAfterCreate} from './draft'
+import type {DraftRecord, PendingReview, RecordedReview, SubmittedReview} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import {withLock} from './lock'
 import type {IUploader} from './store'
 import type {PrStore} from './store'
-import {headDigest, prepareUploads, prStore, readContributions, readDraftRecord, readHead, runUploads, writeReviewRequest, writeSynthesized} from './store'
+import {headDigest, prepareUploads, prStore, readContributions, readDraftRecord, readHead, runUploads, writeDraftRecord, writeReviewRequest, writeSynthesized} from './store'
 import type {DevQaContribution} from './contribution'
-import {blankPage, devQa, HEAD, OTHER_HEAD, review} from './testing/fixtures'
+import {blankPage, devQa, HEAD, OTHER_HEAD, payloadOf, review} from './testing/fixtures'
+import {substituteUploads} from './uploads'
 
 const MAIN = join(import.meta.dir, 'main.ts')
 const REPO = {owner: 'acme', name: 'widgets'}
@@ -235,7 +236,8 @@ describe('draftAction', () => {
   const NO_RECORD: RecordedReview = {kind: 'none'}
   const inState = (lastWritten: DraftRecord, state: string): RecordedReview => ({kind: 'found', record: lastWritten, state})
   const stillPending = (lastWritten: DraftRecord) => inState(lastWritten, 'PENDING')
-  const decide = (existing: PendingReview[], recorded: RecordedReview) => draftAction(existing, recorded, HEAD)
+  const decide = (existing: PendingReview[], recorded: RecordedReview, submitted: SubmittedReview[] = [], body = 'Merged body.') =>
+    draftAction({pending: existing, submitted, recorded, head: HEAD, body})
 
   test('with no pending review, creates one', () => {
     expect(decide([], NO_RECORD)).toEqual({kind: 'create'})
@@ -291,6 +293,57 @@ describe('draftAction', () => {
   test('refuses another pending review when the user deleted the recorded review', () => {
     expect(decide([pending('Body.', [], 9)], {kind: 'gone', record: record('Body.')})).toEqual({kind: 'refuse', reviewId: 9})
   })
+
+  const submittedReview = (body: string, commitId: string | undefined = HEAD, state = 'COMMENTED', id = 8): SubmittedReview => ({id, state, commitId, body})
+
+  test('refuses a body that a submitted review for this head already holds, with no draft.json', () => {
+    expect(decide([], NO_RECORD, [submittedReview('Merged body.')], 'Merged body.')).toEqual({kind: 'duplicate', reviewId: 8, state: 'COMMENTED'})
+  })
+
+  test('compares the bodies after CRLF becomes LF and trailing whitespace goes', () => {
+    expect(decide([], NO_RECORD, [submittedReview('Line one.\r\n\r\nLine two.  \r\n')], 'Line one.\n\nLine two.')).toEqual({kind: 'duplicate', reviewId: 8, state: 'COMMENTED'})
+  })
+
+  test('creates a draft when the submitted review with the same body belongs to another commit', () => {
+    expect(decide([], NO_RECORD, [submittedReview('Merged body.', OTHER_HEAD)], 'Merged body.')).toEqual({kind: 'create'})
+  })
+
+  test('creates a draft when the submitted review for this head holds another body', () => {
+    expect(decide([], NO_RECORD, [submittedReview('Older findings.')], 'Merged body.')).toEqual({kind: 'create'})
+  })
+
+  test('ignores a pending review in the submitted list', () => {
+    expect(decide([], NO_RECORD, [submittedReview('Merged body.', HEAD, 'PENDING')], 'Merged body.')).toEqual({kind: 'create'})
+  })
+})
+
+describe('the second create after the user submitted a draft that draft.json does not name', () => {
+  const BODY = 'Merged body.'
+  const submitted: SubmittedReview[] = [{id: 7, state: 'COMMENTED', commitId: HEAD, body: BODY}]
+  const decideWith = (recorded: RecordedReview) => draftAction({pending: [], submitted, recorded, head: HEAD, body: BODY})
+  const staleRecord: DraftRecord = {reviewId: 5, bodyHash: bodyHash(BODY), comments: [], head: HEAD, url: 'https://example.test/review/5'}
+
+  test('refuses after a read-back failure left no draft.json', () => {
+    const afterCreate = draftRecordAfterCreate({review: {id: 7, body: BODY, url: 'https://example.test/review/7'}, head: HEAD, requestedBodies: [], readBack: {kind: 'failed', reason: 'HTTP 502'}, contributionsDigest: 'd'.repeat(64)})
+    expect(afterCreate.kind).toBe('skip')
+    expect(decideWith({kind: 'none'})).toEqual({kind: 'duplicate', reviewId: 7, state: 'COMMENTED'})
+  })
+
+  test('refuses when a stale draft.json names a review that GitHub no longer has (404)', () => {
+    expect(decideWith({kind: 'gone', record: staleRecord})).toEqual({kind: 'duplicate', reviewId: 7, state: 'COMMENTED'})
+  })
+
+  test('refuses after the user deleted draft.json by hand', () => {
+    const world = makeWorld()
+    writeDraftRecord(world.store, staleRecord)
+    rmSync(join(world.store.prDir, 'draft.json'))
+    const recorded: RecordedReview = (() => {
+      const record = readDraftRecord(world.store)
+      return record === undefined ? {kind: 'none'} : {kind: 'gone', record}
+    })()
+    expect(recorded).toEqual({kind: 'none'})
+    expect(decideWith(recorded)).toEqual({kind: 'duplicate', reviewId: 7, state: 'COMMENTED'})
+  })
 })
 
 describe('readDraftRecord', () => {
@@ -317,7 +370,7 @@ describe('readDraftRecord', () => {
     const outcome = attempt(draftWorld(JSON.stringify({...recordFields, bodyHash: 'not a hash'})).store)
     expect(outcome).toMatchObject({code: EXIT.dataErr})
     expect('message' in outcome ? outcome.message : '').toContain(
-      'It names pending review 41. After a delete of draft.json, the next create refuses to replace review 41 until you delete that review on GitHub.'
+      'It names review 41. A delete of draft.json is safe: create never posts the content of a submitted review again. While review 41 is pending, the next create refuses to replace it. Delete review 41 on GitHub to unblock create.'
     )
   })
 
@@ -325,7 +378,7 @@ describe('readDraftRecord', () => {
     const outcome = attempt(draftWorld('{"reviewId": 41,').store)
     expect(outcome).toMatchObject({code: EXIT.dataErr})
     expect('message' in outcome ? outcome.message : '').toContain(
-      'After a delete of draft.json, the next create refuses to replace the pending review that draft-review created until you delete that review on GitHub.'
+      'A delete of draft.json is safe: create never posts the content of a submitted review again. While the review that draft-review created is pending, the next create refuses to replace it. Delete that review on GitHub to unblock create.'
     )
   })
 })
@@ -447,6 +500,19 @@ describe('prepareUploads and runUploads', () => {
       {sha256: bodyHash('bytes of the first file'), sent: bodyHash('bytes of the first file')}
     ])
     expect(outcome).toEqual({code: EXIT.noInput, message: `${second} changed while create ran. Run create again.`})
+    expect(cdn.contentByUrl.size).toBe(1)
+  })
+
+  test('two prepares of the same store give the same body, so a later create can match a submitted body', async () => {
+    const world = makeWorld()
+    const png = world.evidence('step.png', 'the recording')
+    await world.add(world.devQaCiting(png))
+    const bodyFor = (urls: ReadonlyMap<string, string>) => substituteUploads(payloadOf(readContributions(world.store, HEAD)), urls).body
+    const first = bodyFor(await resolveUploads(world.store, HEAD, [png], () => memoryCdn().uploader))
+    const second = bodyFor(prepareUploads(world.store, HEAD, [png], noUploader).plan.urlByPath)
+    expect(second).toBe(first)
+    expect(first).toContain('https://cdn.example/memory/1')
+    expect(first).not.toContain(png)
   })
 
   test('asks for no uploader when every file is in the ledger', async () => {

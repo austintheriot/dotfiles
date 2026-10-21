@@ -32,9 +32,10 @@ function jsonOf(text: string): unknown {
 
 function consequenceOfDelete(raw: unknown): string {
   const named = NamedReviewSchema.safeParse(raw)
-  if (!named.success) return 'After a delete of draft.json, the next create refuses to replace the pending review that draft-review created until you delete that review on GitHub.'
+  const safe = 'A delete of draft.json is safe: create never posts the content of a submitted review again.'
+  if (!named.success) return `${safe} While the review that draft-review created is pending, the next create refuses to replace it. Delete that review on GitHub to unblock create.`
   const id = named.data.reviewId
-  return `It names pending review ${id}. After a delete of draft.json, the next create refuses to replace review ${id} until you delete that review on GitHub.`
+  return `It names review ${id}. ${safe} While review ${id} is pending, the next create refuses to replace it. Delete review ${id} on GitHub to unblock create.`
 }
 
 export function parseDraftRecord(text: string): Parsed<DraftRecord> {
@@ -88,8 +89,19 @@ export type DraftAction =
   | {kind: 'replace'; reviewId: number}
   | {kind: 'refuse'; reviewId: number}
   | {kind: 'submitted'; reviewId: number; state: string}
+  | {kind: 'duplicate'; reviewId: number; state: string}
 
 export type RecordedReview = {kind: 'none'} | {kind: 'found'; record: DraftRecord; state: string} | {kind: 'gone'; record: DraftRecord}
+
+export type SubmittedReview = {id: number; state: string; commitId: string | undefined; body: string}
+
+export type DecisionInput = {
+  pending: readonly PendingReview[]
+  submitted: readonly SubmittedReview[]
+  recorded: RecordedReview
+  head: string
+  body: string
+}
 
 export const bodyHash = (body: string): string => createHash('sha256').update(body, 'utf8').digest('hex')
 
@@ -107,10 +119,16 @@ const isOurs = (review: PendingReview, lastWritten: DraftRecord | undefined) =>
 
 // Any state other than PENDING counts as submitted, so a state that GitHub adds later cannot lead to a second post of the same content.
 // A submitted review for an earlier head does not block a draft for a new head: the new head is a new round of review.
-export function draftAction(existing: readonly PendingReview[], recorded: RecordedReview, head: string): DraftAction {
+// The content check does not need draft.json, so a lost or deleted draft.json cannot lead to a second post of submitted content.
+export function draftAction(input: DecisionInput): DraftAction {
+  const {pending: existing, recorded, head, body} = input
   if (recorded.kind === 'found' && recorded.state !== 'PENDING' && recorded.record.head === head) {
     return {kind: 'submitted', reviewId: recorded.record.reviewId, state: recorded.state}
   }
+  const holder = input.submitted.find(
+    review => review.state !== 'PENDING' && review.commitId === head && normalizedBody(review.body) === normalizedBody(body)
+  )
+  if (holder !== undefined) return {kind: 'duplicate', reviewId: holder.id, state: holder.state}
   const lastWritten = recorded.kind === 'found' ? recorded.record : undefined
   const [first] = existing
   if (first === undefined) return {kind: 'create'}

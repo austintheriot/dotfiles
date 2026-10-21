@@ -10,7 +10,7 @@ import {draftAction, draftRecordAfterCreate} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ExitCode} from './exit'
 import type {CreatedReview} from './github'
-import {createPendingReview, currentRepo, deleteReview, ensureGh, ghUploader, pendingReviews, recordedReview, reviewComments, reviewRequest, viewerLogin} from './github'
+import {createPendingReview, currentRepo, deleteReview, ensureGh, ghUploader, recordedReview, reviewComments, reviewRequest, viewerLogin, viewerReviews} from './github'
 import {withLock} from './lock'
 import type {ReviewPayload} from './payload'
 import {renderReview} from './render'
@@ -82,11 +82,41 @@ function uploaderFor(settings: RepositoryConfig, configPath: string, firstPath: 
 }
 
 type Target = {repo: Repo; store: PrStore; command: CreateCommand; login: string; contributionsDigest: string}
-type Written = {synthesizedPath: string; requestPath: string; requestedBodies: string[]}
+type Written = {synthesizedPath: string; requestPath: string; requestedBodies: string[]; body: string}
 
-const decide = (target: Target): DraftAction => {
+const decide = (target: Target, body: string): DraftAction => {
   const {repo, command} = target
-  return draftAction(pendingReviews(repo, command.pr, target.login), recordedReview(repo, command.pr, readDraftRecord(target.store)), command.head)
+  const reviews = viewerReviews(repo, command.pr, target.login)
+  const recorded = recordedReview(repo, command.pr, readDraftRecord(target.store))
+  return draftAction({pending: reviews.pending, submitted: reviews.submitted, recorded, head: command.head, body})
+}
+
+function refuseDuplicate(target: Target, synthesizedPath: string, action: {reviewId: number; state: string}): ExitCode {
+  const {head} = target.command
+  console.error(
+    `A submitted review for head ${head} (review ${action.reviewId}, state ${action.state}) already holds this content. draft-review never posts submitted content again. The merged review is in ${synthesizedPath}.`
+  )
+  console.log(synthesizedPath)
+  return EXIT.refused
+}
+
+type Refusal = Extract<DraftAction, {kind: 'refuse' | 'submitted' | 'duplicate'}>
+
+const isRefusal = (action: DraftAction): action is Refusal => action.kind === 'refuse' || action.kind === 'submitted' || action.kind === 'duplicate'
+
+function refuseFor(action: Refusal, target: Target, synthesizedPath: string): ExitCode {
+  switch (action.kind) {
+    case 'refuse':
+      return refuse(target, synthesizedPath, action.reviewId)
+    case 'submitted':
+      return refuseSubmitted(target, synthesizedPath, action)
+    case 'duplicate':
+      return refuseDuplicate(target, synthesizedPath, action)
+    default: {
+      const unreachable: never = action
+      return unreachable
+    }
+  }
 }
 
 function refuseSubmitted(target: Target, synthesizedPath: string, action: {reviewId: number; state: string}): ExitCode {
@@ -110,7 +140,8 @@ function writeReview(target: Target, review: ReviewPayload): Written {
   return {
     synthesizedPath: writeSynthesized(store, command.head, renderReview(review)),
     requestPath: writeReviewRequest(store, command.head, reviewRequest(command.head, review)),
-    requestedBodies: review.comments.map(comment => comment.body)
+    requestedBodies: review.comments.map(comment => comment.body),
+    body: review.body
   }
 }
 
@@ -129,7 +160,8 @@ function recordDraft(target: Target, written: Written, review: CreatedReview): v
   const {store, command, contributionsDigest} = target
   const decision = draftRecordAfterCreate({review, head: command.head, requestedBodies: written.requestedBodies, readBack: readBack(target, review.id), contributionsDigest})
   if (decision.kind === 'record') return writeDraftRecord(store, decision.record)
-  const consequence = 'draft-review wrote no draft.json, so the next create refuses to replace that review. Check the review on GitHub, delete it, then run create again.'
+  const consequence =
+    'draft-review wrote no draft.json, so the next create refuses to replace that review while it is pending. When you submit it, create never posts the same content again. Check the review on GitHub, delete it, then run create again.'
   throw new DraftReviewError(`pending review ${review.id} exists, but ${decision.reason}. ${consequence}`, SKIP_EXIT[decision.cause])
 }
 
@@ -165,11 +197,8 @@ function post(target: Target, written: Written, deletedId: number | undefined): 
 }
 
 function applyDraftAction(action: DraftAction, target: Target, written: Written): ExitCode {
+  if (isRefusal(action)) return refuseFor(action, target, written.synthesizedPath)
   switch (action.kind) {
-    case 'refuse':
-      return refuse(target, written.synthesizedPath, action.reviewId)
-    case 'submitted':
-      return refuseSubmitted(target, written.synthesizedPath, action)
     case 'replace':
       deleteReview(target.repo, target.command.pr, action.reviewId)
       return post(target, written, action.reviewId)
@@ -194,12 +223,11 @@ async function create(command: CreateCommand): Promise<ExitCode> {
     const uploads = prepareUploads(store, command.head, payload.uploads, firstPath => uploaderFor(settings, configPath, firstPath))
     ensureGh()
     const target: Target = {repo, store, command, login: viewerLogin(), contributionsDigest: digest}
-    const early = decide(target)
-    if (early.kind === 'refuse') return refuse(target, writeSynthesized(store, command.head, renderReview(payload)), early.reviewId)
-    if (early.kind === 'submitted') return refuseSubmitted(target, writeSynthesized(store, command.head, renderReview(payload)), early)
+    const early = decide(target, substituteUploads(payload, uploads.plan.urlByPath).body)
+    if (isRefusal(early)) return refuseFor(early, target, writeSynthesized(store, command.head, renderReview(payload)))
     const urls = await runUploads(store, uploads)
     const written = writeReview(target, substituteUploads(payload, urls))
-    return applyDraftAction(decide(target), target, written)
+    return applyDraftAction(decide(target, written.body), target, written)
   })
 }
 

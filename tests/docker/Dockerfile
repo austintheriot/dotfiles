@@ -218,6 +218,9 @@ WORKDIR /root
 COPY tests /root/tests
 COPY .scripts /root/.scripts
 COPY .claude /root/.claude
+# shellcheck_lint.rs walks tools/ to find the same scripts the host lists
+# with git ls-files.
+COPY tools /root/tools
 # tmux-conf-split.test.sh loads the real config on a throwaway tmux server.
 COPY .config/tmux /root/.config/tmux
 

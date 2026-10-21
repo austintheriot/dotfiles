@@ -184,7 +184,7 @@ fn shell_scripts(root: &Path) -> Vec<String> {
     // exactly the set the rooted-pathspec fix in `f28cfed2` added on the host.
     // Left as it was, the host would lint 24 and the container 14 against one
     // floor, and the container would fail on a gap rather than on a defect.
-    for directory in [".scripts", "tests", ".claude/hooks", "deps"] {
+    for directory in [".scripts", "tests", ".claude/hooks", "deps", "tools"] {
         collect_scripts(root, &root.join(directory), &mut found);
     }
     // Root-level scripts are not in any of those directories. `setup.sh` is

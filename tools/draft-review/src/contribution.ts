@@ -1,40 +1,47 @@
 import {z} from 'zod'
+import {duplicates} from './lists'
 import type {Parsed} from './parsed'
 
 const Text = z.string().min(1)
 const Line = z.number().int().positive()
 const Side = z.enum(['LEFT', 'RIGHT'])
 const LocalPaths = z.array(Text)
+const Platform = Text.regex(/^[^@]+$/, 'a platform label cannot contain @')
 
-const Anchor = z.object({path: Text, line: Line, side: Side}).strict()
+export const AnchorSchema = z.object({path: Text, line: Line, side: Side}).strict()
 
-const ContributionComment = z
+export const ContributionCommentSchema = z
   .object({path: Text, line: Line, side: Side, startLine: Line.optional(), body: Text, finding: Text})
   .strict()
 
-const FindingSchema = z
+export const FindingSchema = z
   .object({
-    id: Text,
+    id: z.string().regex(/^[RQ][0-9]+$/, 'a finding id is R or Q followed by digits'),
     kind: z.enum(['code', 'behavior']),
     title: Text,
     body: Text,
-    anchor: Anchor.optional(),
+    anchor: AnchorSchema.optional(),
     behavior: Text.optional(),
     evidence: LocalPaths.optional()
   })
   .strict()
 
-const VerifyVerdictSchema = z
-  .object({id: Text, result: z.enum(['reproduced', 'not-reproduced', 'not-reachable']), evidence: LocalPaths, note: Text})
+export const VerifyVerdictSchema = z
+  .object({
+    id: z.string().regex(/^R[0-9]+$/, 'a dev-qa-verify verdict id is a review finding id, R followed by digits'),
+    result: z.enum(['reproduced', 'not-reproduced', 'not-reachable']),
+    evidence: LocalPaths,
+    note: Text
+  })
   .strict()
 
-const TraceVerdictSchema = z
+export const TraceVerdictSchema = z
   .object({
-    id: Text,
+    id: z.string().regex(/^Q[0-9]+(@[^@]+)?$/, 'a code-trace verdict id is a Dev QA finding id, Q followed by digits and an optional @platform'),
     result: z.enum(['root-cause', 'no-code-cause', 'inconclusive']),
-    anchor: Anchor.optional(),
+    anchor: AnchorSchema.optional(),
     body: Text,
-    duplicateOf: Text.optional()
+    duplicateOf: z.string().regex(/^R[0-9]+$/, 'duplicateOf is a review finding id, R followed by digits').optional()
   })
   .strict()
 
@@ -48,33 +55,33 @@ const common = {
 
 const roundOne = {
   body: Text,
-  comments: z.array(ContributionComment),
+  comments: z.array(ContributionCommentSchema),
   findings: z.array(FindingSchema)
 }
 
-const CodeReviewSchema = z
+export const CodeReviewSchema = z
   .object({...common, ...roundOne, kind: z.literal('code-review'), status: z.enum(['completed', 'not-run']).optional(), reason: Text.optional()})
   .strict()
 
-const DevQaSchema = z
+export const DevQaSchema = z
   .object({
     ...common,
     ...roundOne,
     kind: z.literal('dev-qa'),
-    platform: Text.optional(),
+    platform: Platform.optional(),
     status: z.enum(['passed', 'failed', 'incomplete', 'not-run']),
     reason: Text.optional()
   })
   .strict()
 
-const DevQaVerifySchema = z
-  .object({...common, kind: z.literal('dev-qa-verify'), platform: Text.optional(), verdicts: z.array(VerifyVerdictSchema)})
+export const DevQaVerifySchema = z
+  .object({...common, kind: z.literal('dev-qa-verify'), platform: Platform.optional(), verdicts: z.array(VerifyVerdictSchema)})
   .strict()
 
-const CodeTraceSchema = z.object({...common, kind: z.literal('code-trace'), verdicts: z.array(TraceVerdictSchema)}).strict()
+export const CodeTraceSchema = z.object({...common, kind: z.literal('code-trace'), verdicts: z.array(TraceVerdictSchema)}).strict()
 
-export type Anchor = z.infer<typeof Anchor>
-export type ContributionComment = z.infer<typeof ContributionComment>
+export type Anchor = z.infer<typeof AnchorSchema>
+export type ContributionComment = z.infer<typeof ContributionCommentSchema>
 export type Finding = z.infer<typeof FindingSchema>
 export type VerifyVerdict = z.infer<typeof VerifyVerdictSchema>
 export type TraceVerdict = z.infer<typeof TraceVerdictSchema>
@@ -85,8 +92,6 @@ export type CodeTraceContribution = z.infer<typeof CodeTraceSchema>
 export type Contribution = CodeReviewContribution | DevQaContribution | DevQaVerifyContribution | CodeTraceContribution
 
 type Problem = {path: (string | number)[]; message: string}
-
-const duplicates = (values: string[]) => [...new Set(values.filter((value, index) => values.indexOf(value) !== index))]
 
 function evidenceProblems(contribution: Contribution): Problem[] {
   const uploads = new Set(contribution.uploads)
@@ -110,8 +115,13 @@ function evidenceProblems(contribution: Contribution): Problem[] {
   )
 }
 
-function findingProblems(findings: Finding[], comments: ContributionComment[]): Problem[] {
+function findingProblems(contribution: CodeReviewContribution | DevQaContribution): Problem[] {
+  const {findings, comments} = contribution
+  const letter = contribution.kind === 'code-review' ? 'R' : 'Q'
   const ids = new Set(findings.map(finding => finding.id))
+  const wrongLetter = findings.flatMap((finding, index) =>
+    finding.id.startsWith(letter) ? [] : [{path: ['findings', index, 'id'], message: `finding id ${finding.id} must start with ${letter} in a ${contribution.kind} contribution`}]
+  )
   const repeated = duplicates(findings.map(finding => finding.id)).map(id => ({path: ['findings'], message: `finding id ${id} appears more than once`}))
   const behaviorGaps = findings.flatMap((finding, index): Problem[] => {
     if (finding.kind !== 'behavior') return []
@@ -125,28 +135,33 @@ function findingProblems(findings: Finding[], comments: ContributionComment[]): 
       ? [{path: ['comments', index, 'startLine'], message: 'startLine is after line'}]
       : [])
   ])
-  return [...repeated, ...behaviorGaps, ...commentGaps]
+  return [...wrongLetter, ...repeated, ...behaviorGaps, ...commentGaps]
 }
+
+function notRunProblems(contribution: CodeReviewContribution | DevQaContribution): Problem[] {
+  return [
+    ...(contribution.reason === undefined ? [{path: ['reason'], message: `a not-run ${contribution.kind} contribution needs a reason`}] : []),
+    ...(contribution.findings.length > 0 ? [{path: ['findings'], message: `a not-run ${contribution.kind} contribution has no findings`}] : []),
+    ...(contribution.comments.length > 0 ? [{path: ['comments'], message: `a not-run ${contribution.kind} contribution has no comments`}] : [])
+  ]
+}
+
+const repeatedVerdicts = (ids: string[]): Problem[] => duplicates(ids).map(id => ({path: ['verdicts'], message: `verdict id ${id} appears more than once`}))
 
 function kindProblems(contribution: Contribution): Problem[] {
   switch (contribution.kind) {
-    case 'code-review': {
-      if (contribution.status !== 'not-run') return []
-      return [
-        ...(contribution.reason === undefined ? [{path: ['reason'], message: 'a not-run code-review needs a reason'}] : []),
-        ...(contribution.findings.length > 0 ? [{path: ['findings'], message: 'a not-run code-review has no findings'}] : []),
-        ...(contribution.comments.length > 0 ? [{path: ['comments'], message: 'a not-run code-review has no comments'}] : [])
-      ]
-    }
+    case 'code-review':
+      return contribution.status === 'not-run' ? notRunProblems(contribution) : []
     case 'dev-qa':
+      if (contribution.status === 'not-run') return notRunProblems(contribution)
       return contribution.status !== 'passed' && contribution.reason === undefined
         ? [{path: ['reason'], message: `a dev-qa contribution with status ${contribution.status} needs a reason`}]
         : []
     case 'dev-qa-verify':
-      return duplicates(contribution.verdicts.map(verdict => verdict.id)).map(id => ({path: ['verdicts'], message: `verdict id ${id} appears more than once`}))
+      return repeatedVerdicts(contribution.verdicts.map(verdict => verdict.id))
     case 'code-trace':
       return [
-        ...duplicates(contribution.verdicts.map(verdict => verdict.id)).map(id => ({path: ['verdicts'], message: `verdict id ${id} appears more than once`})),
+        ...repeatedVerdicts(contribution.verdicts.map(verdict => verdict.id)),
         ...contribution.verdicts.flatMap((verdict, index) =>
           verdict.duplicateOf !== undefined && verdict.result === 'inconclusive'
             ? [{path: ['verdicts', index, 'duplicateOf'], message: 'duplicateOf is allowed only with root-cause or no-code-cause'}]
@@ -161,11 +176,11 @@ function kindProblems(contribution: Contribution): Problem[] {
 }
 
 function crossFieldProblems(contribution: Contribution): Problem[] {
-  const findings = contribution.kind === 'code-review' || contribution.kind === 'dev-qa' ? findingProblems(contribution.findings, contribution.comments) : []
+  const findings = contribution.kind === 'code-review' || contribution.kind === 'dev-qa' ? findingProblems(contribution) : []
   return [...kindProblems(contribution), ...findings, ...evidenceProblems(contribution)]
 }
 
-const ContributionSchema = z
+export const ContributionSchema = z
   .discriminatedUnion('kind', [CodeReviewSchema, DevQaSchema, DevQaVerifySchema, CodeTraceSchema])
   .superRefine((contribution, context) => {
     crossFieldProblems(contribution).forEach(problem => context.addIssue({code: z.ZodIssueCode.custom, ...problem}))
@@ -179,10 +194,8 @@ function readJson(text: string): Parsed<unknown> {
   }
 }
 
-export function parseContribution(text: string): Parsed<Contribution> {
-  const json = readJson(text)
-  if (!json.ok) return json
-  const parsed = ContributionSchema.safeParse(json.value)
+export function checkContribution(value: unknown): Parsed<Contribution> {
+  const parsed = ContributionSchema.safeParse(value)
   if (parsed.success) return {ok: true, value: parsed.data}
   const issue = parsed.error.issues[0]
   if (issue === undefined) return {ok: false, reason: 'invalid contribution'}
@@ -190,9 +203,14 @@ export function parseContribution(text: string): Parsed<Contribution> {
   return {ok: false, reason: `${where}: ${issue.message}`}
 }
 
+export function parseContribution(text: string): Parsed<Contribution> {
+  const json = readJson(text)
+  return json.ok ? checkContribution(json.value) : json
+}
+
 export type NotRunInput = {kind: 'code-review' | 'dev-qa'; pr: number; head: string; platform?: string; reason: string}
 
-export function notRun(input: NotRunInput): Contribution {
+export function notRun(input: NotRunInput): CodeReviewContribution | DevQaContribution {
   const empty = {comments: [], findings: [], uploads: [], handback: []}
   switch (input.kind) {
     case 'code-review':

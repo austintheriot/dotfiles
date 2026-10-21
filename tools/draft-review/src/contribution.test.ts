@@ -184,6 +184,56 @@ describe('parseContribution', () => {
   })
 })
 
+describe('parseContribution id grammar', () => {
+  test('rejects a code-review finding id that does not start with R', () => {
+    const findings = [{...reviewJson.findings[0], id: 'Q1'}]
+    const comments = [{...reviewJson.comments[0], finding: 'Q1'}]
+    expect(reasonOf({...reviewJson, findings, comments})).toContain('must start with R')
+  })
+
+  test('rejects a dev-qa finding id that does not start with Q', () => {
+    expect(reasonOf({...devQaJson, findings: [{...blankPageFinding, id: 'R1'}]})).toContain('must start with Q')
+  })
+
+  test('rejects a finding id outside the grammar', () => {
+    expect(reasonOf({...devQaJson, findings: [{...blankPageFinding, id: 'Q1a'}]})).toContain('findings.0.id')
+  })
+
+  test('rejects a platform that contains @', () => {
+    expect(reasonOf({...devQaJson, platform: 'mac@os'})).toContain('platform')
+    expect(reasonOf({...verifyJson, platform: 'mac@os'})).toContain('platform')
+  })
+
+  test('rejects a verify verdict id that is not a review id', () => {
+    const verdicts = [{id: 'Q1', result: 'not-reachable', evidence: [], note: 'Nothing.'}]
+    expect(reasonOf({...verifyJson, verdicts})).toContain('verdicts.0.id')
+  })
+
+  test.each(['R1', 'Q1@a@b', 'Q1@'])('rejects the trace verdict id %s', id => {
+    const verdicts = [{id, result: 'inconclusive', body: 'Nothing.'}]
+    expect(reasonOf({...traceJson, verdicts})).toContain('verdicts.0.id')
+  })
+
+  test('accepts a trace verdict id qualified with a platform', () => {
+    const verdicts = [{id: 'Q1@macOS', result: 'inconclusive', body: 'Nothing.'}]
+    expect(parse({...traceJson, verdicts}).ok).toBe(true)
+  })
+
+  test('rejects a duplicateOf that is not a review id', () => {
+    const verdicts = [{id: 'Q1', result: 'root-cause', body: 'Same.', duplicateOf: 'Q2'}]
+    expect(reasonOf({...traceJson, verdicts})).toContain('duplicateOf')
+  })
+
+  test('rejects a not-run dev-qa contribution that has findings', () => {
+    expect(reasonOf({...devQaJson, status: 'not-run'})).toContain('findings')
+  })
+
+  test('rejects a not-run dev-qa contribution that has comments', () => {
+    const comments = [{path: 'src/a.ts', line: 1, side: 'RIGHT', body: 'Draft.', finding: 'Q1'}]
+    expect(reasonOf({...devQaJson, status: 'not-run', findings: [], uploads: [], comments})).toContain('comments')
+  })
+})
+
 describe('notRun', () => {
   test('builds a code-review contribution that parses', () => {
     const contribution = notRun({kind: 'code-review', pr: 1234, head: HEAD, reason: 'The diff did not load.'})

@@ -178,6 +178,44 @@ A round-two contribution carries `version`, `kind`, `pr`, `head`, `verdicts`, `u
 | `body` | non-empty string | required for `code-trace` | Markdown explanation of the trace. |
 | `duplicateOf` | string | optional for `code-trace`, allowed with `root-cause` and `no-code-cause` | Review finding `id` that already covers the same defect. It means this finding has the same cause as that finding. |
 
+#### Ids
+
+- A `code-review` finding `id` is `R` followed by digits, for example `R3`.
+- A `dev-qa` finding `id` is `Q` followed by digits, for example `Q1`.
+- A `platform` label never contains `@`.
+- When a `dev-qa` contribution has a `platform`, the orchestrator qualifies each of its finding ids as `<id>@<platform>`, for example `Q1@macOS`.
+- The orchestrator never qualifies a review id.
+- A `dev-qa-verify` verdict `id` and a `duplicateOf` are review ids.
+- A `code-trace` verdict `id` is a Dev QA id. If its `dev-qa` contribution has a `platform`, the verdict uses the qualified id.
+
+#### Merge rules
+
+The orchestrator refuses to merge a set of contributions that breaks one of these rules:
+
+- Every contribution names the same `pr` and the same `head`.
+- The set has at least one `code-review` or `dev-qa` contribution.
+- The set has at most one `code-review` contribution and at most one `code-trace` contribution.
+- When the set has two or more `dev-qa` contributions, each one has a `platform`, and no two share a platform.
+- No two `dev-qa-verify` contributions share a platform. Two that have no platform also collide.
+- A `dev-qa-verify` verdict answers only a review finding that has `behavior`.
+- A `code-trace` verdict answers only a Dev QA finding of kind `behavior`.
+- A `duplicateOf` names a review finding in the set.
+
+#### Cross-check
+
+The orchestrator applies round-two verdicts to round-one findings with this table:
+
+| Round one | Round two | Result |
+|---|---|---|
+| Review finding | `reproduced` | Keep the comment. Add "Reproduced on the deployed build (<platforms>)" with the evidence. The Dev QA section gets one pointer line. |
+| Review finding | `not-reproduced` or `not-reachable` | Keep the comment unchanged. Hand-back only. |
+| Dev QA finding | `root-cause` | New inline comment at the trace anchor. The Dev QA line points to it. |
+| Dev QA finding | `root-cause` with `duplicateOf` | No new comment. The review comment gets the Dev QA evidence line. |
+| Dev QA finding | `no-code-cause` or `inconclusive` | Unchanged. |
+| Any | no round-two contribution | Unchanged, no note. A standalone or two-skill run has no round two by design. |
+
+The pointer line for a reproduced finding goes in the Dev QA part that has the same `platform` as the `dev-qa-verify` contribution. When no Dev QA part matches, the line goes before the first platform heading.
+
 ## Local summary
 
 Run the pending-review check (under Posting) before you print the summary, so the summary shows the real delivery shape.

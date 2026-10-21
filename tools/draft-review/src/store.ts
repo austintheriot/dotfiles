@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto'
 import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs'
 import {basename, dirname, join} from 'node:path'
-import type {z} from 'zod'
+import {z} from 'zod'
 import type {Repo} from './args'
 import type {Contribution} from './contribution'
 import {parseContribution} from './contribution'
@@ -9,8 +9,8 @@ import type {RoutedFindings} from './contribution-set'
 import type {DraftRecord} from './draft'
 import {DraftRecordSchema} from './draft'
 import {DraftReviewError, EXIT} from './exit'
-import type {CitedFile, Ledger} from './ledger'
-import {EMPTY_LEDGER, LedgerSchema, planUploads, recordUpload} from './ledger'
+import type {CitedFile, Ledger, UploadPlan} from './ledger'
+import {EMPTY_LEDGER, LedgerSchema, planUploads, recordUpload, Sha256Schema} from './ledger'
 
 export interface IUploader {
   upload(path: string): Promise<string>
@@ -21,6 +21,7 @@ export type PrStore = {prDir: string; lockPath: string}
 const LEDGER_FILE = 'uploads.json'
 const DRAFT_FILE = 'draft.json'
 const SYNTHESIZED_FILE = 'synthesized.md'
+const REQUEST_FILE = 'payload.json'
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -70,10 +71,37 @@ const contributionFileName = (contribution: Contribution) => {
   return platform === undefined ? `${contribution.kind}.json` : `${contribution.kind}@${encodeURIComponent(platform)}.json`
 }
 
+const FileHashesSchema = z.object({files: z.array(z.object({path: z.string().min(1), sha256: Sha256Schema}).strict())}).strict()
+type FileHashes = z.infer<typeof FileHashesSchema>
+
+const FILE_HASHES_SUFFIX = '.files'
+
+const hashFile = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex')
+
+function citedFileHashes(contribution: Contribution): FileHashes {
+  const missing = contribution.uploads.filter(path => !existsSync(path))
+  if (missing.length > 0) throw new DraftReviewError(`the contribution cites files that do not exist: ${missing.join(', ')}`, EXIT.noInput)
+  return {files: contribution.uploads.map(path => ({path, sha256: hashFile(path)}))}
+}
+
+// The hashes sit beside the contribution, not inside it, so the stored contribution stays the exact file that add received.
 export function writeContribution(store: PrStore, contribution: Contribution): string {
+  const hashes = citedFileHashes(contribution)
   const path = join(headDir(store, contribution.head), contributionFileName(contribution))
+  writeJson(`${path}${FILE_HASHES_SUFFIX}`, hashes)
   writeJson(path, contribution)
   return path
+}
+
+function recordedHashes(store: PrStore, head: string): Map<string, string | undefined> {
+  const dir = headDir(store, head)
+  const records = existsSync(dir) ? readdirSync(dir).filter(name => name.endsWith(`.json${FILE_HASHES_SUFFIX}`)) : []
+  const files = records.flatMap(name => readStoredJson(join(dir, name), FileHashesSchema)?.files ?? [])
+  const onlyHash = (path: string) => {
+    const hashes = [...new Set(files.filter(file => file.path === path).map(file => file.sha256))]
+    return hashes.length === 1 ? hashes[0] : undefined
+  }
+  return new Map([...new Set(files.map(file => file.path))].map(path => [path, onlyHash(path)]))
 }
 
 export function readContributions(store: PrStore, head: string): Contribution[] {
@@ -105,10 +133,8 @@ const ledgerPath = (store: PrStore) => join(store.prDir, LEDGER_FILE)
 
 const readLedger = (store: PrStore): Ledger => readStoredJson(ledgerPath(store), LedgerSchema) ?? EMPTY_LEDGER
 
-function citedFile(path: string): CitedFile {
-  if (!existsSync(path)) return {path, sha256: undefined}
-  return {path, sha256: createHash('sha256').update(readFileSync(path)).digest('hex')}
-}
+const citedFile = (path: string, recorded: Map<string, string | undefined>): CitedFile =>
+  existsSync(path) ? {kind: 'present', path, sha256: hashFile(path)} : {kind: 'gone', path, recordedSha256: recorded.get(path)}
 
 async function uploadOne(uploader: IUploader, path: string): Promise<string> {
   try {
@@ -119,14 +145,23 @@ async function uploadOne(uploader: IUploader, path: string): Promise<string> {
   }
 }
 
-export async function resolveUploads(store: PrStore, paths: readonly string[], uploaderFor: (firstPath: string) => IUploader): Promise<Map<string, string>> {
-  const cited = paths.map(citedFile)
+export type PreparedUploads = {cited: CitedFile[]; plan: UploadPlan; uploader: IUploader | undefined}
+
+export function prepareUploads(store: PrStore, head: string, paths: readonly string[], uploaderFor: (firstPath: string) => IUploader): PreparedUploads {
+  const recorded = recordedHashes(store, head)
+  const cited = paths.map(path => citedFile(path, recorded))
   const plan = planUploads(cited, readLedger(store))
   const [missing] = plan.missingFiles
-  if (missing !== undefined) throw new DraftReviewError(`the review cites ${missing}, which does not exist and was never uploaded`, EXIT.noInput)
+  if (missing !== undefined) {
+    throw new DraftReviewError(`the review cites ${missing}, which no longer exists, and the ledger has no upload of the content that add recorded for it`, EXIT.noInput)
+  }
   const [first] = plan.toUpload
-  if (first === undefined) return plan.urlByPath
-  const uploader = uploaderFor(first.path)
+  return {cited, plan, uploader: first === undefined ? undefined : uploaderFor(first.path)}
+}
+
+export async function runUploads(store: PrStore, prepared: PreparedUploads): Promise<Map<string, string>> {
+  const {cited, plan, uploader} = prepared
+  if (uploader === undefined) return plan.urlByPath
   for (const file of plan.toUpload) {
     const url = await uploadOne(uploader, file.path)
     writeJson(ledgerPath(store), recordUpload(readLedger(store), {...file, url}))
@@ -143,6 +178,12 @@ export const writeDraftRecord = (store: PrStore, record: DraftRecord): void => w
 export function writeSynthesized(store: PrStore, head: string, text: string): string {
   const path = join(headDir(store, head), SYNTHESIZED_FILE)
   writeFileAtomic(path, text)
+  return path
+}
+
+export function writeReviewRequest(store: PrStore, head: string, request: unknown): string {
+  const path = join(headDir(store, head), REQUEST_FILE)
+  writeJson(path, request)
   return path
 }
 

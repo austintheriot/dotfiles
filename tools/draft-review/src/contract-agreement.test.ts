@@ -16,49 +16,15 @@ import {
   VerifyVerdictSchema
 } from './contribution'
 import {blankPage, devQa, HEAD, review, trace} from './testing/fixtures'
+import type {Requirement} from './testing/posture'
+import {requirementsByKind, singleRequirement, tableRows} from './testing/posture'
 
 const DEFAULT_POSTURE = join(import.meta.dir, '..', '..', '..', '.claude', 'rules', 'outside-pr-review.md')
 const readPosture = (path = process.env['DRAFT_REVIEW_POSTURE'] ?? DEFAULT_POSTURE) => readFileSync(path, 'utf8')
 
-type Row = {field: string; type: string; required: string; meaning: string}
-type Requirement = 'required' | 'optional' | 'absent'
 type ObjectSchema = z.ZodObject<z.ZodRawShape>
 
-const cells = (line: string) =>
-  line
-    .trim()
-    .replace(/^\||\|$/g, '')
-    .split('|')
-    .map(cell => cell.trim())
-
-function tableRows(markdown: string, heading: string): Row[] {
-  const lines = markdown.split('\n')
-  const start = lines.findIndex(line => line.trim() === heading)
-  if (start < 0) throw new Error(`the posture file has no heading ${heading}`)
-  const rest = lines.slice(start + 1)
-  const tableStart = rest.findIndex(line => line.startsWith('|'))
-  const afterTable = rest.slice(tableStart).findIndex(line => !line.startsWith('|'))
-  const table = rest.slice(tableStart, afterTable < 0 ? undefined : tableStart + afterTable)
-  return table.slice(2).map(line => {
-    const [field = '', type = '', required = '', meaning = ''] = cells(line)
-    return {field: field.replace(/`/g, ''), type, required, meaning}
-  })
-}
-
-const backticked = (text: string) => [...text.matchAll(/`([^`]+)`/g)].map(match => match[1] ?? '')
 const quotedValues = (text: string) => [...text.matchAll(/`"([^"]+)"`/g)].map(match => match[1] ?? '')
-
-function requirementsByKind(cell: string, kinds: readonly string[]): Record<string, Requirement> {
-  const statuses = cell.split(', ').flatMap((clause): [string, Requirement][] => {
-    if (clause.startsWith('required for all kinds')) return kinds.map(kind => [kind, 'required'])
-    const [subject = ''] = clause.split(' when ')
-    const named = backticked(subject).filter(name => kinds.includes(name))
-    const status: Requirement = clause.startsWith('required for') && !clause.includes(' when ') ? 'required' : 'optional'
-    return named.map(kind => [kind, status])
-  })
-  const named = Object.fromEntries(statuses)
-  return Object.fromEntries(kinds.map(kind => [kind, named[kind] ?? 'absent']))
-}
 
 const requirementIn = (schema: ObjectSchema, field: string): Requirement => {
   const member = schema.shape[field]
@@ -125,7 +91,6 @@ describe('the top-level field table agrees with the four contribution shapes', (
 
 describe('the comment field table agrees with the comment shape', () => {
   const rows = tableRows(posture, '#### Comment fields')
-  const singleRequirement = (cell: string): Requirement => (/^required( and non-empty)? for every/.test(cell) ? 'required' : 'optional')
 
   test('names the same fields with the same status', () => {
     const fromTable = Object.fromEntries(rows.map(row => [row.field, singleRequirement(row.required)]))
@@ -141,7 +106,6 @@ describe('the comment field table agrees with the comment shape', () => {
 
 describe('the finding field table agrees with the finding shape', () => {
   const rows = tableRows(posture, '#### Finding fields')
-  const singleRequirement = (cell: string): Requirement => (/^required( and non-empty)? for every/.test(cell) ? 'required' : 'optional')
 
   test('names the same fields with the same status', () => {
     const fromTable = Object.fromEntries(rows.map(row => [row.field, singleRequirement(row.required)]))

@@ -2,7 +2,7 @@ import {basename, extname} from 'node:path'
 import {z} from 'zod'
 import type {Repo} from './args'
 import {parseRepo} from './args'
-import type {PendingReview} from './draft'
+import type {PendingComment, PendingReview} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ReviewPayload} from './payload'
 import type {IUploader} from './store'
@@ -52,13 +52,23 @@ export function currentRepo(): Repo {
 export const viewerLogin = (): string => ghJson(['api', 'user'], z.object({login: z.string()}), 'read the signed-in user').login
 
 const ReviewSchema = z.object({id: z.number().int(), state: z.string(), body: z.string().nullable(), user: z.object({login: z.string()}).nullable()})
+const ReviewCommentSchema = z.object({id: z.number().int(), body: z.string()})
+
+export function reviewComments(repo: Repo, pr: number, reviewId: number): PendingComment[] {
+  const pages = ghJson(
+    ['api', `${reviewsPath(repo, pr)}/${reviewId}/comments`, '--paginate', '--slurp'],
+    z.array(z.array(ReviewCommentSchema)),
+    `list the comments of pending review ${reviewId}`
+  )
+  return pages.flat().map(comment => ({id: comment.id, body: comment.body}))
+}
 
 export function pendingReviews(repo: Repo, pr: number, login: string): PendingReview[] {
   const pages = ghJson(['api', reviewsPath(repo, pr), '--paginate', '--slurp'], z.array(z.array(ReviewSchema)), `list the reviews of pull request ${pr}`)
   return pages
     .flat()
     .filter(review => review.state === 'PENDING' && review.user?.login === login)
-    .map(review => ({id: review.id, body: review.body ?? ''}))
+    .map(review => ({id: review.id, body: review.body ?? '', comments: reviewComments(repo, pr, review.id)}))
 }
 
 export function deleteReview(repo: Repo, pr: number, reviewId: number): void {
@@ -68,8 +78,18 @@ export function deleteReview(repo: Repo, pr: number, reviewId: number): void {
 
 export type CreatedReview = {id: number; url: string; body: string}
 export type CreateOutcome = {kind: 'created'; review: CreatedReview} | {kind: 'pending-exists'}
+export type HttpReply = {status: number | undefined; body: string}
 
-function reviewRequest(head: string, payload: ReviewPayload) {
+export function parseHttpReply(text: string): HttpReply {
+  const status = /^HTTP\/[\d.]+ (\d{3})/.exec(text)?.[1]
+  if (status === undefined) return {status: undefined, body: text}
+  const separator = /\r?\n\r?\n/.exec(text)
+  return {status: Number(status), body: separator === null ? '' : text.slice(separator.index + separator[0].length)}
+}
+
+export const isPendingReviewConflict = (reply: HttpReply): boolean => reply.status === 422 && /one pending review/i.test(reply.body)
+
+export function reviewRequest(head: string, payload: ReviewPayload) {
   const comments = payload.comments.map(comment => ({
     path: comment.path,
     line: comment.line,
@@ -81,10 +101,12 @@ function reviewRequest(head: string, payload: ReviewPayload) {
 }
 
 // Omitting `event` is what keeps the review pending. GitHub submits a review only when the request names an event.
-export function createPendingReview(repo: Repo, pr: number, head: string, payload: ReviewPayload): CreateOutcome {
-  const run = gh(['api', '--method', 'POST', reviewsPath(repo, pr), '--input', '-'], JSON.stringify(reviewRequest(head, payload)))
-  if (run.code !== 0 && /one pending review/i.test(run.stdout + run.stderr)) return {kind: 'pending-exists'}
-  const created = parseReply(run, z.object({id: z.number().int(), html_url: z.string(), body: z.string().nullable()}), 'create the pending review')
+// The request file must come from reviewRequest, which never sets `event`.
+export function createPendingReview(repo: Repo, pr: number, requestPath: string): CreateOutcome {
+  const run = gh(['api', '--include', '--method', 'POST', reviewsPath(repo, pr), '--input', requestPath])
+  const reply = parseHttpReply(run.stdout)
+  if (isPendingReviewConflict(reply)) return {kind: 'pending-exists'}
+  const created = parseReply({...run, stdout: reply.body}, z.object({id: z.number().int(), html_url: z.string(), body: z.string().nullable()}), 'create the pending review')
   return {kind: 'created', review: {id: created.id, url: created.html_url, body: created.body ?? ''}}
 }
 

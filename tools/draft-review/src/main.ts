@@ -8,12 +8,25 @@ import type {DraftAction} from './draft'
 import {bodyHash, draftAction} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ExitCode} from './exit'
-import {createPendingReview, currentRepo, deleteReview, ensureGh, ghUploader, pendingReviews, viewerLogin} from './github'
+import type {CreatedReview} from './github'
+import {createPendingReview, currentRepo, deleteReview, ensureGh, ghUploader, pendingReviews, reviewComments, reviewRequest, viewerLogin} from './github'
 import {withLock} from './lock'
 import type {ReviewPayload} from './payload'
 import {renderReview} from './render'
 import type {IUploader, PrStore} from './store'
-import {prStore, readContributionFile, readContributions, readDraftRecord, resolveUploads, writeContribution, writeDraftRecord, writeRouted, writeSynthesized} from './store'
+import {
+  prStore,
+  readContributionFile,
+  readContributions,
+  readDraftRecord,
+  prepareUploads,
+  runUploads,
+  writeContribution,
+  writeDraftRecord,
+  writeReviewRequest,
+  writeRouted,
+  writeSynthesized
+} from './store'
 import {synthesize} from './synthesize'
 import {substituteUploads} from './uploads'
 
@@ -30,8 +43,7 @@ function loadSet(store: PrStore, head: string): ContributionSet {
 async function add(command: AddCommand): Promise<ExitCode> {
   const contribution = readContributionFile(command.file)
   const store = storeFor(command, command.repo ?? currentRepo(), contribution.pr)
-  const path = await withLock(store.lockPath, LOCK_WAIT_MS, async () => writeContribution(store, contribution))
-  console.log(path)
+  console.log(writeContribution(store, contribution))
   return EXIT.ok
 }
 
@@ -64,34 +76,71 @@ function uploaderFor(settings: RepositoryConfig, configPath: string, firstPath: 
   return ghUploader(settings.uploadEndpoint, settings.repositoryId)
 }
 
-type Posting = {repo: Repo; store: PrStore; command: CreateCommand; review: ReviewPayload}
+type Target = {repo: Repo; store: PrStore; command: CreateCommand; login: string}
+type Written = {synthesizedPath: string; requestPath: string}
 
-function refuse(posting: Posting, reviewId: number | undefined): ExitCode {
-  const path = writeSynthesized(posting.store, posting.command.head, renderReview(posting.review))
+const decide = (target: Target): DraftAction =>
+  draftAction(pendingReviews(target.repo, target.command.pr, target.login), readDraftRecord(target.store))
+
+function refuse(target: Target, synthesizedPath: string, reviewId: number | undefined): ExitCode {
   const which = reviewId === undefined ? 'Another pending review' : `Pending review ${reviewId}`
-  console.error(`${which} on pull request ${posting.command.pr} is not one that draft-review can replace. draft-review left it unchanged and wrote the review to a file.`)
-  console.log(path)
+  console.error(`${which} on pull request ${target.command.pr} is not one that draft-review can replace. draft-review left it unchanged and wrote the review to a file.`)
+  console.log(synthesizedPath)
   return EXIT.refused
 }
 
-function post(posting: Posting): ExitCode {
-  const {repo, store, command, review} = posting
-  const outcome = createPendingReview(repo, command.pr, command.head, review)
-  if (outcome.kind === 'pending-exists') return refuse(posting, undefined)
-  writeDraftRecord(store, {reviewId: outcome.review.id, bodyHash: bodyHash(outcome.review.body), head: command.head, url: outcome.review.url})
+function writeReview(target: Target, review: ReviewPayload): Written {
+  const {store, command} = target
+  return {
+    synthesizedPath: writeSynthesized(store, command.head, renderReview(review)),
+    requestPath: writeReviewRequest(store, command.head, reviewRequest(command.head, review))
+  }
+}
+
+function recordDraft(target: Target, review: CreatedReview): void {
+  const {repo, store, command} = target
+  try {
+    const comments = reviewComments(repo, command.pr, review.id).map(comment => ({id: comment.id, bodyHash: bodyHash(comment.body)}))
+    writeDraftRecord(store, {reviewId: review.id, bodyHash: bodyHash(review.body), comments, head: command.head, url: review.url})
+  } catch (error) {
+    if (!(error instanceof DraftReviewError)) throw error
+    const consequence = 'draft-review has no record of that review, so the next create refuses to replace it. Delete that review on GitHub, then run create again.'
+    throw new DraftReviewError(`pending review ${review.id} exists, but ${error.message}. ${consequence}`, error.exitCode)
+  }
+}
+
+function lostDraft(written: Written, deletedId: number, cause: string): DraftReviewError {
+  const steps = `The review request is in ${written.requestPath}. Run create again to make the draft again.`
+  return new DraftReviewError(`draft-review deleted pending review ${deletedId}, and then the new draft was not made: ${cause}. ${steps}`, EXIT.unavailable)
+}
+
+function post(target: Target, written: Written, deletedId: number | undefined): ExitCode {
+  const outcome = (() => {
+    try {
+      return createPendingReview(target.repo, target.command.pr, written.requestPath)
+    } catch (error) {
+      if (deletedId === undefined || !(error instanceof DraftReviewError)) throw error
+      throw lostDraft(written, deletedId, error.message)
+    }
+  })()
+  if (outcome.kind === 'pending-exists') {
+    if (deletedId !== undefined) throw lostDraft(written, deletedId, 'another pending review appeared on the pull request')
+    return refuse(target, written.synthesizedPath, undefined)
+  }
   console.log(outcome.review.url)
+  recordDraft(target, outcome.review)
   return EXIT.ok
 }
 
-function applyDraftAction(action: DraftAction, posting: Posting): ExitCode {
+function applyDraftAction(action: DraftAction, target: Target, written: Written): ExitCode {
   switch (action.kind) {
     case 'refuse':
-      return refuse(posting, action.reviewId)
+      return refuse(target, written.synthesizedPath, action.reviewId)
     case 'replace':
-      deleteReview(posting.repo, posting.command.pr, action.reviewId)
-      return post(posting)
+      deleteReview(target.repo, target.command.pr, action.reviewId)
+      return post(target, written, action.reviewId)
     case 'create':
-      return post(posting)
+      return post(target, written, undefined)
     default: {
       const unreachable: never = action
       return unreachable
@@ -107,11 +156,14 @@ async function create(command: CreateCommand): Promise<ExitCode> {
   const store = storeFor(command, repo, command.pr)
   return withLock(store.lockPath, LOCK_WAIT_MS, async () => {
     const payload = synthesize(loadSet(store, command.head), settings.attribution)
-    const urls = await resolveUploads(store, payload.uploads, firstPath => uploaderFor(settings, configPath, firstPath))
-    const review = substituteUploads(payload, urls)
+    const uploads = prepareUploads(store, command.head, payload.uploads, firstPath => uploaderFor(settings, configPath, firstPath))
     ensureGh()
-    const action = draftAction(pendingReviews(repo, command.pr, viewerLogin()), readDraftRecord(store))
-    return applyDraftAction(action, {repo, store, command, review})
+    const target: Target = {repo, store, command, login: viewerLogin()}
+    const early = decide(target)
+    if (early.kind === 'refuse') return refuse(target, writeSynthesized(store, command.head, renderReview(payload)), early.reviewId)
+    const urls = await runUploads(store, uploads)
+    const written = writeReview(target, substituteUploads(payload, urls))
+    return applyDraftAction(decide(target), target, written)
   })
 }
 

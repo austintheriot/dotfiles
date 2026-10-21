@@ -224,7 +224,7 @@ The orchestrator lists hand-back lines in this order:
 
 ## Local summary
 
-Every run, standalone or orchestrated, ends in at most one pending review per PR head. The tool `draft-review` builds that review from every contribution for that head. A standalone run asks one question before `draft-review create`, because that step uploads. An unattended orchestrator runs `draft-review create` directly and asks nothing.
+Every run, standalone or orchestrated, ends in at most one pending review per pull request. The tool `draft-review` builds that review from every contribution for that head. A standalone run asks one question before `draft-review create`, because that step uploads. An unattended orchestrator runs `draft-review create` directly and asks nothing.
 
 Before the question, print the complete intended review in chat: the output of `draft-review show`. That output holds the whole body and every `<details>` block. It also holds every inline comment with its file, line, and full text, every upload by local path, and the hand-back lines. Local-only items go in `handback`, because `show` prints them and `create` never posts them.
 

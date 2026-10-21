@@ -79,7 +79,15 @@ export function draftRecordAfterCreate(created: CreatedDraft): RecordDecision {
   return {kind: 'record', record: {reviewId: review.id, bodyHash: bodyHash(review.body), comments, contributionsDigest, head, url: review.url}}
 }
 
-export type LostDraft = {deletedId: number; requestPath: string; cause: string}
+export type EarlierDraft = {head: string; synthesizedPath: string}
+
+// GitHub allows one pending review per user on a pull request, so a draft for a new head replaces the draft of the earlier head.
+export const replacedHeadLine = (earlier: EarlierDraft | undefined, head: string): string | undefined =>
+  earlier === undefined || earlier.head === head
+    ? undefined
+    : `create replaces the pending draft for head ${earlier.head.slice(0, 7)}; its text is in ${earlier.synthesizedPath}`
+
+export type LostDraft ={deletedId: number; requestPath: string; cause: string}
 
 export const lostDraftMessage = (lost: LostDraft): string =>
   `draft-review deleted pending review ${lost.deletedId}, and then the new draft was not made: ${lost.cause}. The review request is in ${lost.requestPath}. A GitHub 422 reply repeats on every create until a contribution changes. For any other cause, run create again to make the draft again.`

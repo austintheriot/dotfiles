@@ -7,7 +7,7 @@ import {routeFindings, validateContributions} from './contribution-set'
 import type {Contribution} from './contribution'
 import type {DraftAction, ReadBack} from './draft'
 import {anchorProblems} from './diff-anchors'
-import {draftAction, draftRecordAfterCreate, lostDraftMessage} from './draft'
+import {draftAction, draftRecordAfterCreate, lostDraftMessage, replacedHeadLine} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ExitCode} from './exit'
 import type {CreatedReview} from './github'
@@ -30,6 +30,7 @@ import {renderReview, renderStrayPaths} from './render'
 import type {IUploader, PrStore} from './store'
 import {
   clearHead,
+  earlierDraft,
   headDigest,
   prStore,
   readHead,
@@ -93,8 +94,9 @@ function show(command: ShowCommand): ExitCode {
   const attribution = showAttribution(command.config ?? DEFAULT_CONFIG_PATH, repo)
   const store = storeFor(command, repo, command.pr)
   const payload = synthesize(loadSet(store, command.head), attribution)
-  const strays = renderStrayPaths(strayLocalPaths(payload))
-  process.stdout.write(strays === '' ? renderReview(payload) : `${renderReview(payload)}\n${strays}`)
+  const replaced = replacedHeadLine(earlierDraft(store), command.head)
+  const notes = [renderStrayPaths(strayLocalPaths(payload)), replaced === undefined ? '' : `${replaced}\n`].filter(note => note !== '')
+  process.stdout.write([renderReview(payload), ...notes].join('\n'))
   return EXIT.ok
 }
 
@@ -238,9 +240,12 @@ function post(target: Target, written: Written, deletedId: number | undefined): 
 function applyDraftAction(action: DraftAction, target: Target, written: Written): ExitCode {
   if (isRefusal(action)) return refuseFor(action, target, written.synthesizedPath)
   switch (action.kind) {
-    case 'replace':
+    case 'replace': {
+      const replaced = replacedHeadLine(earlierDraft(target.store), target.command.head)
+      if (replaced !== undefined) console.error(replaced)
       deleteReview(target.repo, target.command.pr, action.reviewId)
       return post(target, written, action.reviewId)
+    }
     case 'create':
       return post(target, written, undefined)
     default: {

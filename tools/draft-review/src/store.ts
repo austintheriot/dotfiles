@@ -8,7 +8,7 @@ import {CONTRIBUTION_FILE_NAME, FILE_HASHES_SUFFIX, namesToClear} from './clear'
 import type {Contribution} from './contribution'
 import {parseContribution} from './contribution'
 import type {RoutedFindings} from './contribution-set'
-import type {DraftRecord} from './draft'
+import type {DraftRecord, EarlierDraft} from './draft'
 import {bodyHash, contributionsDigest, parseDraftRecord} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {CitedFile, Ledger, RecordedHash, UnresolvedFile, UploadPlan} from './ledger'
@@ -260,10 +260,17 @@ export function readDraftRecord(store: PrStore): DraftRecord | undefined {
   return parsed.value
 }
 
-export const writeDraftRecord = (store: PrStore, record: DraftRecord): void => writeJson(join(store.prDir, DRAFT_FILE), record)
+export const synthesizedPathFor = (store: PrStore, head: string): string => join(headDir(store, head), SYNTHESIZED_FILE)
+
+export function earlierDraft(store: PrStore): EarlierDraft | undefined {
+  const record = readDraftRecord(store)
+  return record === undefined ? undefined : {head: record.head, synthesizedPath: synthesizedPathFor(store, record.head)}
+}
+
+export const writeDraftRecord =(store: PrStore, record: DraftRecord): void => writeJson(join(store.prDir, DRAFT_FILE), record)
 
 export function writeSynthesized(store: PrStore, head: string, text: string): string {
-  const path = join(headDir(store, head), SYNTHESIZED_FILE)
+  const path = synthesizedPathFor(store, head)
   writeFileAtomic(path, text)
   return path
 }

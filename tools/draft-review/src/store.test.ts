@@ -255,6 +255,25 @@ describe('show', () => {
     expect(run.stdout).toContain(`--- files to upload ---\n\n${png}`)
   })
 
+  const draftJson = (head: string) => JSON.stringify({reviewId: 7, bodyHash: 'a'.repeat(64), comments: [], head, url: 'https://example.test/review/7'})
+
+  test('says that create replaces the pending draft of an earlier head, and where its text is', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    world.plant('draft.json', draftJson(OTHER_HEAD))
+    const run = await world.cli(['show', ...world.target, '--config', world.configPath])
+    expect(run.code).toBe(EXIT.ok)
+    expect(run.stdout).toContain(`create replaces the pending draft for head bbbbbbb; its text is in ${join(world.store.prDir, OTHER_HEAD, 'synthesized.md')}`)
+  })
+
+  test('says nothing about a replaced draft when draft.json names this head', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    world.plant('draft.json', draftJson(HEAD))
+    const run = await world.cli(['show', ...world.target, '--config', world.configPath])
+    expect(run.stdout).not.toContain('create replaces the pending draft')
+  })
+
   test('marks a local path that is not in uploads, with its location', async () => {
     const world = makeWorld()
     await world.add(review({body: 'Notes are in /Users/someone/notes.md.'}))

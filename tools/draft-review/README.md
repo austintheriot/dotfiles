@@ -42,6 +42,14 @@ Prints the merged review: the body, each inline comment with its file and line, 
 
 When the text holds a local path that `uploads` does not list, `show` ends with a section that names each such path and its location. `create` refuses that text.
 
+When `draft.json` names a draft for another head, `show` ends with this line, and `create` prints it on stderr before it deletes that draft:
+
+```text
+create replaces the pending draft for head <short head>; its text is in <path to synthesized.md of that head>
+```
+
+`show` makes no GitHub call. So after the user submits that draft, `show` still prints the line. `create` never deletes a submitted review.
+
 ### `draft-review create --pr <n> --head <sha> [--config <file>]`
 
 Takes the per-PR lock, merges the store, and creates the pending review. The steps are:

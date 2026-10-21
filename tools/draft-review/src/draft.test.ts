@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'bun:test'
-import {bodyHash, contributionsDigest, draftRecordAfterCreate, lostDraftMessage} from './draft'
+import {bodyHash, contributionsDigest, draftRecordAfterCreate, lostDraftMessage, replacedHeadLine} from './draft'
 import type {ReadBack} from './draft'
 import {HEAD} from './testing/fixtures'
 
@@ -8,6 +8,22 @@ const created = {id: 7, body: 'Body.', url: 'https://example.test/review'}
 const comment = (id: number, body: string) => ({id, body})
 const afterCreate = (requestedBodies: string[], readBack: ReadBack) =>
   draftRecordAfterCreate({review: created, head: HEAD, requestedBodies, readBack, contributionsDigest: DIGEST})
+
+describe('replacedHeadLine', () => {
+  const earlier = {head: 'b'.repeat(40), synthesizedPath: `/store/${'b'.repeat(40)}/synthesized.md`}
+
+  test('names the short earlier head and the path of its synthesized text when draft.json names another head', () => {
+    expect(replacedHeadLine(earlier, HEAD)).toBe(`create replaces the pending draft for head bbbbbbb; its text is in /store/${'b'.repeat(40)}/synthesized.md`)
+  })
+
+  test('gives no line when draft.json names the same head', () => {
+    expect(replacedHeadLine({...earlier, head: HEAD}, HEAD)).toBeUndefined()
+  })
+
+  test('gives no line when there is no draft.json', () => {
+    expect(replacedHeadLine(undefined, HEAD)).toBeUndefined()
+  })
+})
 
 describe('lostDraftMessage', () => {
   const text = lostDraftMessage({deletedId: 7, requestPath: '/store/payload.request', cause: 'gh could not create the pending review: HTTP 422'})

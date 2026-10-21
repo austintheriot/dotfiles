@@ -3,6 +3,7 @@ import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, wr
 import {basename, dirname, join} from 'node:path'
 import {z} from 'zod'
 import type {Repo} from './args'
+import {CONTRIBUTION_FILE_NAME, FILE_HASHES_SUFFIX, namesToClear} from './clear'
 import type {Contribution} from './contribution'
 import {parseContribution} from './contribution'
 import type {RoutedFindings} from './contribution-set'
@@ -24,7 +25,6 @@ const LEDGER_FILE = 'uploads.json'
 const DRAFT_FILE = 'draft.json'
 const SYNTHESIZED_FILE = 'synthesized.md'
 const REQUEST_FILE = 'payload.request'
-const CONTRIBUTION_FILE_NAME = /^(code-review|dev-qa|dev-qa-verify|code-trace)(@[^/]+)?\.json$/
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -77,8 +77,6 @@ const contributionFileName = (contribution: Contribution) => {
 const FileHashesSchema = z.object({files: z.array(z.object({path: z.string().min(1), sha256: Sha256Schema}).strict())}).strict()
 type FileHashes = z.infer<typeof FileHashesSchema>
 
-const FILE_HASHES_SUFFIX = '.files'
-
 const sha256Of = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
 
 const hashFile = (path: string) => sha256Of(readFileSync(path))
@@ -96,6 +94,20 @@ export function writeContribution(store: PrStore, contribution: Contribution): s
   writeJson(`${path}${FILE_HASHES_SUFFIX}`, hashes)
   writeJson(path, contribution)
   return path
+}
+
+export function clearHead(store: PrStore, head: string): string[] {
+  const dir = headDir(store, head)
+  if (!existsSync(dir)) return []
+  const names = namesToClear(readdirSync(dir))
+  names.forEach(name => {
+    try {
+      rmSync(join(dir, name), {force: true})
+    } catch (error) {
+      throw new DraftReviewError(`cannot remove ${join(dir, name)}: ${message(error)}`, EXIT.ioErr)
+    }
+  })
+  return names
 }
 
 const contributionNames = (dir: string) => readdirSync(dir).filter(name => CONTRIBUTION_FILE_NAME.test(name)).sort()

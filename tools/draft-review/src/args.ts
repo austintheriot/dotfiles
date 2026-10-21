@@ -10,13 +10,15 @@ export type AddCommand = {kind: 'add'; file: string} & Common
 export type RouteCommand = {kind: 'route'; out: string} & Target & Common
 export type ShowCommand = {kind: 'show'; config: string | undefined} & Target & Common
 export type CreateCommand = {kind: 'create'; config: string | undefined} & Target & Common
-export type Command = {kind: 'help'} | AddCommand | RouteCommand | ShowCommand | CreateCommand
+export type ClearCommand = {kind: 'clear'} & Target & Common
+export type Command = {kind: 'help'} | AddCommand | RouteCommand | ShowCommand | CreateCommand | ClearCommand
 
 export const USAGE = `Usage:
   draft-review add <contribution.json> [--repo <owner/repo>] [--store <dir>]
   draft-review route --pr <n> --head <sha> --out <dir> [--repo <owner/repo>] [--store <dir>]
   draft-review show --pr <n> --head <sha> [--repo <owner/repo>] [--store <dir>] [--config <file>]
-  draft-review create --pr <n> --head <sha> [--repo <owner/repo>] [--store <dir>] [--config <file>]`
+  draft-review create --pr <n> --head <sha> [--repo <owner/repo>] [--store <dir>] [--config <file>]
+  draft-review clear --pr <n> --head <sha> [--repo <owner/repo>] [--store <dir>]`
 
 const NAME = /^[A-Za-z0-9_.-]+$/
 
@@ -44,7 +46,8 @@ const ALLOWED: Record<Exclude<Command['kind'], 'help'>, readonly OptionName[]> =
   add: ['repo', 'store'],
   route: ['pr', 'head', 'out', 'repo', 'store'],
   show: ['pr', 'head', 'repo', 'store', 'config'],
-  create: ['pr', 'head', 'repo', 'store', 'config']
+  create: ['pr', 'head', 'repo', 'store', 'config'],
+  clear: ['pr', 'head', 'repo', 'store']
 }
 
 const isCommandName = (name: string): name is keyof typeof ALLOWED => Object.hasOwn(ALLOWED, name)
@@ -88,6 +91,7 @@ function build(kind: keyof typeof ALLOWED, values: Values, positionals: readonly
     if (values.out === undefined) return {ok: false, reason: '--out is required'}
     return {ok: true, value: {kind, out: values.out, ...aim.value, ...shared.value}}
   }
+  if (kind === 'clear') return {ok: true, value: {kind, ...aim.value, ...shared.value}}
   return {ok: true, value: {kind, config: values.config, ...aim.value, ...shared.value}}
 }
 

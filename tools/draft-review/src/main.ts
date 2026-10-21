@@ -1,4 +1,4 @@
-import type {AddCommand, CreateCommand, Repo, RouteCommand, ShowCommand} from './args'
+import type {AddCommand, ClearCommand, CreateCommand, Repo, RouteCommand, ShowCommand} from './args'
 import {parseCommand, USAGE} from './args'
 import {DEFAULT_CONFIG_PATH, DEFAULT_STORE_ROOT, loadConfig, repositoryConfig, requireConfig} from './config'
 import type {RepositoryConfig} from './config'
@@ -16,6 +16,7 @@ import type {ReviewPayload} from './payload'
 import {renderReview} from './render'
 import type {IUploader, PrStore} from './store'
 import {
+  clearHead,
   headDigest,
   prStore,
   readHead,
@@ -55,6 +56,13 @@ async function add(command: AddCommand): Promise<ExitCode> {
 function route(command: RouteCommand): ExitCode {
   const store = storeFor(command, command.repo ?? currentRepo(), command.pr)
   writeRouted(command.out, routeFindings(loadSet(store, command.head))).forEach(path => console.log(path))
+  return EXIT.ok
+}
+
+async function clear(command: ClearCommand): Promise<ExitCode> {
+  const store = storeFor(command, command.repo ?? currentRepo(), command.pr)
+  const removed = await withLock(store.lockPath, LOCK_WAIT_MS, async () => clearHead(store, command.head))
+  removed.forEach(name => console.log(name))
   return EXIT.ok
 }
 
@@ -251,6 +259,8 @@ async function main(argv: readonly string[]): Promise<number> {
         return show(command)
       case 'create':
         return await create(command)
+      case 'clear':
+        return await clear(command)
       default: {
         const unreachable: never = command
         return unreachable

@@ -75,6 +75,14 @@ function makeWorld() {
     stored: (head = HEAD) => (existsSync(join(store.prDir, head)) ? readdirSync(join(store.prDir, head)).filter(name => name.endsWith('.json')).sort() : []),
     storedJson: (name: string, head = HEAD): unknown => JSON.parse(readFileSync(join(store.prDir, head, name), 'utf8')),
     writeConfig: (json: unknown) => writeFileSync(configPath, JSON.stringify(json)),
+    plant: (relativePath: string, text = 'kept') => {
+      const path = join(store.prDir, relativePath)
+      mkdirSync(join(path, '..'), {recursive: true})
+      writeFileSync(path, text)
+      return path
+    },
+    listing: (head = HEAD) => (existsSync(join(store.prDir, head)) ? readdirSync(join(store.prDir, head)).sort() : []),
+    clear: (head = HEAD) => finish(start(['clear', '--pr', '1234', '--head', head])),
     target: ['--pr', '1234', '--head', HEAD]
   }
 }
@@ -241,6 +249,57 @@ describe('create', () => {
     const run = await world.cli(['create', ...world.target, '--config', world.configPath])
     expect(run.code).toBe(EXIT.unavailable)
     expect(run.stderr).toContain(FAKE_GH_MESSAGE)
+  })
+})
+
+describe('clear', () => {
+  test('removes the contributions and hash records of the head, prints their names, and keeps every other file', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    await world.add(world.devQa({platform: 'macOS'}))
+    await world.add(review({head: OTHER_HEAD}))
+    world.plant(`${HEAD}/synthesized.md`)
+    world.plant(`${HEAD}/payload.request`)
+    world.plant(`${HEAD}/notes.json`)
+    world.plant('uploads.json', '{"entries": []}')
+    world.plant('draft.json', '{}')
+    const run = await world.clear()
+    expect(run.code).toBe(EXIT.ok)
+    expect(run.stdout.trim().split('\n')).toEqual(['code-review.json', 'code-review.json.files', 'dev-qa@macOS.json', 'dev-qa@macOS.json.files'])
+    expect(world.listing()).toEqual(['notes.json', 'payload.request', 'synthesized.md'])
+    expect(world.stored(OTHER_HEAD)).toEqual(['code-review.json'])
+    expect(existsSync(join(world.store.prDir, 'uploads.json'))).toBe(true)
+    expect(existsSync(join(world.store.prDir, 'draft.json'))).toBe(true)
+  })
+
+  test('removes a hash record whose contribution is gone', async () => {
+    const world = makeWorld()
+    world.plant(`${HEAD}/code-trace.json.files`, '{"files": []}')
+    const run = await world.clear()
+    expect(run.code).toBe(EXIT.ok)
+    expect(run.stdout).toBe('code-trace.json.files\n')
+    expect(world.listing()).toEqual([])
+  })
+
+  test('with no folder for the head, prints nothing and exits 0', async () => {
+    const world = makeWorld()
+    const run = await world.clear()
+    expect(run.code).toBe(EXIT.ok)
+    expect(run.stdout).toBe('')
+  })
+
+  test('waits for the per-PR lock before it removes a file', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    const whileHeld = await withLock(world.store.lockPath, 1000, async () => {
+      const proc = world.start(['clear', ...world.target])
+      await Bun.sleep(500)
+      return {proc, listing: world.listing()}
+    })
+    const run = await world.finish(whileHeld.proc)
+    expect(whileHeld.listing).toEqual(['code-review.json', 'code-review.json.files'])
+    expect(run.code).toBe(EXIT.ok)
+    expect(world.listing()).toEqual([])
   })
 })
 

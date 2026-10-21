@@ -32,6 +32,11 @@ describe('parseCommand', () => {
     expect(parseCommand(argv)).toEqual({ok: true, value: {kind: 'help'}})
   })
 
+  test('parses clear with a head and refuses clear with --config', () => {
+    expect(parseCommand(['clear', '--pr', '52', '--head', HEAD])).toEqual({ok: true, value: {kind: 'clear', pr: 52, head: HEAD, repo: undefined, store: undefined}})
+    expect(reasonOf(['clear', '--pr', '52', '--head', HEAD, '--config', 'c.json'])).toBe('clear does not take --config')
+  })
+
   test('refuses an unknown command, naming it', () => {
     expect(reasonOf(['submit'])).toContain('submit')
   })

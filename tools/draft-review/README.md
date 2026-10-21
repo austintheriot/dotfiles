@@ -67,6 +67,14 @@ When the create fails after the delete, the command names the deleted review and
 
 The request never names an `event`, so GitHub keeps the review pending.
 
+### `draft-review clear --pr <n> --head <sha>`
+
+Takes the per-PR lock and removes the stored contributions for that head. An orchestrator runs `clear` before a new run on a head, so that the contributions of an earlier run do not enter the new draft.
+
+The command removes each file in the head folder whose name matches the contribution file grammar. It also removes the `.files` record of each of those names, and a `.files` record whose contribution is gone. The command keeps every other file: `uploads.json`, `draft.json`, `synthesized.md`, `payload.request`, and every file outside the head folder.
+
+The command prints the name of each removed file, one name per line. When the head folder holds no contribution file, the command prints nothing and exits with code 0. A missing head folder also gives code 0. Without `--repo`, the command asks `gh repo view` for the repository. It makes no other call to GitHub.
+
 ## Pending reviews that `create` never changes
 
 GitHub allows one pending review per user on a pull request. `create` replaces only the review that it created last and that nobody edited. These GitHub facts explain why `create` never appends to another pending review:
@@ -191,7 +199,7 @@ The contribution contract is the `## Orchestrated mode` section of `.claude/rule
 
 ## Layout of the code
 
-- The pure core: `contribution.ts`, `contribution-set.ts`, `synthesize.ts`, `uploads.ts`, `payload.ts`, `parsed.ts`, `lists.ts`, `args.ts`, `draft.ts`, `ledger.ts`, `render.ts`, and `exit.ts`. These files do no IO.
+- The pure core: `clear.ts`, `contribution.ts`, `contribution-set.ts`, `synthesize.ts`, `uploads.ts`, `payload.ts`, `parsed.ts`, `lists.ts`, `args.ts`, `draft.ts`, `ledger.ts`, `render.ts`, and `exit.ts`. These files do no IO.
 - The shell: `main.ts` (the commands), `store.ts` (the store files and the upload loop), `github.ts` (every `gh` call), `lock.ts` (the lock), and `config.ts` (the config file).
 
 The test `src/core-imports.test.ts` holds that boundary. A core file can import only core files, `zod`, `node:crypto`, and `node:util`. It cannot name `Bun` or `process`, it cannot call `require`, and it cannot read the clock with `Date.now` or `new Date(`. The test removes comments and string literals before it looks for these names, so a comment or a message can use the words.

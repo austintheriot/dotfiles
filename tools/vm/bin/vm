@@ -1,0 +1,36 @@
+#!/bin/sh
+# Starts the vm CLI with Bun. install.sh links ~/.local/bin/vm here.
+set -eu
+
+self=$0
+while [ -L "$self" ]; do
+  link=$(readlink "$self")
+  case $link in
+    /*) self=$link ;;
+    *) self=$(dirname "$self")/$link ;;
+  esac
+done
+root=$(cd "$(dirname "$self")/.." && pwd -P)
+
+# launchd and other minimal environments do not put Bun's install directories on PATH.
+bun=$(command -v bun 2>/dev/null || true)
+for candidate in "${BUN_INSTALL:-$HOME/.bun}/bin/bun" /opt/homebrew/bin/bun /usr/local/bin/bun; do
+  [ -n "$bun" ] && break
+  [ -x "$candidate" ] && bun=$candidate
+done
+if [ -z "$bun" ]; then
+  echo "vm: Bun is not installed, and vm runs on Bun." >&2
+  echo "Install it with: curl -fsSL https://bun.sh/install | bash" >&2
+  echo "Then open a new terminal and run: vm doctor" >&2
+  exit 69
+fi
+
+if [ ! -d "$root/node_modules/commander" ] || [ ! -d "$root/node_modules/zod" ]; then
+  echo "vm: installing its dependencies (first run only)..." >&2
+  (cd "$root" && "$bun" install --frozen-lockfile >/dev/null 2>&1) || {
+    echo "vm: 'bun install' failed in $root. Run it there to see why." >&2
+    exit 69
+  }
+fi
+
+exec "$bun" "$root/src/main.ts" "$@"

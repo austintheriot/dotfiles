@@ -19,6 +19,40 @@ For the self-authorship line, name `/expert-review`:
 
 When the invocation includes `--contribution <path>`, follow the orchestrated mode in `~/.claude/rules/outside-pr-review.md`. Run the analysis and the filter as usual. Then write one `code-review` contribution as JSON to that path. Skip the local summary, the approval question, and the post. Each inline comment names the id of its finding, so this skill assigns a finding id to every finding. The posture file holds the field contract.
 
+## Trace mode
+
+Trace mode answers one question for each finding it receives: which code causes this behavior? The findings come from any source, such as a failed step or an observed bug. The posture file `~/.claude/rules/outside-pr-review.md` defines the `code-trace` kind, its `verdicts` table, and every field type. Follow it.
+
+**Input.** `--trace <findings.json> --contribution <path>`. Optional: `--known <findings.json>`. Each file is a JSON object `{"findings": [...]}`. Each entry has the finding shape from the posture file. The user is not reachable. Put every blocker into `handback`.
+
+**Run these steps, in this order:**
+
+1. Scope. Resolve the pull request and its head, and write the full head SHA to `head`.
+2. Fetch the change set with the `pr-diff` agent.
+3. For each finding in input order, derive the behavior. Use the finding's `behavior`. When it has none, use its `title` and `body`.
+4. Find the code in the diff, or the code that the diff calls, that causes the behavior. Read the code. Do not guess from the behavior alone.
+5. Hold each candidate cause to the filter in this skill: a named defect, a concrete trigger, and a real consequence. Apply the verify step to every `root-cause` candidate.
+6. Dispatch only the panel agents whose lens fits the behavior. Do not run the full panel. When the behavior is about structure, naming, or tests, run the matching pass. Otherwise skip both passes.
+7. Write the verdicts.
+
+**Results.**
+
+| Result | Means | Fields |
+|---|---|---|
+| `root-cause` | A line in the diff, or code that the diff calls, causes the behavior, and the cause clears the filter. | `body` in the inline comment shape of this skill. `anchor` on a changed line. |
+| `no-code-cause` | The behavior comes from configuration, data, the environment, or is expected. | `body` names the source. No `anchor`. |
+| `inconclusive` | The run did not find a cause and cannot rule one out. | `body` says what the run read and what stayed open. No `anchor`. |
+
+**Anchor.** A `root-cause` anchor sits on a changed line, with `side` `RIGHT`. Verify it against the patch. When the cause sits in unchanged code, anchor on the nearest changed line that calls it, and name the real location in `body`. When no changed line reaches the cause, write `root-cause` with no `anchor` and name the location in `body`. If the cause is outside the code, write `no-code-cause`. In every other case, write `root-cause`.
+
+**Duplicates.** When `--known` is present, compare each finding with the known findings. When a known finding covers the same defect, set `duplicateOf` to its `id`. Use it with `root-cause` or `no-code-cause`. The `body` still explains the cause, so the orchestrator can merge.
+
+**Coverage.** Write exactly one verdict for each input finding, in input order, with the finding's `id` in `id`. When the run does not get to a finding, write `inconclusive` and say so in `body`.
+
+**Unreadable input.** When the `--trace` file cannot be read, is invalid JSON, or lacks a `findings` array, that is a blocker. Write `verdicts` as an empty array and add one `handback` line that names the file and the parse error. Empty `verdicts` are legal only in this case. When the `--known` file cannot be read or parsed, trace anyway, set no `duplicateOf`, and add one `handback` line that names the file and the parse error.
+
+**Contribution.** Write one file at `--contribution <path>` as `kind: "code-trace"`, with `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback` only. It has no `body`, `comments`, or `findings`. A verdict has `id`, `result`, `body`, and optional `anchor` and `duplicateOf`. Put every local path that a verdict cites in `uploads`, in citation order. Write the file in one call, as the last action of the run. Never post, upload, or ask to post.
+
 ## Analysis
 
 Follow `/expert-review`'s process for Stage 1 through Stage 6: fetch the change set with the `pr-diff` agent, discover project conventions, classify regions, dispatch specialists in parallel, synthesize with the skepticism discipline.

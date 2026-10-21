@@ -190,7 +190,7 @@ In orchestrated mode, write the file at `--contribution <path>` as `kind: "dev-q
 - `body`: the Dev QA section, with local video and screenshot paths in place of URLs.
 - `uploads`: the video and screenshot paths that `body` and the comments cite (the posted ones only), in citation order. Every path in a finding's `evidence` also appears here.
 - `findings`: one entry for every failed step and every bug the run observed, including each Other observations finding. Each entry has `kind: "behavior"`, a non-empty `behavior` text, and `evidence` that holds the screenshot or video paths. Number the ids `Q1`, `Q2`, and so on. Each untested-step item (see Verdicts) also gets an entry with `kind: "code"`, an `anchor` on its changed line, and no `behavior`.
-- `comments`: one inline comment for each untested-step item, as standalone mode posts it, on the changed line, with the test to add. Each comment names its finding id in `finding`. A finding for a failed step or a bug gets an inline comment only if the step or bug maps to a changed line.
+- `comments`: one inline comment for each untested-step item, as standalone mode posts it, on the changed line, with the test to add. Each comment names its finding id in `finding`. A finding for a failed step or a bug has an inline comment only on the changed line it maps to.
 - `handback`: one line for each of these items.
   - Each step this skill cannot drive, with the repository command that runs it.
   - Each framework role that fell back, and why.

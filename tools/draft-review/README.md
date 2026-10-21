@@ -64,7 +64,7 @@ The request never names an `event`, so GitHub keeps the review pending.
 
 ## Pending reviews that `create` never changes
 
-GitHub allows one pending review per user on a pull request. `create` changes only the review that it created last and that nobody edited. These GitHub facts explain why `create` never appends to another pending review:
+GitHub allows one pending review per user on a pull request. `create` replaces only the review that it created last and that nobody edited. These GitHub facts explain why `create` never appends to another pending review:
 
 - REST cannot add a comment to an existing pending review. `POST repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}/comments` returns `404`. `POST repos/{owner}/{repo}/pulls/{pr}/comments` returns `422` with `user_id can only have one pending review per pull request`.
 - Comments of an unsubmitted review are invisible to REST. `GET repos/{owner}/{repo}/pulls/comments/{comment_id}` returns `404` for them. `GET repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}/comments` returns them to the review's author.
@@ -77,7 +77,7 @@ When another pending review exists, `create` exits with code 3 and writes the me
 | Code | Name | Meaning |
 |---|---|---|
 | 0 | `ok` | The command finished. |
-| 3 | `refused` | Another pending review by the user exists, the user changed the review that `draft-review` created, or the comments of a new review do not match the request. When no review URL was printed, the merged review is in `synthesized.md`. When a review URL was printed, a new pending review exists with no `draft.json`, and the user must check it on GitHub and delete it before the next `create`. |
+| 3 | `refused` | Another pending review by the user exists, the user edited the review that `draft-review` created, or the comments of a new review do not match the request. When no review URL was printed, the merged review is in `synthesized.md`. When a review URL was printed, a new pending review exists with no `draft.json`, and the user must check it on GitHub and delete it before the next `create`. |
 | 64 | `usage` | The command line is wrong. |
 | 65 | `dataErr` | A contribution is invalid, or the stored contributions break a merge rule. |
 | 66 | `noInput` | An input file is missing, a cited file is missing or changed after `add` with no upload of its recorded content, two contributions recorded different content for one file, or the store holds nothing for the head. |

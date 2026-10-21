@@ -254,7 +254,7 @@ When `create` exits with a code other than 0, act as follows. The README exit co
 - Code 75: a contribution changed while `create` ran. Run `create` again.
 - Code 69 with a review URL on stdout: the new pending review exists, and it has no record. Tell the user to check it on GitHub and delete it before you run `create` again.
 - Code 69 with no review URL: a GitHub call failed. Tell the user the message. If the message says that the review was deleted, run `create` again.
-- Code 78: tell the user the `draft-review` config does not exist or lacks this repository.
+- Code 78: the `draft-review` config does not exist, is not valid, has no entry for this repository, or has no `uploadEndpoint` for an upload. Tell the user which cause the error message names.
 
 ### Verify inline anchors
 

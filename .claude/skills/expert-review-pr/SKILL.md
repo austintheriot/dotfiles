@@ -323,7 +323,7 @@ When several gaps anchor to the same line, merge them into one short comment wit
 
 ## Posting
 
-End a standalone run with the sequence in `~/.claude/rules/outside-pr-review.md`: write the contribution, run `draft-review add`, print `draft-review show`, ask one question, and on approval run `draft-review create`. The result for the user is one pending review for this head. The user submits it. While the first draft is still pending, a later `/dev-qa` run on the same head updates the same draft, so one review holds both parts.
+End a standalone run with the sequence in `~/.claude/rules/outside-pr-review.md`: write the contribution, run `draft-review add`, print `draft-review show`, ask one question, and on approval run `draft-review create`. The result for the user is one pending review for this head. The user submits it. While the first draft is still pending, a later `/dev-qa` run on the same head replaces that draft with the merged review, so one review holds both parts.
 
 When someone else has a pending review on the pull request, `draft-review create` exits with code 3 and changes nothing. The posture file says what to tell the user.
 

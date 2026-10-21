@@ -234,7 +234,12 @@ Do not run the steps extractor, do not write scenario records, and do not play f
 
 `not-reproduced` is not proof that the code is correct. It says only that this run, on this build, did not see the symptom.
 
-**Never report `not-reproduced` for a state the run did not reach.** When the run cannot reach the state, the result is `not-reachable`. These are reasons: the state needs an account that the project file forbids creating, no available test environment can drive the platform, the deployed commit does not carry a file the finding exercises (cause `needs-retest`), or the rig rules list the path as out of rig scope.
+**Never report `not-reproduced` for a state the run did not reach.** When the run cannot reach the state, the result is `not-reachable`. Valid reasons:
+
+- The state needs an account that the project file forbids creating.
+- No available test environment can drive the platform.
+- The deployed commit does not carry a file the finding exercises (cause `needs-retest`).
+- The rig rules list the path as out of rig scope.
 
 **Coverage.** Write exactly one verdict for each input finding, in input order, with the finding's `id` in `id`. When time runs out before the run reaches a finding, write `not-reachable` for it with the note "not reached before the run ended". When a blocker stops every finding (a missing project file, a failed target proof, or a failed session proof), write `not-reachable` for every finding with the blocker as the note, and put the blocker in `handback`.
 

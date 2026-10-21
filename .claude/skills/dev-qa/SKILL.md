@@ -18,6 +18,8 @@ Three files share the work:
 
 **Read `~/.claude/local/dev-qa.md` and `~/.claude/rules/outside-pr-review.md` before you test.** If the project file does not exist, ask the user for the deployed URL and a test account before you test.
 
+In orchestrated mode, never ask the user. When a blocker stops every step from starting, write the contribution with `status` `not-run` and the blocker as `reason`. A blocker is a missing project file, a failed target proof, or a failed session proof. When some steps ran before the blocker, use `status` `incomplete` instead.
+
 ## Test environments
 
 A test environment is where a step runs and what drives it: a browser on this machine, a virtual machine, a simulator, a device, or a remote browser, plus its driver and its recorder. This skill does not choose one. The project file names the environments for each platform, which one to prefer, when to fall back, and how to set each one up and tear it down. Use the preferred environment unless it cannot run the step. When you fall back, record the reason in the step's log entry. When the project file names no environment for a platform, use the drivers this session has, and say which one you used in the local summary.
@@ -44,9 +46,9 @@ Work inside the repository's QA framework wherever it reaches. The project file 
 | Oracle source | The documentation that says how the feature is meant to behave. |
 | Driving recipes | The platform skill: selectors, state reads, sign-in helpers, known input quirks. |
 
-When the project file maps no framework, use the fallbacks: a `results.md` plus screenshots per section, and a fresh `general-purpose` subagent as the confirmer with the confirmer rules below. A session can deny a mapped command or agent, for example in an allowlisted unattended run. In that case, use the fallback for that role only. Name each role that fell back in the hand-back or the local summary.
+When the project file maps no framework, use the fallbacks: a `results.md` plus screenshots per section, and a fresh `general-purpose` subagent as the confirmer with the confirmer rules below. A session can deny a mapped command or agent, for example in an allowlisted unattended run. In that case, use the fallback for that role only. Name each role that fell back in `handback` (orchestrated) or the local summary (standalone).
 
-**The repository's run orchestrator is a different tool.** A local QA runner builds the branch and drives its own targets. It tests the branch, not the deployed build. Do not hand a deployed-build check to it. Some Test Steps need a platform that no available test environment can drive. Report each such step as `SKIP` with the reason. Name the repository command that runs it in the hand-back.
+**The repository's run orchestrator is a different tool.** A local QA runner builds the branch and drives its own targets. It tests the branch, not the deployed build. Do not hand a deployed-build check to it. Some Test Steps need a platform that no available test environment can drive. Report each such step as `SKIP` with the reason. Name the repository command that runs it in `handback` (orchestrated) or the local summary (standalone).
 
 ## Verdicts
 
@@ -179,7 +181,7 @@ Exactly these parts, in this order:
 4. An optional `<details>` block titled `Other observations`: free-play findings worth sharing (problem, repro steps, expected and actual, repro video, screenshot), other problems outside the listed steps, and documentation disagreements. Leave the block out when there is nothing to report. Never written as `Fail` lines. When an orchestrator posts a live-reproduced finding that came from outside this run, the section gets one pointer line for it here, not a restatement. A finding that the orchestrator drops does not appear.
 5. A closing status line for the whole run, from the rollup table with counts: `Dev QA Overall Result: Pass (6/8 pass, 2/8 incomplete)`, `Dev QA Overall Result: Fail (1/8 fail, 7/8 pass)`, or `Dev QA Overall Result: Incomplete (5/8 pass, 3/8 incomplete)`.
 
-**Leave the test environment out of the post.** The reader needs the result, not the rig. Do not name the machine, virtual machine, or simulator, the audio device, the browser profile, the driver, the recorder, or any workaround that made the rig run. Name an environment detail only when a reader needs it to reproduce or read a result: a repro that needs a specific setup (an account tier, a narrow window, a meeting with no calendar end), or a result that holds only under that setup. An adaptation always stays, because it changes what was tested ("a Google Meet call in place of a Zoom call"), but its rig reason does not ("the test machine has no Zoom"). The build under test (the deployed URL and commit, or the commit a local build came from) always stays. Environment details belong in the local summary and the hand-back.
+**Leave the test environment out of the post.** The reader needs the result, not the rig. Do not name the machine, virtual machine, or simulator, the audio device, the browser profile, the driver, the recorder, or any workaround that made the rig run. Name an environment detail only when a reader needs it to reproduce or read a result: a repro that needs a specific setup (an account tier, a narrow window, a meeting with no calendar end), or a result that holds only under that setup. An adaptation always stays, because it changes what was tested ("a Google Meet call in place of a Zoom call"), but its rig reason does not ("the test machine has no Zoom"). The build under test (the deployed URL and commit, or the commit a local build came from) always stays. Environment details belong in the local summary (standalone) or `handback` (orchestrated).
 
 Never put a step result outside a `<details>` block. Be terse and matter-of-fact. When a step's failure is also a posted code finding, point to it in one line ("see the comment on `default.conf:192`") rather than restating it. Write no attribution line inside the section. The body's attribution line covers it.
 
@@ -190,7 +192,7 @@ In orchestrated mode, write the file at `--contribution <path>` as `kind: "dev-q
 - `body`: the Dev QA section, with local video and screenshot paths in place of URLs.
 - `uploads`: the video and screenshot paths that `body` and the comments cite (the posted ones only), in citation order. Every path in a finding's `evidence` also appears here.
 - `findings`: one entry for every failed step and every bug the run observed, including each Other observations finding. Each entry has `kind: "behavior"`, a non-empty `behavior` text, and `evidence` that holds the screenshot or video paths. Number the ids `Q1`, `Q2`, and so on. Each untested-step item (see Verdicts) also gets an entry with `kind: "code"`, an `anchor` on its changed line, and no `behavior`.
-- `comments`: one inline comment for each untested-step item, as standalone mode posts it, on the changed line, with the test to add. Each comment names its finding id in `finding`. A finding for a failed step or a bug has an inline comment only on the changed line it maps to.
+- `comments`: one inline comment for each untested-step item, as standalone mode posts it, on the changed line with `side` `RIGHT`, with the test to add. Each comment names its finding id in `finding`. A finding for a failed step or a bug has an inline comment only on the changed line it maps to.
 - `handback`: one line for each of these items.
   - Each step this skill cannot drive, with the repository command that runs it.
   - Each framework role that fell back, and why.

@@ -122,9 +122,7 @@ The clock is the one most often forgotten. The source app banned timers but not 
 - **The bag reaches code through exactly one path: the effect layer.** With RTK that is the thunk `extraArgument` and the middleware factories. Never through a component, a context provider, or a module import. A second path is the crack this convention exists to close, and it widens the lint exemption into component code.
 - **Pay the cost of the single funnel on purpose.** A component cannot debounce, because it has no timer. It dispatches on every keystroke and the effect layer debounces. That cost is correct: the debounce is now testable with a fake timer.
 
-### Fakes, and the global "no interface only to mock" rule
-
-`CLAUDE.md` says: do not add an interface for an IO boundary only to mock it. In a browser, this rule and the Services layer do not conflict. Browser IO is ambient: every line can call `fetch` or `Date.now`. The `Services` interface is not a mock seam added for tests. It is the shell boundary itself, and lint enforces it (section 7). Without it, the functional core has no edge.
+### Fakes
 
 - **Write fakes with working behavior, not empty spies.** A fake timer keeps a pending queue that the test flushes. A fake id generator returns unique, deterministic ids from a counter. An empty `vi.fn()` id generator returns `undefined` for every id, and in the source app it hid a real collision bug.
 - **Provide `makeFakeServices(overrides: Partial<Services>)`** that builds the whole bag from fakes. Tests override only what they examine.

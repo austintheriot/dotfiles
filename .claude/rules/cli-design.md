@@ -252,8 +252,7 @@ Anti-patterns that break the shape:
 - **Printing from the core.** A core that calls `println!` or `console.log` decides the stream and the format. Return the report.
 - **`isatty` or `env::var` calls in the middle of logic.** Pass a `Terminal { stdout_tty, stderr_tty, width, color }` value in.
 - **Reading the clock in the core.** `Date.now()` inside a "pure" function blocks reproducible tests. Pass `now`.
-- **An interface or trait for the filesystem only so tests can mock it.** Read the needed listing at the edge into data. A trait earns its place only when the core must ask the world a question mid-decision (rare for a CLI).
-- **Tests that assert command strings or call order.** Test the plan value and the end-to-end transcript, not the steps.
+- **Tests that assert command strings or call order when the result is observable.** Test the plan value and the end-to-end transcript, not the steps. Record calls only when the call itself is the contract: a send, a charge, a negative "never calls X", or an order that an atomicity guarantee depends on.
 
 Lineage: Gary Bernhardt, "Boundaries" (SCNA 2012) and the "Functional Core, Imperative Shell" screencast; Thomas Eizinger, "sans-IO" (Firezone, 2024), with time passed in as input; Raymond's Rule of Separation.
 

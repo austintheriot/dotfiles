@@ -41,12 +41,14 @@ use std::process::Command;
 /// `tmux-tools split`, so it carries a `#!/bin/sh` shebang and is linted like
 /// any other sh script. The "every zsh exclusion is still a zsh script"
 /// assertion below is what caught the dialect change.
-const ZSH_SCRIPTS: [&str; 5] = [
+const ZSH_SCRIPTS: [&str; 7] = [
     ".scripts/tmux-close.sh",
     ".scripts/tmux-setup.sh",
     ".scripts/tmux-start.sh",
     ".scripts/zsh-git-widgets.sh",
     "tests/leak-check.sh",
+    "tools/vm/install.sh",
+    "tools/vm/setup/install-softnet.sh",
 ];
 
 /// Files sourced at shell-init time, so they carry no shebang and shellcheck

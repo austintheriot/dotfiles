@@ -8,7 +8,7 @@ import {DraftReviewError, EXIT} from './exit'
 import {withLock} from './lock'
 import type {IUploader} from './store'
 import type {PrStore} from './store'
-import {prepareUploads, prStore, runUploads} from './store'
+import {headDigest, prepareUploads, prStore, readContributions, readHead, runUploads, writeReviewRequest, writeSynthesized} from './store'
 import type {DevQaContribution} from './contribution'
 import {blankPage, devQa, HEAD, OTHER_HEAD, review} from './testing/fixtures'
 
@@ -226,6 +226,7 @@ describe('draftAction', () => {
     reviewId,
     bodyHash: bodyHash(body),
     comments: comments.map(item => ({id: item.id, bodyHash: bodyHash(item.body)})),
+    contributionsDigest: 'd'.repeat(64),
     head: HEAD,
     url: 'https://example.test/review'
   })
@@ -261,6 +262,50 @@ describe('draftAction', () => {
   test('refuses a pending review that it did not create', () => {
     expect(draftAction([pending('Body.', [], 9)], record('Body.'))).toEqual({kind: 'refuse', reviewId: 9})
     expect(draftAction([pending('Body.', [], 9)], undefined)).toEqual({kind: 'refuse', reviewId: 9})
+  })
+})
+
+describe('readContributions', () => {
+  test('reads the contributions after create wrote the review request and the synthesized text beside them', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    writeReviewRequest(world.store, HEAD, {commit_id: HEAD, body: 'Body.', comments: []})
+    writeSynthesized(world.store, HEAD, 'Body.\n')
+    expect(readContributions(world.store, HEAD).map(contribution => contribution.kind)).toEqual(['code-review'])
+    expect((await world.cli(['route', ...world.target, '--out', join(world.dir, 'routed')])).code).toBe(EXIT.ok)
+  })
+
+  test('the head digest of the contributions it read stays the same when create writes its own files', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    const {digest} = readHead(world.store, HEAD)
+    writeReviewRequest(world.store, HEAD, {commit_id: HEAD, body: 'Body.', comments: []})
+    writeSynthesized(world.store, HEAD, 'Body.\n')
+    expect(headDigest(world.store, HEAD)).toBe(digest)
+  })
+
+  test('the head digest changes when an add lands after the read', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    const {digest} = readHead(world.store, HEAD)
+    await world.add(world.devQa())
+    expect(headDigest(world.store, HEAD)).not.toBe(digest)
+  })
+
+  test('the head digest changes when an add replaces a contribution after the read', async () => {
+    const world = makeWorld()
+    await world.add(review({body: 'First.'}))
+    const {digest} = readHead(world.store, HEAD)
+    await world.add(review({body: 'Second.'}))
+    expect(headDigest(world.store, HEAD)).not.toBe(digest)
+  })
+
+  test('ignores a JSON file whose name is not a contribution file name', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    writeFileSync(join(world.store.prDir, HEAD, 'payload.json'), JSON.stringify({commit_id: HEAD, body: 'Body.', comments: []}))
+    writeFileSync(join(world.store.prDir, HEAD, 'notes.json'), '{}')
+    expect(readContributions(world.store, HEAD).map(contribution => contribution.kind)).toEqual(['code-review'])
   })
 })
 
@@ -333,5 +378,39 @@ describe('prepareUploads and runUploads', () => {
     rmSync(png)
     const caught = await resolveUploads(world.store, HEAD, [png], noUploader).catch((error: unknown) => error)
     expect(caught instanceof DraftReviewError ? caught.exitCode : caught).toBe(EXIT.noInput)
+  })
+
+  const refusal = async (promise: Promise<unknown>) => {
+    const caught = await promise.catch((error: unknown) => error)
+    return caught instanceof DraftReviewError ? {code: caught.exitCode, message: caught.message} : {code: undefined, message: String(caught)}
+  }
+
+  test('refuses a file that changed after add with exit 66 and tells the caller to run add again', async () => {
+    const world = makeWorld()
+    const png = world.evidence('step.png', 'what the author saw')
+    await world.add(world.devQaCiting(png))
+    world.evidence('step.png', 'a later recording')
+    expect(await refusal(resolveUploads(world.store, HEAD, [png], noUploader))).toEqual({code: EXIT.noInput, message: `${png} changed after add, run add again`})
+  })
+
+  test('uses the upload of the content that add recorded when the file changed after that upload', async () => {
+    const world = makeWorld()
+    const png = world.evidence('step.png', 'what the author saw')
+    await world.add(world.devQaCiting(png))
+    const first = await resolveUploads(world.store, HEAD, [png], () => uploaderThat('first', undefined).uploader)
+    world.evidence('step.png', 'a later recording')
+    expect(await resolveUploads(world.store, HEAD, [png], noUploader)).toEqual(first)
+  })
+
+  test('refuses with exit 66 when two contributions for one head recorded different content for one path', async () => {
+    const world = makeWorld()
+    const png = world.evidence('step.png', 'the first recording')
+    await world.add(world.devQaCiting(png, {platform: 'macOS'}))
+    world.evidence('step.png', 'the second recording')
+    await world.add(world.devQaCiting(png, {platform: 'Windows'}))
+    const result = await refusal(resolveUploads(world.store, HEAD, [png], noUploader))
+    expect(result.code).toBe(EXIT.noInput)
+    expect(result.message).toContain(png)
+    expect(result.message).toContain('different content')
   })
 })

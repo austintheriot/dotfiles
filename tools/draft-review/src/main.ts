@@ -4,8 +4,9 @@ import {DEFAULT_CONFIG_PATH, DEFAULT_STORE_ROOT, loadConfig, repositoryConfig, r
 import type {RepositoryConfig} from './config'
 import type {ContributionSet} from './contribution-set'
 import {routeFindings, validateContributions} from './contribution-set'
-import type {DraftAction} from './draft'
-import {bodyHash, draftAction} from './draft'
+import type {Contribution} from './contribution'
+import type {DraftAction, ReadBack} from './draft'
+import {draftAction, draftRecordAfterCreate} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ExitCode} from './exit'
 import type {CreatedReview} from './github'
@@ -15,7 +16,9 @@ import type {ReviewPayload} from './payload'
 import {renderReview} from './render'
 import type {IUploader, PrStore} from './store'
 import {
+  headDigest,
   prStore,
+  readHead,
   readContributionFile,
   readContributions,
   readDraftRecord,
@@ -34,11 +37,13 @@ const LOCK_WAIT_MS = 30_000
 
 const storeFor = (command: {store: string | undefined}, repo: Repo, pr: number) => prStore(command.store ?? DEFAULT_STORE_ROOT, repo, pr)
 
-function loadSet(store: PrStore, head: string): ContributionSet {
-  const set = validateContributions(readContributions(store, head))
+function mergeable(contributions: Contribution[], head: string): ContributionSet {
+  const set = validateContributions(contributions)
   if (!set.ok) throw new DraftReviewError(`the stored contributions for head ${head} cannot merge: ${set.reason}`, EXIT.dataErr)
   return set.value
 }
+
+const loadSet = (store: PrStore, head: string): ContributionSet => mergeable(readContributions(store, head), head)
 
 async function add(command: AddCommand): Promise<ExitCode> {
   const contribution = readContributionFile(command.file)
@@ -76,8 +81,8 @@ function uploaderFor(settings: RepositoryConfig, configPath: string, firstPath: 
   return ghUploader(settings.uploadEndpoint, settings.repositoryId)
 }
 
-type Target = {repo: Repo; store: PrStore; command: CreateCommand; login: string}
-type Written = {synthesizedPath: string; requestPath: string}
+type Target = {repo: Repo; store: PrStore; command: CreateCommand; login: string; contributionsDigest: string}
+type Written = {synthesizedPath: string; requestPath: string; requestedBodies: string[]}
 
 const decide = (target: Target): DraftAction =>
   draftAction(pendingReviews(target.repo, target.command.pr, target.login), readDraftRecord(target.store))
@@ -93,20 +98,35 @@ function writeReview(target: Target, review: ReviewPayload): Written {
   const {store, command} = target
   return {
     synthesizedPath: writeSynthesized(store, command.head, renderReview(review)),
-    requestPath: writeReviewRequest(store, command.head, reviewRequest(command.head, review))
+    requestPath: writeReviewRequest(store, command.head, reviewRequest(command.head, review)),
+    requestedBodies: review.comments.map(comment => comment.body)
   }
 }
 
-function recordDraft(target: Target, review: CreatedReview): void {
-  const {repo, store, command} = target
+function readBack(target: Target, reviewId: number): ReadBack {
   try {
-    const comments = reviewComments(repo, command.pr, review.id).map(comment => ({id: comment.id, bodyHash: bodyHash(comment.body)}))
-    writeDraftRecord(store, {reviewId: review.id, bodyHash: bodyHash(review.body), comments, head: command.head, url: review.url})
+    return {kind: 'read', comments: reviewComments(target.repo, target.command.pr, reviewId)}
   } catch (error) {
     if (!(error instanceof DraftReviewError)) throw error
-    const consequence = 'draft-review has no record of that review, so the next create refuses to replace it. Delete that review on GitHub, then run create again.'
-    throw new DraftReviewError(`pending review ${review.id} exists, but ${error.message}. ${consequence}`, error.exitCode)
+    return {kind: 'failed', reason: error.message}
   }
+}
+
+const SKIP_EXIT = {'read-failed': EXIT.unavailable, mismatch: EXIT.refused} as const
+
+function recordDraft(target: Target, written: Written, review: CreatedReview): void {
+  const {store, command, contributionsDigest} = target
+  const decision = draftRecordAfterCreate({review, head: command.head, requestedBodies: written.requestedBodies, readBack: readBack(target, review.id), contributionsDigest})
+  if (decision.kind === 'record') return writeDraftRecord(store, decision.record)
+  const consequence = 'draft-review wrote no draft.json, so the next create refuses to replace that review. Check the review on GitHub, delete it, then run create again.'
+  throw new DraftReviewError(`pending review ${review.id} exists, but ${decision.reason}. ${consequence}`, SKIP_EXIT[decision.cause])
+}
+
+function refuseStale(target: Target, reviewId: number): void {
+  const {store, command} = target
+  if (headDigest(store, command.head) === target.contributionsDigest) return
+  const message = `a contribution for head ${command.head} changed while create ran, so pending review ${reviewId} is stale. Run create again.`
+  throw new DraftReviewError(message, EXIT.tempFail)
 }
 
 function lostDraft(written: Written, deletedId: number, cause: string): DraftReviewError {
@@ -128,7 +148,8 @@ function post(target: Target, written: Written, deletedId: number | undefined): 
     return refuse(target, written.synthesizedPath, undefined)
   }
   console.log(outcome.review.url)
-  recordDraft(target, outcome.review)
+  recordDraft(target, written, outcome.review)
+  refuseStale(target, outcome.review.id)
   return EXIT.ok
 }
 
@@ -155,10 +176,11 @@ async function create(command: CreateCommand): Promise<ExitCode> {
   const settings = repositoryConfig(config, configPath, repo)
   const store = storeFor(command, repo, command.pr)
   return withLock(store.lockPath, LOCK_WAIT_MS, async () => {
-    const payload = synthesize(loadSet(store, command.head), settings.attribution)
+    const {contributions, digest} = readHead(store, command.head)
+    const payload = synthesize(mergeable(contributions, command.head), settings.attribution)
     const uploads = prepareUploads(store, command.head, payload.uploads, firstPath => uploaderFor(settings, configPath, firstPath))
     ensureGh()
-    const target: Target = {repo, store, command, login: viewerLogin()}
+    const target: Target = {repo, store, command, login: viewerLogin(), contributionsDigest: digest}
     const early = decide(target)
     if (early.kind === 'refuse') return refuse(target, writeSynthesized(store, command.head, renderReview(payload)), early.reviewId)
     const urls = await runUploads(store, uploads)

@@ -12,11 +12,49 @@ export const DraftRecordSchema = z
     reviewId: z.number().int().positive(),
     bodyHash: Sha256,
     comments: z.array(WrittenCommentSchema).default([]),
+    contributionsDigest: Sha256,
     head: z.string().min(1),
     url: z.string().min(1)
   })
   .strict()
 export type DraftRecord = z.infer<typeof DraftRecordSchema>
+
+export type ReadBack = {kind: 'read'; comments: PendingComment[]} | {kind: 'failed'; reason: string}
+export type RecordDecision = {kind: 'record'; record: DraftRecord} | {kind: 'skip'; cause: 'read-failed' | 'mismatch'; reason: string}
+export type CreatedDraft = {
+  review: {id: number; body: string; url: string}
+  head: string
+  requestedBodies: readonly string[]
+  readBack: ReadBack
+  contributionsDigest: string
+}
+
+const sortedText = (bodies: readonly string[]) => JSON.stringify([...bodies].sort())
+
+// A comment the user adds between the create and the read-back would otherwise be recorded as the tool's, and a later replace would delete it.
+function readBackMismatch(reviewId: number, requestedBodies: readonly string[], comments: readonly PendingComment[]): string | undefined {
+  if (comments.length !== requestedBodies.length) {
+    return `GitHub shows ${comments.length} inline comments on pending review ${reviewId}, and the request had ${requestedBodies.length}`
+  }
+  if (sortedText(comments.map(comment => comment.body)) !== sortedText(requestedBodies)) {
+    return `the inline comments on pending review ${reviewId} are not the comments that the request sent`
+  }
+  return undefined
+}
+
+export function draftRecordAfterCreate(created: CreatedDraft): RecordDecision {
+  const {review, head, requestedBodies, readBack, contributionsDigest} = created
+  if (readBack.kind === 'failed') return {kind: 'skip', cause: 'read-failed', reason: readBack.reason}
+  const mismatch = readBackMismatch(review.id, requestedBodies, readBack.comments)
+  if (mismatch !== undefined) return {kind: 'skip', cause: 'mismatch', reason: mismatch}
+  const comments = readBack.comments.map(comment => ({id: comment.id, bodyHash: bodyHash(comment.body)}))
+  return {kind: 'record', record: {reviewId: review.id, bodyHash: bodyHash(review.body), comments, contributionsDigest, head, url: review.url}}
+}
+
+export function contributionsDigest(files: readonly {name: string; sha256: string}[]): string {
+  const lines = files.map(file => `${file.name}\u0000${file.sha256}`).sort()
+  return bodyHash(lines.join('\n'))
+}
 
 export type DraftAction = {kind: 'create'} | {kind: 'replace'; reviewId: number} | {kind: 'refuse'; reviewId: number}
 

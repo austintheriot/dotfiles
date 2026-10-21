@@ -95,7 +95,7 @@ Every contribution is one JSON object. This example is a `code-review` contribut
 }
 ```
 
-A `dev-qa` contribution has the same fields plus `"platform": "<free label, optional>"`, `"status": "passed" | "failed" | "incomplete" | "not-run"`, and `"reason"` (required if the status is not `passed`). Its `body` is the Dev QA section only.
+A `dev-qa` contribution has the same fields plus `"platform": "<free label, optional>"`, `"status": "passed" | "failed" | "incomplete" | "not-run"`, and `"reason"` (required for every status except `passed`). Its `body` is the Dev QA section only.
 
 Both kinds also carry `findings`, so an orchestrator can route single findings to the other skill:
 

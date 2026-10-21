@@ -89,7 +89,8 @@ Every contribution is one JSON object. This example is a `code-review` contribut
   "pr": 1234,
   "head": "<full head SHA>",
   "body": "<top-level body markdown, local file paths in place of URLs>",
-  "comments": [{"path": "src/a.ts", "line": 42, "side": "RIGHT", "startLine": 40, "body": "<markdown>"}],
+  "comments": [{"path": "src/a.ts", "line": 42, "side": "RIGHT", "startLine": 40, "body": "<markdown>", "finding": "R1"}],
+  "findings": [{"id": "R1", "kind": "code", "title": "<one line>", "body": "<markdown>", "anchor": {"path": "src/a.ts", "line": 42, "side": "RIGHT"}}],
   "uploads": ["/abs/local/path.png"],
   "handback": ["<one line per item the orchestrator must see>"]
 }
@@ -114,58 +115,66 @@ Two round-two contributions answer a list of findings from the other skill:
 
 A round-two contribution carries `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback`. It has no `body`, `comments`, or `findings`.
 
+#### Rules for every kind
+
+- Omit an optional field to leave it absent. Never write `null`.
+- A required array is always present and can be empty.
+- A reader rejects unknown keys.
+- Every path in any `evidence` array, in a finding or in a verdict, also appears in `uploads`.
+- A comment `finding` equals an `id` in `findings` of the same contribution. A finding can have zero comments.
+
 #### Top-level fields
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `version` | number, always `1` | all kinds | Schema version. |
-| `kind` | `"code-review"`, `"dev-qa"`, `"dev-qa-verify"`, or `"code-trace"` | all kinds | Selects the shape of the rest of the object. |
-| `pr` | number | all kinds | Pull request number. |
-| `head` | string | all kinds | Full head SHA that the skill examined. An orchestrator refuses to merge contributions with different heads. |
-| `body` | string | `code-review`, `dev-qa` | Top-level body markdown with local paths in place of URLs. For `dev-qa`, the body is the Dev QA section only. |
-| `comments` | array of comment | `code-review`, `dev-qa` | Inline comments. The array can be empty. |
-| `uploads` | array of string | all kinds | Absolute local paths that the text cites, in citation order. The array can be empty. |
-| `handback` | array of string | all kinds | One line per item the orchestrator must see. The array can be empty. |
-| `findings` | array of finding | `code-review`, `dev-qa` | Findings that an orchestrator can route to the other skill. The array can be empty. |
-| `platform` | string | `dev-qa`, optional | Free label for the test environment. |
-| `status` | `"passed"`, `"failed"`, `"incomplete"`, or `"not-run"` | `dev-qa` | Overall result of the Dev QA run. |
-| `reason` | string | `dev-qa`, required when `status` is not `passed` | Why the run did not pass. |
-| `verdicts` | array of verdict | `dev-qa-verify`, `code-trace` | One verdict per finding that the skill received. The verdict shape depends on `kind`. |
+| `version` | integer, always `1` | required for all kinds | Schema version. |
+| `kind` | `"code-review"`, `"dev-qa"`, `"dev-qa-verify"`, or `"code-trace"` | required for all kinds | Selects the shape of the rest of the object. |
+| `pr` | integer | required for all kinds | Pull request number. |
+| `head` | string, 40-character hex commit SHA | required for all kinds | Full head SHA that the skill examined. An orchestrator refuses to merge contributions with different heads. |
+| `body` | non-empty string | required for `code-review` and `dev-qa` | Top-level body markdown with local paths in place of URLs. For `dev-qa`, the body is the Dev QA section only. |
+| `comments` | array of comment | required for `code-review` and `dev-qa` | Inline comments. The array can be empty. |
+| `uploads` | array of string | required for all kinds | Absolute local paths that the text cites, in citation order. The array can be empty. |
+| `handback` | array of string | required for all kinds | One line per item the orchestrator must see. The array can be empty. |
+| `findings` | array of finding | required for `code-review` and `dev-qa` | Findings that an orchestrator can route to the other skill. The array can be empty. |
+| `platform` | string | optional for `dev-qa` | Free label for the test environment. |
+| `status` | `"passed"`, `"failed"`, `"incomplete"`, or `"not-run"` | required for `dev-qa` | Overall result of the Dev QA run. |
+| `reason` | non-empty string | required for `dev-qa` when `status` is not `passed`, otherwise optional | Why the run did not pass. |
+| `verdicts` | array of verdict | required for `dev-qa-verify` and `code-trace` | One verdict per finding that the skill received. The verdict shape depends on `kind`. |
 
 #### Comment fields
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `path` | string | yes | File path in the pull request. |
-| `line` | number | yes | Line number on the chosen side. |
-| `side` | `"LEFT"` or `"RIGHT"` | yes | Diff side. `RIGHT` is the new file. |
-| `startLine` | number | optional | First line of a multi-line comment. `line` is the last line. |
-| `body` | string | yes | Comment markdown. |
-| `finding` | string | yes | `id` of the finding that this comment came from. |
+| `path` | string | required for every comment | File path in the pull request. |
+| `line` | integer | required for every comment | Line number on the chosen side. |
+| `side` | `"LEFT"` or `"RIGHT"` | required for every comment | Diff side. `RIGHT` is the new file. |
+| `startLine` | integer, less than or equal to `line` | optional for every comment | First line of a multi-line comment. `line` is the last line. |
+| `body` | non-empty string | required for every comment | Comment markdown. |
+| `finding` | string | required for every comment | `id` of the finding that this comment came from. |
 
 #### Finding fields
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `id` | string | yes | Unique within the contribution. `R<n>` for review, `Q<n>` for Dev QA. |
-| `kind` | `"code"` or `"behavior"` | yes | `code` is a defect in the diff. `behavior` is a symptom seen in the running build. |
-| `title` | string | yes | One line. |
-| `body` | string | yes | Markdown. |
-| `anchor` | object | optional | Location in the diff: `path` (string), `line` (number), `side` (`"LEFT"` or `"RIGHT"`). |
-| `behavior` | string | optional | The user-visible symptom. Omit it when the finding has no user-visible effect. |
-| `evidence` | array of string | optional | Absolute local paths of screenshots or videos. |
+| `id` | string | required for every finding | Unique in the contribution. `R<n>` for review, `Q<n>` for Dev QA. |
+| `kind` | `"code"` or `"behavior"` | required for every finding | `code` is a defect in the diff. `behavior` is a symptom seen in the running build. |
+| `title` | non-empty string | required for every finding | One line. |
+| `body` | non-empty string | required for every finding | Markdown. |
+| `anchor` | object | optional for every finding | Location in the diff: `path` (string), `line` (integer), `side` (`"LEFT"` or `"RIGHT"`). |
+| `behavior` | non-empty string | required for `behavior`, optional for `code` | The user-visible symptom. Omit it when a `code` finding has no user-visible effect. |
+| `evidence` | array of string | required and non-empty for `behavior`, optional for `code` | Absolute local paths of screenshots or videos. |
 
 #### Verdict fields
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `id` | string | yes, both kinds | `id` of the finding that the verdict answers. |
-| `result` | string | yes, both kinds | `dev-qa-verify`: `"reproduced"`, `"not-reproduced"`, or `"not-reachable"`. `code-trace`: `"root-cause"`, `"no-code-cause"`, or `"inconclusive"`. |
-| `evidence` | array of string | `dev-qa-verify`, yes | Absolute local paths that show the result. |
-| `note` | string | `dev-qa-verify`, yes | One or two sentences on what the run did and saw. |
-| `anchor` | object | `code-trace`, optional | Location of the cause. Same shape as a finding `anchor`. |
-| `body` | string | `code-trace`, yes | Markdown explanation of the trace. |
-| `duplicateOf` | string | `code-trace`, optional | Review finding `id` that already covers the same defect. |
+| `id` | string | required for `dev-qa-verify` and `code-trace` | `id` of the finding that the verdict answers. |
+| `result` | string | required for `dev-qa-verify` and `code-trace` | `dev-qa-verify`: `"reproduced"`, `"not-reproduced"`, or `"not-reachable"`. `code-trace`: `"root-cause"`, `"no-code-cause"`, or `"inconclusive"`. |
+| `evidence` | array of string, can be empty | required for `dev-qa-verify` | Absolute local paths that show the result. A `not-reachable` verdict has nothing to show and uses an empty array. |
+| `note` | non-empty string | required for `dev-qa-verify` | One or two sentences on what the run did and saw. |
+| `anchor` | object | optional for `code-trace` | Location of the cause. Same shape as a finding `anchor`. |
+| `body` | non-empty string | required for `code-trace` | Markdown explanation of the trace. |
+| `duplicateOf` | string | optional for `code-trace`, allowed with `root-cause` and `no-code-cause` | Review finding `id` that already covers the same defect. It means this finding has the same cause as that finding. |
 
 ## Local summary
 
@@ -173,7 +182,7 @@ Run the pending-review check (under Posting) before you print the summary, so th
 
 Before posting anything, print the complete intended post in chat: the whole body, every inline comment with its file, line, and full text, every `<details>` block, and every attachment by local path. Then ask one question, whether to post, and wait for the answer.
 
-Every run, standalone or orchestrated, ends in one pending review per PR head. The tool `draft-review` builds that review from every contribution for that head. A standalone run asks one question before `draft-review create`, because that step uploads.
+Every run, standalone or orchestrated, ends in one pending review per PR head. The tool `draft-review` builds that review from every contribution for that head. A standalone run asks one question before `draft-review create`, because that step uploads. An unattended orchestrator calls `draft-review create` directly and asks nothing.
 
 ## Attachments
 

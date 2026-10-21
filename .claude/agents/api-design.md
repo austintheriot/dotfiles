@@ -21,7 +21,7 @@ Any change that touches a consumer-facing surface:
 - `.proto` files, gRPC service definitions
 - GraphQL schemas, resolvers exposing new fields/types
 - Public library exports (the `pub` / `export` / `public` surface of a package)
-- CLI flags, subcommands, output formats, exit codes
+- CLI flags, subcommands, output formats, exit codes: the breaking-change and versioning question only. CLI-specific mechanics (stream placement, exit-code conventions, abbreviation traps, porcelain formats, TTY and prompt behavior) route to `cli-design`.
 - Webhook payload schemas
 - SDK signatures
 

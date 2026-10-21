@@ -92,6 +92,9 @@ Every agent listed here knows how to operate in consult mode (either because it 
 - **`local-inference`** -- local model serving: llama.cpp / vLLM / SGLang / Ollama / mlx-lm, KV-cache arithmetic, quantization evidence, Apple unified memory and the Docker VM, MIG / MPS / time-slicing, when local is cheaper than an API.
 - **`browser-spec`** -- WhatWG specs, DOM event model, modern platform primitives (`<dialog>`, Popover, AbortController, `Intl.*`), Web Components.
 - **`web-analytics`** -- Mixpanel / Amplitude / Segment / PostHog; event taxonomy, identity correctness, funnels / retention, A/B test instrumentation, privacy.
+- **`cli-design`** -- command-line programs as a contract: argv grammar and parser defaults, stdout / stderr discipline, buffering and SIGPIPE per runtime, exit status, TTY / prompt / color decisions, config precedence and XDG, machine output as contract, signals and wrappers, Windows argv, the functional-core shape of a CLI, transcript testing, agents as consumers.
+- **`terminal-tui`** -- the terminal as a device: termios and raw mode, terminal state restoration, escape sequences and capability probing, emulator / tmux / SSH / ConPTY differences, keyboard and mouse protocols, TUI architecture (ratatui, Bubble Tea, Ink, Textual), flicker and the alternate-screen trade-off, escape injection, terminal accessibility.
+- **`shell-scripting`** -- shell code and the shell as host: expansion and re-parse injection, `set -e` holes and the strict-mode debate, dash / macOS bash 3.2 / BusyBox portability, startup files and non-interactive environments, completions and `init` hooks a tool ships, cross-language quoting, `curl | sh`, when to leave shell.
 - **`neovim`** -- config load order and timing, Lua API pitfalls (fast events, index bases, option scope), plugin managers and `vim.pack`, LSP and treesitter transitions, agent-editor integration over RPC.
 - **`blender-3d`** -- Blender and 3D authoring: transform state, color management, normals and tangent space, the modifier stack and depsgraph, UVs and texel density, rigging and skinning, `bpy` automation.
 - **`game-art-pipeline`** -- the authored-content-to-engine boundary: interchange formats and their data loss, identity and reference stability, texture compression, collision and lightmap conventions, binary version control, CI asset validation.
@@ -203,6 +206,9 @@ When the agent isn't named, infer from question keywords. The strongest signals:
 | "Is this agent sandbox real, and what can the agent reach" | `agent-sandboxing` |
 | "How many agents should I run, and why did two of them collide or stall" | `agent-orchestration` |
 | "Can this model run on my machine, and is local cheaper than the API" | `local-inference` |
+| "How should this CLI's flags / output / exit codes work, and why does it break in a pipe" | `cli-design` |
+| "Why is my terminal broken after this exits / why does my TUI flicker / does tmux support this" | `terminal-tui` |
+| "Is this shell script safe / portable / should it still be shell" | `shell-scripting` |
 | "Do I need this useEffect / why does this component reset or loop / how should I shape this React state" | `react-components` |
 | "Is this Server Action safe / why is this page cached or stale / why the hydration mismatch / should this be a Server Component" | `react-server` |
 | "Is there a platform API for this / should I use `<dialog>` / `Intl.*`" | `browser-spec` |

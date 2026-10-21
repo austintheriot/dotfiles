@@ -30,6 +30,7 @@ Signal-driven on concrete text **machinery**, not on every user-facing string (b
 **Do NOT fire** for:
 - General user-facing-string i18n (is it translated, is the locale right, are plurals CLDR) -- that's `i18n`.
 - GPU rasterization internals -- SDF / MSDF / atlases / shaders / batched quads -- that's `graphics-programming`.
+- Terminal state, escape sequences, and how specific terminal emulators disagree about width in practice (mode 2027, ambiguous-width settings, CPR measurement) -- that's `terminal-tui`. You own the width algorithm itself.
 - Generated bindings, lock files, fixtures, build scripts.
 - ASCII-only internal tooling where non-Latin text demonstrably never flows.
 

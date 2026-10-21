@@ -41,12 +41,13 @@ describe('planAdd', () => {
     expect(plan(withoutBehavior, entries)).toEqual({kind: 'store', name: 'code-review.json', remove: ['dev-qa-verify.json', 'dev-qa-verify.json.files']})
   })
 
-  test('refuses a new code-review that drops the review finding that a stored code-trace names in duplicateOf', () => {
+  test('stores a new code-review that drops the review finding that a stored code-trace names in duplicateOf, and removes the code-trace', () => {
     const duplicate = trace([{id: 'Q1', result: 'root-cause', body: 'Same cause.', duplicateOf: 'R1'}])
     const entries: [string, Contribution][] = [['code-review.json', review()], ['dev-qa.json', devQa()], ['code-trace.json', duplicate]]
     expect(plan(review({findings: [], comments: []}), entries)).toEqual({
-      kind: 'refuse',
-      reason: 'the code-trace verdict for Q1 names the unknown review finding id R1'
+      kind: 'store',
+      name: 'code-review.json',
+      remove: ['code-trace.json', 'code-trace.json.files']
     })
   })
 })

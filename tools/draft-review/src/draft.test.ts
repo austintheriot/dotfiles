@@ -13,7 +13,7 @@ describe('replacedHeadLine', () => {
   const earlier = {head: 'b'.repeat(40), synthesizedPath: `/store/${'b'.repeat(40)}/synthesized.md`}
 
   test('names the short earlier head and the path of its synthesized text when draft.json names another head', () => {
-    expect(replacedHeadLine(earlier, HEAD)).toBe(`create replaces the pending draft for head bbbbbbb; its text is in /store/${'b'.repeat(40)}/synthesized.md`)
+    expect(replacedHeadLine(earlier, HEAD)).toBe(`create replaces the pending draft for head bbbbbbb. Its text is in /store/${'b'.repeat(40)}/synthesized.md.`)
   })
 
   test('gives no line when draft.json names the same head', () => {

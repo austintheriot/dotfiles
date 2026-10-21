@@ -85,7 +85,7 @@ export type EarlierDraft = {head: string; synthesizedPath: string}
 export const replacedHeadLine = (earlier: EarlierDraft | undefined, head: string): string | undefined =>
   earlier === undefined || earlier.head === head
     ? undefined
-    : `create replaces the pending draft for head ${earlier.head.slice(0, 7)}; its text is in ${earlier.synthesizedPath}`
+    : `create replaces the pending draft for head ${earlier.head.slice(0, 7)}. Its text is in ${earlier.synthesizedPath}.`
 
 export type LostDraft ={deletedId: number; requestPath: string; cause: string}
 

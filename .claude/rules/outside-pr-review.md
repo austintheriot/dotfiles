@@ -252,7 +252,7 @@ When any `draft-review` command exits with code 127, the tool is not installed. 
 
 The result for the user is one pending review for that head. The user reads it on GitHub and submits it. While the first draft is still pending, the other skill can run later on the same head. Its `add` and `create` replace that draft with the merged review, so one review holds both parts. When someone edited the draft, `create` refuses to replace it.
 
-When `add` stores a `code-review` or `dev-qa` contribution, it removes the round-two verdicts on the earlier one, so a rerun never carries a stale cross-check.
+When `add` stores a `code-review` or `dev-qa` contribution, it removes the round-two verdicts that can name its finding ids, so a rerun never carries a stale cross-check. A `code-review` removes both the `dev-qa-verify` and the `code-trace` verdicts.
 
 When `create` exits with a code other than 0, act as follows. The README exit code table has the full list.
 

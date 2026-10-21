@@ -16,8 +16,10 @@ describe('staleRoundTwoNames', () => {
     'synthesized.md'
   ]
 
-  test('a code-review removes every dev-qa-verify file and its hash record, and keeps the code-trace', () => {
+  test('a code-review removes every dev-qa-verify file and the code-trace file, each with its hash record', () => {
     expect(staleRoundTwoNames('code-review', listing)).toEqual([
+      'code-trace.json',
+      'code-trace.json.files',
       'dev-qa-verify.json',
       'dev-qa-verify.json.files',
       'dev-qa-verify@macOS.json',

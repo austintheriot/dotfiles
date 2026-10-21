@@ -176,6 +176,17 @@ describe('add removes the round-two files that answered the kind it replaces', (
     expect(run.stderr).toContain('code-trace.json')
   })
 
+  test('a code-review rerun that drops the finding a code-trace duplicateOf names succeeds and removes the code-trace', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    await world.add(world.devQa())
+    await world.add(trace([{id: 'Q1', result: 'root-cause', body: 'Same cause.', duplicateOf: 'R1'}]))
+    const run = await world.add(review({findings: [], comments: []}))
+    expect(run.code).toBe(EXIT.ok)
+    expect(world.stored()).toEqual(['code-review.json', 'dev-qa.json'])
+    expect(run.stderr).toContain('code-trace.json')
+  })
+
   test('a round-two contribution removes nothing', async () => {
     const world = makeWorld()
     await world.add(review())
@@ -263,7 +274,7 @@ describe('show', () => {
     world.plant('draft.json', draftJson(OTHER_HEAD))
     const run = await world.cli(['show', ...world.target, '--config', world.configPath])
     expect(run.code).toBe(EXIT.ok)
-    expect(run.stdout).toContain(`create replaces the pending draft for head bbbbbbb; its text is in ${join(world.store.prDir, OTHER_HEAD, 'synthesized.md')}`)
+    expect(run.stdout).toContain(`create replaces the pending draft for head bbbbbbb. Its text is in ${join(world.store.prDir, OTHER_HEAD, 'synthesized.md')}.`)
   })
 
   test('says nothing about a replaced draft when draft.json names this head', async () => {

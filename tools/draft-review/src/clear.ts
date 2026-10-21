@@ -17,13 +17,14 @@ const isHashRecord = (name: string) => name.endsWith(FILE_HASHES_SUFFIX) && isCo
 export const namesToClear = (listing: readonly string[]): string[] => listing.filter(name => isContribution(name) || isHashRecord(name)).sort()
 
 const ROUND_TWO_ANSWERING: Record<Contribution['kind'], RegExp | undefined> = {
-  'code-review': /^dev-qa-verify(@[^/]+)?\.json$/,
+  'code-review': /^(dev-qa-verify(@[^/]+)?|code-trace)\.json$/,
   'dev-qa': /^code-trace\.json$/,
   'dev-qa-verify': undefined,
   'code-trace': undefined
 }
 
 // Finding ids restart at R1 and Q1 on every run, so a verdict kept from an earlier round can name a different finding with the same id.
+// A code-trace verdict names review ids through duplicateOf, so a new code-review removes the code-trace too.
 export function staleRoundTwoNames(kind: Contribution['kind'], listing: readonly string[]): string[] {
   const answering = ROUND_TWO_ANSWERING[kind]
   if (answering === undefined) return []

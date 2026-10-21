@@ -25,7 +25,7 @@ Every command takes these options:
 
 Reads one contribution file, checks it against the contribution contract, and copies it into the store. The copy is a temporary file that a rename puts in place. When the store already holds a file of the same kind and platform for the same head, the new file replaces it. The command prints the path of the stored file.
 
-Before `add` stores a `code-review` or `dev-qa` contribution, it removes the round-two files of that head that answer it (`dev-qa-verify*` or `code-trace.json`, with their `.files` records) and names each one on stderr.
+Before `add` stores a `code-review` contribution, it removes the `dev-qa-verify*` files and `code-trace.json` of that head. Before it stores a `dev-qa` contribution, it removes `code-trace.json`. It also removes their `.files` records and names each removed file on stderr.
 
 The command also records the SHA-256 hash of each file in the `uploads` list of the contribution. Later, `create` posts the content with that hash, not the content that the path holds at create time.
 
@@ -55,7 +55,7 @@ When the text holds a local path that `uploads` does not list, `show` ends with 
 When `draft.json` names a draft for another head, `show` ends with this line, and `create` prints it on stderr before it deletes that draft:
 
 ```text
-create replaces the pending draft for head <short head>; its text is in <path to synthesized.md of that head>
+create replaces the pending draft for head <short head>. Its text is in <path to synthesized.md of that head>.
 ```
 
 `show` makes no GitHub call. So after the user submits that draft, `show` still prints the line. `create` never deletes a submitted review.

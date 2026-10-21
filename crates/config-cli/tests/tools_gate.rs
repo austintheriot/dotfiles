@@ -1,7 +1,7 @@
-//! The agent-notify gate: `tools/agent-notify` is its own Cargo workspace
+//! The thumper gate: `tools/thumper` is its own Cargo workspace
 //! with a Bun UI and Bun installer tests, so the `crates/` checks never reach
 //! it. `tests/tools-checks.sh` runs them at pre-push and
-//! `.github/workflows/agent-notify.yml` runs them in CI, both only when a push
+//! `.github/workflows/thumper.yml` runs them in CI, both only when a push
 //! touches a path that build reads.
 
 use dotfiles_test_support::repo::{self, root as repo_root};
@@ -19,7 +19,7 @@ fn checks_script() -> PathBuf {
 }
 
 fn workflow_path() -> PathBuf {
-    repo_root().join(".github/workflows/agent-notify.yml")
+    repo_root().join(".github/workflows/thumper.yml")
 }
 
 fn tools_trigger_paths() -> String {
@@ -50,7 +50,7 @@ fn matches_pattern(pattern: &str, path: &str) -> bool {
 /// The paths in the installer's `STAMP_PATHS`, which name what the daemon
 /// build reads.
 fn stamp_paths() -> Vec<String> {
-    let plan = read(&repo_root().join("tools/agent-notify/scripts/install-plan.ts"));
+    let plan = read(&repo_root().join("tools/thumper/scripts/install-plan.ts"));
     let line = plan
         .lines()
         .find(|line| line.contains("STAMP_PATHS"))
@@ -69,7 +69,7 @@ fn stamp_paths() -> Vec<String> {
 /// repository-relative directory.
 fn tools_path_dependencies() -> Vec<String> {
     let root = repo_root();
-    let workspace = root.join("tools/agent-notify");
+    let workspace = root.join("tools/thumper");
     let mut found: Vec<String> = ["daemon", "app"]
         .iter()
         .flat_map(|member| {
@@ -113,9 +113,9 @@ fn paths_the_tools_checks_read() -> Vec<String> {
         .chain(tools_path_dependencies())
         .map(as_example)
         .collect();
-    paths.push("tools/agent-notify/ui/src/model.ts".to_string());
+    paths.push("tools/thumper/ui/src/model.ts".to_string());
     paths.push("tests/tools-checks.sh".to_string());
-    paths.push(".github/workflows/agent-notify.yml".to_string());
+    paths.push(".github/workflows/thumper.yml".to_string());
     paths
 }
 
@@ -163,8 +163,8 @@ fn the_tools_trigger_matches_every_path_the_tools_checks_read() {
     let pattern = tools_trigger_paths();
     let paths = paths_the_tools_checks_read();
     assert!(
-        paths.iter().any(|path| path.starts_with("crates/agent-notify-core")),
-        "positive control: no path dependency on agent-notify-core was found in {paths:?}"
+        paths.iter().any(|path| path.starts_with("crates/thumper-core")),
+        "positive control: no path dependency on thumper-core was found in {paths:?}"
     );
     let unmatched: Vec<&String> = paths
         .iter()
@@ -173,7 +173,7 @@ fn the_tools_trigger_matches_every_path_the_tools_checks_read() {
     assert!(
         unmatched.is_empty(),
         "TOOLS_TRIGGER_PATHS does not match {unmatched:?}, so a push that edits them skips \
-         the agent-notify checks"
+         the thumper checks"
     );
 }
 
@@ -220,7 +220,7 @@ fn the_workflow_filters_on_every_path_the_tools_checks_read() {
         let filters = path_filters(&workflow, event);
         assert!(
             !filters.is_empty(),
-            "agent-notify.yml has no `{event}.paths` filter, so it runs on every {event}"
+            "thumper.yml has no `{event}.paths` filter, so it runs on every {event}"
         );
         let uncovered: Vec<String> = paths_the_tools_checks_read()
             .into_iter()
@@ -228,7 +228,7 @@ fn the_workflow_filters_on_every_path_the_tools_checks_read() {
             .collect();
         assert!(
             uncovered.is_empty(),
-            "agent-notify.yml `{event}.paths` does not cover {uncovered:?}"
+            "thumper.yml `{event}.paths` does not cover {uncovered:?}"
         );
         let covered: Vec<&str> = UNRELATED_PATHS
             .into_iter()
@@ -236,7 +236,7 @@ fn the_workflow_filters_on_every_path_the_tools_checks_read() {
             .collect();
         assert!(
             covered.is_empty(),
-            "agent-notify.yml `{event}.paths` covers unrelated {covered:?}"
+            "thumper.yml `{event}.paths` covers unrelated {covered:?}"
         );
     }
 }
@@ -255,7 +255,7 @@ fn the_workflow_and_the_script_run_every_check() {
     ] {
         assert!(
             workflow_scripts.contains(check),
-            "agent-notify.yml does not run `{check}`"
+            "thumper.yml does not run `{check}`"
         );
         assert!(script.contains(check), "tests/tools-checks.sh does not run `{check}`");
     }
@@ -363,7 +363,7 @@ fn tools_checks_with_stubs(files: &[&str], cargo_body: &str) -> (Option<i32>, St
     (output.status.code(), combined)
 }
 
-const TOOLS_WORKSPACE: [&str; 2] = ["tools/agent-notify/Cargo.toml", "crates/Cargo.toml"];
+const TOOLS_WORKSPACE: [&str; 2] = ["tools/thumper/Cargo.toml", "crates/Cargo.toml"];
 
 fn on_macos_or_skip(reason: &str) -> bool {
     if cfg!(target_os = "macos") {
@@ -379,7 +379,7 @@ fn a_ref_without_the_tools_workspace_has_nothing_to_check() {
         return;
     }
     let (code, output) = tools_checks_with_stubs(&["crates/Cargo.toml"], "echo CARGO_RAN");
-    assert_eq!(code, Some(0), "a ref without tools/agent-notify blocked: {output}");
+    assert_eq!(code, Some(0), "a ref without tools/thumper blocked: {output}");
     assert!(!output.contains("CARGO_RAN"), "cargo ran on a ref with no tools workspace: {output}");
     assert!(output.contains("nothing to check"), "the skip was silent: {output}");
 }
@@ -395,7 +395,7 @@ fn a_failing_check_still_runs_the_rest_and_blocks() {
     );
     assert!(output.contains("CARGO test"), "a clippy failure skipped cargo test: {output}");
     assert!(
-        output.contains("BUN test in agent-notify"),
+        output.contains("BUN test in thumper"),
         "a clippy failure skipped the installer tests: {output}"
     );
     assert_eq!(code, Some(1), "a failing check did not block the push: {output}");
@@ -412,7 +412,7 @@ fn an_interrupt_stops_the_gate() {
     );
     assert!(!output.contains("CARGO test"), "an interrupt still started cargo test: {output}");
     assert!(
-        !output.contains("BUN test in agent-notify"),
+        !output.contains("BUN test in thumper"),
         "an interrupt still started the installer tests: {output}"
     );
     assert_eq!(code, Some(130), "an interrupt did not report 130: {output}");

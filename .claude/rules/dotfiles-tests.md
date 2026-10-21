@@ -39,12 +39,12 @@ runs two gates and blocks the push on either.
 - `~/tests/rust-checks.sh` runs on the **host**, against a `git archive`
   snapshot of the ref being pushed, not the working tree. It runs
   `cargo test --locked --quiet` and `cargo clippy` there.
-- `~/tests/tools-checks.sh` runs the `tools/agent-notify` checks on the
+- `~/tests/tools-checks.sh` runs the `tools/thumper` checks on the
   **host**, against the same kind of snapshot: the UI build, typecheck and
   `bun test`, `cargo clippy` and `cargo test` on that separate workspace, and
   the installer tests. It runs only for a push that touches
   `TOOLS_TRIGGER_PATHS`, because a cold Tauri build takes minutes.
-  `.github/workflows/agent-notify.yml` runs the same checks in CI behind the
+  `.github/workflows/thumper.yml` runs the same checks in CI behind the
   same paths.
 - `~/tests/run-in-docker.sh` runs the same cargo suite **in Docker**, gated to
   pushes whose commits touch tested code, so it needs a running Docker daemon.

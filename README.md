@@ -73,7 +73,7 @@ hand-written and can, so `config help` wins on any disagreement:
 
 - `config build` builds every workspace crate and installs each stamped
   binary. `--tools` also builds and installs the desktop tools under
-  `tools/` (the agent-notify daemon), and `--no-launchd` installs them
+  `tools/` (the thumper daemon), and `--no-launchd` installs them
   without restarting their launch agents.
 - `config deps check` checks the tracked dependencies against the manifest;
   `config deps install` installs what is missing.

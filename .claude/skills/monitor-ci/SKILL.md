@@ -57,13 +57,13 @@ Record:
 - **PR number, URL, branch name, draft state, labels**.
 - **Monitor start time** (current ISO-8601 timestamp). Used later to filter AI review comments to "posted after we started watching" -- review opt-in labels are often auto-removed by the workflow after the review runs, so label presence is not a reliable signal on its own.
 
-Silence the per-stop notification for the length of the watch, when `agent-notify` is installed:
+Silence the per-stop notification for the length of the watch, when `thumper` is installed:
 
 ```bash
-agent-notify quiet --until next-send --max-minutes 180
+thumper quiet --until next-send --max-minutes 180
 ```
 
-A non-zero exit is not an error. That includes exit 127 when `agent-notify` is not installed, and a failure outside tmux. Ignore it and continue.
+A non-zero exit is not an error. That includes exit 127 when `thumper` is not installed, and a failure outside tmux. Ignore it and continue.
 
 ## Step 2: Single status check
 
@@ -204,7 +204,7 @@ Print:
 Then send one notification with the outcome. This ends the quiet period from Step 1. Use `attention` when the user must act (a red workflow, a manual gate, review comments) and `info` when everything is green:
 
 ```bash
-agent-notify send --kind attention --body "PR 123: lint failed, 1 manual gate pending"
+thumper send --kind attention --body "PR 123: lint failed, 1 manual gate pending"
 ```
 
 Send it only at a terminal state, never on an intermediate wake-up. A non-zero exit, including exit 127, is not an error. Ignore it.

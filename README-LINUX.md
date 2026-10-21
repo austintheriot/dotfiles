@@ -30,5 +30,5 @@ on the older build.
 
 ## Claude Code notifications
 
-Not wired up yet. tools/agent-notify runs on macOS only until its Linux plan
+Not wired up yet. tools/thumper runs on macOS only until its Linux plan
 lands. The CLI's fallback (notify-send) works on Pop!_OS COSMIC today.

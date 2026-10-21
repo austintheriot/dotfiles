@@ -1,5 +1,0 @@
-{
-  "name": "agent-notify",
-  "version": "0.1.0",
-  "description": "Sends Claude Code session events to agent-notify and teaches the agent when to notify"
-}

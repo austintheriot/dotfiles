@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use tmux_core::{HeadState, RepositoryFacts};
 
-/// Each `git` spawn in the fallback ends within this time. agent-notify calls
+/// Each `git` spawn in the fallback ends within this time. thumper calls
 /// [`inspect`] on the hook path outside tmux, where a wedged `git` must not
 /// hold the hook. The limit is per spawn, not for the whole fallback: on a
 /// machine whose endpoint scanner delays every exec, one `git` call took about

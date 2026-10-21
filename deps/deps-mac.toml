@@ -3,21 +3,21 @@
 # single branch, selected at runtime. Format matches deps.toml -- see that
 # file's header for the schema.
 #
-# aerospace lets agent-notifyd raise the right Alacritty window when a
-# card is clicked (tools/agent-notify). It is optional: without it the
+# aerospace lets thumperd raise the right Alacritty window when a
+# card is clicked (tools/thumper). It is optional: without it the
 # daemon activates Alacritty and tmux still switches pane.
 
 [aerospace]
 command = "aerospace"
 docs = "https://github.com/nikitabobko/AeroSpace"
 
-# terminal-notifier shows the agent-notify fallback notification when the
+# terminal-notifier shows the thumper fallback notification when the
 # daemon is not running.
 [terminal-notifier]
 command = "terminal-notifier"
 docs = "https://github.com/julienXX/terminal-notifier"
 
-# The agent-notify install runs `cargo deny check` before it builds the
+# The thumper install runs `cargo deny check` before it builds the
 # daemon, and that install is macOS-only until the Linux plan lands.
 [cargo-deny]
 command = "cargo-deny"

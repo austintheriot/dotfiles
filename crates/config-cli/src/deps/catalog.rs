@@ -341,7 +341,7 @@ pub fn packages() -> PackageCatalog {
         &mut catalog,
         "terminal-notifier",
         per_manager(vec![(PackageManager::Brew, named("terminal-notifier"))]),
-        // macOS-only fallback notifier for agent-notify; no other manager ships it.
+        // macOS-only fallback notifier for thumper; no other manager ships it.
         PackageAvailability::Unavailable(NoInstallReason::NotPackagedForThisManager),
     );
 
@@ -350,7 +350,7 @@ pub fn packages() -> PackageCatalog {
         "cargo-deny",
         per_manager(vec![
             (PackageManager::Brew, named("cargo-deny")),
-            // Listed in deps-mac.toml only until the agent-notify install runs on Linux.
+            // Listed in deps-mac.toml only until the thumper install runs on Linux.
             (
                 PackageManager::Apt,
                 PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
@@ -382,7 +382,7 @@ pub fn packages() -> PackageCatalog {
                 PackageAvailability::Unavailable(NoInstallReason::NotPackagedForThisManager),
             ),
         ]),
-        // Linux-only fallback notifier for agent-notify; macOS has no such
+        // Linux-only fallback notifier for thumper; macOS has no such
         // package and an undetected manager has no install command.
         PackageAvailability::Unavailable(NoInstallReason::ManagerNotNamedInManifest {
             manager: PackageManager::Unknown,

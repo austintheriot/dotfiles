@@ -66,12 +66,12 @@ defaults write com.apple.spaces spans-displays -bool true && killall SystemUISer
 
 ## Claude Code notifications
 
-`agent-notifyd` (`tools/agent-notify`) shows a card at the top right when a
+`thumperd` (`tools/thumper`) shows a card at the top right when a
 Claude Code session finishes or needs you, and a click switches tmux to that
-session's pane and raises Alacritty. The `agent-notify` plugin's hooks send
-the events; agents can also call `agent-notify send` themselves.
+session's pane and raises Alacritty. The `thumper` plugin's hooks send
+the events; agents can also call `thumper send` themselves.
 
 Install or update it with `config build --tools`. It runs as the launch
-agent `dev.dotfiles.agent-notifyd`. `agent-notify doctor` checks the setup,
-`agent-notify dnd on` silences it, and Meta-n jumps to the newest card's
-pane. Logs are in `~/Library/Logs/agent-notify/`.
+agent `dev.dotfiles.thumperd`. `thumper doctor` checks the setup,
+`thumper dnd on` silences it, and Meta-n jumps to the newest card's
+pane. Logs are in `~/Library/Logs/thumper/`.

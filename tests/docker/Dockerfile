@@ -39,8 +39,8 @@ COPY crates/dotfiles-test-support/Cargo.toml dotfiles-test-support/
 COPY crates/deps-core/Cargo.toml deps-core/
 COPY crates/tmux-core/Cargo.toml tmux-core/
 COPY crates/tmux-tools/Cargo.toml tmux-tools/
-COPY crates/agent-notify-core/Cargo.toml agent-notify-core/
-COPY crates/agent-notify/Cargo.toml agent-notify/
+COPY crates/thumper-core/Cargo.toml thumper-core/
+COPY crates/thumper/Cargo.toml thumper/
 # The warm-up build: stub sources so the dependency compile lands in a layer
 # that survives an edit to any real source.
 #
@@ -52,7 +52,7 @@ COPY crates/agent-notify/Cargo.toml agent-notify/
 # to be left in place, which kept this one cache-bust away from failing that
 # way, and it did fail that way the first time the stub line itself changed.
 RUN mkdir config-cli/src config-manifest/src dotfiles-path/src dotfiles-test-support/src deps-core/src tmux-core/src tmux-tools/src \
-        agent-notify-core/src agent-notify/src \
+        thumper-core/src thumper/src \
     && echo 'fn main() {}' > config-cli/src/main.rs \
     && echo '' > config-manifest/src/lib.rs \
     && echo '' > dotfiles-path/src/lib.rs \
@@ -60,18 +60,18 @@ RUN mkdir config-cli/src config-manifest/src dotfiles-path/src dotfiles-test-sup
     && echo '' > deps-core/src/lib.rs \
     && echo '' > tmux-core/src/lib.rs \
     && echo 'fn main() {}' > tmux-tools/src/main.rs \
-    && echo '' > agent-notify-core/src/lib.rs \
-    && echo 'fn main() {}' > agent-notify/src/main.rs \
+    && echo '' > thumper-core/src/lib.rs \
+    && echo 'fn main() {}' > thumper/src/main.rs \
     && cargo build --release --locked --quiet \
     && rm -rf config-cli/src config-manifest/src dotfiles-path/src dotfiles-test-support/src deps-core/src \
-        tmux-core/src tmux-tools/src agent-notify-core/src agent-notify/src \
-        target/release/config-cli target/release/tmux-tools target/release/agent-notify \
+        tmux-core/src tmux-tools/src thumper-core/src thumper/src \
+        target/release/config-cli target/release/tmux-tools target/release/thumper \
         target/release/deps/config_cli* target/release/deps/config_manifest* \
         target/release/deps/dotfiles_path* target/release/deps/deps_core* \
         target/release/deps/tmux_core* target/release/deps/tmux_tools* \
         target/release/deps/libconfig_manifest* target/release/deps/libdotfiles_path* \
         target/release/deps/libdeps_core* target/release/deps/libtmux_core* \
-        target/release/deps/agent_notify* target/release/deps/libagent_notify_core*
+        target/release/deps/thumper* target/release/deps/libthumper_core*
 # The tracked files the catalog embeds at compile time. Copied to
 # /build/deps so the crate-relative escape above resolves.
 COPY deps ../deps
@@ -83,8 +83,8 @@ COPY crates/dotfiles-test-support/src ./dotfiles-test-support/src
 COPY crates/deps-core/src ./deps-core/src
 COPY crates/tmux-core/src ./tmux-core/src
 COPY crates/tmux-tools/src ./tmux-tools/src
-COPY crates/agent-notify-core/src ./agent-notify-core/src
-COPY crates/agent-notify/src ./agent-notify/src
+COPY crates/thumper-core/src ./thumper-core/src
+COPY crates/thumper/src ./thumper/src
 RUN cargo build --release --locked --quiet
 
 # The runtime stage shares the builder's base image, so cargo and rustc reach
@@ -286,10 +286,10 @@ COPY setup.sh /root/setup.sh
 # ~/.local/bin lands on PATH. Another root-level file needing its own COPY
 # line, caught by the guard in container.test.sh rather than by CI this time.
 COPY .profile /root/.profile
-# agent-notify's plugin_manifest.rs reads the Claude plugin's hooks.json and
+# thumper's plugin_manifest.rs reads the Claude plugin's hooks.json and
 # both plugin manifests, which live outside crates/.
-COPY tools/agent-notify/claude-plugin /root/tools/agent-notify/claude-plugin
-COPY tools/agent-notify/.claude-plugin /root/tools/agent-notify/.claude-plugin
+COPY tools/thumper/claude-plugin /root/tools/thumper/claude-plugin
+COPY tools/thumper/.claude-plugin /root/tools/thumper/.claude-plugin
 
 # The crates workspace, because the entrypoint compiles and runs its tests.
 #

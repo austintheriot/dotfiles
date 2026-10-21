@@ -60,7 +60,7 @@ the other in a single backgrounded command.
 | Workflow | File | Fires on | Jobs |
 |---|---|---|---|
 | Test suite (linux + macOS) | `test-suite.yml` | every push to `main`, `pull_request`, `workflow_dispatch` | `Linux / ubuntu-latest`, `macOS / macos-latest` |
-| agent-notify (macOS) | `agent-notify.yml` | push to `main` or `pull_request` touching `tools/agent-notify/**`, `crates/agent-notify-core/**`, `crates/dotfiles-test-support/**`, `crates/Cargo.toml`, `crates/Cargo.lock`, `tests/tools-checks.sh`, or the workflow file; `workflow_dispatch` | `macOS / macos-latest` |
+| thumper (macOS) | `thumper.yml` | push to `main` or `pull_request` touching `tools/thumper/**`, `crates/thumper-core/**`, `crates/dotfiles-test-support/**`, `crates/Cargo.toml`, `crates/Cargo.lock`, `tests/tools-checks.sh`, or the workflow file; `workflow_dispatch` | `macOS / macos-latest` |
 | Dependency bootstrap | `deps-check.yml` | push to `main` touching `deps/**`, `setup.sh`, `.scripts/config/**`, `crates/**`, or the workflow file; cron `0 13 1,15 * *`; `workflow_dispatch` | Ubuntu, Pop!_OS, Arch, macOS installs, plus three full-bootstrap jobs |
 
 A push that touches only skills or rules starts the test suite alone. Both workflows

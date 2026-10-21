@@ -3,33 +3,6 @@
 version = 4
 
 [[package]]
-name = "agent-notify"
-version = "0.1.0"
-dependencies = [
- "agent-notify-core",
- "clap",
- "dotfiles-test-support",
- "proptest",
- "serde_json",
- "socket2",
- "tempfile",
- "tmux-core",
- "tmux-tools",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "agent-notify-core"
-version = "0.1.0"
-dependencies = [
- "proptest",
- "serde",
- "serde_json",
- "ts-rs",
-]
-
-[[package]]
 name = "anstream"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -758,6 +731,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "thumper"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "dotfiles-test-support",
+ "proptest",
+ "serde_json",
+ "socket2",
+ "tempfile",
+ "thumper-core",
+ "tmux-core",
+ "tmux-tools",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "thumper-core"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "ts-rs",
 ]
 
 [[package]]

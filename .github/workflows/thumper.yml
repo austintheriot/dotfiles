@@ -1,0 +1,95 @@
+name: thumper (macOS)
+
+# tools/thumper is its own Cargo workspace with a Bun UI, so
+# test-suite.yml, which runs cargo from crates/, never builds it. macOS only:
+# the app links AppKit, and the Linux shell does not exist yet.
+#
+# The paths below match TOOLS_TRIGGER_PATHS in tests/pre-push, and
+# tests/tools-checks.sh runs the same checks before a push.
+# crates/config-cli/tests/tools_gate.rs asserts all three against what the
+# build reads.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/thumper/**
+      - crates/thumper-core/**
+      - crates/dotfiles-test-support/**
+      - crates/Cargo.toml
+      - crates/Cargo.lock
+      - tests/tools-checks.sh
+      - .github/workflows/thumper.yml
+  pull_request:
+    paths:
+      - tools/thumper/**
+      - crates/thumper-core/**
+      - crates/dotfiles-test-support/**
+      - crates/Cargo.toml
+      - crates/Cargo.lock
+      - tests/tools-checks.sh
+      - .github/workflows/thumper.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: thumper-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: macOS / macos-latest
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    # The daemon tests parse tmux output with a tab separator, and tmux
+    # replaces a tab with "_" when no UTF-8 locale is set.
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+
+    defaults:
+      run:
+        working-directory: tools/thumper
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      # The daemon's tmux adapter tests start throwaway tmux servers.
+      - name: Install tmux
+        run: brew install tmux
+
+      - name: UI dependencies
+        working-directory: tools/thumper/ui
+        run: bun install --frozen-lockfile
+
+      # Before cargo: the Tauri context embeds ui/dist and fails to compile
+      # without it.
+      - name: UI build
+        working-directory: tools/thumper/ui
+        run: bun run build
+
+      - name: UI typecheck
+        working-directory: tools/thumper/ui
+        run: bun run typecheck
+
+      - name: UI tests
+        working-directory: tools/thumper/ui
+        run: bun test
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Cargo tests
+        run: cargo test --locked
+
+      - name: Installer tests
+        run: bun test

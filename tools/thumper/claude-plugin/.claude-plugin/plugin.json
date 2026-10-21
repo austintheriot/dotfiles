@@ -1,0 +1,5 @@
+{
+  "name": "thumper",
+  "version": "0.1.0",
+  "description": "Sends Claude Code session events to thumper and teaches the agent when to notify"
+}

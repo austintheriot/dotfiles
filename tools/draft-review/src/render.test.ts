@@ -1,5 +1,5 @@
 import {expect, test} from 'bun:test'
-import {renderReview} from './render'
+import {renderReview, renderStrayPaths} from './render'
 
 test('renders the body, each inline comment with its location, the uploads, and the hand-back', () => {
   const text = renderReview({
@@ -33,6 +33,16 @@ test('renders the body, each inline comment with its location, the uploads, and 
       ''
     ].join('\n')
   )
+})
+
+test('marks each local path that create refuses, with its location', () => {
+  expect(renderStrayPaths([{location: 'the body', path: '/Users/someone/a.png'}])).toBe(
+    '--- local paths that create refuses: list each file in uploads, or remove the path ---\n\nthe body: /Users/someone/a.png\n'
+  )
+})
+
+test('marks nothing when no local path is left', () => {
+  expect(renderStrayPaths([])).toBe('')
 })
 
 test('renders only the body when there is nothing else', () => {

@@ -1,4 +1,5 @@
 import type {InlineComment} from './payload'
+import {lineLabel} from './payload'
 
 export type LineRange = {start: number; end: number}
 export type HunkRanges = {right: LineRange[]; left: LineRange[]}
@@ -23,13 +24,10 @@ export function parsePatch(patch: string): HunkRanges {
   }
 }
 
-const where = (comment: InlineComment) =>
-  comment.startLine === undefined || comment.startLine === comment.line ? `line ${comment.line}` : `lines ${comment.startLine}-${comment.line}`
-
 const insideOneRange = (ranges: readonly LineRange[], first: number, last: number) => ranges.some(range => range.start <= first && last <= range.end)
 
 function problemFor(comment: InlineComment, files: readonly PullFile[]): string | undefined {
-  const subject = `the inline comment on ${comment.path} ${where(comment)} (${comment.side}) from ${comment.source}`
+  const subject = `the inline comment on ${comment.path} ${lineLabel(comment)} (${comment.side}) from ${comment.source}`
   const file = files.find(candidate => candidate.filename === comment.path)
   if (file === undefined) return `${subject} is on a file that the pull request does not change`
   if (file.patch === undefined) return `${subject} is on a file that GitHub sends with no patch, so draft-review cannot check the line`

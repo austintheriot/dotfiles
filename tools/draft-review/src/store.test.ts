@@ -254,6 +254,15 @@ describe('show', () => {
     expect(run.stdout).toContain('--- inline comment: src/a.ts line 42 (RIGHT) ---')
     expect(run.stdout).toContain(`--- files to upload ---\n\n${png}`)
   })
+
+  test('marks a local path that is not in uploads, with its location', async () => {
+    const world = makeWorld()
+    await world.add(review({body: 'Notes are in /Users/someone/notes.md.'}))
+    const run = await world.cli(['show', ...world.target, '--config', world.configPath])
+    expect(run.code).toBe(EXIT.ok)
+    expect(run.stdout).toContain('--- local paths that create refuses')
+    expect(run.stdout).toContain('the body: /Users/someone/notes.md')
+  })
 })
 
 describe('create', () => {
@@ -302,6 +311,16 @@ describe('create', () => {
     const run = await world.cli(['create', ...world.target, '--config', world.configPath])
     expect(run.code).toBe(EXIT.noInput)
     expect(run.stderr).toContain(png)
+  })
+
+  test('refuses with exit 65 when the body holds a local path that is not in uploads, and names the path and its location', async () => {
+    const world = makeWorld()
+    world.writeConfig({repositories: {'acme/widgets': {}}})
+    await world.add(review({body: 'Notes are in /Users/someone/notes.md.'}))
+    const run = await world.cli(['create', ...world.target, '--config', world.configPath])
+    expect(run.code).toBe(EXIT.dataErr)
+    expect(run.stderr).toContain('the body holds the local path /Users/someone/notes.md')
+    expect(run.stderr).not.toContain(FAKE_GH_MESSAGE)
   })
 
   test('a run that reaches gh gets the fake gh, so no test calls GitHub', async () => {

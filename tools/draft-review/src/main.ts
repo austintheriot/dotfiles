@@ -26,7 +26,7 @@ import {
 } from './github'
 import {withLock} from './lock'
 import type {InlineComment, ReviewPayload} from './payload'
-import {renderReview} from './render'
+import {renderReview, renderStrayPaths} from './render'
 import type {IUploader, PrStore} from './store'
 import {
   clearHead,
@@ -45,7 +45,7 @@ import {
   writeSynthesized
 } from './store'
 import {synthesize} from './synthesize'
-import {substituteUploads} from './uploads'
+import {strayLocalPaths, substituteUploads} from './uploads'
 
 const LOCK_WAIT_MS = 30_000
 
@@ -92,7 +92,9 @@ function show(command: ShowCommand): ExitCode {
   const repo = command.repo ?? currentRepo()
   const attribution = showAttribution(command.config ?? DEFAULT_CONFIG_PATH, repo)
   const store = storeFor(command, repo, command.pr)
-  process.stdout.write(renderReview(synthesize(loadSet(store, command.head), attribution)))
+  const payload = synthesize(loadSet(store, command.head), attribution)
+  const strays = renderStrayPaths(strayLocalPaths(payload))
+  process.stdout.write(strays === '' ? renderReview(payload) : `${renderReview(payload)}\n${strays}`)
   return EXIT.ok
 }
 
@@ -198,6 +200,14 @@ function refuseStale(target: Target, reviewId: number): void {
 const lostDraft = (written: Written, deletedId: number, cause: string): DraftReviewError =>
   new DraftReviewError(lostDraftMessage({deletedId, requestPath: written.requestPath, cause}), EXIT.unavailable)
 
+function refuseStrayPaths(payload: ReviewPayload): void {
+  const strays = strayLocalPaths(payload)
+  if (strays.length === 0) return
+  const found = strays.map(stray => `${stray.location} holds the local path ${stray.path}`).join(', ')
+  const steps = 'That path is not in uploads, so GitHub gets it as raw text. List the file in uploads, or remove the path, then run add again.'
+  throw new DraftReviewError(`${found}. ${steps}`, EXIT.dataErr)
+}
+
 function refuseOffDiff(target: Target, comments: readonly InlineComment[]): void {
   if (comments.length === 0) return
   const problems = anchorProblems(comments, pullRequestFiles(target.repo, target.command.pr))
@@ -249,6 +259,7 @@ async function create(command: CreateCommand): Promise<ExitCode> {
   return withLock(store.lockPath, LOCK_WAIT_MS, async () => {
     const {contributions, digest} = readHead(store, command.head)
     const payload = synthesize(mergeable(contributions, command.head), settings.attribution)
+    refuseStrayPaths(payload)
     const uploads = prepareUploads(store, command.head, payload.uploads, firstPath => uploaderFor(settings, configPath, firstPath))
     ensureGh()
     const target: Target = {repo, store, command, login: viewerLogin(), contributionsDigest: digest}

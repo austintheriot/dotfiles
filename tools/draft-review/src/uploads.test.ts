@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'bun:test'
 import type {ReviewPayload} from './payload'
-import {citedPaths, substituteUploads} from './uploads'
+import {citedPaths, strayLocalPaths, substituteUploads} from './uploads'
 
 const payload = (body: string, commentBody = body): ReviewPayload => ({
   body,
@@ -28,6 +28,39 @@ describe('substituteUploads', () => {
   test('returns the payload unchanged when no path has a URL', () => {
     const original = payload('See /a.png.')
     expect(substituteUploads(original, new Map())).toEqual(original)
+  })
+})
+
+describe('strayLocalPaths', () => {
+  const withText = (body: string, commentBody = 'Fine.', uploads: string[] = []): ReviewPayload => ({
+    body,
+    comments: [{path: 'src/a.ts', line: 7, side: 'RIGHT', startLine: 5, body: commentBody, source: 'code-review'}],
+    uploads,
+    handback: ['/Users/someone/handback-is-never-posted.txt']
+  })
+
+  test('names each absolute local path in the body and in each comment, with its location', () => {
+    expect(strayLocalPaths(withText('See /Users/someone/a.png and ~/notes.md.', 'Log at /private/var/x.log'))).toEqual([
+      {location: 'the body', path: '/Users/someone/a.png'},
+      {location: 'the body', path: '~/notes.md'},
+      {location: 'the inline comment on src/a.ts lines 5-7', path: '/private/var/x.log'}
+    ])
+  })
+
+  test('finds paths under /home/ and /tmp/', () => {
+    expect(strayLocalPaths(withText('(/home/dev/out.txt) and `/tmp/run/1.mp4`')).map(stray => stray.path)).toEqual(['/home/dev/out.txt', '/tmp/run/1.mp4'])
+  })
+
+  test('ignores a path that uploads lists, because create puts its URL in place', () => {
+    expect(strayLocalPaths(withText('See /tmp/qa/blank.png.', 'Fine.', ['/tmp/qa/blank.png']))).toEqual([])
+  })
+
+  test('ignores a URL whose path holds one of the prefixes', () => {
+    expect(strayLocalPaths(withText('See https://cdn.example/tmp/a.png and https://example.test/Users/x.'))).toEqual([])
+  })
+
+  test('ignores the hand-back lines, which create never posts', () => {
+    expect(strayLocalPaths(withText('Clean.'))).toEqual([])
   })
 })
 

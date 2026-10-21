@@ -1,5 +1,6 @@
 import {unique} from './lists'
 import type {ReviewPayload} from './payload'
+import {lineLabel} from './payload'
 
 const escapeForRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -14,6 +15,22 @@ export function citedPaths(texts: readonly string[], candidates: readonly string
   const matcher = pathMatcher(candidates)
   if (matcher === undefined) return []
   return unique([...texts.join('\n').matchAll(matcher)].map(match => match[0]))
+}
+
+export type StrayPath = {location: string; path: string}
+
+const LOCAL_PATH = /(?<![\p{L}\p{N}_./:~-])(?:\/(?:Users|home|private|tmp)\/|~\/)[^\s)\]>'"`]+/gu
+const TRAILING_PUNCTUATION = /[.,;:!?]+$/u
+
+const localPathsIn = (text: string) => [...text.matchAll(LOCAL_PATH)].map(match => match[0].replace(TRAILING_PUNCTUATION, ''))
+
+// A path in uploads gets its URL in create, so only the paths left after that substitution reach GitHub as raw text.
+export function strayLocalPaths(payload: ReviewPayload): StrayPath[] {
+  const substituted = substituteUploads(payload, new Map(payload.uploads.map(path => [path, 'uploaded-file'])))
+  return [
+    ...localPathsIn(substituted.body).map(path => ({location: 'the body', path})),
+    ...substituted.comments.flatMap(comment => localPathsIn(comment.body).map(path => ({location: `the inline comment on ${comment.path} ${lineLabel(comment)}`, path})))
+  ]
 }
 
 export function substituteUploads(payload: ReviewPayload, urlByPath: ReadonlyMap<string, string>): ReviewPayload {

@@ -40,11 +40,13 @@ Each file has the shape `{"findings": [...]}`.
 
 Prints the merged review: the body, each inline comment with its file and line, the local files to upload, and the hand-back lines. The text keeps local file paths in place of URLs. Use this output for the one approval question before `create`.
 
+When the text holds a local path that `uploads` does not list, `show` ends with a section that names each such path and its location. `create` refuses that text.
+
 ### `draft-review create --pr <n> --head <sha> [--config <file>]`
 
 Takes the per-PR lock, merges the store, and creates the pending review. The steps are:
 
-1. Read and merge the stored contributions for the head. Keep a digest of the contribution file names and contents, and of the `.files` hash record beside each contribution.
+1. Read and merge the stored contributions for the head. Keep a digest of the contribution file names and contents, and of the `.files` hash record beside each contribution. When the body or a comment holds an absolute local path that `uploads` does not list, exit with code 65 and name the path and its location. A local path starts with `/Users/`, `/home/`, `/private/`, `/tmp/`, or `~/`.
 2. Find the upload for each cited file by the hash that `add` recorded for it:
    - When the file holds the recorded content, reuse its upload from the ledger, or upload it in step 5.
    - When the file changed after `add`, or no longer exists, use the ledger upload of the recorded content. When the ledger has none, exit with code 66. For a changed file, the message says `<path> changed after add, run add again`.
@@ -125,7 +127,7 @@ The check runs after the upload plan. So a missing cited file (code 66) or a mis
 | 0 | `ok` | The command finished. |
 | 3 | `refused` | Another pending review by the user exists, the user edited the review that `draft-review` created, the user submitted the first draft for the head, a submitted review for the head holds the same body, or the comments of a new review do not match the request. When no review URL was printed, the merged review is in `synthesized.md`. When a review URL was printed, a new pending review exists with no `draft.json`, and the user must check it on GitHub and delete it before the next `create`. |
 | 64 | `usage` | The command line is wrong. |
-| 65 | `dataErr` | A contribution is invalid, the stored contributions break a merge rule, an inline comment is outside the pull-request diff, or `draft.json` is invalid. See [An invalid draft.json](#an-invalid-draftjson). |
+| 65 | `dataErr` | A contribution is invalid, the stored contributions break a merge rule, an inline comment is outside the pull-request diff, the text holds a local path that `uploads` does not list, or `draft.json` is invalid. See [An invalid draft.json](#an-invalid-draftjson). |
 | 66 | `noInput` | An input file is missing, a cited file is missing or changed after `add` with no upload of its recorded content, a cited file changed while `create` ran, two contributions recorded different content for one file, or the store holds nothing for the head. |
 | 69 | `unavailable` | `gh` is missing or not signed in, or a GitHub call or an upload failed. This code includes a create that failed after the delete, and a failed read of the new review's comments. When a review URL was printed, a pending review exists with no `draft.json`. The user must check it on GitHub and delete it before the next `create`. |
 | 73 | `cantCreate` | Another run holds the per-PR lock for longer than 30 seconds. |
@@ -204,7 +206,7 @@ The contribution contract is the `## Orchestrated mode` section of `.claude/rule
 
 ## Layout of the code
 
-- The pure core: `add-plan.ts`, `clear.ts`, `contribution.ts`, `contribution-set.ts`, `synthesize.ts`, `uploads.ts`, `payload.ts`, `parsed.ts`, `lists.ts`, `args.ts`, `draft.ts`, `ledger.ts`, `render.ts`, and `exit.ts`. These files do no IO.
+- The pure core: `add-plan.ts`, `clear.ts`, `contribution.ts`, `contribution-set.ts`, `diff-anchors.ts`, `synthesize.ts`, `uploads.ts`, `payload.ts`, `parsed.ts`, `lists.ts`, `args.ts`, `draft.ts`, `ledger.ts`, `render.ts`, and `exit.ts`. These files do no IO.
 - The shell: `main.ts` (the commands), `store.ts` (the store files and the upload loop), `github.ts` (every `gh` call), `lock.ts` (the lock), and `config.ts` (the config file).
 
 The test `src/core-imports.test.ts` holds that boundary. A core file can import only core files, `zod`, `node:crypto`, and `node:util`. It cannot name `Bun` or `process`, it cannot call `require`, and it cannot read the clock with `Date.now` or `new Date(`. The test removes comments and string literals before it looks for these names, so a comment or a message can use the words.

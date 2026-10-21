@@ -65,13 +65,115 @@ The posted text says nothing about how it was produced. No mention of a panel, e
 
 Before posting, re-read the first sentence of every comment and section on its own. If it describes the review rather than the code or the build, rewrite it.
 
+## Orchestrated mode
+
+The argument `--contribution <path>` selects orchestrated mode. The skill writes its result as one JSON file at that path. An orchestrator then merges the contributions and posts.
+
+Rules for the skill in this mode:
+
+1. Write the file in one call of the Write tool, as the last action of the run.
+2. Never upload anything. Never create or edit a review or a comment. Never ask to post.
+3. Use local file paths in `body` and in every comment. List every local path that the text cites in `uploads`, in citation order.
+4. Add no attribution line and no zone headers. The orchestrator adds both.
+
+The orchestrator owns the summary, the approval, the uploads, the merge, and the post.
+
+### Contribution contract
+
+Every contribution is one JSON object. This example is a `code-review` contribution:
+
+```json
+{
+  "version": 1,
+  "kind": "code-review",
+  "pr": 1234,
+  "head": "<full head SHA>",
+  "body": "<top-level body markdown, local file paths in place of URLs>",
+  "comments": [{"path": "src/a.ts", "line": 42, "side": "RIGHT", "startLine": 40, "body": "<markdown>"}],
+  "uploads": ["/abs/local/path.png"],
+  "handback": ["<one line per item the orchestrator must see>"]
+}
+```
+
+A `dev-qa` contribution has the same fields plus `"platform": "<free label, optional>"`, `"status": "passed" | "failed" | "incomplete" | "not-run"`, and `"reason"` (required if the status is not `passed`). Its `body` is the Dev QA section only.
+
+Both kinds also carry `findings`, so an orchestrator can route single findings to the other skill:
+
+```json
+"findings": [{"id": "R3", "kind": "code" | "behavior", "title": "<one line>", "body": "<markdown>",
+              "anchor": {"path": "src/a.ts", "line": 42, "side": "RIGHT"},
+              "behavior": "<the user-visible symptom, when there is one>", "evidence": ["/abs/local/path.mp4"]}]
+```
+
+`id` is unique in the contribution (`R<n>` for review, `Q<n>` for Dev QA). Every inline comment in `comments` names the finding id it came from in a `finding` field. A review finding with no user-visible effect has no `behavior`, and an orchestrator does not send it to Dev QA.
+
+Two round-two contributions answer a list of findings from the other skill:
+
+- `kind: "dev-qa-verify"`: `verdicts: [{id, result: "reproduced" | "not-reproduced" | "not-reachable", evidence: [...], note}]`.
+- `kind: "code-trace"`: `verdicts: [{id, result: "root-cause" | "no-code-cause" | "inconclusive", anchor?, body, duplicateOf?}]`. `duplicateOf` names a review finding id that already covers the same defect.
+
+A round-two contribution carries `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback`. It has no `body`, `comments`, or `findings`.
+
+#### Top-level fields
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `version` | number, always `1` | all kinds | Schema version. |
+| `kind` | `"code-review"`, `"dev-qa"`, `"dev-qa-verify"`, or `"code-trace"` | all kinds | Selects the shape of the rest of the object. |
+| `pr` | number | all kinds | Pull request number. |
+| `head` | string | all kinds | Full head SHA that the skill examined. An orchestrator refuses to merge contributions with different heads. |
+| `body` | string | `code-review`, `dev-qa` | Top-level body markdown with local paths in place of URLs. For `dev-qa`, the body is the Dev QA section only. |
+| `comments` | array of comment | `code-review`, `dev-qa` | Inline comments. The array can be empty. |
+| `uploads` | array of string | all kinds | Absolute local paths that the text cites, in citation order. The array can be empty. |
+| `handback` | array of string | all kinds | One line per item the orchestrator must see. The array can be empty. |
+| `findings` | array of finding | `code-review`, `dev-qa` | Findings that an orchestrator can route to the other skill. The array can be empty. |
+| `platform` | string | `dev-qa`, optional | Free label for the test environment. |
+| `status` | `"passed"`, `"failed"`, `"incomplete"`, or `"not-run"` | `dev-qa` | Overall result of the Dev QA run. |
+| `reason` | string | `dev-qa`, required when `status` is not `passed` | Why the run did not pass. |
+| `verdicts` | array of verdict | `dev-qa-verify`, `code-trace` | One verdict per finding that the skill received. The verdict shape depends on `kind`. |
+
+#### Comment fields
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `path` | string | yes | File path in the pull request. |
+| `line` | number | yes | Line number on the chosen side. |
+| `side` | `"LEFT"` or `"RIGHT"` | yes | Diff side. `RIGHT` is the new file. |
+| `startLine` | number | optional | First line of a multi-line comment. `line` is the last line. |
+| `body` | string | yes | Comment markdown. |
+| `finding` | string | yes | `id` of the finding that this comment came from. |
+
+#### Finding fields
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `id` | string | yes | Unique within the contribution. `R<n>` for review, `Q<n>` for Dev QA. |
+| `kind` | `"code"` or `"behavior"` | yes | `code` is a defect in the diff. `behavior` is a symptom seen in the running build. |
+| `title` | string | yes | One line. |
+| `body` | string | yes | Markdown. |
+| `anchor` | object | optional | Location in the diff: `path` (string), `line` (number), `side` (`"LEFT"` or `"RIGHT"`). |
+| `behavior` | string | optional | The user-visible symptom. Omit it when the finding has no user-visible effect. |
+| `evidence` | array of string | optional | Absolute local paths of screenshots or videos. |
+
+#### Verdict fields
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `id` | string | yes, both kinds | `id` of the finding that the verdict answers. |
+| `result` | string | yes, both kinds | `dev-qa-verify`: `"reproduced"`, `"not-reproduced"`, or `"not-reachable"`. `code-trace`: `"root-cause"`, `"no-code-cause"`, or `"inconclusive"`. |
+| `evidence` | array of string | `dev-qa-verify`, yes | Absolute local paths that show the result. |
+| `note` | string | `dev-qa-verify`, yes | One or two sentences on what the run did and saw. |
+| `anchor` | object | `code-trace`, optional | Location of the cause. Same shape as a finding `anchor`. |
+| `body` | string | `code-trace`, yes | Markdown explanation of the trace. |
+| `duplicateOf` | string | `code-trace`, optional | Review finding `id` that already covers the same defect. |
+
 ## Local summary
 
 Run the pending-review check (under Posting) before you print the summary, so the summary shows the real delivery shape.
 
 Before posting anything, print the complete intended post in chat: the whole body, every inline comment with its file, line, and full text, every `<details>` block, and every attachment by local path. Then ask one question, whether to post, and wait for the answer.
 
-When two skills contribute to one post (a code review with a Dev QA section), the summary shows both parts together and asks one question. One approval posts one review. When the user asks for only one part, post that part alone as the review body.
+Every run, standalone or orchestrated, ends in one pending review per PR head. The tool `draft-review` builds that review from every contribution for that head. A standalone run asks one question before `draft-review create`, because that step uploads.
 
 ## Attachments
 
@@ -160,7 +262,7 @@ Pending-review comments are invisible to REST: `GET repos/{owner}/{repo}/pulls/c
 |---|---|
 | The headline line and the summary paragraph | One more inline comment, anchored to the changed line the other comments are most about. It opens by saying it summarizes the other comments. |
 | Unanchored `<details>` blocks | The same summary comment, after the paragraph. |
-| A long section (a Dev QA section) | A separate top-level pull-request comment, with the attribution line at its top. Its pointers name comments that stay invisible until the user submits the pending review. So write it to a file, and post it only when the user says the review is submitted and asks for this post. |
+| A long section, such as the Dev QA section of a standalone Dev QA post | A separate top-level pull-request comment, with the attribution line at its top. Its pointers name comments that stay invisible until the user submits the pending review. So write it to a file, and post it only when the user says the review is submitted and asks for this post. |
 
 Say in the local summary where each part goes, and that the appended comments publish only when the user submits the pending review.
 

@@ -62,6 +62,16 @@ When the create fails after the delete, the command names the deleted review and
 
 The request never names an `event`, so GitHub keeps the review pending.
 
+## Pending reviews that `create` never changes
+
+GitHub allows one pending review per user on a pull request. `create` changes only the review that it created last and that nobody edited. These GitHub facts explain why `create` never appends to another pending review:
+
+- REST cannot add a comment to an existing pending review. `POST repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}/comments` returns `404`. `POST repos/{owner}/{repo}/pulls/{pr}/comments` returns `422` with `user_id can only have one pending review per pull request`.
+- Comments of an unsubmitted review are invisible to REST. `GET repos/{owner}/{repo}/pulls/comments/{comment_id}` returns `404` for them. Only GraphQL reads them.
+- The body of a pending review belongs to its author. Text that the tool wrote there publishes under that author's name.
+
+When another pending review exists, `create` exits with code 3 and writes the merged review to `synthesized.md`. The user submits or discards the other review, then runs `create` again.
+
 ## Exit codes
 
 | Code | Name | Meaning |

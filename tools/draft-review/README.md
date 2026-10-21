@@ -67,7 +67,7 @@ The request never names an `event`, so GitHub keeps the review pending.
 GitHub allows one pending review per user on a pull request. `create` changes only the review that it created last and that nobody edited. These GitHub facts explain why `create` never appends to another pending review:
 
 - REST cannot add a comment to an existing pending review. `POST repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}/comments` returns `404`. `POST repos/{owner}/{repo}/pulls/{pr}/comments` returns `422` with `user_id can only have one pending review per pull request`.
-- Comments of an unsubmitted review are invisible to REST. `GET repos/{owner}/{repo}/pulls/comments/{comment_id}` returns `404` for them. Only GraphQL reads them.
+- Comments of an unsubmitted review are invisible to REST. `GET repos/{owner}/{repo}/pulls/comments/{comment_id}` returns `404` for them. `GET repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}/comments` returns them to the review's author.
 - The body of a pending review belongs to its author. Text that the tool wrote there publishes under that author's name.
 
 When another pending review exists, `create` exits with code 3 and writes the merged review to `synthesized.md`. The user submits or discards the other review, then runs `create` again.
@@ -77,11 +77,11 @@ When another pending review exists, `create` exits with code 3 and writes the me
 | Code | Name | Meaning |
 |---|---|---|
 | 0 | `ok` | The command finished. |
-| 3 | `refused` | Another pending review by the user exists, the user changed the review that `draft-review` created, or the comments of a new review do not match the request. The merged review is in `synthesized.md`. |
+| 3 | `refused` | Another pending review by the user exists, the user changed the review that `draft-review` created, or the comments of a new review do not match the request. When no review URL was printed, the merged review is in `synthesized.md`. When a review URL was printed, a new pending review exists with no `draft.json`, and the user must check it on GitHub and delete it before the next `create`. |
 | 64 | `usage` | The command line is wrong. |
 | 65 | `dataErr` | A contribution is invalid, or the stored contributions break a merge rule. |
 | 66 | `noInput` | An input file is missing, a cited file is missing or changed after `add` with no upload of its recorded content, two contributions recorded different content for one file, or the store holds nothing for the head. |
-| 69 | `unavailable` | `gh` is missing or not signed in, or a GitHub call or an upload failed. This code includes a create that failed after the delete, and a failed read of the new review's comments. |
+| 69 | `unavailable` | `gh` is missing or not signed in, or a GitHub call or an upload failed. This code includes a create that failed after the delete, and a failed read of the new review's comments. When a review URL was printed, a pending review exists with no `draft.json`. The user must check it on GitHub and delete it before the next `create`. |
 | 73 | `cantCreate` | Another run holds the per-PR lock for longer than 30 seconds. |
 | 74 | `ioErr` | A store file cannot be read or written. |
 | 75 | `tempFail` | `create` made the pending review, but a contribution for the head changed while it ran. Run `create` again. |

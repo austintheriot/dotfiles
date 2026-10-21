@@ -13,7 +13,7 @@ Three files share the work:
 | File | Owns |
 |---|---|
 | This skill | The process, the verdict rules, the evidence rules, the section shape. Project-neutral and environment-neutral. |
-| `~/.claude/local/dev-qa.md` | The project and environment bindings: deployed URLs, deployed-commit proof, the test environments and which one to prefer, accounts, forbidden writes, driver quirks, the video recorder, uploads, and the mapping onto the repository's QA framework. |
+| `~/.claude/local/dev-qa.md` | The project and environment bindings: deployed URLs, deployed-commit proof, the test environments and which one to prefer, accounts, forbidden writes, driver quirks, the video recorder, how to embed uploads, and the mapping onto the repository's QA framework. |
 | `~/.claude/rules/outside-pr-review.md` | Approval, the never-submit rule, scope resolution, voice, the internals rule, the contribution contract, the local summary, uploads, and the standalone ending through `draft-review`. |
 
 **Read `~/.claude/local/dev-qa.md` and `~/.claude/rules/outside-pr-review.md` before you test.** If the project file does not exist, ask the user for the deployed URL and a test account before you test.
@@ -169,7 +169,7 @@ QA writes only data it creates, and removes it before it finishes. When the prod
 
 Compose the section (next heading). Copy the evidence set (videos and screenshots) and the unit directories to the session scratchpad.
 
-- **Standalone**: write the contribution file to a path in the session scratchpad (see Contribution). Write every video and screenshot to disk first. If a cited file does not exist, `draft-review add` exits with code 66. Then follow the sequence in the posture file: `draft-review add`, `draft-review show` printed in chat, one question, and on approval `draft-review create`. The result is one pending review for the head. Running `/expert-review-pr` later on the same head updates the same draft, so one review holds both parts. The user submits the review.
+- **Standalone**: write the contribution file to a path in the session scratchpad (see Contribution). Write every video and screenshot to disk first. If a cited file does not exist, `draft-review add` exits with code 66. Then follow the sequence in the posture file: `draft-review add`, `draft-review show` printed in chat, one question, and on approval `draft-review create`. The result is one pending review for the head. While the first draft is still pending, running `/expert-review-pr` later on the same head updates the same draft, so one review holds both parts. The user submits the review.
 - **Orchestrated**: write the contribution file at `--contribution <path>` (see Contribution).
 
 ## The Dev QA section

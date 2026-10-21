@@ -39,11 +39,12 @@ If the pull request author equals that login, print one line naming the self-rev
 The posted text is Claude's own writing, and reads that way.
 
 - Do not invoke `/write-like-austin`. Do not imitate the user's voice.
-- No praise, no flattery, no compliments on the change. Open on the result, not on what the pull request does well.
+- No praise, no flattery, no compliments on the pull request. Open on the result, not on what the pull request does well.
 - No softeners: "ignore me", "worth a ticket if you agree", "just a thought", "feel free to disregard", "nice work but".
 - Plain literal words. A reader who has not seen the diff follows it without decoding a figure of speech.
 - State uncertainty as a fact when it is load-bearing: "I did not verify X."
 - Write no attribution line and no zone headers in a contribution. `draft-review` adds both. It puts the zone headers at the top of the body. It puts the `attribution` line from its config at the top of the body and of each inline comment. The `Pre-Claude zone` heading stays empty so the user can write above Claude's text before submitting. Never add the headers to a body someone else wrote.
+- When the user's instructions or the repository's `CLAUDE.md` define an attribution line, and the `show` output has none, stop. Tell the user to set `attribution` in the `draft-review` config.
 
 ## Internals stay out
 
@@ -67,7 +68,7 @@ Rules for the skill in this mode:
 4. Add no attribution line and no zone headers. `draft-review` adds both.
 5. When the run used a panel of agents, put one line in `handback`. The line starts with `Models:` and lists each agent with its model, and any rerun. A hand-back line is never posted.
 
-A clean run writes empty `comments` and empty `findings`, with the clean body in `body`.
+A clean `code-review` or `dev-qa` run writes empty `comments` and empty `findings`, with the clean body in `body`.
 
 The orchestrator owns the summary, the approval, and the two `draft-review` commands. `draft-review create` owns the uploads, the merge, and the pending review.
 
@@ -221,7 +222,7 @@ The orchestrator lists hand-back lines in this order:
 
 ## Local summary
 
-Every run, standalone or orchestrated, ends in one pending review per PR head. The tool `draft-review` builds that review from every contribution for that head. A standalone run asks one question before `draft-review create`, because that step uploads. An unattended orchestrator runs `draft-review create` directly and asks nothing.
+Every run, standalone or orchestrated, ends in at most one pending review per PR head. The tool `draft-review` builds that review from every contribution for that head. A standalone run asks one question before `draft-review create`, because that step uploads. An unattended orchestrator runs `draft-review create` directly and asks nothing.
 
 Before the question, print the complete intended review in chat: the output of `draft-review show`. That output holds the whole body and every `<details>` block. It also holds every inline comment with its file, line, and full text, every upload by local path, and the hand-back lines. Local-only items go in `handback`, because `show` prints them and `create` never posts them.
 
@@ -237,20 +238,23 @@ A standalone run ends with this sequence:
 
 1. Write the contribution file to a path in the session scratchpad, in one call of the Write tool.
 2. Run `draft-review add <contribution.json>`.
-3. Run `draft-review show --pr <n> --head <sha>`, and print the output in chat.
+3. Run `draft-review show --pr <n> --head <sha>`, and print the output in chat. The head is the full 40-character SHA.
 4. Ask one question: "Create the pending review?" Wait for the answer.
 5. On approval, run `draft-review create --pr <n> --head <sha>`. Print the URL that the command prints.
 
 When the current folder is not a checkout of the repository, add `--repo <owner/repo>` to each command. The README describes every flag.
 
-The result for the user is one pending review for that head. The user reads it on GitHub and submits it. When the other skill later runs on the same head, its `add` and `create` update the same draft, so one review holds both parts. When someone edited the draft, `create` refuses to replace it.
+The result for the user is one pending review for that head. The user reads it on GitHub and submits it. While the first draft is still pending, the other skill can run later on the same head. Its `add` and `create` replace that draft with the merged review, so one review holds both parts. When someone edited the draft, `create` refuses to replace it.
 
 When `create` exits with a code other than 0, act as follows. The README exit code table has the full list.
 
-- Code 3: another pending review exists, or someone changed the draft. Nothing changed on GitHub. Tell the user the path of `synthesized.md`, which holds the merged review. Do not touch the other review. After the user submits or discards it, run `create` again.
-- Code 66: a cited file does not exist or changed after `add`. Write the file again, run `add` again, and run `create` again.
+- Code 3 with no review URL on stdout: another pending review exists, or someone edited the draft. `create` wrote nothing to GitHub. Tell the user the path of `synthesized.md`, which holds the merged review. Do not touch the other review. When the other review is the user's own hand-written draft, the user can copy text from `synthesized.md` into it. After the user submits or discards it, run `create` again.
+- Code 3 with a review URL on stdout: the new pending review exists, and it has no record. The read-back found different comments. Tell the user to check it on GitHub and delete it before you run `create` again.
+- Code 66: a cited file does not exist or was edited after `add`. Write the file again and run `add` again. Then run `show` again, and ask the question again before `create`.
 - Code 75: a contribution changed while `create` ran. Run `create` again.
-- Code 69: a GitHub call failed. Tell the user the message. If the message says that the review was deleted, run `create` again.
+- Code 69 with a review URL on stdout: the new pending review exists, and it has no record. Tell the user to check it on GitHub and delete it before you run `create` again.
+- Code 69 with no review URL: a GitHub call failed. Tell the user the message. If the message says that the review was deleted, run `create` again.
+- Code 78: tell the user the `draft-review` config does not exist or lacks this repository.
 
 ### Verify inline anchors
 
@@ -278,7 +282,7 @@ Any of these means stop and re-read this file:
 
 - Do not submit a review. Do not set a review event. Never write `APPROVE` or `REQUEST_CHANGES`.
 - Do not run `draft-review create` without an approval that answers the question you asked.
-- Do not change another person's pending review. When one exists, `create` exits with code 3 and changes nothing.
+- Do not edit another person's pending review. When one exists, `create` exits with code 3 and writes nothing.
 - Do not write into another person's review body, and do not edit the comments they wrote.
 - Do not apply fixes or push commits. Outside reviews read, test, and comment.
 - Do not re-post a result the pull request already carries as a comment. Fetch existing comments and match on substance, not location.

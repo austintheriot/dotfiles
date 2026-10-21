@@ -105,7 +105,7 @@ Synthesis, the filter, verification of survivors against the code, and posting s
 
 A user instruction outranks this rule. "Use Opus for the panel" or `--model opus` applies to every specialist call for that run. A model named for one agent applies to that agent only.
 
-Add one line to `handback` that starts with `Models:` and lists each agent with the model it ran on, and any rerun. That line is how the user tunes this rule. Standalone runs show it in the local summary, and every mode never posts it.
+Add one line to `handback` that starts with `Models:` and lists each agent with the model it ran on, and any rerun. That line is how the user tunes this rule. A standalone run shows it in the local summary. No mode posts it.
 
 ## The structure and naming pass
 
@@ -253,7 +253,7 @@ One finding is posted: the surviving `<=` mutant, because it names the behavior 
 
 ## Local summary
 
-A standalone run ends through `draft-review`, as the Posting section says. Write the contribution first. Put these lines in `handback`, because `draft-review show` prints them and `create` never posts them:
+A standalone run ends through `draft-review`, as the Posting section says. Put these lines in `handback`, because `draft-review show` prints them and `create` never posts them. Then write the contribution, and run `draft-review add` on it:
 
 - The `Models:` line.
 - A one-line count: how many findings the panel produced, and how many cleared the filter.
@@ -261,7 +261,7 @@ A standalone run ends through `draft-review`, as the Posting section says. Write
 
 The test findings are summarized with the rest, in one list, ordered with them by severity. Do not print them as a separate section, do not hold them back for a later message, and do not ask about them separately. One summary, one question, one create.
 
-Then print the output of `draft-review show` in chat. It holds the whole body and every inline comment with its file, line, and full text. Ask one question: "Create the pending review?" Wait for the answer.
+After `add`, print the output of `draft-review show` in chat. It holds the whole body and every inline comment with its file, line, and full text. Ask one question: "Create the pending review?" Wait for the answer.
 
 ## Voice
 
@@ -323,7 +323,7 @@ When several gaps anchor to the same line, merge them into one short comment wit
 
 ## Posting
 
-End a standalone run with the sequence in `~/.claude/rules/outside-pr-review.md`: write the contribution, run `draft-review add`, print `draft-review show`, ask one question, and on approval run `draft-review create`. The result for the user is one pending review for this head. The user submits it. When `/dev-qa` runs later on the same head, it updates the same draft, so one review holds both parts.
+End a standalone run with the sequence in `~/.claude/rules/outside-pr-review.md`: write the contribution, run `draft-review add`, print `draft-review show`, ask one question, and on approval run `draft-review create`. The result for the user is one pending review for this head. The user submits it. While the first draft is still pending, a later `/dev-qa` run on the same head updates the same draft, so one review holds both parts.
 
 When someone else has a pending review on the pull request, `draft-review create` exits with code 3 and changes nothing. The posture file says what to tell the user.
 

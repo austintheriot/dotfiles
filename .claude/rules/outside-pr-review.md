@@ -60,6 +60,8 @@ Before you write the contribution, re-read the first sentence of every comment a
 
 The argument `--contribution <path>` selects orchestrated mode. The skill writes its result as one JSON file at that path. An orchestrator then runs `draft-review add` on each contribution and `draft-review create` for the head.
 
+The interactive orchestrator is the `/draft-review` skill. It runs both skills on one pull request and asks one question before `draft-review create`.
+
 Rules for the skill in this mode:
 
 1. Write the file in one call of the Write tool, as the last action of the run.

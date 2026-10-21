@@ -25,7 +25,7 @@ A test environment is where a step runs and what drives it: a browser on this ma
 ## Modes
 
 - **Standalone** (`/dev-qa [PR]`): this skill owns the post. It ends with the local summary, one question, and on approval a `COMMENT` review whose body is the zone headers from `~/.claude/rules/outside-pr-review.md`, then the Dev QA section.
-- **Embedded** (invoked by `/expert-review-pr`): this skill never posts and never asks to post. It returns the section and the hand-back items under Embedded hand-back. The caller owns the summary, the question, and the post.
+- **Embedded** (invoked by `/expert-review-pr`): this skill never posts and never asks to post. It returns the section and the hand-back items under Embedded hand-back. The caller owns the summary, the question, and the post. The caller normally runs this mode in a background subagent (`/expert-review-pr` says how). In that subagent, the user is not reachable: return a needed hand-off as the report instead of asking for it, and wait for every confirmer verdict before handing back.
 
 `--steps-only` skips the live check of panel candidates in embedded mode. `--no-confirm` skips the independent confirm stage. Every verdict is then reported as unconfirmed.
 
@@ -70,7 +70,14 @@ Use the repository's verdict vocabulary. The default, and the vocabulary the con
 |---|---|
 | Any `FAIL` | `fail` |
 | Every step `PASS`, adapted or not | `pass` |
+| Every step not `PASS` is test-covered (below), and the project file allows test-covered steps for the platform | `pass` |
 | Otherwise (some `INCONCLUSIVE`, `SKIP`, or `MISSING_PREREQ`, no `FAIL`) | `incomplete` |
+
+**A test-covered step** is a step that was not run because running it is impractical, and an automated test already checks its expected result. Impractical means no reasonable rig fix removes the block: a rig-scope exclusion, real hardware, a third-party flow. A stale deploy, a signed-out session, or a fixable account state is not impractical. Fix it and run the step. Name the covering test by file and test name, and read it first: it must assert the step's expected result, not only run the same code. A step whose test you cannot name stays `incomplete`. The step keeps its own verdict (`INCONCLUSIVE` or `SKIP`). Only the rollup changes.
+
+**An impractical step with no test is a review comment.** When a step is impractical, no test covers it, and a feasible test could check its expected result, record an untested-step item. It names the step, why it is impractical, the changed line in the diff that implements the step's behavior, and the test to add: the test file (prefer extending an existing test), the setup it drives, and the assertion that fails when the behavior breaks. First search the tests for one that already covers the step, because a test you missed makes the step test-covered instead. When no realistic test can reach the behavior (it needs real hardware, a real third-party service, or a mock so deep the test only re-asserts the code), record nothing. In standalone mode, post the item as an inline comment on that changed line, opening with "Possible coverage gap:", and point the step's result line to the comment in a few words. In embedded mode, hand it back. The caller decides whether it posts.
+
+**Every rollup carries its counts**, out of the listed steps: `pass (6/8 pass, 2/8 incomplete)`, `fail (1/8 fail, 6/8 pass, 1/8 incomplete)`, `incomplete (5/8 pass, 3/8 incomplete)`. Count `INCONCLUSIVE`, `SKIP`, and `MISSING_PREREQ` steps as `incomplete`. List only the nonzero buckets, in the order fail, pass, incomplete. An all-pass run still shows its count: `pass (8/8 pass)`.
 
 A step that depends on an earlier step that did not run is `INCONCLUSIVE` with the earlier step's cause, unless another path reaches it.
 
@@ -172,9 +179,9 @@ Exactly these parts, in this order:
 
 1. `## Dev QA`
 2. One plain paragraph: the result, the deployed URL, and the deployed commit. If the results are unconfirmed, say so.
-3. One `<details>` block per Test Steps section. The `<summary>` is the section name and its rollup. Inside, one line per step: the step number, its verdict in plain words (`Pass`, `Fail`, `Inconclusive (<reason>)`, `Skipped (<reason>)`), `adapted:` and the change when adapted, then its video, embedded the way the project file says. Add a screenshot next to the video when a still makes a point clearer than the video can: an error, exact copy, or a specific state or value the reader should not have to pause the video to find. A truly static step posts its screenshots alone.
+3. One `<details>` block per Test Steps section. The `<summary>` is the section name and its rollup with counts (`Test Steps: pass (6/8 pass, 2/8 incomplete)`). Inside, one line per step: the step number, its verdict in plain words (`Pass`, `Fail`, `Inconclusive (<reason>)`, `Skipped (<reason>)`), `covered by <test file>: <test name>` when the rollup counted it as test-covered, `adapted:` and the change when adapted, then its video, embedded the way the project file says. Add a screenshot next to the video when a still makes a point clearer than the video can: an error, exact copy, or a specific state or value the reader should not have to pause the video to find. A truly static step posts its screenshots alone.
 4. An optional `<details>` block titled `Other observations`: free-play findings worth sharing (problem, repro steps, expected and actual, repro video, screenshot), other problems outside the listed steps, and documentation disagreements. Leave the block out when there is nothing to report. Never written as `Fail` lines. In embedded mode, a live-reproduced candidate that the caller posts as a finding gets one pointer line here, not a restatement. A candidate the caller drops does not appear.
-5. A closing status line from the rollup table: `Dev QA: pass`, `Dev QA: fail (<n> steps)`, or `Dev QA: incomplete (<n> steps not run)`.
+5. A closing status line for the whole run, from the rollup table with counts: `Dev QA Overall Result: Pass (6/8 pass, 2/8 incomplete)`, `Dev QA Overall Result: Fail (1/8 fail, 7/8 pass)`, or `Dev QA Overall Result: Incomplete (5/8 pass, 3/8 incomplete)`.
 
 **Leave the test environment out of the post.** The reader needs the result, not the rig. Do not name the machine, virtual machine, or simulator, the audio device, the browser profile, the driver, the recorder, or any workaround that made the rig run. Name an environment detail only when a reader needs it to reproduce or read a result: a repro that needs a specific setup (an account tier, a narrow window, a meeting with no calendar end), or a result that holds only under that setup. An adaptation always stays, because it changes what was tested ("a Google Meet call in place of a Zoom call"), but its rig reason does not ("the test machine has no Zoom"). The build under test (the deployed URL and commit, or the commit a local build came from) always stays. Environment details belong in the local summary and the hand-back.
 
@@ -188,6 +195,7 @@ Return these to the caller, and nothing else:
 - The video and screenshot paths to upload, in the order the section cites them (the posted ones only).
 - Per panel candidate: reproduced, not reproduced, or not reachable, with the evidence path.
 - Steps this skill cannot drive, with the repository command that runs them.
+- Each untested-step item (see Verdicts), with its changed line and the test to add.
 - Each framework role that fell back, and why.
 - If any verdict is unconfirmed, which ones.
 

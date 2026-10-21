@@ -222,13 +222,27 @@ Then ask whether to post, and wait for the answer.
 
 ## Dev QA against the deployed build
 
-Run this only when the invocation asks for dev QA. Invoke the `dev-qa` skill (Skill tool) in embedded mode, in the main session, right after the Stage 5 dispatch, so the listed steps run while the panel agents work. Pass the pull request number, the head, and the base. After synthesis, hand it the candidate findings that a browser can reproduce, for its live check. `/dev-qa` owns the target proof, the session proof, the steps, the evidence, the confirm stage, the writes, and the section shape. Do not restate or override its rules here.
+Run this only when the invocation asks for dev QA. Run `/dev-qa` in embedded mode in its own background subagent, dispatched in the same message as the Stage 5 panel, so the listed steps run while the panel agents work and the screenshots and driver output stay out of the main context. Use a `general-purpose` agent on Sonnet. Its prompt:
+
+- Invoke the `dev-qa` skill with the Skill tool, in embedded mode, for this pull request number, head, and base.
+- Never post, never upload, and never ask the user anything. When a step needs a hand-off to the user, stop driving and return the hand-off as the whole report.
+- Do not hand back until every confirmer it dispatched has returned its verdict. A subagent receives its own agent's result before it finishes, so a report with unconfirmed verdicts means it stopped early.
+- Return the embedded hand-back and nothing else. Do not claim a run, a verdict, or a file it did not produce.
+
+The subagent counts toward the per-dispatch agent limit.
+
+After synthesis, send the candidate findings that a browser can reproduce to the same subagent with SendMessage, for its live check. Reusing it keeps the test environment it set up. Wait for its second hand-back before the local summary.
+
+Check the hand-back before you use it. For each section, read the last `verdict_final` event in the unit's `audit.jsonl`, and confirm it matches the reported verdict. `ls` every video and screenshot the section cites. Open each screenshot the section will post.
+
+Run `/dev-qa` in the main session instead in either of two cases. The first is a hand-off the run needs at the start: a known expired sign-in, or a step the project file says needs the user. The second is a session where the subagent cannot use the Skill or Agent tools. Then invoke the skill right after the Stage 5 dispatch, as before, and name the reason in the local summary. `/dev-qa` owns the target proof, the session proof, the steps, the evidence, the confirm stage, the writes, and the section shape. Do not restate or override its rules here.
 
 Fold its hand-back into this review:
 
 - The Dev QA section is the last part of the review body (see Body shape). The review and the Dev QA result are one top-level comment, not two.
 - A candidate `/dev-qa` reproduced live is stronger evidence for that finding. It still goes through the filter. When it posts, the comment states the reproduction, and the section's Other observations block points to the comment in one line. A candidate it did not reproduce goes back through the verify step before it is posted.
 - A step failure that also cleared the filter is a review finding. The section points to its comment in one line.
+- An untested-step item from the hand-back is a coverage gap. It meets the "relevant to the pull request" and "a user depends on it" conditions by definition, because it comes from the author's own Test Steps. It still needs the feasible test named and checked against the code, and a changed line to anchor to. Post it as a short coverage-gap comment on that line. When coverage gaps would bury the other findings, keep these ahead of gaps found only by mutation, because a user walks this path. The section's step line points to the comment in one line.
 - The local summary shows the review and the section together, with one question. Upload the section's screenshots only after approval.
 
 ## Voice

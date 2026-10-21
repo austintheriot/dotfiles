@@ -120,6 +120,28 @@ fn installed_nvim() -> Option<PathBuf> {
     if path.is_empty() { None } else { Some(PathBuf::from(path)) }
 }
 
+/// Whether an executable's first bytes carry the AppImage magic.
+///
+/// An AppImage is an ELF runtime with a squashfs image appended, and the image
+/// holds `share/nvim/runtime`. A copy of the file is the whole install, so it
+/// cannot be orphaned from its runtime the way a tarball's `bin/nvim` can.
+/// The AppImage specification puts `AI` plus a type byte (1 or 2) at offset 8.
+fn is_appimage(header: &[u8]) -> bool {
+    matches!(header.get(8..11), Some([b'A', b'I', 1 | 2]))
+}
+
+#[test]
+fn appimage_magic_is_recognized_and_a_plain_elf_is_not() {
+    let plain_elf = b"\x7fELF\x02\x01\x01\x00\x00\x00\x00";
+    let type_2 = b"\x7fELF\x02\x01\x01\x00AI\x02";
+    let type_1 = b"\x7fELF\x02\x01\x01\x00AI\x01";
+
+    assert!(!is_appimage(plain_elf), "a plain ELF is not an AppImage");
+    assert!(is_appimage(type_2), "a type 2 AppImage is recognized");
+    assert!(is_appimage(type_1), "a type 1 AppImage is recognized");
+    assert!(!is_appimage(b"\x7fELF"), "a header shorter than the magic is not an AppImage");
+}
+
 /// The installed Neovim can find its own runtime.
 ///
 /// Skips rather than fails when Neovim is absent, and that is a deliberate
@@ -163,6 +185,9 @@ fn the_installed_neovim_resolves_its_runtime() {
 /// target still lands next to the Cellar's `share/`, and the copy stays
 /// healthy for a legitimate reason. The tarball install is where the invariant
 /// is load-bearing, so the control runs there.
+///
+/// An AppImage nvim is skipped for the same reason: the runtime lives inside
+/// the file, so a copy carries it along.
 #[test]
 fn a_neovim_separated_from_its_runtime_is_reported_broken() {
     let Some(nvim) = installed_nvim() else {
@@ -175,6 +200,18 @@ fn a_neovim_separated_from_its_runtime_is_reported_broken() {
         dotfiles_test_support::skip(
             "a Homebrew nvim resolves into its Cellar prefix, so an orphaned \
              copy is still beside a real share/ tree",
+        );
+        return;
+    }
+
+    let mut header = [0_u8; 11];
+    let header_length = std::fs::File::open(&resolved)
+        .and_then(|mut file| std::io::Read::read(&mut file, &mut header))
+        .expect("the nvim executable is readable");
+    if is_appimage(&header[..header_length]) {
+        dotfiles_test_support::skip(
+            "an AppImage nvim carries its runtime inside its own image, so an \
+             orphaned copy still has a real share/ tree",
         );
         return;
     }

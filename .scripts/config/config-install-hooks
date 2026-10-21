@@ -27,7 +27,11 @@ usage_if_requested "${1:-}"
 bin_dir="$HOME/.local/bin"
 hooks_dir="$HOME/.cfg/hooks"
 
-mkdir -p "$bin_dir"
+# A subshell umask, so a directory created here is owner-writable only even
+# under a user-private-group umask of 0002. check_dir below would otherwise
+# refuse the directory this line just made. An existing directory keeps its
+# mode and still faces the check.
+(umask 022 && mkdir -p "$bin_dir")
 
 # `find -L` follows the symlink and tests the directory that will actually be
 # written to. Without -L, find stats the LINK rather than the target, and the

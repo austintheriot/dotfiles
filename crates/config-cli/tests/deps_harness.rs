@@ -1118,3 +1118,86 @@ fn the_committed_execute_bits_in_deps_match_the_executed_scripts() {
         "the committed execute bits in deps/ match the executed scripts"
     );
 }
+
+// --- bind-mount sources live under $HOME ----------------------------------
+
+/// Docker Desktop shares `$HOME` with its VM by default, on Linux as on
+/// macOS, and shares `/tmp` on neither Linux nor a stock configuration. Both
+/// harnesses bind-mount their seed directory into a container, so a seed under
+/// `/tmp` fails there with "mounts denied ... is not shared from the host".
+/// Native Docker Engine mounts any path, so `$HOME` costs nothing there.
+///
+/// The seam is `deps/docker/build-seed-binary.sh`, the first command that
+/// mounts the seed. The fixture's stub records the directory it was handed
+/// and stops the run.
+fn seed_directory_handed_to_the_build(script: &str) -> (PathBuf, PathBuf) {
+    let fixture = FixtureHome::new();
+    let home = fixture.home().to_path_buf();
+
+    std::fs::copy(repo_root().join("deps").join(script), home.join("deps").join(script))
+        .expect("the harness copies into the fixture");
+    std::fs::create_dir_all(home.join("deps/docker")).expect("the fixture docker dir");
+    for helper in [
+        "seed-prebuilt.sh",
+        "deps-image-entrypoint.sh",
+        "bootstrap-entrypoint.sh",
+        "bootstrap-bare-entrypoint.sh",
+    ] {
+        std::fs::write(home.join("deps/docker").join(helper), "#!/bin/sh\n").expect("a helper stub");
+    }
+    std::fs::write(home.join("setup.sh"), "#!/bin/sh\n").expect("a setup stub");
+    let recorder = home.join("deps/docker/build-seed-binary.sh");
+    std::fs::write(&recorder, "#!/bin/sh\nprintf '%s' \"$1\" > \"$HOME/seed-directory\"\nexit 1\n")
+        .expect("the recording stub");
+    std::fs::set_permissions(&recorder, std::fs::Permissions::from_mode(0o755)).expect("executable");
+    fixture.home_git(&["add", "-A"]);
+    fixture.home_git(&["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "stubs"]);
+
+    let fake_bin = home.join("fake-docker-bin");
+    std::fs::create_dir_all(&fake_bin).expect("the fake docker dir");
+    std::fs::write(fake_bin.join("docker"), "#!/bin/sh\nexit 0\n").expect("a fake docker");
+    std::fs::set_permissions(fake_bin.join("docker"), std::fs::Permissions::from_mode(0o755))
+        .expect("executable");
+    let path = format!(
+        "{}:{}",
+        fake_bin.display(),
+        std::env::var("PATH").expect("PATH is set")
+    );
+
+    let output = Command::new(home.join("deps").join(script))
+        .env("HOME", &home)
+        .env("PATH", path)
+        .env_remove("TMPDIR")
+        .env_remove("XDG_CACHE_HOME")
+        .output()
+        .expect("the harness runs");
+    let recorded = std::fs::read_to_string(home.join("seed-directory")).unwrap_or_else(|_| {
+        panic!(
+            "{script} never reached the seed build: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+    });
+    (home, PathBuf::from(recorded))
+}
+
+#[test]
+fn test_local_builds_its_seed_under_home() {
+    let (home, seed) = seed_directory_handed_to_the_build("test-local.sh");
+    assert!(
+        seed.starts_with(&home),
+        "the seed directory {} must sit under $HOME ({}) so Docker Desktop can mount it",
+        seed.display(),
+        home.display()
+    );
+}
+
+#[test]
+fn test_bootstrap_builds_its_seed_under_home() {
+    let (home, seed) = seed_directory_handed_to_the_build("test-bootstrap.sh");
+    assert!(
+        seed.starts_with(&home),
+        "the seed directory {} must sit under $HOME ({}) so Docker Desktop can mount it",
+        seed.display(),
+        home.display()
+    );
+}

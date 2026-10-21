@@ -1,6 +1,6 @@
 ---
 name: expert-review-pr
-description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants) and, when the change adds files, modules, or public names, a pass checking that they match the project's existing structure and naming, holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that. When asked, also dev-QAs the PR on its deployed build and folds a Dev QA section, with screenshots of every checked state, into the same top-level review body.
+description: Use when reviewing someone else's pull request and posting the result to GitHub as an outside reviewer. Runs the expert panel over the PR diff plus a second independent pass over the tests (untested paths, uncovered edge cases, surviving mutants) and, when the change adds files, modules, or public names, a pass checking that they match the project's existing structure and naming, holds both to the same bar of a named defect with a concrete trigger and a real consequence, summarizes locally, and on approval posts a COMMENT-only review with inline comments. Not for reviewing your own work -- use /expert-review for that.
 ---
 
 # Expert Review PR
@@ -9,11 +9,15 @@ Review another person's pull request and post the result to GitHub.
 
 Analysis comes from the `/expert-review` panel. Everything after analysis is different: a far harsher filter, a posted artifact, and a voice that is openly Claude's rather than the user's.
 
-**Read `~/.claude/rules/outside-pr-review.md` first.** It holds the posture this skill shares with `/dev-qa`: the two overriding rules (post only on an answered approval, `COMMENT` only), scope resolution, the posting identity, voice, the internals rule, the local summary, uploads, and the GitHub posting mechanics. This file adds what is specific to a code review: the analysis, the filter, the body shape, and the inline comment shapes.
+**Read `~/.claude/rules/outside-pr-review.md` first.** It holds the posture that every outside-review skill shares: the two overriding rules (post only on an answered approval, `COMMENT` only), scope resolution, the posting identity, voice, the internals rule, the local summary, uploads, and the GitHub posting mechanics. This file adds what is specific to a code review: the analysis, the filter, the body shape, and the inline comment shapes.
 
 For the self-authorship line, name `/expert-review`:
 
 > This pull request is authored by you. `/expert-review` is the skill built for your own work. Continuing.
+
+## Orchestrated mode
+
+When the invocation includes `--contribution <path>`, follow the orchestrated mode in `~/.claude/rules/outside-pr-review.md`. Run the analysis and the filter as usual. Then write one `code-review` contribution as JSON to that path. Skip the local summary, the approval question, and the post. Each inline comment names the id of its finding, so this skill assigns a finding id to every finding. The posture file holds the field contract.
 
 ## Analysis
 
@@ -51,7 +55,7 @@ When unsure between Haiku and Sonnet, pick Sonnet for a lens in the first list a
 - The lens finds defects by reasoning about behavior (the first bullet of the Sonnet list), and its region touches money, auth, persistence, sync, or concurrency.
 - The region is large or spread out, by the size threshold in the Sonnet list.
 
-Risk alone stays on Sonnet. Size alone stays on Sonnet. Agents that a skill or the repository dispatches with their own model setting, such as the dev QA confirmer, keep that setting.
+Risk alone stays on Sonnet. Size alone stays on Sonnet. Agents that a skill or the repository dispatches with their own model setting, such as a verification agent the repository defines, keep that setting.
 
 **Rerun once on Sonnet** when a Haiku call returns output without file and line references, contradicts the code on a fresh read, or obviously did not read the region (for example, it describes functions the diff does not contain). Do not rerun to get more findings from a call that returned a clean result with evidence.
 
@@ -220,36 +224,11 @@ The test findings are summarized here with the rest, in one list, ordered with t
 
 Then ask whether to post, and wait for the answer.
 
-## Dev QA against the deployed build
-
-Run this only when the invocation asks for dev QA. Run `/dev-qa` in embedded mode in its own background subagent, dispatched in the same message as the Stage 5 panel, so the listed steps run while the panel agents work and the screenshots and driver output stay out of the main context. Use a `general-purpose` agent on Sonnet. Its prompt:
-
-- Invoke the `dev-qa` skill with the Skill tool, in embedded mode, for this pull request number, head, and base.
-- Never post, never upload, and never ask the user anything. When a step needs a hand-off to the user, stop driving and return the hand-off as the whole report.
-- Do not hand back until every confirmer it dispatched has returned its verdict. A subagent receives its own agent's result before it finishes, so a report with unconfirmed verdicts means it stopped early.
-- Return the embedded hand-back and nothing else. Do not claim a run, a verdict, or a file it did not produce.
-
-The subagent counts toward the per-dispatch agent limit.
-
-After synthesis, send the candidate findings that a browser can reproduce to the same subagent with SendMessage, for its live check. Reusing it keeps the test environment it set up. Wait for its second hand-back before the local summary.
-
-Check the hand-back before you use it. For each section, read the last `verdict_final` event in the unit's `audit.jsonl`, and confirm it matches the reported verdict. `ls` every video and screenshot the section cites. Open each screenshot the section will post.
-
-Run `/dev-qa` in the main session instead in either of two cases. The first is a hand-off the run needs at the start: a known expired sign-in, or a step the project file says needs the user. The second is a session where the subagent cannot use the Skill or Agent tools. Then invoke the skill right after the Stage 5 dispatch, as before, and name the reason in the local summary. `/dev-qa` owns the target proof, the session proof, the steps, the evidence, the confirm stage, the writes, and the section shape. Do not restate or override its rules here.
-
-Fold its hand-back into this review:
-
-- The Dev QA section is the last part of the review body (see Body shape). The review and the Dev QA result are one top-level comment, not two.
-- A candidate `/dev-qa` reproduced live is stronger evidence for that finding. It still goes through the filter. When it posts, the comment states the reproduction, and the section's Other observations block points to the comment in one line. A candidate it did not reproduce goes back through the verify step before it is posted.
-- A step failure that also cleared the filter is a review finding. The section points to its comment in one line.
-- An untested-step item from the hand-back is a coverage gap. It meets the "relevant to the pull request" and "a user depends on it" conditions by definition, because it comes from the author's own Test Steps. It still needs the feasible test named and checked against the code, and a changed line to anchor to. Post it as a short coverage-gap comment on that line. When coverage gaps would bury the other findings, keep these ahead of gaps found only by mutation, because a user walks this path. The section's step line points to the comment in one line.
-- The local summary shows the review and the section together, with one question. Upload the section's screenshots only after approval.
-
 ## Voice
 
 Follow the voice rules in `~/.claude/rules/outside-pr-review.md`. One rule is specific to findings:
 
-- Hedge each posted finding lightly, so it reads as a likely bug, not a verdict. Open with "Possible bug here:", write the claim with "may" ("a close that lands during the upgrade may be dropped for good"), and say in one plain clause what the claim rests on ("based on reading through the code and tweaking the tests a bit", or for a finding reproduced on the deployed build, "reproduced on the preview: <what happened>"). The headline line of the body takes the same hedge. A coverage finding is not a bug in today's code, so it does not open with "Possible bug here:". It opens on the guarantee, with the same light hedge: "Nothing currently pins that typed cards survive a click outside the modal." A short coverage-gap comment opens with "Possible coverage gap:" instead. The hedge sets the tone only. Keep the trigger, the consequence, and any reproduction exact. The filter still decides what gets posted, and the hedge never lets through a finding that failed the filter.
+- Hedge each posted finding lightly, so it reads as a likely bug, not a verdict. Open with "Possible bug here:", write the claim with "may" ("a close that lands during the upgrade may be dropped for good"), and say in one plain clause what the claim rests on ("based on reading through the code and tweaking the tests a bit"). The headline line of the body takes the same hedge. A coverage finding is not a bug in today's code, so it does not open with "Possible bug here:". It opens on the guarantee, with the same light hedge: "Nothing currently pins that typed cards survive a click outside the modal." A short coverage-gap comment opens with "Possible coverage gap:" instead. The hedge sets the tone only. Keep the trigger, the consequence, and any reproduction exact. The filter still decides what gets posted, and the hedge never lets through a finding that failed the filter.
 ## Internals stay out
 
 Follow the internals rule in `~/.claude/rules/outside-pr-review.md`. The review contains findings about the code and nothing about itself. These parts are specific to a code review.
@@ -269,7 +248,6 @@ The review body starts with the zone headers from `~/.claude/rules/outside-pr-re
 1. **A headline verdict line.** One short sentence naming what the review found. Declarative, and phrased as an observation rather than a decision about the pull request's fate: "Two correctness problems, both in the token rotation path." Never "Requesting changes", "Approving", "LGTM", "Two things to fix before merge", or any other phrase that reads as a merge decision. The review is a comment; the body must not imply otherwise.
 2. **One paragraph in plain language.** What breaks and what it costs, for a reader who has not read the diff. Walk the mechanism in order: when X happens, Y does Z, so W results. Keep it to one paragraph.
 3. **A `<details>` block per unanchored finding.** Only findings that cleared the filter and have no changed line to attach to. Each block: `<summary>` with a short title, then the finding in the same what-breaks, what-triggers-it, what-it-costs order, then the fix in one sentence.
-4. **The Dev QA section**, only when the invocation asked for dev QA. `/dev-qa` defines its shape. Never post it as a separate comment beside the review, except in the pending-review case the posture file's delivery table covers.
 
 Nothing else goes in the body on a run that has findings. No coverage inventory, no list of what was examined, no summary of what looked fine, no closing offer, no restatement of the inline comments.
 
@@ -308,7 +286,7 @@ When several gaps anchor to the same line, merge them into one short comment wit
 
 ## Posting
 
-Post through the mechanics in `~/.claude/rules/outside-pr-review.md`: the pending-review check, the single create call, the GraphQL append path, the attribution line on every inline comment, and where the summary paragraph and the Dev QA section go when it is. The summary paragraph that moves into an inline comment anchors to the changed line the findings are most about (the shared type, the shared call site, the shared branch).
+Post through the mechanics in `~/.claude/rules/outside-pr-review.md`: the pending-review check, the single create call, the GraphQL append path, the attribution line on every inline comment, and where the summary paragraph goes when a pending review exists. The summary paragraph that moves into an inline comment anchors to the changed line the findings are most about (the shared type, the shared call site, the shared branch).
 
 ## Clean runs
 
@@ -317,7 +295,6 @@ When no finding clears the filter, say so in chat, and offer to post a short rev
 1. A headline verdict line stating that the review found no blocking problems.
 2. One short paragraph.
 3. A list of the concern areas examined, in plain language. Name the test examination among them, in plain words ("what the tests would catch if this broke"), when the test pass produced nothing that cleared the filter. Name the structure and naming examination the same way ("fit with the project's existing layout and naming") when it ran and produced nothing that cleared the filter. Do not name it when it did not run.
-4. The Dev QA section, when dev QA ran.
 
 The structure and naming pass is an internal, like the test pass. A posted alignment finding is a finding about the code, interleaved with the others by severity. Nothing in the posted review says that a structure or naming pass ran.
 
@@ -333,7 +310,6 @@ Any of these means stop and re-apply the filter or the voice rules:
 - An inline comment about whitespace, formatting, or import order.
 - A change-level comment that asks "why was this needed?" or "could this be organized better?" without citing the existing code, the stated claim, or the leftover structure it rests on.
 - A finding cleared because the PR description or a code comment says the behavior is intended.
-- A Dev QA result posted as its own comment while the review body was available to carry it.
 - An inline comment about naming or file placement that does not state the project's convention with its count, or does not name a concrete cost.
 - An alignment comment that argues for an ecosystem guide over the project's own convention.
 - A finding you cut from inline that reappears in the body as a question or a note.
@@ -368,7 +344,6 @@ Any of these means stop and re-apply the filter or the voice rules:
 ## Decision references
 
 - Shared outside-reviewer posture and posting: `~/.claude/rules/outside-pr-review.md`
-- Dev QA process and section shape: `~/.claude/skills/dev-qa/SKILL.md`, project bindings in `~/.claude/local/dev-qa.md`
 - Panel process and dispatch: `~/.claude/skills/expert-review/SKILL.md`
 - Structure and naming lenses: `~/.claude/rules/project-structure.md`, `~/.claude/rules/naming-conventions.md`
 - Panel output contract: `~/.claude/rules/panel-contract.md`

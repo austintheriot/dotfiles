@@ -29,9 +29,9 @@ Trace mode answers one question for each finding it receives: which code causes 
 
 1. Scope. Resolve the pull request and its head, and write the full head SHA to `head`.
 2. Fetch the change set with the `pr-diff` agent.
-3. For each finding in input order, derive the behavior. Use the finding's `behavior`. When it has none, use its `title` and `body`.
+3. For each finding in input order, derive the behavior. Use the finding's `behavior`. When it has none, use its `title` and `body`. Never invent a behavior the finding does not state.
 4. Find the code in the diff, or the code that the diff calls, that causes the behavior. Read the code. Do not guess from the behavior alone.
-5. Hold each candidate cause to the filter in this skill: a named defect, a concrete trigger, and a real consequence. Apply the verify step to every `root-cause` candidate.
+5. Hold each candidate cause to the filter in this skill: a named defect, a concrete trigger, and a real consequence. Apply the verify step to every `root-cause` candidate. A candidate that fails the filter is `inconclusive`. `root-cause` means the cause is in code and clears the bar: a named defect, a concrete trigger, and a real consequence.
 6. Dispatch only the panel agents whose lens fits the behavior. Do not run the full panel. When the behavior is about structure, naming, or tests, run the matching pass. Otherwise skip both passes.
 7. Write the verdicts.
 
@@ -39,19 +39,27 @@ Trace mode answers one question for each finding it receives: which code causes 
 
 | Result | Means | Fields |
 |---|---|---|
-| `root-cause` | A line in the diff, or code that the diff calls, causes the behavior, and the cause clears the filter. | `body` in the inline comment shape of this skill. `anchor` on a changed line. |
+| `root-cause` | A line in the diff, or code that the diff calls, causes the behavior, and the cause clears the filter. | `body` in the inline comment shape of this skill. `anchor` on a changed line when one reaches the cause. |
 | `no-code-cause` | The behavior comes from configuration, data, the environment, or is expected. | `body` names the source. No `anchor`. |
 | `inconclusive` | The run did not find a cause and cannot rule one out. | `body` says what the run read and what stayed open. No `anchor`. |
 
-**Anchor.** A `root-cause` anchor sits on a changed line, with `side` `RIGHT`. Verify it against the patch. When the cause sits in unchanged code, anchor on the nearest changed line that calls it, and name the real location in `body`. When no changed line reaches the cause, write `root-cause` with no `anchor` and name the location in `body`. If the cause is outside the code, write `no-code-cause`. In every other case, write `root-cause`.
+**Anchor.** A `root-cause` anchor sits on a changed line, with `side` `RIGHT`. Verify it against the patch. When the cause sits in unchanged code, anchor on the nearest changed line that calls it, and name the real location in `body`. When no changed line reaches the cause, write `root-cause` with no `anchor` and name the location in `body`. If the cause is outside the code, write `no-code-cause`. If the run found no cause, or a candidate fails the filter, write `inconclusive`.
 
 **Duplicates.** When `--known` is present, compare each finding with the known findings. When a known finding covers the same defect, set `duplicateOf` to its `id`. Use it with `root-cause` or `no-code-cause`. The `body` still explains the cause, so the orchestrator can merge.
 
 **Coverage.** Write exactly one verdict for each input finding, in input order, with the finding's `id` in `id`. When the run does not get to a finding, write `inconclusive` and say so in `body`.
 
-**Unreadable input.** When the `--trace` file cannot be read, is invalid JSON, or lacks a `findings` array, that is a blocker. Write `verdicts` as an empty array and add one `handback` line that names the file and the parse error. Empty `verdicts` are legal only in this case. When the `--known` file cannot be read or parsed, trace anyway, set no `duplicateOf`, and add one `handback` line that names the file and the parse error.
+**Blockers.** A blocker can stop every finding. Examples: the pull request or head cannot be resolved, or the diff fetch fails. Then write `inconclusive` for every finding, with the blocker in `body`. Add one `handback` line for the blocker.
 
-**Contribution.** Write one file at `--contribution <path>` as `kind: "code-trace"`, with `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback` only. It has no `body`, `comments`, or `findings`. A verdict has `id`, `result`, `body`, and optional `anchor` and `duplicateOf`. Put every local path that a verdict cites in `uploads`, in citation order. Write the file in one call, as the last action of the run. Never post, upload, or ask to post.
+**Unreadable input.** When the `--trace` file cannot be read, is invalid JSON, or lacks a `findings` array, that is a blocker. Write `verdicts` as an empty array and add one `handback` line that names the file and the parse error. An empty `findings` array is not a blocker. It gives empty `verdicts`, and that is legal. When the `--known` file cannot be read or parsed, trace anyway, set no `duplicateOf`, and add one `handback` line that names the file and the parse error.
+
+**Contribution.** Write one file at `--contribution <path>` as `kind: "code-trace"`, with `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, and `handback` only. It has no `body`, `comments`, or `findings`. A verdict has `id`, `result`, `body`, and optional `anchor` and `duplicateOf`. Put every local path that a verdict cites in `uploads`, in citation order. Put these items in `handback`:
+
+- Each blocker.
+- A `--known` parse failure.
+- Each finding left `inconclusive` because the run hit a time or read limit.
+
+Write the file in one call, as the last action of the run. Never post, upload, or ask to post.
 
 ## Analysis
 

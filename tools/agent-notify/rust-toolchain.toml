@@ -1,0 +1,6 @@
+# The same pin as crates/rust-toolchain.toml. Without it a CI runner builds
+# with its own newer default, and clippy -D warnings fails on lints that the
+# local 1.94.0 does not have.
+[toolchain]
+channel = "1.94.0"
+components = ["rustfmt", "clippy"]

@@ -54,6 +54,13 @@ empty_tree='4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 # missing for the same reason, and the zshrc_*.rs tests read the latter.
 TRIGGER_PATHS='^\.scripts/|^deps/|^\.claude/scripts/.*\.py$|^\.claude/hooks/.*\.sh$|^tests/|^\.github/workflows/|^crates/|^\.config/nvim/|^\.config/tmux/|^setup\.sh$|^\.zshrc'
 
+# Paths the agent-notify build reads: its own workspace, its path
+# dependencies, and the crates workspace manifest they inherit from, which is
+# STAMP_PATHS in tools/agent-notify/scripts/install-plan.ts plus the test-only
+# dependency. tools_gate.rs asserts the list against both, and against the
+# paths filter in .github/workflows/agent-notify.yml.
+TOOLS_TRIGGER_PATHS='^tools/agent-notify/|^crates/agent-notify-core/|^crates/dotfiles-test-support/|^crates/Cargo\.(toml|lock)$|^tests/tools-checks\.sh$|^\.github/workflows/agent-notify\.yml$'
+
 pushing_branch=0
 changed_paths=''
 push_ref=''
@@ -264,6 +271,29 @@ for ref in $push_refs; do
 done
 
 printf 'pre-push: Rust checks passed\n'
+
+# --- agent-notify checks ---------------------------------------------------
+#
+# tools/agent-notify is a separate Cargo workspace with a Bun UI, so the Rust
+# checks above never build it. Gated on its own paths because a cold Tauri
+# build takes minutes. Before the suite block, whose early exit would
+# otherwise skip this for a push that touches only tools/.
+
+if printf '%s\n' "$changed_paths" | grep -qE "$TOOLS_TRIGGER_PATHS"; then
+    if [ ! -x "$HOME/tests/tools-checks.sh" ]; then
+        printf 'pre-push: ~/tests/tools-checks.sh is missing or not executable\n' >&2
+        exit 1
+    fi
+    for ref in $push_refs; do
+        if ! "$HOME/tests/tools-checks.sh" "$ref"; then
+            printf '\npre-push: agent-notify checks failed for %s, push blocked.\n' "$ref" >&2
+            exit 1
+        fi
+    done
+    printf 'pre-push: agent-notify checks passed\n'
+else
+    printf 'pre-push: no pushed path touches agent-notify, skipping its checks\n'
+fi
 
 # --- dotfiles test suite -------------------------------------------------
 #

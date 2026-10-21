@@ -46,13 +46,17 @@ Takes the per-PR lock, merges the store, and creates the pending review. The ste
    - When the file changed after `add`, or no longer exists, use the ledger upload of the recorded content. When the ledger has none, exit with code 66. For a changed file, the message says `<path> changed after add, run add again`.
    - When two contributions for the head recorded different content for one path, exit with code 66.
    - When `add` recorded no hash for the path, use the content that the path holds now.
-3. Find the pending reviews of the signed-in user on the pull request, with the inline comments of each review. When a pending review is not one that `draft-review` can replace, change nothing. Write the merged review to `synthesized.md`, print the path, and exit with code 3.
-4. Upload each file from step 2. The command writes the ledger after each upload, so a failed run keeps the URLs it already has.
+3. Find the pending reviews of the signed-in user on the pull request, with the inline comments of each review. Read the review that `draft.json` names by its id, and get its state. Then decide:
+   - When the user submitted that review, and `draft.json` names the same head, change nothing. Write the merged review to `synthesized.md`, print the path, and exit with code 3. See [A submitted first draft](#a-submitted-first-draft).
+   - When GitHub returns `404` for that review, the user deleted the draft. The command then ignores `draft.json` for this decision.
+   - When a pending review is not one that `draft-review` can replace, change nothing. Write the merged review to `synthesized.md`, print the path, and exit with code 3.
+4. Upload each file from step 2. For each file, the command reads the file one time, hashes those bytes, and uploads the same bytes. When the hash is not the hash from step 2, the file changed while `create` ran. The command then uploads nothing more, says `<path> changed while create ran. Run create again.`, and exits with code 66. The command writes the ledger after each upload, so a failed run keeps the URLs it already has.
 5. Put the URLs in place of the local paths. Write the merged review to `synthesized.md` and the exact request to `payload.request`.
 6. Find the pending reviews again, and decide again.
 7. When no pending review exists, create one.
 8. When the only pending review is the review that `draft-review` created last, delete that review and create the new one. The body and every inline comment must be unchanged. An added, an edited, or a deleted inline comment makes the review one that `draft-review` cannot replace.
 9. When any other pending review exists, change nothing, and exit with code 3.
+10. When the user submitted the review that `draft.json` names after step 3, change nothing, and exit with code 3.
 
 On success, the command prints the URL of the pending review. Then it reads the inline comments of the new review back from GitHub and compares them with the request. The comparison changes CRLF to LF and removes trailing whitespace from each body on both sides. When the count or the set of comment bodies differs, a comment can be the user's work. The command then writes no `draft.json`, says why, and exits with code 3. When the read fails, the command writes no `draft.json`, says why, and exits with code 69. Without `draft.json`, the next `create` refuses to replace that review.
 
@@ -72,20 +76,50 @@ GitHub allows one pending review per user on a pull request. `create` replaces o
 
 When another pending review exists, `create` exits with code 3 and writes the merged review to `synthesized.md`. The user submits or discards the other review, then runs `create` again.
 
+## A submitted first draft
+
+The user can submit the pending review that `draft-review` created. The submitted review is public, so `create` must never post its content again.
+
+When `draft.json` names a submitted review for the same head, `create` changes nothing on GitHub. It writes the merged review to `synthesized.md`, prints the path on stdout, and exits with code 3. The message on stderr is:
+
+```text
+The first draft for head <head> (review <id>) was submitted, and its state is <state>. draft-review never posts submitted content again. The merged review is in <path>.
+```
+
+Every later `create` for that head gives the same result. To add new findings to the pull request, the user copies them from `synthesized.md` by hand.
+
+`create` reads the state from `GET repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}`. Every state other than `PENDING` counts as submitted. The GitHub documentation names `COMMENTED`, `APPROVED`, `CHANGES_REQUESTED`, and `DISMISSED`. A state that GitHub adds later also counts as submitted.
+
+A submitted review for an earlier head does not stop `create`. A new head starts a new round of review, so `create` makes a new draft for the new head.
+
+When GitHub returns `404` for the review, the user deleted the draft and discarded its content. `create` then makes a new draft.
+
 ## Exit codes
 
 | Code | Name | Meaning |
 |---|---|---|
 | 0 | `ok` | The command finished. |
-| 3 | `refused` | Another pending review by the user exists, the user edited the review that `draft-review` created, or the comments of a new review do not match the request. When no review URL was printed, the merged review is in `synthesized.md`. When a review URL was printed, a new pending review exists with no `draft.json`, and the user must check it on GitHub and delete it before the next `create`. |
+| 3 | `refused` | Another pending review by the user exists, the user edited the review that `draft-review` created, the user submitted the first draft for the head, or the comments of a new review do not match the request. When no review URL was printed, the merged review is in `synthesized.md`. When a review URL was printed, a new pending review exists with no `draft.json`, and the user must check it on GitHub and delete it before the next `create`. |
 | 64 | `usage` | The command line is wrong. |
-| 65 | `dataErr` | A contribution is invalid, or the stored contributions break a merge rule. |
-| 66 | `noInput` | An input file is missing, a cited file is missing or changed after `add` with no upload of its recorded content, two contributions recorded different content for one file, or the store holds nothing for the head. |
+| 65 | `dataErr` | A contribution is invalid, the stored contributions break a merge rule, or `draft.json` is invalid. See [An invalid draft.json](#an-invalid-draftjson). |
+| 66 | `noInput` | An input file is missing, a cited file is missing or changed after `add` with no upload of its recorded content, a cited file changed while `create` ran, two contributions recorded different content for one file, or the store holds nothing for the head. |
 | 69 | `unavailable` | `gh` is missing or not signed in, or a GitHub call or an upload failed. This code includes a create that failed after the delete, and a failed read of the new review's comments. When a review URL was printed, a pending review exists with no `draft.json`. The user must check it on GitHub and delete it before the next `create`. |
 | 73 | `cantCreate` | Another run holds the per-PR lock for longer than 30 seconds. |
 | 74 | `ioErr` | A store file cannot be read or written. |
 | 75 | `tempFail` | `create` made the pending review, but a contribution for the head changed while it ran. Run `create` again. |
 | 78 | `config` | The config file is missing or invalid, it has no entry for the repository, or an upload needs an `uploadEndpoint` that the entry does not set. |
+
+## An invalid draft.json
+
+When `draft.json` is not JSON, or does not match the schema, `create` exits with code 65. The message names the file and the problem. When the file holds a `reviewId`, the message names that review:
+
+```text
+<path> is invalid: <problem>. Fix it or delete it. It names pending review <id>. After a delete of draft.json, the next create refuses to replace review <id> until you delete that review on GitHub.
+```
+
+Without `draft.json`, `create` cannot tell its own draft from a review that the user wrote. So it refuses every pending review, and the user must delete the old draft on GitHub.
+
+A `draft.json` from an older round has no `contributionsDigest`. `create` loads it.
 
 ## Store layout
 
@@ -93,7 +127,7 @@ When another pending review exists, `create` exits with code 3 and writes the me
 <store root>/<owner>/<repo>/<pr>/
   .lock                     the per-PR lock file (flock)
   uploads.json              the upload ledger: {"entries": [{path, sha256, url}]}
-  draft.json                the last review that draft-review created: {reviewId, bodyHash, comments: [{id, bodyHash}], contributionsDigest, head, url}
+  draft.json                the last review that draft-review created: {reviewId, bodyHash, comments: [{id, bodyHash}], contributionsDigest (optional), head, url}
   <head>/
     code-review.json
     code-review.json.files  the hashes that add recorded: {"files": [{path, sha256}]}
@@ -106,7 +140,7 @@ When another pending review exists, `create` exits with code 3 and writes the me
     payload.request         the exact request that create sends to GitHub, as JSON
 ```
 
-Each contribution file has a `.files` file beside it. The tree shows only one of them.
+Each contribution file has a `.files` file beside it. The tree shows only one of them. The commands read a `.files` file only beside a contribution file that exists and has a contribution file name. An `add` that stops between its two writes leaves a `.files` file with no contribution, and the commands ignore it.
 
 A contribution file name starts with the kind. When the contribution has a platform, the name adds `@` and the platform. The name encodes the platform with `encodeURIComponent`. A platform label never contains `@`, so two kinds cannot share a file name. The commands read only files whose names match `^(code-review|dev-qa|dev-qa-verify|code-trace)(@[^/]+)?\.json$` as contributions. They ignore every other file in the head folder.
 
@@ -149,9 +183,9 @@ The contribution contract is the `## Orchestrated mode` section of `.claude/rule
 - The pure core: `contribution.ts`, `contribution-set.ts`, `synthesize.ts`, `uploads.ts`, `payload.ts`, `parsed.ts`, `lists.ts`, `args.ts`, `draft.ts`, `ledger.ts`, `render.ts`, and `exit.ts`. These files do no IO.
 - The shell: `main.ts` (the commands), `store.ts` (the store files and the upload loop), `github.ts` (every `gh` call), `lock.ts` (the lock), and `config.ts` (the config file).
 
-The test `src/core-imports.test.ts` holds that boundary. A core file can import only core files, `zod`, `node:crypto`, and `node:util`. It cannot name `Bun` or `process`, and it cannot call `require`.
+The test `src/core-imports.test.ts` holds that boundary. A core file can import only core files, `zod`, `node:crypto`, and `node:util`. It cannot name `Bun` or `process`, it cannot call `require`, and it cannot read the clock with `Date.now` or `new Date(`. The test removes comments and string literals before it looks for these names, so a comment or a message can use the words.
 
-The one seam is `IUploader` in `store.ts`. The upload loop asks the uploader for each missing URL, so a test can pass a fake uploader.
+The one seam is `IUploader` in `store.ts`. The upload loop gives the uploader the path and the bytes of each file to upload, and the uploader returns the URL. A test can pass a fake uploader.
 
 ## Development
 

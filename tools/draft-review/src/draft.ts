@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto'
 import {z} from 'zod'
 import {Sha256Schema as Sha256} from './ledger'
+import type {Parsed} from './parsed'
 
 export type PendingComment = {id: number; body: string}
 export type PendingReview = {id: number; body: string; comments: PendingComment[]}
@@ -12,12 +13,37 @@ export const DraftRecordSchema = z
     reviewId: z.number().int().positive(),
     bodyHash: Sha256,
     comments: z.array(WrittenCommentSchema).default([]),
-    contributionsDigest: Sha256,
+    contributionsDigest: Sha256.optional(),
     head: z.string().min(1),
     url: z.string().min(1)
   })
   .strict()
 export type DraftRecord = z.infer<typeof DraftRecordSchema>
+
+const NamedReviewSchema = z.object({reviewId: z.number().int().positive()})
+
+function jsonOf(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return undefined
+  }
+}
+
+function consequenceOfDelete(raw: unknown): string {
+  const named = NamedReviewSchema.safeParse(raw)
+  if (!named.success) return 'After a delete of draft.json, the next create refuses to replace the pending review that draft-review created until you delete that review on GitHub.'
+  const id = named.data.reviewId
+  return `It names pending review ${id}. After a delete of draft.json, the next create refuses to replace review ${id} until you delete that review on GitHub.`
+}
+
+export function parseDraftRecord(text: string): Parsed<DraftRecord> {
+  const raw = jsonOf(text)
+  const parsed = DraftRecordSchema.safeParse(raw)
+  if (parsed.success) return {ok: true, value: parsed.data}
+  const detail = raw === undefined ? 'it is not JSON' : parsed.error.issues.map(issue => `${issue.path.join('.') || '(top level)'}: ${issue.message}`).join(', ')
+  return {ok: false, reason: `${detail}. Fix it or delete it. ${consequenceOfDelete(raw)}`}
+}
 
 export type ReadBack = {kind: 'read'; comments: PendingComment[]} | {kind: 'failed'; reason: string}
 export type RecordDecision = {kind: 'record'; record: DraftRecord} | {kind: 'skip'; cause: 'read-failed' | 'mismatch'; reason: string}
@@ -57,7 +83,13 @@ export function contributionsDigest(files: readonly {name: string; sha256: strin
   return bodyHash(lines.join('\n'))
 }
 
-export type DraftAction = {kind: 'create'} | {kind: 'replace'; reviewId: number} | {kind: 'refuse'; reviewId: number}
+export type DraftAction =
+  | {kind: 'create'}
+  | {kind: 'replace'; reviewId: number}
+  | {kind: 'refuse'; reviewId: number}
+  | {kind: 'submitted'; reviewId: number; state: string}
+
+export type RecordedReview = {kind: 'none'} | {kind: 'found'; record: DraftRecord; state: string} | {kind: 'gone'; record: DraftRecord}
 
 export const bodyHash = (body: string): string => createHash('sha256').update(body, 'utf8').digest('hex')
 
@@ -73,7 +105,13 @@ const isOurs = (review: PendingReview, lastWritten: DraftRecord | undefined) =>
   bodyHash(review.body) === lastWritten.bodyHash &&
   commentsUnchanged(review, lastWritten)
 
-export function draftAction(existing: readonly PendingReview[], lastWritten: DraftRecord | undefined): DraftAction {
+// Any state other than PENDING counts as submitted, so a state that GitHub adds later cannot lead to a second post of the same content.
+// A submitted review for an earlier head does not block a draft for a new head: the new head is a new round of review.
+export function draftAction(existing: readonly PendingReview[], recorded: RecordedReview, head: string): DraftAction {
+  if (recorded.kind === 'found' && recorded.state !== 'PENDING' && recorded.record.head === head) {
+    return {kind: 'submitted', reviewId: recorded.record.reviewId, state: recorded.state}
+  }
+  const lastWritten = recorded.kind === 'found' ? recorded.record : undefined
   const [first] = existing
   if (first === undefined) return {kind: 'create'}
   const foreign = existing.find(review => !isOurs(review, lastWritten))

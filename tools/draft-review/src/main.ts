@@ -10,7 +10,7 @@ import {draftAction, draftRecordAfterCreate} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ExitCode} from './exit'
 import type {CreatedReview} from './github'
-import {createPendingReview, currentRepo, deleteReview, ensureGh, ghUploader, pendingReviews, reviewComments, reviewRequest, viewerLogin} from './github'
+import {createPendingReview, currentRepo, deleteReview, ensureGh, ghUploader, pendingReviews, recordedReview, reviewComments, reviewRequest, viewerLogin} from './github'
 import {withLock} from './lock'
 import type {ReviewPayload} from './payload'
 import {renderReview} from './render'
@@ -84,8 +84,19 @@ function uploaderFor(settings: RepositoryConfig, configPath: string, firstPath: 
 type Target = {repo: Repo; store: PrStore; command: CreateCommand; login: string; contributionsDigest: string}
 type Written = {synthesizedPath: string; requestPath: string; requestedBodies: string[]}
 
-const decide = (target: Target): DraftAction =>
-  draftAction(pendingReviews(target.repo, target.command.pr, target.login), readDraftRecord(target.store))
+const decide = (target: Target): DraftAction => {
+  const {repo, command} = target
+  return draftAction(pendingReviews(repo, command.pr, target.login), recordedReview(repo, command.pr, readDraftRecord(target.store)), command.head)
+}
+
+function refuseSubmitted(target: Target, synthesizedPath: string, action: {reviewId: number; state: string}): ExitCode {
+  const {head} = target.command
+  console.error(
+    `The first draft for head ${head} (review ${action.reviewId}) was submitted, and its state is ${action.state}. draft-review never posts submitted content again. The merged review is in ${synthesizedPath}.`
+  )
+  console.log(synthesizedPath)
+  return EXIT.refused
+}
 
 function refuse(target: Target, synthesizedPath: string, reviewId: number | undefined): ExitCode {
   const which = reviewId === undefined ? 'Another pending review' : `Pending review ${reviewId}`
@@ -157,6 +168,8 @@ function applyDraftAction(action: DraftAction, target: Target, written: Written)
   switch (action.kind) {
     case 'refuse':
       return refuse(target, written.synthesizedPath, action.reviewId)
+    case 'submitted':
+      return refuseSubmitted(target, written.synthesizedPath, action)
     case 'replace':
       deleteReview(target.repo, target.command.pr, action.reviewId)
       return post(target, written, action.reviewId)
@@ -183,6 +196,7 @@ async function create(command: CreateCommand): Promise<ExitCode> {
     const target: Target = {repo, store, command, login: viewerLogin(), contributionsDigest: digest}
     const early = decide(target)
     if (early.kind === 'refuse') return refuse(target, writeSynthesized(store, command.head, renderReview(payload)), early.reviewId)
+    if (early.kind === 'submitted') return refuseSubmitted(target, writeSynthesized(store, command.head, renderReview(payload)), early)
     const urls = await runUploads(store, uploads)
     const written = writeReview(target, substituteUploads(payload, urls))
     return applyDraftAction(decide(target), target, written)

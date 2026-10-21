@@ -2,14 +2,14 @@ import {basename, extname} from 'node:path'
 import {z} from 'zod'
 import type {Repo} from './args'
 import {parseRepo} from './args'
-import type {PendingComment, PendingReview} from './draft'
+import type {DraftRecord, PendingComment, PendingReview, RecordedReview} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {ReviewPayload} from './payload'
 import type {IUploader} from './store'
 
 type GhRun = {code: number; stdout: string; stderr: string}
 
-function gh(args: readonly string[], input?: string): GhRun {
+function gh(args: readonly string[], input?: string | Uint8Array): GhRun {
   try {
     const run = Bun.spawnSync(['gh', ...args], {stdin: input === undefined ? 'ignore' : Buffer.from(input), stdout: 'pipe', stderr: 'pipe'})
     return {code: run.exitCode, stdout: run.stdout.toString(), stderr: run.stderr.toString()}
@@ -71,6 +71,16 @@ export function pendingReviews(repo: Repo, pr: number, login: string): PendingRe
     .map(review => ({id: review.id, body: review.body ?? '', comments: reviewComments(repo, pr, review.id)}))
 }
 
+// A 404 means the review is gone: the user deleted the pending draft, which discards it. Any other failure stops the run.
+export function recordedReview(repo: Repo, pr: number, record: DraftRecord | undefined): RecordedReview {
+  if (record === undefined) return {kind: 'none'}
+  const run = gh(['api', '--include', `${reviewsPath(repo, pr)}/${record.reviewId}`])
+  const reply = parseHttpReply(run.stdout)
+  if (reply.status === 404 || (reply.status === undefined && /HTTP 404/.test(run.stderr))) return {kind: 'gone', record}
+  const review = parseReply({...run, stdout: reply.body}, z.object({state: z.string()}), `read review ${record.reviewId}, which draft.json names`)
+  return {kind: 'found', record, state: review.state}
+}
+
 export function deleteReview(repo: Repo, pr: number, reviewId: number): void {
   const run = gh(['api', '--method', 'DELETE', `${reviewsPath(repo, pr)}/${reviewId}`])
   if (run.code !== 0) throw new DraftReviewError(`gh could not delete pending review ${reviewId}: ${run.stderr.trim()}`, EXIT.unavailable)
@@ -127,13 +137,13 @@ const contentType = (path: string) => CONTENT_TYPES[extname(path).toLowerCase()]
 
 export function ghUploader(endpoint: string, repositoryId: number | undefined): IUploader {
   return {
-    upload: async path => {
+    upload: async ({path, bytes}) => {
       const url = new URL(endpoint)
       url.searchParams.set('name', basename(path))
       url.searchParams.set('content_type', contentType(path))
       if (repositoryId !== undefined) url.searchParams.set('repository_id', String(repositoryId))
-      const args = ['api', '--method', 'POST', url.toString(), '--input', path, '-H', `Content-Type: ${contentType(path)}`]
-      return ghJson(args, z.object({url: z.string().url()}), `upload ${path}`).url
+      const args = ['api', '--method', 'POST', url.toString(), '--input', '-', '-H', `Content-Type: ${contentType(path)}`]
+      return parseReply(gh(args, bytes), z.object({url: z.string().url()}), `upload ${path}`).url
     }
   }
 }

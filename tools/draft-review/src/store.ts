@@ -7,13 +7,15 @@ import type {Contribution} from './contribution'
 import {parseContribution} from './contribution'
 import type {RoutedFindings} from './contribution-set'
 import type {DraftRecord} from './draft'
-import {bodyHash, contributionsDigest, DraftRecordSchema} from './draft'
+import {bodyHash, contributionsDigest, parseDraftRecord} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import type {CitedFile, Ledger, RecordedHash, UnresolvedFile, UploadPlan} from './ledger'
 import {EMPTY_LEDGER, LedgerSchema, planUploads, recordUpload, Sha256Schema} from './ledger'
 
+export type UploadFile = {path: string; bytes: Uint8Array}
+
 export interface IUploader {
-  upload(path: string): Promise<string>
+  upload(file: UploadFile): Promise<string>
 }
 
 export type PrStore = {prDir: string; lockPath: string}
@@ -77,7 +79,9 @@ type FileHashes = z.infer<typeof FileHashesSchema>
 
 const FILE_HASHES_SUFFIX = '.files'
 
-const hashFile = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex')
+const sha256Of = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
+
+const hashFile = (path: string) => sha256Of(readFileSync(path))
 
 function citedFileHashes(contribution: Contribution): FileHashes {
   const missing = contribution.uploads.filter(path => !existsSync(path))
@@ -94,10 +98,13 @@ export function writeContribution(store: PrStore, contribution: Contribution): s
   return path
 }
 
+const contributionNames = (dir: string) => readdirSync(dir).filter(name => CONTRIBUTION_FILE_NAME.test(name)).sort()
+
+// Only a record beside a stored contribution counts: an add that crashed between its two writes leaves a record that no contribution cites.
 function recordedHashes(store: PrStore, head: string): Map<string, RecordedHash> {
   const dir = headDir(store, head)
-  const records = existsSync(dir) ? readdirSync(dir).filter(name => name.endsWith(`.json${FILE_HASHES_SUFFIX}`)) : []
-  const files = records.flatMap(name => readStoredJson(join(dir, name), FileHashesSchema)?.files ?? [])
+  const records = existsSync(dir) ? contributionNames(dir).map(name => join(dir, `${name}${FILE_HASHES_SUFFIX}`)) : []
+  const files = records.flatMap(path => readStoredJson(path, FileHashesSchema)?.files ?? [])
   const recordedFor = (path: string): RecordedHash => {
     const hashes = [...new Set(files.filter(file => file.path === path).map(file => file.sha256))].sort()
     const [only] = hashes
@@ -111,14 +118,11 @@ type StoredFile = {name: string; path: string; text: string; hashRecord: string 
 function readContributionFiles(store: PrStore, head: string): StoredFile[] {
   const dir = headDir(store, head)
   if (!existsSync(dir)) throw new DraftReviewError(`no contributions stored for head ${head} in ${dir}`, EXIT.noInput)
-  return readdirSync(dir)
-    .filter(name => CONTRIBUTION_FILE_NAME.test(name))
-    .sort()
-    .map(name => {
-      const path = join(dir, name)
-      const hashRecordPath = `${path}${FILE_HASHES_SUFFIX}`
-      return {name, path, text: readText(path), hashRecord: existsSync(hashRecordPath) ? readText(hashRecordPath) : undefined}
-    })
+  return contributionNames(dir).map(name => {
+    const path = join(dir, name)
+    const hashRecordPath = `${path}${FILE_HASHES_SUFFIX}`
+    return {name, path, text: readText(path), hashRecord: existsSync(hashRecordPath) ? readText(hashRecordPath) : undefined}
+  })
 }
 
 const digestOf = (files: readonly StoredFile[]) =>
@@ -178,12 +182,20 @@ function unresolvedMessage(file: UnresolvedFile, head: string): string {
   }
 }
 
-async function uploadOne(uploader: IUploader, path: string): Promise<string> {
+async function uploadOne(uploader: IUploader, file: UploadFile): Promise<string> {
   try {
-    return await uploader.upload(path)
+    return await uploader.upload(file)
   } catch (error) {
     if (error instanceof DraftReviewError) throw error
-    throw new DraftReviewError(`uploading ${path} failed: ${message(error)}`, EXIT.unavailable)
+    throw new DraftReviewError(`uploading ${file.path} failed: ${message(error)}`, EXIT.unavailable)
+  }
+}
+
+function readBytes(path: string): Uint8Array {
+  try {
+    return readFileSync(path)
+  } catch (error) {
+    throw new DraftReviewError(`cannot read ${path}: ${message(error)}`, EXIT.noInput)
   }
 }
 
@@ -203,7 +215,9 @@ export async function runUploads(store: PrStore, prepared: PreparedUploads): Pro
   const {cited, plan, uploader} = prepared
   if (uploader === undefined) return plan.urlByPath
   for (const file of plan.toUpload) {
-    const url = await uploadOne(uploader, file.path)
+    const bytes = readBytes(file.path)
+    if (sha256Of(bytes) !== file.sha256) throw new DraftReviewError(`${file.path} changed while create ran. Run create again.`, EXIT.noInput)
+    const url = await uploadOne(uploader, {path: file.path, bytes})
     writeJson(ledgerPath(store), recordUpload(readLedger(store), {...file, url}))
   }
   const final = planUploads(cited, readLedger(store))
@@ -211,7 +225,13 @@ export async function runUploads(store: PrStore, prepared: PreparedUploads): Pro
   return final.urlByPath
 }
 
-export const readDraftRecord = (store: PrStore): DraftRecord | undefined => readStoredJson(join(store.prDir, DRAFT_FILE), DraftRecordSchema)
+export function readDraftRecord(store: PrStore): DraftRecord | undefined {
+  const path = join(store.prDir, DRAFT_FILE)
+  if (!existsSync(path)) return undefined
+  const parsed = parseDraftRecord(readText(path))
+  if (!parsed.ok) throw new DraftReviewError(`${path} is invalid: ${parsed.reason}`, EXIT.dataErr)
+  return parsed.value
+}
 
 export const writeDraftRecord = (store: PrStore, record: DraftRecord): void => writeJson(join(store.prDir, DRAFT_FILE), record)
 

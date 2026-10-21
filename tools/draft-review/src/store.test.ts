@@ -3,12 +3,12 @@ import {existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, w
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {bodyHash, draftAction} from './draft'
-import type {DraftRecord} from './draft'
+import type {DraftRecord, PendingReview, RecordedReview} from './draft'
 import {DraftReviewError, EXIT} from './exit'
 import {withLock} from './lock'
 import type {IUploader} from './store'
 import type {PrStore} from './store'
-import {headDigest, prepareUploads, prStore, readContributions, readHead, runUploads, writeReviewRequest, writeSynthesized} from './store'
+import {headDigest, prepareUploads, prStore, readContributions, readDraftRecord, readHead, runUploads, writeReviewRequest, writeSynthesized} from './store'
 import type {DevQaContribution} from './contribution'
 import {blankPage, devQa, HEAD, OTHER_HEAD, review} from './testing/fixtures'
 
@@ -222,46 +222,111 @@ describe('create', () => {
 
 describe('draftAction', () => {
   const comment = (id: number, body: string) => ({id, body})
-  const record = (body: string, comments: {id: number; body: string}[] = [], reviewId = 7): DraftRecord => ({
+  const record = (body: string, comments: {id: number; body: string}[] = [], reviewId = 7, head = HEAD): DraftRecord => ({
     reviewId,
     bodyHash: bodyHash(body),
     comments: comments.map(item => ({id: item.id, bodyHash: bodyHash(item.body)})),
     contributionsDigest: 'd'.repeat(64),
-    head: HEAD,
+    head,
     url: 'https://example.test/review'
   })
   const pending = (body: string, comments: {id: number; body: string}[] = [], id = 7) => ({id, body, comments})
   const written = [comment(11, 'First.'), comment(12, 'Second.')]
+  const NO_RECORD: RecordedReview = {kind: 'none'}
+  const inState = (lastWritten: DraftRecord, state: string): RecordedReview => ({kind: 'found', record: lastWritten, state})
+  const stillPending = (lastWritten: DraftRecord) => inState(lastWritten, 'PENDING')
+  const decide = (existing: PendingReview[], recorded: RecordedReview) => draftAction(existing, recorded, HEAD)
 
   test('with no pending review, creates one', () => {
-    expect(draftAction([], record('Body.'))).toEqual({kind: 'create'})
-    expect(draftAction([], undefined)).toEqual({kind: 'create'})
+    expect(decide([], NO_RECORD)).toEqual({kind: 'create'})
   })
 
   test('replaces the review it created when the body and every comment still match', () => {
-    expect(draftAction([pending('Body.')], record('Body.'))).toEqual({kind: 'replace', reviewId: 7})
-    expect(draftAction([pending('Body.', [...written].reverse())], record('Body.', written))).toEqual({kind: 'replace', reviewId: 7})
+    expect(decide([pending('Body.')], stillPending(record('Body.')))).toEqual({kind: 'replace', reviewId: 7})
+    expect(decide([pending('Body.', [...written].reverse())], stillPending(record('Body.', written)))).toEqual({kind: 'replace', reviewId: 7})
   })
 
-  test('refuses when the user changed the body of that review', () => {
-    expect(draftAction([pending('Body, edited by hand.')], record('Body.'))).toEqual({kind: 'refuse', reviewId: 7})
+  test('refuses when the user edited the body of that review', () => {
+    expect(decide([pending('Body, edited by hand.')], stillPending(record('Body.')))).toEqual({kind: 'refuse', reviewId: 7})
   })
 
   test('refuses when the user added an inline comment to that review', () => {
-    expect(draftAction([pending('Body.', [...written, comment(13, 'Mine.')])], record('Body.', written))).toEqual({kind: 'refuse', reviewId: 7})
+    expect(decide([pending('Body.', [...written, comment(13, 'Mine.')])], stillPending(record('Body.', written)))).toEqual({kind: 'refuse', reviewId: 7})
   })
 
   test('refuses when the user edited an inline comment of that review', () => {
-    expect(draftAction([pending('Body.', [written[0] ?? comment(0, ''), comment(12, 'Second, edited.')])], record('Body.', written))).toEqual({kind: 'refuse', reviewId: 7})
+    const edited = [written[0] ?? comment(0, ''), comment(12, 'Second, edited.')]
+    expect(decide([pending('Body.', edited)], stillPending(record('Body.', written)))).toEqual({kind: 'refuse', reviewId: 7})
   })
 
   test('refuses when the user deleted an inline comment of that review', () => {
-    expect(draftAction([pending('Body.', written.slice(0, 1))], record('Body.', written))).toEqual({kind: 'refuse', reviewId: 7})
+    expect(decide([pending('Body.', written.slice(0, 1))], stillPending(record('Body.', written)))).toEqual({kind: 'refuse', reviewId: 7})
   })
 
   test('refuses a pending review that it did not create', () => {
-    expect(draftAction([pending('Body.', [], 9)], record('Body.'))).toEqual({kind: 'refuse', reviewId: 9})
-    expect(draftAction([pending('Body.', [], 9)], undefined)).toEqual({kind: 'refuse', reviewId: 9})
+    expect(decide([pending('Body.', [], 9)], stillPending(record('Body.')))).toEqual({kind: 'refuse', reviewId: 9})
+    expect(decide([pending('Body.', [], 9)], NO_RECORD)).toEqual({kind: 'refuse', reviewId: 9})
+  })
+
+  test.each(['COMMENTED', 'APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'])('refuses, and never posts again, when the user submitted the first draft for this head (state %s)', state => {
+    expect(decide([], inState(record('Body.'), state))).toEqual({kind: 'submitted', reviewId: 7, state})
+  })
+
+  test('reports the submitted first draft even when another pending review exists', () => {
+    expect(decide([pending('Body.', [], 9)], inState(record('Body.'), 'COMMENTED'))).toEqual({kind: 'submitted', reviewId: 7, state: 'COMMENTED'})
+  })
+
+  test('treats a state it does not know as submitted, so a new GitHub state cannot cause a second post', () => {
+    expect(decide([], inState(record('Body.'), 'SOME_FUTURE_STATE'))).toEqual({kind: 'submitted', reviewId: 7, state: 'SOME_FUTURE_STATE'})
+  })
+
+  test('creates a draft when the submitted review belongs to an earlier head', () => {
+    expect(decide([], inState(record('Body.', [], 7, OTHER_HEAD), 'COMMENTED'))).toEqual({kind: 'create'})
+  })
+
+  test('creates a draft when the user deleted the recorded review', () => {
+    expect(decide([], {kind: 'gone', record: record('Body.')})).toEqual({kind: 'create'})
+  })
+
+  test('refuses another pending review when the user deleted the recorded review', () => {
+    expect(decide([pending('Body.', [], 9)], {kind: 'gone', record: record('Body.')})).toEqual({kind: 'refuse', reviewId: 9})
+  })
+})
+
+describe('readDraftRecord', () => {
+  const recordFields = {reviewId: 41, bodyHash: 'a'.repeat(64), comments: [], head: HEAD, url: 'https://example.test/review'}
+  const draftWorld = (text: string) => {
+    const world = makeWorld()
+    mkdirSync(world.store.prDir, {recursive: true})
+    writeFileSync(join(world.store.prDir, 'draft.json'), text)
+    return world
+  }
+  const attempt = (store: PrStore) => {
+    try {
+      return {record: readDraftRecord(store)}
+    } catch (error) {
+      return error instanceof DraftReviewError ? {code: error.exitCode, message: error.message} : {thrown: String(error)}
+    }
+  }
+
+  test('loads a draft.json from an older round that has no contributions digest', () => {
+    expect(attempt(draftWorld(JSON.stringify(recordFields)).store)).toEqual({record: recordFields})
+  })
+
+  test('refuses an invalid draft.json with exit 65, names its pending review, and says what a delete of draft.json does', () => {
+    const outcome = attempt(draftWorld(JSON.stringify({...recordFields, bodyHash: 'not a hash'})).store)
+    expect(outcome).toMatchObject({code: EXIT.dataErr})
+    expect('message' in outcome ? outcome.message : '').toContain(
+      'It names pending review 41. After a delete of draft.json, the next create refuses to replace review 41 until you delete that review on GitHub.'
+    )
+  })
+
+  test('refuses a draft.json that is not JSON with exit 65, and says what a delete of draft.json does', () => {
+    const outcome = attempt(draftWorld('{"reviewId": 41,').store)
+    expect(outcome).toMatchObject({code: EXIT.dataErr})
+    expect('message' in outcome ? outcome.message : '').toContain(
+      'After a delete of draft.json, the next create refuses to replace the pending review that draft-review created until you delete that review on GitHub.'
+    )
   })
 })
 
@@ -338,7 +403,7 @@ describe('prepareUploads and runUploads', () => {
   const uploaderThat = (name: string, failOn: number | undefined) => {
     const uploaded: string[] = []
     const uploader: IUploader = {
-      upload: async path => {
+      upload: async ({path}) => {
         if (uploaded.length + 1 === failOn) throw new Error(`upload of ${path} failed`)
         uploaded.push(path)
         return `https://cdn.example/${name}/${uploaded.length}`
@@ -356,6 +421,32 @@ describe('prepareUploads and runUploads', () => {
     expect(failing.uploaded).toEqual([first])
     expect(working.uploaded).toEqual([second])
     expect(urls).toEqual(new Map([[first, 'https://cdn.example/failing/1'], [second, 'https://cdn.example/working/1']]))
+  })
+
+  const memoryCdn = () => {
+    const contentByUrl = new Map<string, string>()
+    const uploader: IUploader = {
+      upload: async ({bytes}) => {
+        const url = `https://cdn.example/memory/${contentByUrl.size + 1}`
+        contentByUrl.set(url, bodyHash(new TextDecoder().decode(bytes)))
+        return url
+      }
+    }
+    return {uploader, contentByUrl}
+  }
+
+  const ledgerEntries = (store: PrStore): {sha256: string; url: string}[] => JSON.parse(readFileSync(join(store.prDir, 'uploads.json'), 'utf8')).entries
+
+  test('records each upload under the hash of the bytes it sent, when a file changes between prepare and upload', async () => {
+    const {world, second, paths} = uploadWorld()
+    const cdn = memoryCdn()
+    const prepared = prepareUploads(world.store, HEAD, paths, () => cdn.uploader)
+    writeFileSync(second, 'bytes written after prepare')
+    const outcome = await refusal(runUploads(world.store, prepared))
+    expect(ledgerEntries(world.store).map(entry => ({sha256: entry.sha256, sent: cdn.contentByUrl.get(entry.url)}))).toEqual([
+      {sha256: bodyHash('bytes of the first file'), sent: bodyHash('bytes of the first file')}
+    ])
+    expect(outcome).toEqual({code: EXIT.noInput, message: `${second} changed while create ran. Run create again.`})
   })
 
   test('asks for no uploader when every file is in the ledger', async () => {
@@ -412,6 +503,26 @@ describe('prepareUploads and runUploads', () => {
     const first = await resolveUploads(world.store, HEAD, [png], () => uploaderThat('first', undefined).uploader)
     world.evidence('step.png', 'a later recording')
     expect(await resolveUploads(world.store, HEAD, [png], noUploader)).toEqual(first)
+  })
+
+  const settled = (promise: Promise<Map<string, string>>) => promise.then(urls => ({urls}), (error: unknown) => ({error: String(error)}))
+  const orphanRecord = (world: ReturnType<typeof makeWorld>, name: string, path: string) =>
+    writeFileSync(join(world.store.prDir, HEAD, name), JSON.stringify({files: [{path, sha256: 'b'.repeat(64)}]}))
+
+  test('ignores the hash record of an add that crashed before it wrote its contribution', async () => {
+    const world = makeWorld()
+    const png = world.evidence('step.png', 'what the author saw')
+    await world.add(world.devQaCiting(png))
+    orphanRecord(world, 'dev-qa@Windows.json.files', png)
+    expect(await settled(resolveUploads(world.store, HEAD, [png], () => uploaderThat('first', undefined).uploader))).toEqual({urls: new Map([[png, 'https://cdn.example/first/1']])})
+  })
+
+  test('ignores a hash record whose name is not a contribution file name', async () => {
+    const world = makeWorld()
+    const png = world.evidence('step.png', 'what the author saw')
+    await world.add(world.devQaCiting(png))
+    orphanRecord(world, 'notes.json.files', png)
+    expect(await settled(resolveUploads(world.store, HEAD, [png], () => uploaderThat('first', undefined).uploader))).toEqual({urls: new Map([[png, 'https://cdn.example/first/1']])})
   })
 
   test('refuses with exit 66 when two contributions for one head recorded different content for one path', async () => {

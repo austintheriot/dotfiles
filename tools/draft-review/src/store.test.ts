@@ -10,7 +10,7 @@ import type {IUploader} from './store'
 import type {PrStore} from './store'
 import {headDigest, prepareUploads, prStore, readContributions, readDraftRecord, readHead, runUploads, writeDraftRecord, writeReviewRequest, writeSynthesized} from './store'
 import type {DevQaContribution} from './contribution'
-import {blankPage, devQa, HEAD, OTHER_HEAD, payloadOf, review} from './testing/fixtures'
+import {blankPage, devQa, HEAD, OTHER_HEAD, payloadOf, review, trace, verify} from './testing/fixtures'
 import {substituteUploads} from './uploads'
 
 const MAIN = join(import.meta.dir, 'main.ts')
@@ -146,6 +146,45 @@ describe('add', () => {
     const run = await world.cli(['add', join(world.dir, 'absent.json')])
     expect(run.code).toBe(EXIT.noInput)
     expect(run.stderr).toContain('absent.json')
+  })
+})
+
+describe('add removes the round-two files that answered the kind it replaces', () => {
+  const reproduced = (path: string) => verify([{id: 'R1', result: 'reproduced', evidence: [path], note: 'Seen on the build.'}])
+  const rootCause = trace([{id: 'Q1', result: 'root-cause', anchor: {path: 'src/b.ts', line: 3, side: 'RIGHT'}, body: 'The cause.'}])
+
+  test('a code-review removes every dev-qa-verify file and names each removed file on stderr', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    await world.add(reproduced(world.evidence('r1.mp4')))
+    const run = await world.add(review({body: 'Second run.'}))
+    expect(run.code).toBe(EXIT.ok)
+    expect(world.listing()).toEqual(['code-review.json', 'code-review.json.files'])
+    expect(run.stderr).toContain('dev-qa-verify.json')
+    expect(run.stderr).toContain('dev-qa-verify.json.files')
+  })
+
+  test('a dev-qa removes the code-trace file and keeps the dev-qa-verify file', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    await world.add(world.devQa())
+    await world.add(reproduced(world.evidence('r1.mp4')))
+    await world.add(rootCause)
+    const run = await world.add(world.devQa({body: 'Second run.'}))
+    expect(run.code).toBe(EXIT.ok)
+    expect(world.stored()).toEqual(['code-review.json', 'dev-qa-verify.json', 'dev-qa.json'])
+    expect(run.stderr).toContain('code-trace.json')
+  })
+
+  test('a round-two contribution removes nothing', async () => {
+    const world = makeWorld()
+    await world.add(review())
+    await world.add(world.devQa())
+    await world.add(rootCause)
+    const run = await world.add(reproduced(world.evidence('r1.mp4')))
+    expect(run.code).toBe(EXIT.ok)
+    expect(world.stored()).toEqual(['code-review.json', 'code-trace.json', 'dev-qa-verify.json', 'dev-qa.json'])
+    expect(run.stderr).toBe('')
   })
 })
 

@@ -248,6 +248,8 @@ When the current folder is not a checkout of the repository, add `--repo <owner/
 
 The result for the user is one pending review for that head. The user reads it on GitHub and submits it. While the first draft is still pending, the other skill can run later on the same head. Its `add` and `create` replace that draft with the merged review, so one review holds both parts. When someone edited the draft, `create` refuses to replace it.
 
+When `add` stores a `code-review` or `dev-qa` contribution, it removes the round-two verdicts on the earlier one, so a rerun never carries a stale cross-check.
+
 When `create` exits with a code other than 0, act as follows. The README exit code table has the full list.
 
 - Code 3 with no review URL on stdout: another pending review exists, or someone edited the draft. `create` wrote nothing to GitHub. Tell the user the path of `synthesized.md`, which holds the merged review. Do not touch the other review. When the other review is the user's own hand-written draft, the user can copy text from `synthesized.md` into it. After the user submits or discards it, run `create` again.

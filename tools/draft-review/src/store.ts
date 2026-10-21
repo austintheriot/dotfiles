@@ -3,7 +3,7 @@ import {existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, wr
 import {basename, dirname, join} from 'node:path'
 import {z} from 'zod'
 import type {Repo} from './args'
-import {CONTRIBUTION_FILE_NAME, FILE_HASHES_SUFFIX, namesToClear} from './clear'
+import {CONTRIBUTION_FILE_NAME, FILE_HASHES_SUFFIX, namesToClear, staleRoundTwoNames} from './clear'
 import type {Contribution} from './contribution'
 import {parseContribution} from './contribution'
 import type {RoutedFindings} from './contribution-set'
@@ -87,19 +87,7 @@ function citedFileHashes(contribution: Contribution): FileHashes {
   return {files: contribution.uploads.map(path => ({path, sha256: hashFile(path)}))}
 }
 
-// The hashes sit beside the contribution, not inside it, so the stored contribution stays the exact file that add received.
-export function writeContribution(store: PrStore, contribution: Contribution): string {
-  const hashes = citedFileHashes(contribution)
-  const path = join(headDir(store, contribution.head), contributionFileName(contribution))
-  writeJson(`${path}${FILE_HASHES_SUFFIX}`, hashes)
-  writeJson(path, contribution)
-  return path
-}
-
-export function clearHead(store: PrStore, head: string): string[] {
-  const dir = headDir(store, head)
-  if (!existsSync(dir)) return []
-  const names = namesToClear(readdirSync(dir))
+function removeNames(dir: string, names: readonly string[]): void {
   names.forEach(name => {
     try {
       rmSync(join(dir, name), {force: true})
@@ -107,6 +95,28 @@ export function clearHead(store: PrStore, head: string): string[] {
       throw new DraftReviewError(`cannot remove ${join(dir, name)}: ${message(error)}`, EXIT.ioErr)
     }
   })
+}
+
+const listingOf = (dir: string) => (existsSync(dir) ? readdirSync(dir) : [])
+
+export type StoredContribution = {path: string; removed: string[]}
+
+// The hashes sit beside the contribution, not inside it, so the stored contribution stays the exact file that add received.
+export function writeContribution(store: PrStore, contribution: Contribution): StoredContribution {
+  const hashes = citedFileHashes(contribution)
+  const dir = headDir(store, contribution.head)
+  const removed = staleRoundTwoNames(contribution.kind, listingOf(dir))
+  removeNames(dir, removed)
+  const path = join(dir, contributionFileName(contribution))
+  writeJson(`${path}${FILE_HASHES_SUFFIX}`, hashes)
+  writeJson(path, contribution)
+  return {path, removed: removed.map(name => join(dir, name))}
+}
+
+export function clearHead(store: PrStore, head: string): string[] {
+  const dir = headDir(store, head)
+  const names = namesToClear(listingOf(dir))
+  removeNames(dir, names)
   return names
 }
 

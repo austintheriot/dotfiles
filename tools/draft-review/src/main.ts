@@ -49,7 +49,9 @@ const loadSet = (store: PrStore, head: string): ContributionSet => mergeable(rea
 async function add(command: AddCommand): Promise<ExitCode> {
   const contribution = readContributionFile(command.file)
   const store = storeFor(command, command.repo ?? currentRepo(), contribution.pr)
-  console.log(writeContribution(store, contribution))
+  const stored = writeContribution(store, contribution)
+  stored.removed.forEach(path => console.error(`removed ${path}: it holds round-two verdicts on the earlier ${contribution.kind} contribution, or their hash record`))
+  console.log(stored.path)
   return EXIT.ok
 }
 

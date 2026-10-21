@@ -17,6 +17,8 @@ Every command takes these options:
 
 Reads one contribution file, checks it against the contribution contract, and copies it into the store. The copy is a temporary file that a rename puts in place. When the store already holds a file of the same kind and platform for the same head, the new file replaces it. The command prints the path of the stored file.
 
+Before `add` stores a `code-review` or `dev-qa` contribution, it removes the round-two files of that head that answer it (`dev-qa-verify*` or `code-trace.json`, with their `.files` records) and names each one on stderr.
+
 The command also records the SHA-256 hash of each file in the `uploads` list of the contribution. Later, `create` posts the content with that hash, not the content that the path holds at create time.
 
 When the file is not a valid contribution, the command stores nothing and names the field path in the error. When a file in the `uploads` list does not exist, the command stores nothing, names the file, and exits with code 66.

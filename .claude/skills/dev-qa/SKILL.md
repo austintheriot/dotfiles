@@ -1,7 +1,7 @@
 ---
 name: dev-qa
-description: Use when asked to dev QA, smoke test, or verify a pull request on its deployed build (a per-commit preview URL, a review environment, or a staging deploy). The check runs the pull request's Test Steps in the test environments the project file names and reports the result on the pull request. Also used by /expert-review-pr when a code review must include dev QA. Not for QA of an undeployed local branch. The repository's own local QA skills cover that.
-argument-hint: "[<PR number | PR URL>] [--steps-only] [--no-confirm]"
+description: Use when asked to dev QA, smoke test, or verify a pull request on its deployed build (a per-commit preview URL, a review environment, or a staging deploy). The check runs the pull request's Test Steps in the test environments the project file names. It drafts the result as a pending review on the pull request. Also runs under an orchestrator that merges its contribution with other work. Not for QA of an undeployed local branch. The repository's own local QA skills cover that.
+argument-hint: "[<PR number | PR URL>] [--contribution <path>] [--verify <findings.json>] [--no-confirm]"
 ---
 
 # Dev QA
@@ -13,10 +13,14 @@ Three files share the work:
 | File | Owns |
 |---|---|
 | This skill | The process, the verdict rules, the evidence rules, the section shape. Project-neutral and environment-neutral. |
-| `~/.claude/local/dev-qa.md` | The project and environment bindings: deployed URLs, deployed-commit proof, the test environments and which one to prefer, accounts, forbidden writes, driver quirks, the video recorder, uploads, and the mapping onto the repository's QA framework. |
-| `~/.claude/rules/outside-pr-review.md` | Approval, the `COMMENT`-only event, scope resolution, voice, the internals rule, the local summary, uploads, and GitHub posting. |
+| `~/.claude/local/dev-qa.md` | The project and environment bindings: deployed URLs, deployed-commit proof, the test environments and which one to prefer, accounts, forbidden writes, driver quirks, the video recorder, how to embed uploads, and the mapping onto the repository's QA framework. |
+| `~/.claude/rules/outside-pr-review.md` | Approval, the never-submit rule, scope resolution, voice, the internals rule, the contribution contract, the local summary, uploads, and the standalone ending through `draft-review`. |
 
 **Read `~/.claude/local/dev-qa.md` and `~/.claude/rules/outside-pr-review.md` before you test.** If the project file does not exist, ask the user for the deployed URL and a test account before you test.
+
+In orchestrated mode, never ask the user. When a blocker stops every step from starting, write the contribution with `status` `not-run`. A blocker is a missing project file, a failed target proof, or a failed session proof. When some steps ran before the blocker, use `status` `incomplete` instead.
+
+`draft-review` posts the `reason` in the review body. Write the `reason` as a plain fact about the pull request or the build. An example: "The deployed build for this head could not be tested." The `reason` never names a local file, a local path, or a private project file. Put that detail in `handback`, which is never posted.
 
 ## Test environments
 
@@ -24,10 +28,11 @@ A test environment is where a step runs and what drives it: a browser on this ma
 
 ## Modes
 
-- **Standalone** (`/dev-qa [PR]`): this skill owns the post. It ends with the local summary, one question, and on approval a `COMMENT` review whose body is the zone headers from `~/.claude/rules/outside-pr-review.md`, then the Dev QA section.
-- **Embedded** (invoked by `/expert-review-pr`): this skill never posts and never asks to post. It returns the section and the hand-back items under Embedded hand-back. The caller owns the summary, the question, and the post. The caller normally runs this mode in a background subagent (`/expert-review-pr` says how). In that subagent, the user is not reachable: return a needed hand-off as the report instead of asking for it, and wait for every confirmer verdict before handing back.
+- **Standalone** (`/dev-qa [PR]`): this skill writes its contribution and ends through `draft-review`, as `~/.claude/rules/outside-pr-review.md` says. It runs `draft-review add`, prints `draft-review show`, asks one question, and on approval runs `draft-review create`. The result is one pending review for the head, with the Dev QA section in it. The user submits that review.
+- **Orchestrated** (`/dev-qa [PR] --contribution <path>`): this skill never runs `draft-review`, never uploads, and never asks for approval. It writes its result as one JSON file at `<path>`, under the Orchestrated mode rules in `~/.claude/rules/outside-pr-review.md`. The orchestrator owns the summary, the approval, and the two `draft-review` commands. The user is not reachable in this mode. Put a needed hand-off into `handback` instead of asking for it. Wait for every confirmer verdict before you write the file.
+- **Verify** (`/dev-qa [PR] --verify <findings.json> --contribution <path>`): an orchestrated mode that tries to reproduce findings from another source on the deployed build. It runs no Test Steps. All Orchestrated rules apply, including the rule that the user is never asked. The `status`, `reason`, and `body` rules of orchestrated mode do not apply, because a verify contribution has none of those fields. See Verify mode.
 
-`--steps-only` skips the live check of panel candidates in embedded mode. `--no-confirm` skips the independent confirm stage. Every verdict is then reported as unconfirmed.
+`--no-confirm` skips the independent confirm stage. Every verdict is then reported as unconfirmed. Verify mode ignores `--no-confirm` and always confirms, because the orchestrator counts `reproduced` as confirmed.
 
 ## The repository's QA framework
 
@@ -44,9 +49,9 @@ Work inside the repository's QA framework wherever it reaches. The project file 
 | Oracle source | The documentation that says how the feature is meant to behave. |
 | Driving recipes | The platform skill: selectors, state reads, sign-in helpers, known input quirks. |
 
-When the project file maps no framework, use the fallbacks: a `results.md` plus screenshots per section, and a fresh `general-purpose` subagent as the confirmer with the confirmer rules below. A session can deny a mapped command or agent, for example in an allowlisted unattended run. In that case, use the fallback for that role only. Name each role that fell back in the hand-back or the local summary.
+When the project file maps no framework, use the fallbacks: a `results.md` plus screenshots per section, and a fresh `general-purpose` subagent as the confirmer with the confirmer rules below. A session can deny a mapped command or agent, for example in an allowlisted unattended run. In that case, use the fallback for that role only. Name each role that fell back in `handback` (orchestrated) or the local summary (standalone).
 
-**The repository's run orchestrator is a different tool.** A local QA runner builds the branch and drives its own targets. It tests the branch, not the deployed build. Do not hand a deployed-build check to it. Some Test Steps need a platform that no available test environment can drive. Report each such step as `SKIP` with the reason. Name the repository command that runs it in the hand-back.
+**The repository's run orchestrator is a different tool.** A local QA runner builds the branch and drives its own targets. It tests the branch, not the deployed build. Do not hand a deployed-build check to it. Some Test Steps need a platform that no available test environment can drive. Report each such step as `SKIP` with the reason. Name the repository command that runs it in `handback` (orchestrated) or the local summary (standalone).
 
 ## Verdicts
 
@@ -75,7 +80,7 @@ Use the repository's verdict vocabulary. The default, and the vocabulary the con
 
 **A test-covered step** is a step that was not run because running it is impractical, and an automated test already checks its expected result. Impractical means no reasonable rig fix removes the block: a rig-scope exclusion, real hardware, a third-party flow. A stale deploy, a signed-out session, or a fixable account state is not impractical. Fix it and run the step. Name the covering test by file and test name, and read it first: it must assert the step's expected result, not only run the same code. A step whose test you cannot name stays `incomplete`. The step keeps its own verdict (`INCONCLUSIVE` or `SKIP`). Only the rollup changes.
 
-**An impractical step with no test is a review comment.** When a step is impractical, no test covers it, and a feasible test could check its expected result, record an untested-step item. It names the step, why it is impractical, the changed line in the diff that implements the step's behavior, and the test to add: the test file (prefer extending an existing test), the setup it drives, and the assertion that fails when the behavior breaks. First search the tests for one that already covers the step, because a test you missed makes the step test-covered instead. When no realistic test can reach the behavior (it needs real hardware, a real third-party service, or a mock so deep the test only re-asserts the code), record nothing. In standalone mode, post the item as an inline comment on that changed line, opening with "Possible coverage gap:", and point the step's result line to the comment in a few words. In embedded mode, hand it back. The caller decides whether it posts.
+**An impractical step with no test is a review comment.** When a step is impractical, no test covers it, and a feasible test could check its expected result, record an untested-step item. It names the step, why it is impractical, the changed line in the diff that implements the step's behavior, and the test to add: the test file (prefer extending an existing test), the setup it drives, and the assertion that fails when the behavior breaks. First search the tests for one that already covers the step, because a test you missed makes the step test-covered instead. When no realistic test can reach the behavior (it needs real hardware, a real third-party service, or a mock so deep the test only re-asserts the code), record nothing. In every mode, write the item as an entry in `comments` (see Contribution). The comment is on that changed line and opens with "Possible coverage gap:". Point the step's result line to the comment in a few words.
 
 **Every rollup carries its counts**, out of the listed steps: `pass (6/8 pass, 2/8 incomplete)`, `fail (1/8 fail, 6/8 pass, 1/8 incomplete)`, `incomplete (5/8 pass, 3/8 incomplete)`. Count `INCONCLUSIVE`, `SKIP`, and `MISSING_PREREQ` steps as `incomplete`. List only the nonzero buckets, in the order fail, pass, incomplete. An all-pass run still shows its count: `pass (8/8 pass)`.
 
@@ -85,7 +90,7 @@ A step that depends on an earlier step that did not run is `INCONCLUSIVE` with t
 
 ### 1. Scope
 
-Resolve the pull request, its head commit, and its base, per the posture file. In embedded mode, take them from the caller.
+Resolve the pull request, its head commit, and its base, per the posture file. In orchestrated mode, resolve them the same way, and write the full head SHA to `head`.
 
 ### 2. Target proof
 
@@ -111,7 +116,7 @@ Read the rig rules before driving. A step the rig rules list as out of rig scope
 
 Read the oracle source for the feature. When a step's expected result and the documentation disagree, test against the pull request's step and record the disagreement as an observation.
 
-When the pull request has no Test Steps, say so and stop in standalone mode. In embedded mode, return "no Test Steps" and let the caller decide.
+When the pull request has no Test Steps, say so and stop in standalone mode. In orchestrated mode, write a contribution with `status` `not-run`, the reason "no Test Steps", and a one-line `body` under `## Dev QA` that says so.
 
 ### 4. Session proof
 
@@ -146,11 +151,7 @@ Append to the evidence log as you go: one action entry per action with its obser
 
 Spend about as long on free play as on the listed steps, and stop sooner when nothing new turns up. Record free play on video (`free-play.<ext>`) as a working record. It is never posted. Log each free-play action in the evidence log like any other action. When something looks off, screenshot the odd state, then reproduce it once more from a known start state as its own trimmed video (`repro-<SEQ>.<ext>`) that holds only the reproduction. Use screenshots alone only when no recorder is available. Free-play results never change a verdict or the rollup. Post only findings worth a reader's time: a defect, a confusing state, or a risk the author likely missed. Each posted finding goes in Other observations with a one-line statement of the problem, numbered repro steps from the known start state, what you expected and what happened, its repro video, and a screenshot of the problem. When free play finds nothing worth sharing, post nothing about it. The Writes rules apply in free play too.
 
-### 6. Live check of panel candidates (embedded mode only)
-
-The caller hands in candidates after its synthesis, so this step runs after the listed steps and after that hand-in. For each candidate that a browser can reproduce, try it live in its own unit directory. Name each one's result: reproduced, did not reproduce, or not reachable from the deployed build. A reproduced candidate is stronger evidence than a re-read. A candidate that does not reproduce goes back to the caller for re-examination before it is posted.
-
-### 7. Confirm
+### 6. Confirm
 
 Unless `--no-confirm`, dispatch the independent confirmer once per section, all in parallel, with the scenario record, the trace, and an output path for the verdict. The trace's evidence for each step is its screenshots and state reads. Do not hand the confirmer a video as a step's only evidence. The confirmer judges from the receipts, not from your conclusion.
 
@@ -162,16 +163,16 @@ The confirmer's final verdict is the reported verdict. When confirm was skipped,
 
 **Fallback confirmer rules.** Use these when the project maps no confirmer. Hand it the screenshots and state reads, not the videos. Read the evidence before the verdict. Check the outcome frame of every non-`SKIP` step against the step's expected result. Dispute a `PASS` over a wrong screen, an error dialog, or a missing outcome frame. Dispute any environmental cause with no logged remediation try.
 
-### 8. Writes
+### 7. Writes
 
 QA writes only data it creates, and removes it before it finishes. When the product allows a name, name created data so it is clearly QA's. Delete the data QA created without asking. Cancel every confirmation dialog that changes shared state QA did not create. The project file lists forbidden writes. Those are absolute, under every authorization.
 
-### 9. Report
+### 8. Report
 
 Compose the section (next heading). Copy the evidence set (videos and screenshots) and the unit directories to the session scratchpad.
 
-- **Standalone**: follow the posture file. Print the local summary with local paths in place of video and image URLs, ask one question, and wait. On approval, upload, embed, and post a `COMMENT` review. The body is the attribution line the posture file requires (when one applies), a blank line, then the section.
-- **Embedded**: return the hand-back.
+- **Standalone**: write the contribution file to a path in the session scratchpad (see Contribution). Write every video and screenshot to disk first. If a cited file does not exist, `draft-review add` exits with code 66. Then follow the sequence in the posture file: `draft-review add`, `draft-review show` printed in chat, one question, and on approval `draft-review create`. The result is one pending review for the head. While the first draft is still pending, running the other outside-review skill later on the same head replaces that draft with the merged review, so one review holds both parts. The user submits the review.
+- **Orchestrated**: write the contribution file at `--contribution <path>` (see Contribution).
 
 ## The Dev QA section
 
@@ -179,25 +180,78 @@ Exactly these parts, in this order:
 
 1. `## Dev QA`
 2. One plain paragraph: the result, the deployed URL, and the deployed commit. If the results are unconfirmed, say so.
-3. One `<details>` block per Test Steps section. The `<summary>` is the section name and its rollup with counts (`Test Steps: pass (6/8 pass, 2/8 incomplete)`). Inside, one line per step: the step number, its verdict in plain words (`Pass`, `Fail`, `Inconclusive (<reason>)`, `Skipped (<reason>)`), `covered by <test file>: <test name>` when the rollup counted it as test-covered, `adapted:` and the change when adapted, then its video, embedded the way the project file says. Add a screenshot next to the video when a still makes a point clearer than the video can: an error, exact copy, or a specific state or value the reader should not have to pause the video to find. A truly static step posts its screenshots alone.
-4. An optional `<details>` block titled `Other observations`: free-play findings worth sharing (problem, repro steps, expected and actual, repro video, screenshot), other problems outside the listed steps, and documentation disagreements. Leave the block out when there is nothing to report. Never written as `Fail` lines. In embedded mode, a live-reproduced candidate that the caller posts as a finding gets one pointer line here, not a restatement. A candidate the caller drops does not appear.
+3. One `<details>` block per Test Steps section. The `<summary>` is the section name and its rollup with counts (`Test Steps: pass (6/8 pass, 2/8 incomplete)`). Inside, one line per step: the step number, its verdict in plain words (`Pass`, `Fail`, `Inconclusive (<reason>)`, `Skipped (<reason>)`), `covered by <test file>: <test name>` when the rollup counted it as test-covered, `adapted:` and the change when adapted, then its video, placed the way the project file says. Add a screenshot next to the video when a still makes a point clearer than the video can: an error, exact copy, or a specific state or value the reader should not have to pause the video to find. A truly static step posts its screenshots alone.
+4. An optional `<details>` block titled `Other observations`: free-play findings worth sharing (problem, repro steps, expected and actual, repro video, screenshot), other problems outside the listed steps, and documentation disagreements. Leave the block out when there is nothing to report. Never written as `Fail` lines. When an orchestrator posts a live-reproduced finding that came from outside this run, the section gets one pointer line for it here, not a restatement. A finding that the orchestrator drops does not appear.
 5. A closing status line for the whole run, from the rollup table with counts: `Dev QA Overall Result: Pass (6/8 pass, 2/8 incomplete)`, `Dev QA Overall Result: Fail (1/8 fail, 7/8 pass)`, or `Dev QA Overall Result: Incomplete (5/8 pass, 3/8 incomplete)`.
 
-**Leave the test environment out of the post.** The reader needs the result, not the rig. Do not name the machine, virtual machine, or simulator, the audio device, the browser profile, the driver, the recorder, or any workaround that made the rig run. Name an environment detail only when a reader needs it to reproduce or read a result: a repro that needs a specific setup (an account tier, a narrow window, a meeting with no calendar end), or a result that holds only under that setup. An adaptation always stays, because it changes what was tested ("a Google Meet call in place of a Zoom call"), but its rig reason does not ("the test machine has no Zoom"). The build under test (the deployed URL and commit, or the commit a local build came from) always stays. Environment details belong in the local summary and the hand-back.
+**Leave the test environment out of the post.** The reader needs the result, not the rig. Do not name the machine, virtual machine, or simulator, the audio device, the browser profile, the driver, the recorder, or any workaround that made the rig run. Name an environment detail only when a reader needs it to reproduce or read a result: a repro that needs a specific setup (an account tier, a narrow window, a meeting with no calendar end), or a result that holds only under that setup. An adaptation always stays, because it changes what was tested ("a Google Meet call in place of a Zoom call"), but its rig reason does not ("the test machine has no Zoom"). The build under test (the deployed URL and commit, or the commit a local build came from) always stays. Environment details belong in the local summary (standalone) or `handback` (orchestrated).
 
-Never put a step result outside a `<details>` block. Be terse and matter-of-fact. When a step's failure is also a posted code finding, point to it in one line ("see the comment on `default.conf:192`") rather than restating it. Write no attribution line inside the section. The body's attribution line covers it.
+Never put a step result outside a `<details>` block. Be terse and matter-of-fact. When a step's failure is also a posted code finding, point to it in one line ("see the comment on `default.conf:192`") rather than restating it. Write no attribution line and no zone headers inside the section. `draft-review` adds them.
 
-## Embedded hand-back
+## Contribution
 
-Return these to the caller, and nothing else:
+Write the contribution file as `kind: "dev-qa"`, at `--contribution <path>` in orchestrated mode and at a scratchpad path in standalone mode. The posture file `~/.claude/rules/outside-pr-review.md` defines the types and rules for every field. This section maps each result of the run to a field.
 
-- The section, with local video and screenshot paths in place of URLs.
-- The video and screenshot paths to upload, in the order the section cites them (the posted ones only).
-- Per panel candidate: reproduced, not reproduced, or not reachable, with the evidence path.
-- Steps this skill cannot drive, with the repository command that runs them.
-- Each untested-step item (see Verdicts), with its changed line and the test to add.
-- Each framework role that fell back, and why.
-- If any verdict is unconfirmed, which ones.
+- `body`: the Dev QA section, with local video and screenshot paths in place of URLs.
+- `uploads`: the video and screenshot paths that `body` and the comments cite (the posted ones only), in citation order. Every path in a finding's `evidence` also appears here.
+- `findings`: one entry for every failed step and every bug the run observed, including each Other observations finding. Each entry has `kind: "behavior"`, a non-empty `behavior` text, and `evidence` that holds the screenshot or video paths. Number the ids `Q1`, `Q2`, and so on. Each untested-step item (see Verdicts) also gets an entry with `kind: "code"`, an `anchor` on its changed line, and no `behavior`.
+- `comments`: one inline comment for each untested-step item, on the changed line with `side` `RIGHT`, with the test to add. Each comment names its finding id in `finding`. A finding for a failed step or a bug has an inline comment only on the changed line it maps to.
+- `handback`: one line for each of these items.
+  - Each step this skill cannot drive, with the repository command that runs it.
+  - Each framework role that fell back, and why.
+  - Each verdict that is unconfirmed.
+  - Each hand-off that needs the user.
+- `status`: the whole-run rollup. `pass` gives `passed`. `fail` gives `failed`. `incomplete` gives `incomplete`. A run that did not start gives `not-run`. Every status except `passed` also needs `reason`. A `not-run` contribution has empty `findings` and empty `comments`. A blocked run writes no untested-step findings.
+- `platform`: the label of the platform the run tested, when the project file names one. Omit the field otherwise.
+
+Write the file in one call, after every confirmer verdict is in. In orchestrated mode, this is the last action of the run. In standalone mode, the sequence in the Report step follows it.
+
+## Verify mode
+
+Verify mode answers one question for each finding it receives: does the symptom appear on the deployed build? The findings come from any source, usually a code review. The posture file `~/.claude/rules/outside-pr-review.md` defines the `dev-qa-verify` kind, its `verdicts` table, and every field type. Follow it.
+
+**Input.** `--verify <findings.json> --contribution <path>`. The findings file is a JSON object `{"findings": [...]}`. Each entry has the finding shape from the posture file. The user is not reachable. Put every blocker into `handback`.
+
+**Run these steps, in this order:**
+
+1. Scope. Resolve the pull request and its head, and write the full head SHA to `head`.
+2. Target proof, as in Process step 2.
+3. Session proof, as in Process step 4.
+4. For each finding in input order, reach the state the finding names and look for the symptom in its `behavior`. Drive and capture as in Process step 5. Use the same recorder, screenshot, popup, and no-injection rules as for a Test Steps step.
+5. Confirm, as in Process step 6, for every `reproduced` and `not-reproduced` verdict. The confirmer judges the symptom from the screenshots and state reads. When the confirmer disputes a verdict twice, write `not-reachable`. The `note` says what the driver saw and that the confirmer disputed it twice. Add one `handback` line for the verdict with the finding `id` and the observed symptom.
+6. Writes, as in Process step 7.
+
+Do not run the steps extractor, do not write scenario records, and do not play freely. Verify mode runs no Test Steps, and it adds no section to the Dev QA post.
+
+**Results.**
+
+| Result | Means | `evidence` |
+|---|---|---|
+| `reproduced` | The confirm stage saw the symptom. | Required, non-empty. The screenshots and video that show the symptom. |
+| `not-reproduced` | The run reached the state the finding names, and the symptom did not appear. | Required. The screenshot that shows the reached state with no symptom. |
+| `not-reachable` | The run could not reach the state the finding names. The `note` gives the reason. | Can be empty. |
+
+`not-reproduced` is not proof that the code is correct. It says only that this run, on this build, did not see the symptom.
+
+**Never report `not-reproduced` for a state the run did not reach.** When the run cannot reach the state, the result is `not-reachable`. Valid reasons:
+
+- The state needs an account that the project file forbids creating.
+- No available test environment can drive the platform.
+- The deployed commit does not carry a file the finding exercises (cause `needs-retest`).
+- The rig rules list the path as out of rig scope.
+
+**Coverage.** Write exactly one verdict for each input finding, in input order, with the finding's `id` in `id`. When time runs out before the run reaches a finding, write `not-reachable` for it with the note "not reached before the run ended". When a blocker stops every finding (a missing project file, a failed target proof, or a failed session proof), write `not-reachable` for every finding with the blocker as the note, and put the blocker in `handback`.
+
+**Unreadable input.** When the findings file cannot be read, is invalid JSON, or lacks a `findings` array, that is a blocker. Write `verdicts` as an empty array and add one `handback` line that names the file and the parse error. An empty `findings` array is not a blocker. It gives empty `verdicts`, and that is legal.
+
+**Contribution.** Write one file at `--contribution <path>` as `kind: "dev-qa-verify"`, with `version`, `kind`, `pr`, `head`, `verdicts`, `uploads`, `handback`, and an optional `platform` only. When the project file names the platform that the run tested, write that label in `platform`. It has no `body`, `comments`, `findings`, `status`, or `reason`. A verdict has `id`, `result`, `evidence`, and `note`. Write the `note` as one or two sentences on what the run did and saw. Every path in a verdict's `evidence` also appears in `uploads`, in citation order. Put these items in `handback`:
+
+- Each framework role that fell back.
+- Each verdict that is unconfirmed.
+- Each verdict that the confirmer disputed twice, with the finding `id` and the observed symptom.
+- Each hand-off that needs the user.
+
+Write the file in one call, as the last action of the run, after every confirmer verdict is in.
 
 ## Red flags
 

@@ -41,18 +41,90 @@ const DEPRECATED_PINS: [&str; 4] = [
     "actions/checkout@v4",
 ];
 
-/// Every `uses:` in every workflow, as (file, job, reference).
-fn all_step_uses() -> Vec<(String, String, String)> {
+/// One `uses:` reference, with the text of the workflow it came from so a
+/// SHA pin's version comment can be read: the YAML parser drops comments.
+struct ActionUse {
+    file: String,
+    job: String,
+    reference: String,
+    workflow_text: String,
+}
+
+impl ActionUse {
+    fn label(&self) -> String {
+        format!("{}/{}: {}", self.file, self.job, self.reference)
+    }
+}
+
+/// Every `uses:` in every workflow.
+fn all_step_uses() -> Vec<ActionUse> {
     workflow_files()
         .iter()
         .flat_map(|path| {
             let file = file_name(path);
-            step_uses(&dotfiles_test_support::repo::read_workflow(path))
+            let workflow_text = std::fs::read_to_string(path)
+                .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()));
+            step_uses(&dotfiles_test_support::repo::parse_workflow(&workflow_text))
                 .into_iter()
-                .map(move |(job, uses)| (file.clone(), job, uses))
-                .collect::<Vec<(String, String, String)>>()
+                .map(move |(job, reference)| ActionUse {
+                    file: file.clone(),
+                    job,
+                    reference,
+                    workflow_text: workflow_text.clone(),
+                })
+                .collect::<Vec<ActionUse>>()
         })
         .collect()
+}
+
+/// Local actions are versioned by the commit that holds them, and Docker
+/// references carry their own tag.
+fn is_remote(reference: &str) -> bool {
+    !reference.starts_with("./") && !reference.starts_with("docker://")
+}
+
+fn is_commit_sha(git_ref: &str) -> bool {
+    git_ref.len() == 40
+        && git_ref
+            .chars()
+            .all(|character| character.is_ascii_digit() || ('a'..='f').contains(&character))
+}
+
+/// The `# vX.Y.Z` comment that names the release a SHA pin points at. Every
+/// line that carries the reference must carry the same comment, so a pin
+/// with no comment anywhere, or with two that disagree, has no version.
+fn version_comment(workflow_text: &str, reference: &str) -> Option<String> {
+    let comments: Vec<Option<&str>> = workflow_text
+        .lines()
+        .filter(|line| line.contains(reference))
+        .map(|line| {
+            let (_, comment) = line.split_once(reference)?;
+            let version = comment.trim().strip_prefix('#')?.trim();
+            let digits = version.strip_prefix('v')?;
+            let well_formed = !digits.is_empty()
+                && digits.split('.').all(|part| {
+                    !part.is_empty() && part.chars().all(|digit| digit.is_ascii_digit())
+                });
+            well_formed.then_some(version)
+        })
+        .collect();
+    let first = (*comments.first()?)?;
+    comments
+        .iter()
+        .all(|comment| *comment == Some(first))
+        .then(|| first.to_string())
+}
+
+/// The reference as `name@vMAJOR`, the shape `DEPRECATED_PINS` holds. A SHA
+/// pin takes its major version from its comment.
+fn major_pin(workflow_text: &str, reference: &str) -> Option<String> {
+    let (name, git_ref) = reference.split_once('@')?;
+    if !is_commit_sha(git_ref) {
+        return Some(reference.to_string());
+    }
+    let version = version_comment(workflow_text, reference)?;
+    let major = version.split('.').next()?;
+    Some(format!("{name}@{major}"))
 }
 
 /// The directory that holds the workflows exists at all. Without it every
@@ -91,8 +163,11 @@ fn no_workflow_pins_an_action_on_a_deprecated_node_runtime() {
 
     let offenders: Vec<String> = found
         .iter()
-        .filter(|(_, _, uses)| DEPRECATED_PINS.contains(&uses.as_str()))
-        .map(|(file, job, uses)| format!("{file}/{job}: {uses}"))
+        .filter(|action| {
+            major_pin(&action.workflow_text, &action.reference)
+                .is_some_and(|pin| DEPRECATED_PINS.contains(&pin.as_str()))
+        })
+        .map(ActionUse::label)
         .collect();
     assert!(
         offenders.is_empty(),
@@ -101,14 +176,11 @@ fn no_workflow_pins_an_action_on_a_deprecated_node_runtime() {
     );
 }
 
-/// Without an explicit version an upstream release silently changes what CI
-/// runs.
-///
-/// A reference is pinned when it names a ref after `@`, or when it is a local
-/// path (`./.github/actions/foo`), which is versioned by the commit that
-/// contains it. Docker references (`docker://image:tag`) carry their own tag.
+/// A tag is a pointer its owner can move, and this repository is public, so a
+/// moved tag would run someone else's code in every workflow. A commit SHA
+/// cannot move.
 #[test]
-fn every_action_reference_carries_an_explicit_version() {
+fn every_remote_action_is_pinned_to_a_commit_sha() {
     let found = all_step_uses();
     assert!(
         !found.is_empty(),
@@ -117,14 +189,54 @@ fn every_action_reference_carries_an_explicit_version() {
 
     let unpinned: Vec<String> = found
         .iter()
-        .filter(|(_, _, uses)| !uses.starts_with("./") && !uses.contains('@'))
-        .map(|(file, job, uses)| format!("{file}/{job}: {uses}"))
+        .filter(|action| is_remote(&action.reference))
+        .filter(|action| {
+            !action
+                .reference
+                .split_once('@')
+                .is_some_and(|(_, git_ref)| is_commit_sha(git_ref))
+        })
+        .map(ActionUse::label)
         .collect();
     assert!(
         unpinned.is_empty(),
-        "these steps use an action with no version, so an upstream release \
-         changes what CI runs: {unpinned:?}"
+        "these steps name an action by a movable ref instead of a full commit \
+         SHA: {unpinned:?}"
     );
+}
+
+/// Without the comment a reader cannot tell which release a SHA is, and the
+/// retired-runtime check above has no major version to judge.
+#[test]
+fn every_sha_pin_names_its_release_in_a_comment() {
+    let unnamed: Vec<String> = all_step_uses()
+        .iter()
+        .filter(|action| is_remote(&action.reference))
+        .filter(|action| version_comment(&action.workflow_text, &action.reference).is_none())
+        .map(ActionUse::label)
+        .collect();
+    assert!(
+        unnamed.is_empty(),
+        "these steps pin a SHA with no `# vX.Y.Z` comment, or with comments \
+         that disagree, on every line that carries it: {unnamed:?}"
+    );
+}
+
+/// The control for the two tests above: a SHA pin is judged by its comment,
+/// so a SHA of a retired major is still caught.
+#[test]
+fn a_sha_pin_takes_its_major_version_from_its_comment() {
+    let reference = "actions/checkout@0123456789abcdef0123456789abcdef01234567";
+    let text = format!("    steps:\n      - uses: {reference} # v4.2.2\n");
+    assert_eq!(
+        major_pin(&text, reference).as_deref(),
+        Some("actions/checkout@v4")
+    );
+    let uncommented = format!("    steps:\n      - uses: {reference}\n");
+    assert_eq!(version_comment(&uncommented, reference), None);
+    let disagreeing =
+        format!("      - uses: {reference} # v4.2.2\n      - uses: {reference} # v7.0.1\n");
+    assert_eq!(version_comment(&disagreeing, reference), None);
 }
 
 /// The hole the line-shaped grep left: a commented-out step is not a step.

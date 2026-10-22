@@ -61,6 +61,7 @@ the other in a single backgrounded command.
 |---|---|---|---|
 | Test suite (linux + macOS) | `test-suite.yml` | every push to `main`, `pull_request`, `workflow_dispatch` | `Linux / ubuntu-latest`, `macOS / macos-latest` |
 | thumper (macOS) | `thumper.yml` | push to `main` or `pull_request` touching `tools/thumper/**`, `crates/thumper-core/**`, `crates/dotfiles-test-support/**`, `crates/Cargo.toml`, `crates/Cargo.lock`, `tests/tools-checks.sh`, or the workflow file; `workflow_dispatch` | `macOS / macos-latest` |
+| vm (macOS) | `vm.yml` | push to `main` or `pull_request` touching `tools/vm/**` or the workflow file; `workflow_dispatch` | `macOS / macos-latest` |
 | Dependency bootstrap | `deps-check.yml` | push to `main` touching `deps/**`, `setup.sh`, `.scripts/config/**`, `crates/**`, or the workflow file; cron `0 13 1,15 * *`; `workflow_dispatch` | Ubuntu, Pop!_OS, Arch, macOS installs, plus three full-bootstrap jobs |
 
 A push that touches only skills or rules starts the test suite alone. Both workflows

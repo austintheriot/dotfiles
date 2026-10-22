@@ -46,6 +46,11 @@ runs two gates and blocks the push on either.
   `TOOLS_TRIGGER_PATHS`, because a cold Tauri build takes minutes.
   `.github/workflows/thumper.yml` runs the same checks in CI behind the
   same paths.
+- `.github/workflows/vm.yml` runs the `tools/vm` typecheck and `bun test` in
+  CI on macOS, for a push that touches `tools/vm/`. No pre-push gate runs
+  them: the video tests launch headless Chrome with a 30 s timeout and fail
+  on a loaded host. `crates/config-cli/tests/vm_ci.rs` asserts that the
+  workflow runs every script in `tools/vm/package.json`.
 - `~/tests/run-in-docker.sh` runs the same cargo suite **in Docker**, gated to
   pushes whose commits touch tested code, so it needs a running Docker daemon.
   There is no host fallback on purpose: on the host the tmux suites spawn

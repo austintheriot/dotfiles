@@ -1,4 +1,6 @@
-import {basename, extname} from 'node:path'
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {basename, extname, join} from 'node:path'
 import {z} from 'zod'
 import type {Repo} from './args'
 import {parseRepo} from './args'
@@ -10,9 +12,9 @@ import type {IUploader} from './store'
 
 export type GhRun = {code: number; stdout: string; stderr: string}
 
-function gh(args: readonly string[], input?: string | Uint8Array): GhRun {
+function gh(args: readonly string[]): GhRun {
   try {
-    const run = Bun.spawnSync(['gh', ...args], {stdin: input === undefined ? 'ignore' : Buffer.from(input), stdout: 'pipe', stderr: 'pipe'})
+    const run = Bun.spawnSync(['gh', ...args], {stdin: 'ignore', stdout: 'pipe', stderr: 'pipe'})
     return {code: run.exitCode, stdout: run.stdout.toString(), stderr: run.stderr.toString()}
   } catch (error) {
     throw new DraftReviewError(`cannot run gh: ${error instanceof Error ? error.message : String(error)}. Install the GitHub CLI.`, EXIT.unavailable)
@@ -173,8 +175,16 @@ export function ghUploader(endpoint: string, repositoryId: number | undefined): 
       url.searchParams.set('name', basename(path))
       url.searchParams.set('content_type', contentType(path))
       if (repositoryId !== undefined) url.searchParams.set('repository_id', String(repositoryId))
-      const args = ['api', '--method', 'POST', url.toString(), '--input', '-', '-H', `Content-Type: ${contentType(path)}`]
-      return parseReply(gh(args, bytes), z.object({url: z.string().url()}), `upload ${path}`).url
+      // gh streams stdin as a chunked body, and the upload endpoint refuses a body without a Content-Length.
+      const dir = mkdtempSync(join(tmpdir(), 'draft-review-upload-'))
+      try {
+        const body = join(dir, 'body')
+        writeFileSync(body, bytes, {mode: 0o600})
+        const args = ['api', '--method', 'POST', url.toString(), '--input', body, '-H', `Content-Type: ${contentType(path)}`]
+        return parseReply(gh(args), z.object({url: z.string().url()}), `upload ${path}`).url
+      } finally {
+        rmSync(dir, {recursive: true, force: true})
+      }
     }
   }
 }

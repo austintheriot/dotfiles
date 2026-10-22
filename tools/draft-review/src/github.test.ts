@@ -1,6 +1,9 @@
 import {describe, expect, test} from 'bun:test'
+import {mkdtempSync, readFileSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
 import {DraftReviewError, EXIT} from './exit'
-import {isPendingReviewConflict, parseHttpReply, recordedReviewFrom, reviewRequest} from './github'
+import {ghUploader, isPendingReviewConflict, parseHttpReply, recordedReviewFrom, reviewRequest} from './github'
 import type {InlineComment, ReviewPayload} from './payload'
 
 const reply = (statusLine: string, body: string) => `${statusLine}\r\nContent-Type: application/json\r\nX-Github-Request-Id: 1\r\n\r\n${body}`
@@ -84,5 +87,37 @@ describe('isPendingReviewConflict', () => {
 
   test('is false for the same message under another status', () => {
     expect(isPendingReviewConflict(parseHttpReply(reply('HTTP/2.0 500 Internal Server Error', conflict)))).toBe(false)
+  })
+})
+
+describe('ghUploader', () => {
+  test('sends the upload with a Content-Length, which the GitHub upload endpoint requires', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'draft-review-upload-'))
+    const log = join(dir, 'requests.jsonl')
+    const serverScript = `
+      const server = Bun.serve({port: 0, fetch: async request => {
+        const body = await request.arrayBuffer()
+        require('node:fs').appendFileSync(${JSON.stringify(log)}, JSON.stringify({length: request.headers.get('content-length'), encoding: request.headers.get('transfer-encoding'), bytes: body.byteLength}) + '\\n')
+        return Response.json({url: 'https://example.com/asset.png'})
+      }})
+      console.log(server.port)
+    `
+    const server = Bun.spawn(['bun', '-e', serverScript], {stdout: 'pipe'})
+    const token = process.env.GH_TOKEN
+    process.env.GH_TOKEN = 'test-token'
+    try {
+      const reader = server.stdout.getReader()
+      const port = new TextDecoder().decode((await reader.read()).value).trim()
+      const bytes = new Uint8Array(5000).fill(7)
+      const url = await ghUploader(`http://localhost:${port}/assets`, 1).upload({path: '/tmp/shot.png', bytes})
+      expect(url).toBe('https://example.com/asset.png')
+      const requests = readFileSync(log, 'utf8').trim().split('\n').map(line => JSON.parse(line))
+      expect(requests).toEqual([{length: '5000', encoding: null, bytes: 5000}])
+    } finally {
+      if (token === undefined) delete process.env.GH_TOKEN
+      else process.env.GH_TOKEN = token
+      server.kill()
+      rmSync(dir, {recursive: true, force: true})
+    }
   })
 })
